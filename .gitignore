@@ -230,6 +230,9 @@ raw/
 # Built indexes and any local sqlite stores.
 *.db
 
+# Harvest outputs (regenerable from config/pilot.toml + the cache under raw/).
+data/
+
 # Node / Next.js (web/)
 node_modules/
 .next/

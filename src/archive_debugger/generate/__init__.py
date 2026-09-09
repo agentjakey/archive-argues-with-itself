@@ -6,11 +6,12 @@ Responsibility:
     visibly uncertain rather than being smoothed into a confident answer.
 
 Boundary rules:
-    - No access to the Internet Archive. May call a configured LLM endpoint if
-      one is wired up, but never fabricates citations, page numbers, dates, or
-      quotations.
+    - No IA corpus re-fetch. May call an explicitly configured external LLM API,
+      kept isolated and config-driven. CI stays hermetic: generation tests use a
+      stubbed LLM and never make a real API call.
+    - Never fabricates citations, page numbers, dates, or quotations.
     - A claim without a retrieved source is not emitted as supported.
-    - This layer is downstream of retrieve and never reads the index directly.
+    - This layer is downstream of retrieve and never reads civic.db directly.
 
 Nothing is implemented yet.
 """

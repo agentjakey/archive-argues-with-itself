@@ -6,7 +6,7 @@ Responsibility:
     coverage signals attached during ingest.
 
 Boundary rules:
-    - No network access. Reads only the local index built by ingest.
+    - No IA corpus re-fetch. Reads only civic.db built by ingest.
     - Every returned passage keeps its item id and page number.
     - Retrieval surfaces coverage context (date and jurisdiction distribution,
       sparsity) alongside results so downstream layers can show uncertainty.

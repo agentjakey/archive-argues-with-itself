@@ -6,7 +6,7 @@ Responsibility:
     failure cases honestly.
 
 Boundary rules:
-    - No network access. Operates over the local index and stored gold data.
+    - No IA corpus re-fetch. Operates over civic.db and stored gold data.
     - Gold data and criteria are never silently relabeled or weakened to improve
       a number. A regression is reported, not hidden.
     - Metrics are computed from real runs, never placeholder or synthetic values.

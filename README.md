@@ -37,7 +37,9 @@ Three separated concerns, with the network boundary as the load-bearing rule:
 - `src/archive_debugger/api/` — read-only serve layer (FastAPI).
 - `web/` — Next.js interface: evidence timeline and coverage views.
 
-The index and serve layers make no network calls.
+Nothing after harvest re-fetches Internet Archive corpus data; ingest, retrieve,
+and serve run from `raw/` and `civic.db`. Generation may call an explicitly
+configured external LLM API (isolated, config-driven; stubbed in CI).
 
 ## Layout
 

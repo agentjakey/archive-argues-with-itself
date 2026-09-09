@@ -8,7 +8,8 @@ Responsibility:
     index.
 
 Boundary rules:
-    - No network access. Reads only from local raw/ storage produced by harvest.
+    - No IA corpus re-fetch. Reads only local raw/ produced by harvest and writes
+      civic.db.
     - Missing or weak metadata (undated items, unknown jurisdiction, poor OCR)
       is recorded as an explicit signal, never silently dropped or guessed.
     - Provenance (item id, page number) is preserved on every indexed passage.

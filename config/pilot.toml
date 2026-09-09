@@ -1,42 +1,67 @@
 # Pilot corpus configuration.
 #
-# This file defines the bounded pilot: the civic topic, the time window, the
-# comparison years, and the exact Internet Archive queries used to assemble the
-# corpus. Values are left as TODO on purpose. They are set during the Week 1
-# collection audit, after confirming the topic actually has longitudinal
-# coverage. Do not fill these with guesses.
+# The single chosen pilot, fixed after the Week 1 coverage audit. The pilot is
+# fully reproducible from this file: topic term-set, collection clause, binning
+# window, and floor.
+#
+# Finalist: public_health, chosen over the proposal's illustrative "housing"
+# because it is the only candidate that clears the 2500-item floor within a clean
+# Canadian-government scope (3,477 texts) without the microfiche-sourced microlog
+# collection. See reports/coverage_audit/finalist_sizing.md.
 
 [corpus]
-# The single civic topic for the pilot. Proposal leans toward housing
-# affordability, pending the coverage audit.
-topic = "TODO"                       # e.g. "housing affordability"
-jurisdiction_scope = "TODO"          # e.g. "Canada: federal + provincial"
+topic = "public_health"
+jurisdiction_scope = "Canada: federal + provincial + municipal (government issuers)"
 
-[corpus.window]
-start_year = 0                       # TODO
-end_year = 0                         # TODO
-comparison_years = []                # TODO, e.g. [1995, 2005, 2025]
-
-[corpus.queries]
-# Internet Archive advanced-search queries that define the corpus. Kept explicit
-# so the pilot is reproducible from this file alone.
-internet_archive = []                # TODO, list of IA search query strings
-collections = []                     # TODO, list of IA collection identifiers
+# The public_health synonym term-set, copied verbatim from config/audit_candidates.toml.
+# This exact string produced the 3,477 count. Do not re-derive it.
+query = 'health OR "public health" OR healthcare OR hospital OR disease OR epidemic OR "medical care" OR sanitation OR "communicable disease" OR vaccination OR "health insurance"'
 mediatype = "texts"
 
+[corpus.window]
+# Binning window only. This is used to bucket items by period for the timeline
+# and coverage views. It is NOT a hard filter on the harvest: undated items are
+# kept and routed to an undated bucket, and out-of-window items are kept too.
+start_year = 1960
+end_year = 2009
+comparison_years = [1975, 1990, 2005]  # in-window; there is no 2025 in this archive
+
+[corpus.collections]
+# The clean Canadian-government clause discovered in Week 1. microlog and all
+# scanner/library/format collections are excluded on purpose (scope + OCR quality).
+# Adding the eight sibling collections to governmentpublications lifts the total
+# only from 104,293 to 105,289 (near-total overlap), but they are kept for
+# completeness of the government scope.
+clean = [
+    "governmentpublications",
+    "albertagovernmentpublications",
+    "uoftgovpubs",
+    "ministryoffinance_ontario",
+    "ocul_govinfocommunity",
+    "hpl-govdocs",
+    "canadianmunicipal",
+    "ontarioeconomiccouncil",
+    "taskforce_reports",
+]
+# Reserve lever only. Upside for corpus size, but microfiche-sourced with
+# unverified OCR. Do not add without its own OCR spot-check.
+reserve = ["microlog"]
+
 [corpus.limits]
-# Keep the pilot deliberately bounded. Do not index the whole collection.
-max_items = 0                        # TODO, target a few thousand
-max_pages_per_item = 0               # TODO or 0 for no per-item cap
+usable_floor = 2500  # minimum usable (has-OCR) items the pilot must retain
 
 [harvest]
 # Internet Archive automated-access etiquette.
-user_agent = "TODO"                  # identify the client, e.g. contact email
-request_delay_seconds = 1.0
+user_agent_contact = ""              # set to a contact (email or URL) for the User-Agent
+request_delay_seconds = 0.5
 max_retries = 5
-use_existing_ocr = true              # prefer existing OCR derivatives
+fields = "identifier,title,creator,publisher,date,year,collection,language,mediatype"
+# Manifest paging uses advancedsearch.php, not the scrape API: the corpus is well
+# under the 10k deep-paging window and the scrape endpoint throttles to a canned
+# baseline. Per-item file lists and OCR come from the metadata API.
+manifest_rows = 100
 cache_dir = "raw"                    # not committed; see .gitignore
 
 [index]
-db_path = "index.db"                 # local sqlite store; not committed
-embedding_model = "TODO"             # fastembed model id
+db_path = "civic.db"                 # local sqlite store; not committed
+embedding_model = "TODO"             # fastembed model id, set in the ingest phase

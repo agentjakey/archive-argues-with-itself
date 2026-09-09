@@ -6,8 +6,8 @@ Responsibility:
     and the coverage view.
 
 Boundary rules:
-    - Read only. Never harvests, never writes to the index, never makes hidden
-      network calls to the Internet Archive.
+    - Read only. Never harvests, never writes to civic.db, never re-fetches IA
+      corpus data.
     - Serves provenance and coverage signals through to the client so the
       interface can show sources and gaps, not just answers.
 
