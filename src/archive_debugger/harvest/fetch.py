@@ -248,6 +248,22 @@ def build_record(doc: dict, meta: dict) -> Optional[dict]:
     return record
 
 
+def _read_jsonl_ids(path: Path) -> set:
+    ids: set = set()
+    if not path.exists():
+        return ids
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                ids.add(json.loads(line)["identifier"])
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return ids
+
+
 def enrich(
     docs: Iterable[dict],
     out_path: Path,
@@ -255,27 +271,56 @@ def enrich(
     ctx: dict,
     limit: Optional[int] = None,
 ) -> tuple[list[dict], list[str]]:
-    """Enrich manifest docs into per-item records. Returns (records, skipped_ids).
-    Items without an OCR derivative are skipped and their ids logged."""
-    records: list[dict] = []
-    skipped: list[str] = []
-    for i, doc in enumerate(docs):
-        if limit is not None and i >= limit:
-            break
-        ident = doc.get("identifier")
-        meta = discover.fetch_metadata(ident, ctx=ctx)
-        record = build_record(doc, meta)
-        if record is None:
-            skipped.append(ident)
-            log.warning("no OCR derivative, skipping: %s", ident)
-            continue
-        records.append(record)
+    """Enrich manifest docs into per-item records, appending each result to
+    items.jsonl as it is built so progress is durable across interruptions.
+
+    Resumable: identifiers already present in items.jsonl or the skipped-ids
+    sidecar are not re-processed. Returns (records, skipped_ids) read back from
+    disk. `limit` caps how many NEW items are processed this call, so the harvest
+    can be advanced in bounded chunks.
+    """
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8") as fh:
-        for record in records:
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-    log.info("enrich: %s usable, %s skipped (no OCR) -> %s", len(records), len(skipped), out_path)
-    return records, skipped
+    skipped_path = out_path.with_name("skipped_no_ocr.txt")
+
+    done = _read_jsonl_ids(out_path)
+    skipped_ids: list[str] = []
+    if skipped_path.exists():
+        skipped_ids = [s for s in skipped_path.read_text(encoding="utf-8").splitlines() if s.strip()]
+    already = done | set(skipped_ids)
+
+    processed = 0
+    with out_path.open("a", encoding="utf-8") as out_fh, skipped_path.open("a", encoding="utf-8") as skip_fh:
+        for doc in docs:
+            if limit is not None and processed >= limit:
+                break
+            ident = doc.get("identifier")
+            if ident in already:
+                continue
+            meta = discover.fetch_metadata(ident, ctx=ctx)
+            record = build_record(doc, meta)
+            if record is None:
+                skip_fh.write(ident + "\n")
+                skip_fh.flush()
+                skipped_ids.append(ident)
+                log.warning("no OCR derivative, skipping: %s", ident)
+            else:
+                out_fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+                out_fh.flush()
+                done.add(ident)
+            already.add(ident)
+            processed += 1
+
+    records: list[dict] = []
+    with out_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                records.append(json.loads(line))
+    log.info(
+        "enrich: %s new this call; %s usable, %s skipped total -> %s",
+        processed, len(records), len(skipped_ids), out_path,
+    )
+    return records, skipped_ids
 
 
 # --------------------------------------------------------------------------- #

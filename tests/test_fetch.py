@@ -228,6 +228,41 @@ def test_enrich_skips_items_without_ocr(tmp_path, real_meta):
     assert skipped == ["noocr"]
 
 
+def test_enrich_is_resumable(tmp_path, real_meta):
+    metas = {"a": real_meta, "b": real_meta}
+
+    def responder(url):
+        for ident, meta in metas.items():
+            if f"/metadata/{ident}" in url:
+                return meta
+        raise AssertionError(url)
+
+    ctx, calls = make_ctx(tmp_path, responder)
+    docs = [{"identifier": "a", "title": "a", "year": 1980},
+            {"identifier": "b", "title": "b", "year": 1981}]
+    items = tmp_path / "items.jsonl"
+    fetch.enrich(docs, items, ctx=ctx)
+    calls_after_first = calls["n"]
+    # Second call: both already done, so no new metadata fetches happen.
+    records, _ = fetch.enrich(docs, items, ctx=ctx)
+    assert len(records) == 2
+    assert calls["n"] == calls_after_first  # resumed, nothing re-fetched
+    assert items.read_text(encoding="utf-8").strip().count("\n") == 1  # 2 lines, no dupes
+
+
+def test_enrich_limit_caps_new_items(tmp_path, real_meta):
+    def responder(url):
+        return real_meta  # any id resolves to a real OCR-bearing item
+
+    ctx, _ = make_ctx(tmp_path, responder)
+    docs = [{"identifier": f"id{i}", "title": "t", "year": 1980} for i in range(3)]
+    items = tmp_path / "items.jsonl"
+    r1, _ = fetch.enrich(docs, items, ctx=ctx, limit=2)
+    assert len(r1) == 2
+    r2, _ = fetch.enrich(docs, items, ctx=ctx, limit=2)
+    assert len(r2) == 3  # remaining one processed on the next chunk
+
+
 # --------------------------------------------------------------------------- #
 # Content-addressed download
 # --------------------------------------------------------------------------- #
