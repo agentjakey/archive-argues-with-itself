@@ -41,9 +41,8 @@ from urllib.parse import urlencode
 from archive_debugger.harvest import discover, explore
 from archive_debugger.harvest.discover import ThrottleError
 
-# OCR derivative selection priority. Word-level coordinates exist for the first
-# two (positional OCR); DjVuTXT is plain text only.
-OCR_PRIORITY = ("hOCR", "Djvu XML", "DjVuTXT")
+# Positional-OCR formats. Their presence is the has_word_coords capability; the
+# parsed source is chosen separately (DjVuTXT preferred) by select_source.
 WORD_COORD_FORMATS = ("hOCR", "Djvu XML")
 
 log = logging.getLogger("harvest.fetch")
@@ -163,28 +162,23 @@ def _files(meta: dict) -> list[dict]:
     return meta.get("files", []) or []
 
 
-def select_ocr(meta: dict) -> Optional[dict]:
-    """Pick ONE OCR derivative file by priority. Returns the file entry annotated
-    with its normalized ocr_format, or None if the item has no OCR derivative."""
-    files = _files(meta)
-    by_format: dict[str, dict] = {}
-    for f in files:
-        fmt = f.get("format")
-        if fmt in OCR_PRIORITY and fmt not in by_format:
-            by_format[fmt] = f
-    for fmt in OCR_PRIORITY:
-        if fmt in by_format:
-            entry = dict(by_format[fmt])
-            entry["ocr_format"] = fmt
-            return entry
-    return None
-
-
 def _find_by_format(meta: dict, fmt: str, name_suffix: str) -> Optional[dict]:
     for f in _files(meta):
         if f.get("format") == fmt or (f.get("name", "").endswith(name_suffix)):
             return f
     return None
+
+
+def find_djvutxt(meta: dict) -> Optional[dict]:
+    return _find_by_format(meta, "DjVuTXT", "_djvu.txt")
+
+
+def find_djvuxml(meta: dict) -> Optional[dict]:
+    return _find_by_format(meta, "Djvu XML", "_djvu.xml")
+
+
+def find_hocr(meta: dict) -> Optional[dict]:
+    return _find_by_format(meta, "hOCR", "_hocr.html")
 
 
 def find_page_numbers(meta: dict) -> Optional[dict]:
@@ -195,8 +189,32 @@ def find_scandata(meta: dict) -> Optional[dict]:
     return _find_by_format(meta, "Scandata", "_scandata.xml")
 
 
-def has_word_coords(ocr_format: str) -> bool:
-    return ocr_format in WORD_COORD_FORMATS
+def find_chocr(meta: dict) -> Optional[dict]:
+    return _find_by_format(meta, "chOCR", "_chocr.html.gz")
+
+
+def select_source(meta: dict) -> tuple[Optional[str], Optional[dict]]:
+    """Choose the ONE OCR file to parse downstream. Prefer plain text (DjVuTXT);
+    fall back to DjVu XML, then hOCR. Returns (ocr_format, file_entry) where
+    ocr_format is the parser switch: 'DjVuTXT' | 'DjVuXML' | 'hOCR'."""
+    txt = find_djvutxt(meta)
+    if txt is not None:
+        return "DjVuTXT", txt
+    xml = find_djvuxml(meta)
+    if xml is not None:
+        return "DjVuXML", xml
+    hocr = find_hocr(meta)
+    if hocr is not None:
+        return "hOCR", hocr
+    return None, None
+
+
+def word_coords_capable(meta: dict) -> bool:
+    """Capability flag: does the item carry positional OCR (hOCR or DjVu XML)
+    from which word-level coordinates COULD be derived later. Independent of which
+    source is parsed."""
+    formats = discover.file_formats(meta)
+    return any(fmt in formats for fmt in WORD_COORD_FORMATS)
 
 
 def page_count_of(meta: dict) -> Optional[int]:
@@ -222,10 +240,9 @@ def _file_ref(entry: Optional[dict]) -> Optional[dict]:
 def build_record(doc: dict, meta: dict) -> Optional[dict]:
     """Build the per-item harvest record, or None if the item has no OCR and must
     be skipped."""
-    ocr = select_ocr(meta)
-    if ocr is None:
+    ocr_format, src = select_source(meta)
+    if src is None:
         return None
-    ocr_format = ocr["ocr_format"]
     year = explore.item_year(doc)
     if year is None:
         year = discover.meta_year(meta)
@@ -252,11 +269,11 @@ def build_record(doc: dict, meta: dict) -> Optional[dict]:
         # OCR-derivative facts.
         "ocr_format": ocr_format,
         "ocr_engine": ocr_engine_of(meta),
-        "has_word_coords": has_word_coords(ocr_format),
+        "has_word_coords": word_coords_capable(meta),
         "has_printed_page_map": page_numbers is not None,
         "page_count": page_count_of(meta),
-        "ocr_file_ref": content_ref(ocr["md5"], ocr["name"]) if ocr.get("md5") and ocr.get("name") else None,
-        "ocr_file": _file_ref(ocr),
+        "ocr_file_ref": content_ref(src["md5"], src["name"]) if src.get("md5") and src.get("name") else None,
+        "ocr_file": _file_ref(src),
         "page_numbers_file": _file_ref(page_numbers),
         "scandata_file": _file_ref(find_scandata(meta)),
     }
@@ -354,14 +371,27 @@ def content_path(cache_dir: Path, md5: str, name: str) -> Path:
     return cache_dir / content_ref(md5, name)
 
 
-def _default_downloader(identifier: str, filename: str, dest_path: str) -> None:
-    """Download one file of an IA item via the internetarchive library. Imported
-    lazily so the rest of the module (and the tests) need no extra dependency."""
-    import internetarchive
+DOWNLOAD_UA = (
+    "archive-argues-with-itself/0.0 "
+    "(+https://github.com/agentjakey/archive-argues-with-itself)"
+)
 
-    item = internetarchive.get_item(identifier)
-    fileobj = item.get_file(filename)
-    fileobj.download(file_path=dest_path, verbose=False)
+
+def _default_downloader(identifier: str, filename: str, dest_path: str) -> None:
+    """Stream one IA file straight to disk from the public download endpoint.
+    Direct requests streaming (chunked) keeps memory flat and avoids the
+    internetarchive get_item metadata round-trip per item. Lazily imports
+    requests so the tests need no extra dependency."""
+    import requests
+    from urllib.parse import quote
+
+    url = f"https://archive.org/download/{quote(identifier)}/{quote(filename)}"
+    with requests.get(url, stream=True, timeout=120, headers={"User-Agent": DOWNLOAD_UA}) as resp:
+        resp.raise_for_status()
+        with open(dest_path, "wb") as fh:
+            for chunk in resp.iter_content(chunk_size=1 << 16):
+                if chunk:
+                    fh.write(chunk)
 
 
 def download_file(
@@ -388,34 +418,242 @@ def download_file(
     return dest, True
 
 
-def download_records(
+DOWNLOAD_KEYS = ("ocr_file", "page_numbers_file", "scandata_file")
+
+
+def load_records(items_path: Path) -> list[dict]:
+    records: list[dict] = []
+    with items_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                records.append(json.loads(line))
+    return records
+
+
+def _iter_item_files(record: dict, keys: tuple = DOWNLOAD_KEYS):
+    for key in keys:
+        entry = record.get(key)
+        if entry and entry.get("md5") and entry.get("name"):
+            yield entry
+
+
+def _write_checkpoint(path: Optional[Path], data: dict) -> None:
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=2)
+
+
+def download_corpus(
     records: list[dict],
     cache_dir: Path,
     *,
     downloader: Callable[[str, str, str], None] = _default_downloader,
     sleeper: Callable[[float], None] = time.sleep,
     delay: float = 0.5,
-    limit: Optional[int] = None,
+    new_limit: Optional[int] = None,
+    batch: int = 100,
+    checkpoint_path: Optional[Path] = None,
+    keys: tuple = DOWNLOAD_KEYS,
 ) -> dict:
-    """Download the chosen OCR derivative plus page_numbers/scandata for each
-    record. Returns counts of downloaded vs already-cached files."""
-    downloaded = cached = 0
-    for i, record in enumerate(records):
-        if limit is not None and i >= limit:
-            break
+    """Download the given file keys per item into the content-addressed cache.
+    Streams to disk (never holds a file in memory); skip-cached; fault-tolerant
+    (a per-file error is recorded, not fatal). Writes a checkpoint every `batch`
+    new downloads so a kill loses at most one batch. `new_limit` caps NEW
+    downloads this call for bounded, resumable runs."""
+    downloaded = cached = failed = 0
+    failures: list[dict] = []
+    for record in records:
         ident = record["identifier"]
-        for key in ("ocr_file", "page_numbers_file", "scandata_file"):
-            entry = record.get(key)
-            if not entry or not entry.get("md5"):
-                continue
-            _, did = download_file(
-                ident, entry, cache_dir, downloader=downloader, sleeper=sleeper, delay=delay
-            )
-            if did:
-                downloaded += 1
-            else:
+        for entry in _iter_item_files(record, keys):
+            dest = content_path(cache_dir, entry["md5"], entry["name"])
+            if dest.exists():
                 cached += 1
-    return {"downloaded": downloaded, "already_cached": cached}
+                continue
+            try:
+                download_file(ident, entry, cache_dir, downloader=downloader, sleeper=sleeper, delay=delay)
+                downloaded += 1
+            except Exception as exc:  # noqa: BLE001 - one bad file must not abort the run
+                failed += 1
+                failures.append({"identifier": ident, "file": entry["name"], "error": str(exc)[:200]})
+                log.warning("download failed %s/%s: %s", ident, entry["name"], exc)
+                continue
+            if downloaded % batch == 0:
+                _write_checkpoint(checkpoint_path, {"downloaded": downloaded, "cached": cached, "failed": failed, "last_identifier": ident})
+            if new_limit is not None and downloaded >= new_limit:
+                _write_checkpoint(checkpoint_path, {"downloaded": downloaded, "cached": cached, "failed": failed, "last_identifier": ident, "complete": False})
+                return {"downloaded": downloaded, "already_cached": cached, "failed": failed, "failures": failures, "complete": False}
+    _write_checkpoint(checkpoint_path, {"downloaded": downloaded, "cached": cached, "failed": failed, "complete": True})
+    return {"downloaded": downloaded, "already_cached": cached, "failed": failed, "failures": failures, "complete": True}
+
+
+# --------------------------------------------------------------------------- #
+# Segmentation-source assignment (waterfall: valid-ff djvu.txt -> djvu.xml -> hOCR)
+# --------------------------------------------------------------------------- #
+
+FF_TOLERANCE = 2  # allow small blank-leaf differences between \f pages and leaf count
+
+
+def _cached_djvutxt_ff(record: dict, cache_dir: Path) -> Optional[int]:
+    """If this item's djvu.txt is cached, return its \\f-page count (ff+1), else
+    None. Only meaningful while ocr_file still points at the djvu.txt."""
+    entry = record.get("ocr_file")
+    if not entry or not entry.get("md5") or not entry.get("name"):
+        return None
+    if not entry["name"].endswith("_djvu.txt"):
+        return None
+    path = content_path(cache_dir, entry["md5"], entry["name"])
+    if not path.exists():
+        return None
+    ff = path.read_bytes().count(b"\x0c")
+    return ff + 1
+
+
+def _leaf_count(record: dict, cache_dir: Path, meta: dict) -> Optional[int]:
+    """Authoritative leaf count from a cached page_numbers.json, else metadata
+    imagecount, else None."""
+    pn = record.get("page_numbers_file")
+    if pn and pn.get("md5") and pn.get("name"):
+        path = content_path(cache_dir, pn["md5"], pn["name"])
+        if path.exists():
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                return len(data.get("pages", []))
+            except (json.JSONDecodeError, OSError):
+                pass
+    return page_count_of(meta)
+
+
+def assign_segmentation(records: list[dict], cache_dir: Path, *, ctx: dict) -> tuple[list[dict], dict]:
+    """Assign a segmentation_source per item by waterfall and rewrite ocr_format /
+    ocr_file / ocr_file_ref to the chosen source. Requires the item's djvu.txt to
+    be cached to be eligible for the djvu.txt branch (\\f detection needs bytes).
+    Returns (updated_records, counts)."""
+    counts = Counter()
+    updated: list[dict] = []
+    for record in records:
+        meta = discover.fetch_metadata(record["identifier"], ctx=ctx)
+        ff_pages = _cached_djvutxt_ff(record, cache_dir)
+        leaves = _leaf_count(record, cache_dir, meta)
+        xml = find_djvuxml(meta)
+        hocr = find_hocr(meta)
+
+        rec = dict(record)
+        if ff_pages is not None and ff_pages > 1 and (
+            leaves is None or abs(ff_pages - leaves) <= FF_TOLERANCE
+        ):
+            rec["segmentation_source"] = "djvutxt"
+            rec["segmentation_reason"] = (
+                f"djvu.txt has {ff_pages} form-feed pages"
+                + ("" if leaves is None else f" ~ {leaves} leaves")
+            )
+            rec["ocr_format"] = "DjVuTXT"
+            # ocr_file already points at djvu.txt
+        elif xml is not None:
+            rec["segmentation_source"] = "djvuxml"
+            reason = "no valid form-feed" if ff_pages is not None else "djvu.txt not cached / no form-feed"
+            rec["segmentation_reason"] = reason + " -> djvu.xml OBJECT-per-page"
+            rec["ocr_format"] = "DjVuXML"
+            rec["ocr_file"] = _file_ref(xml)
+            rec["ocr_file_ref"] = content_ref(xml["md5"], xml["name"]) if xml.get("md5") and xml.get("name") else None
+        elif hocr is not None:
+            rec["segmentation_source"] = "hocr"
+            rec["segmentation_reason"] = "no djvu.txt form-feed and no djvu.xml -> hOCR"
+            rec["ocr_format"] = "hOCR"
+            rec["ocr_file"] = _file_ref(hocr)
+            rec["ocr_file_ref"] = content_ref(hocr["md5"], hocr["name"]) if hocr.get("md5") and hocr.get("name") else None
+        else:
+            rec["segmentation_source"] = None
+            rec["segmentation_reason"] = "no usable structured derivative"
+        counts[rec["segmentation_source"]] += 1
+        updated.append(rec)
+    return updated, dict(counts)
+
+
+# --------------------------------------------------------------------------- #
+# Integrity
+# --------------------------------------------------------------------------- #
+
+
+def _file_looks_empty(path: Path) -> bool:
+    """True if the file is zero-byte or has no non-whitespace content in its head.
+    Only a small head is read, so this stays memory-light."""
+    try:
+        if path.stat().st_size == 0:
+            return True
+        with path.open("rb") as fh:
+            head = fh.read(8192)
+        return len(head.strip()) == 0
+    except OSError:
+        return True
+
+
+def integrity_check(records: list[dict], cache_dir: Path) -> dict:
+    """Assert one cached source file per item. Reports present/missing/empty, the
+    total bytes of source files, and counts by ocr_format."""
+    present = 0
+    total_bytes = 0
+    missing: list[dict] = []
+    empty: list[dict] = []
+    by_format: Counter = Counter()
+    for record in records:
+        by_format[record.get("ocr_format")] += 1
+        entry = record.get("ocr_file")
+        ident = record.get("identifier")
+        if not entry or not entry.get("md5") or not entry.get("name"):
+            missing.append({"identifier": ident, "reason": "no source file ref"})
+            continue
+        dest = content_path(cache_dir, entry["md5"], entry["name"])
+        if not dest.exists():
+            missing.append({"identifier": ident, "file": entry["name"], "reason": "missing"})
+            continue
+        if _file_looks_empty(dest):
+            empty.append({"identifier": ident, "file": entry["name"]})
+            continue
+        present += 1
+        total_bytes += dest.stat().st_size
+    return {
+        "manifest_count": len(records),
+        "source_present": present,
+        "total_source_bytes": total_bytes,
+        "by_ocr_format": dict(by_format),
+        "missing": missing,
+        "empty": empty,
+    }
+
+
+def run_integrity(
+    records: list[dict],
+    cache_dir: Path,
+    *,
+    downloader: Callable[[str, str, str], None] = _default_downloader,
+    sleeper: Callable[[float], None] = time.sleep,
+    delay: float = 0.5,
+) -> dict:
+    """Integrity check, then re-fetch any missing or empty source file once, then
+    re-check. Returns the final report plus the list still failing after retry."""
+    report = integrity_check(records, cache_dir)
+    by_id = {r.get("identifier"): r for r in records}
+    to_refetch = report["missing"] + report["empty"]
+    still_failing: list[dict] = []
+    for bad in to_refetch:
+        record = by_id.get(bad["identifier"])
+        entry = record.get("ocr_file") if record else None
+        if not entry or not entry.get("md5"):
+            still_failing.append({**bad, "retry": "no ref"})
+            continue
+        dest = content_path(cache_dir, entry["md5"], entry["name"])
+        if dest.exists() and _file_looks_empty(dest):
+            dest.unlink(missing_ok=True)  # force a clean re-download
+        try:
+            download_file(bad["identifier"], entry, cache_dir, downloader=downloader, sleeper=sleeper, delay=delay)
+        except Exception as exc:  # noqa: BLE001
+            still_failing.append({"identifier": bad["identifier"], "file": entry["name"], "error": str(exc)[:200]})
+    final = integrity_check(records, cache_dir)
+    final["still_failing_after_retry"] = still_failing
+    return final
 
 
 # --------------------------------------------------------------------------- #
@@ -529,11 +767,38 @@ def run(
     write_summary(out_dir, summary)
 
     if do_download or download_sample:
-        limit = None if do_download else download_sample
-        dl = download_records(records, cfg.cache_dir, delay=cfg.request_delay, limit=limit)
+        new_limit = None if do_download else download_sample
+        dl = download_corpus(
+            records, cfg.cache_dir, delay=cfg.request_delay, new_limit=new_limit,
+            checkpoint_path=out_dir / "download_checkpoint.json",
+        )
         summary["download"] = dl
         write_summary(out_dir, summary)
     return summary
+
+
+def run_download_all(config_path: Path, out_dir: Path, *, contact: str, new_limit: Optional[int]) -> dict:
+    """Standalone: download every source derivative for the already-enriched
+    items.jsonl. Resumable via the content-addressed cache."""
+    cfg = load_pilot(config_path)
+    if contact:
+        cfg.contact = contact
+    records = load_records(out_dir / "items.jsonl")
+    return download_corpus(
+        records, cfg.cache_dir, delay=cfg.request_delay, new_limit=new_limit,
+        checkpoint_path=out_dir / "download_checkpoint.json",
+    )
+
+
+def run_integrity_pass(config_path: Path, out_dir: Path, *, contact: str) -> dict:
+    cfg = load_pilot(config_path)
+    if contact:
+        cfg.contact = contact
+    records = load_records(out_dir / "items.jsonl")
+    report = run_integrity(records, cfg.cache_dir, delay=cfg.request_delay)
+    with (out_dir / "integrity_report.json").open("w", encoding="utf-8") as fh:
+        json.dump(report, fh, ensure_ascii=False, indent=2)
+    return report
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -543,6 +808,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--contact", default="")
     p.add_argument("--download", action="store_true", help="download all chosen derivatives")
     p.add_argument("--download-sample", type=int, default=None, help="download only the first N")
+    p.add_argument("--download-all", action="store_true", help="standalone: download all sources for items.jsonl")
+    p.add_argument("--integrity", action="store_true", help="standalone: integrity pass + re-fetch")
+    p.add_argument("--new-limit", type=int, default=None, help="cap NEW downloads this call (resumable batches)")
     p.add_argument("--enrich-limit", type=int, default=None, help="cap items enriched (debug)")
     p.add_argument("--offline", action="store_true", help="use cache only; fail on cache miss")
     p.add_argument("--verbose", action="store_true")
@@ -555,16 +823,32 @@ def main(argv: Optional[list[str]] = None) -> int:
         level=logging.INFO if args.verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
-    if not args.contact and not args.offline:
-        cfg = load_pilot(args.config)
-        if not cfg.contact:
-            print(
-                "Refusing to harvest without a contact for the User-Agent. Pass "
-                "--contact you@example.com, set harvest.user_agent_contact in the "
-                "config, or use --offline.",
-                file=sys.stderr,
-            )
-            return 2
+    contact = args.contact or load_pilot(args.config).contact
+    needs_network = not args.offline and (
+        args.download or args.download_sample or args.download_all or args.integrity or True
+    )
+    if needs_network and not contact:
+        print(
+            "Refusing to hit the network without a contact for the User-Agent. Pass "
+            "--contact you@example.com, set harvest.user_agent_contact in the config, "
+            "or use --offline.",
+            file=sys.stderr,
+        )
+        return 2
+
+    if args.download_all:
+        dl = run_download_all(args.config, args.out, contact=args.contact, new_limit=args.new_limit)
+        print(f"download-all: {dl['downloaded']} new, {dl['already_cached']} cached, {dl['failed']} failed, complete={dl['complete']}")
+        return 0
+    if args.integrity:
+        rep = run_integrity_pass(args.config, args.out, contact=args.contact)
+        print(
+            f"integrity: {rep['source_present']}/{rep['manifest_count']} source files present, "
+            f"{rep['total_source_bytes']/1e9:.3f} GB, by_format={rep['by_ocr_format']}, "
+            f"still_failing={len(rep['still_failing_after_retry'])}"
+        )
+        return 0
+
     try:
         summary = run(
             args.config,

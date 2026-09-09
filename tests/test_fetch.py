@@ -26,59 +26,62 @@ def real_meta() -> dict:
 
 
 # --------------------------------------------------------------------------- #
-# OCR selection priority
+# Source selection (DjVuTXT preferred) and capability flag
 # --------------------------------------------------------------------------- #
 
 
-def test_select_ocr_prefers_hocr(real_meta):
-    ocr = fetch.select_ocr(real_meta)
-    assert ocr["ocr_format"] == "hOCR"
-    assert ocr["md5"]  # a real file entry with a checksum
+def test_select_source_prefers_djvutxt(real_meta):
+    # The fixture has hOCR, DjVu XML AND DjVuTXT; the parsed source is DjVuTXT.
+    fmt, entry = fetch.select_source(real_meta)
+    assert fmt == "DjVuTXT"
+    assert entry["name"].endswith("_djvu.txt")
+    assert entry["md5"]
 
 
-def test_select_ocr_priority_djvu_xml_over_txt():
+def test_select_source_falls_back_to_djvuxml():
     meta = {"files": [
-        {"format": "DjVuTXT", "name": "x_djvu.txt", "md5": "t"},
+        {"format": "hOCR", "name": "x_hocr.html", "md5": "h"},
         {"format": "Djvu XML", "name": "x_djvu.xml", "md5": "x"},
     ]}
-    assert fetch.select_ocr(meta)["ocr_format"] == "Djvu XML"
+    fmt, entry = fetch.select_source(meta)
+    assert fmt == "DjVuXML"
+    assert entry["md5"] == "x"
 
 
-def test_select_ocr_txt_only():
-    meta = {"files": [
-        {"format": "DjVu", "name": "x.djvu"},
-        {"format": "DjVuTXT", "name": "x_djvu.txt", "md5": "t"},
-    ]}
-    assert fetch.select_ocr(meta)["ocr_format"] == "DjVuTXT"
+def test_select_source_falls_back_to_hocr_only():
+    meta = {"files": [{"format": "hOCR", "name": "x_hocr.html", "md5": "h"}]}
+    assert fetch.select_source(meta)[0] == "hOCR"
 
 
-def test_select_ocr_none_when_no_derivative():
+def test_select_source_none_when_no_derivative():
     meta = {"files": [{"format": "JPEG"}, {"format": "Metadata"}]}
-    assert fetch.select_ocr(meta) is None
+    assert fetch.select_source(meta) == (None, None)
+
+
+def test_word_coords_capability_independent_of_source(real_meta):
+    # Source is DjVuTXT, but the item is still word-coord capable (hOCR present).
+    assert fetch.word_coords_capable(real_meta) is True
+    txt_only = {"files": [{"format": "DjVuTXT", "name": "t_djvu.txt", "md5": "m"}]}
+    assert fetch.word_coords_capable(txt_only) is False
 
 
 # --------------------------------------------------------------------------- #
-# Flags and record building
+# Record building
 # --------------------------------------------------------------------------- #
-
-
-def test_has_word_coords():
-    assert fetch.has_word_coords("hOCR") is True
-    assert fetch.has_word_coords("Djvu XML") is True
-    assert fetch.has_word_coords("DjVuTXT") is False
 
 
 def test_record_from_real_fixture(real_meta):
     doc = {"identifier": "01ambientairsurvey00onta", "title": "Ambient air survey",
            "year": 1980, "collection": ["omote", "governmentpublications"]}
     rec = fetch.build_record(doc, real_meta)
-    assert rec["ocr_format"] == "hOCR"
-    assert rec["has_word_coords"] is True
-    assert rec["has_printed_page_map"] is True       # Page Numbers JSON present
+    assert rec["ocr_format"] == "DjVuTXT"                 # parsed source is text
+    assert rec["ocr_file"]["name"].endswith("_djvu.txt")
+    assert rec["ocr_file_ref"].startswith("ocr/")
+    assert rec["has_word_coords"] is True                 # capability preserved (hOCR present)
+    assert rec["has_printed_page_map"] is True            # Page Numbers JSON present
     assert rec["page_count"] == 524
     assert rec["ocr_engine"] == "ABBYY FineReader 8.0"
     assert rec["dated"] is True
-    assert rec["ocr_file"]["md5"]
 
 
 def test_record_txt_only_no_page_map():
@@ -88,6 +91,16 @@ def test_record_txt_only_no_page_map():
     assert rec["ocr_format"] == "DjVuTXT"
     assert rec["has_word_coords"] is False
     assert rec["has_printed_page_map"] is False
+
+
+def test_record_djvuxml_fallback():
+    # No DjVuTXT: fall back to DjVu XML and mark ocr_format='DjVuXML'.
+    doc = {"identifier": "xmlonly", "title": "t", "year": 1980}
+    meta = {"metadata": {}, "files": [{"format": "Djvu XML", "name": "x_djvu.xml", "md5": "x"}]}
+    rec = fetch.build_record(doc, meta)
+    assert rec["ocr_format"] == "DjVuXML"
+    assert rec["has_word_coords"] is True                 # DjVu XML is positional OCR
+    assert rec["ocr_file"]["md5"] == "x"
 
 
 def test_record_undated_is_kept():
@@ -287,6 +300,67 @@ def test_download_file_skips_when_cached(tmp_path):
     # Second call: already cached, downloader must not be invoked again.
     dest2, did2 = fetch.download_file("id", entry, tmp_path, downloader=downloader, sleeper=lambda s: None)
     assert did2 is False and dest2 == dest1 and calls["n"] == 1
+
+
+def _dl_record(ident, md5):
+    return {
+        "identifier": ident,
+        "ocr_file": {"name": f"{ident}_djvu.txt", "md5": md5, "size": "100"},
+        "page_numbers_file": {"name": f"{ident}_page_numbers.json", "md5": md5 + "p", "size": "10"},
+        "scandata_file": None,
+    }
+
+
+def test_download_corpus_downloads_then_resumes(tmp_path):
+    calls = {"n": 0}
+
+    def downloader(identifier, filename, dest_path):
+        calls["n"] += 1
+        Path(dest_path).write_text("real ocr text", encoding="utf-8")
+
+    records = [_dl_record("a", "111"), _dl_record("b", "222")]
+    r1 = fetch.download_corpus(records, tmp_path, downloader=downloader, sleeper=lambda s: None,
+                               checkpoint_path=tmp_path / "ck.json")
+    assert r1["downloaded"] == 4 and r1["failed"] == 0 and r1["complete"] is True
+    n_after = calls["n"]
+    # Rerun: all cached, nothing re-downloaded.
+    r2 = fetch.download_corpus(records, tmp_path, downloader=downloader, sleeper=lambda s: None)
+    assert r2["downloaded"] == 0 and r2["already_cached"] == 4 and calls["n"] == n_after
+    assert (tmp_path / "ck.json").exists()  # checkpoint written
+
+
+def test_download_corpus_new_limit_and_faults(tmp_path):
+    def downloader(identifier, filename, dest_path):
+        if identifier == "bad":
+            raise RuntimeError("404 not found")
+        Path(dest_path).write_text("x", encoding="utf-8")
+
+    records = [_dl_record("good", "1"), _dl_record("bad", "2")]
+    # new_limit stops after 1 new download.
+    r = fetch.download_corpus(records, tmp_path, downloader=downloader, sleeper=lambda s: None, new_limit=1)
+    assert r["downloaded"] == 1 and r["complete"] is False
+    # Finish: the bad item's files fail but do not abort the run.
+    r2 = fetch.download_corpus(records, tmp_path, downloader=downloader, sleeper=lambda s: None)
+    assert r2["failed"] >= 1
+    assert any(f["identifier"] == "bad" for f in r2["failures"])
+
+
+def test_integrity_check_flags_missing_and_empty(tmp_path):
+    records = [_dl_record("present", "aaa"), _dl_record("gone", "bbb"), _dl_record("blank", "ccc")]
+    # 'present' source file exists with content.
+    p = fetch.content_path(tmp_path, "aaa", "present_djvu.txt")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("has text", encoding="utf-8")
+    # 'blank' source file exists but is empty.
+    b = fetch.content_path(tmp_path, "ccc", "blank_djvu.txt")
+    b.parent.mkdir(parents=True, exist_ok=True)
+    b.write_text("   \n", encoding="utf-8")
+    # 'gone' has no file on disk.
+    rep = fetch.integrity_check(records, tmp_path)
+    assert rep["source_present"] == 1
+    assert any(m["identifier"] == "gone" for m in rep["missing"])
+    assert any(e["identifier"] == "blank" for e in rep["empty"])
+    assert rep["total_source_bytes"] == p.stat().st_size
 
 
 def test_summarize_counts(real_meta):
