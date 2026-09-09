@@ -230,17 +230,32 @@ def build_record(doc: dict, meta: dict) -> Optional[dict]:
     if year is None:
         year = discover.meta_year(meta)
     page_numbers = find_page_numbers(meta)
+    identifier = doc.get("identifier")
+    md = meta.get("metadata", {})
     record = {
-        "identifier": doc.get("identifier"),
+        "identifier": identifier,
+        # Raw harvest fields, preserved verbatim. creator and publisher are kept
+        # separate on purpose: issuer normalization happens in Phase 5.
         "title": explore._as_text(doc.get("title")),
-        "collection": doc.get("collection"),
+        "creator_raw": doc.get("creator"),
+        "publisher_raw": doc.get("publisher"),
+        "date_raw": doc.get("date"),
+        "collection_raw": doc.get("collection"),
+        "language": doc.get("language"),
+        "mediatype": doc.get("mediatype"),
+        "details_url": f"https://archive.org/details/{identifier}",
+        "license": md.get("licenseurl"),
+        # Preliminary harvest date; Phase 5 is the source of truth, so downstream
+        # loaders ignore these for the normalized columns.
         "year": year,
         "dated": year is not None,
+        # OCR-derivative facts.
         "ocr_format": ocr_format,
         "ocr_engine": ocr_engine_of(meta),
         "has_word_coords": has_word_coords(ocr_format),
         "has_printed_page_map": page_numbers is not None,
         "page_count": page_count_of(meta),
+        "ocr_file_ref": content_ref(ocr["md5"], ocr["name"]) if ocr.get("md5") and ocr.get("name") else None,
         "ocr_file": _file_ref(ocr),
         "page_numbers_file": _file_ref(page_numbers),
         "scandata_file": _file_ref(find_scandata(meta)),
@@ -328,9 +343,15 @@ def enrich(
 # --------------------------------------------------------------------------- #
 
 
-def content_path(cache_dir: Path, md5: str, name: str) -> Path:
+def content_ref(md5: str, name: str) -> str:
+    """Deterministic, cache-root-relative content address for a file. Phase 4
+    joins this to raw/ to locate the cached derivative."""
     base = os.path.basename(name)
-    return cache_dir / "ocr" / md5[:2] / f"{md5}__{base}"
+    return f"ocr/{md5[:2]}/{md5}__{base}"
+
+
+def content_path(cache_dir: Path, md5: str, name: str) -> Path:
+    return cache_dir / content_ref(md5, name)
 
 
 def _default_downloader(identifier: str, filename: str, dest_path: str) -> None:
