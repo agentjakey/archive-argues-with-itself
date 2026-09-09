@@ -103,8 +103,14 @@ def corpus_query(cfg: PilotConfig) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def manifest_page_url(query: str, *, rows: int, start: int, fields: str) -> str:
-    params = [("q", query), ("rows", str(rows)), ("start", str(start)), ("output", "json")]
+# advancedsearch.php pages with a 1-indexed `page` parameter and IGNORES Solr's
+# `start`. A stable sort is required so pages do not overlap or skip items.
+MANIFEST_SORT = "identifier asc"
+
+
+def manifest_page_url(query: str, *, rows: int, page: int, fields: str, sort: str = MANIFEST_SORT) -> str:
+    params = [("q", query), ("rows", str(rows)), ("page", str(page)), ("output", "json")]
+    params += [("sort[]", sort)]
     params += [("fl[]", f) for f in fields.split(",")]
     return f"{discover.ADVANCEDSEARCH_URL}?{urlencode(params)}"
 
@@ -117,20 +123,28 @@ def harvest_manifest(cfg: PilotConfig, out_path: Path, *, ctx: dict) -> list[dic
     discover.assert_healthy(collection_clause(cfg.collections), ctx=ctx)
 
     docs: list[dict] = []
-    start = 0
+    seen: set = set()
+    page = 1
     num_found = None
     while True:
-        url = manifest_page_url(query, rows=cfg.manifest_rows, start=start, fields=cfg.fields)
+        url = manifest_page_url(query, rows=cfg.manifest_rows, page=page, fields=cfg.fields)
         data = discover.cached_get_json(url, **ctx)
         response = data.get("response", {})
         if num_found is None:
             num_found = response.get("numFound", 0)
-        page = response.get("docs", [])
-        if not page:
+        page_docs = response.get("docs", [])
+        if not page_docs:
             break
-        docs.extend(page)
-        start += cfg.manifest_rows
-        if start >= num_found:
+        # Guard against a paging regression (repeated page): stop if a whole page
+        # adds nothing new.
+        new_docs = [d for d in page_docs if d.get("identifier") not in seen]
+        if not new_docs:
+            break
+        for d in new_docs:
+            seen.add(d.get("identifier"))
+        docs.extend(new_docs)
+        page += 1
+        if len(docs) >= num_found:
             break
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as fh:

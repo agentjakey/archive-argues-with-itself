@@ -143,8 +143,9 @@ def test_harvest_manifest_pages_all(tmp_path):
             return {"response": {"numFound": 0, "docs": []}}
         if "rows=0" in url:
             return {"response": {"numFound": 105289, "docs": []}}  # assert_healthy baseline
-        # manifest page: parse start
-        start = int(url.split("start=")[1].split("&")[0])
+        # manifest page: parse 1-indexed page
+        page = int(url.split("page=")[1].split("&")[0])
+        start = (page - 1) * 100
         return {"response": {"numFound": num_found, "docs": all_docs[start:start + 100]}}
 
     ctx, _ = make_ctx(tmp_path, responder)
@@ -160,6 +161,29 @@ def test_harvest_manifest_pages_all(tmp_path):
     lines = out.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == num_found
     assert json.loads(lines[0])["identifier"] == "id0"
+
+
+def test_harvest_manifest_dedupes_repeated_pages(tmp_path):
+    # Regression: if the search ignores paging and returns the same first page
+    # forever (the `start`-vs-`page` bug), the loop must terminate via the seen
+    # guard and return only the unique items, not spin or inflate the count.
+    first_page = [{"identifier": f"id{i}", "title": "t", "year": 1980} for i in range(100)]
+
+    def responder(url):
+        if discover.CANARY_TERM in url:
+            return {"response": {"numFound": 0, "docs": []}}
+        if "rows=0" in url:
+            return {"response": {"numFound": 105289, "docs": []}}
+        return {"response": {"numFound": 3500, "docs": first_page}}  # same page every time
+
+    ctx, _ = make_ctx(tmp_path, responder)
+    cfg = fetch.PilotConfig(
+        topic="t", query="health", mediatype="texts", collections=["governmentpublications"],
+        fields="identifier,title,year", manifest_rows=100, request_delay=0.0, cache_dir=tmp_path,
+        contact="x@example.com", usable_floor=2500,
+    )
+    docs = fetch.harvest_manifest(cfg, tmp_path / "m.jsonl", ctx=ctx)
+    assert len(docs) == 100  # unique only, not 3500
 
 
 def test_harvest_manifest_aborts_on_throttle(tmp_path):
