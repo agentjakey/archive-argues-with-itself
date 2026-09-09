@@ -21,19 +21,40 @@ max_items = 8000     # safety cap per candidate; keeps the pilot bounded
 mediatype = "texts"  # scanned-OCR items
 
 [audit.collections]
-# Canadian government collections to search within.
+# Empirically discovered from a real topical housing sample via the metadata API.
+# See reports/coverage_audit/discovery.md and finalist_sizing.md.
+#
+# statisticscanada and canadiana were NOT surfaced by discovery and are dropped
+# (they are not where these items live).
 confirmed = ["governmentpublications"]
-# Add after confirming with the run's per-collection counts:
-candidate = ["statisticscanada", "canadiana"]
+
+# Other Canadian-government collections found. They overlap governmentpublications
+# almost entirely: the curated-gov union total is 105289 vs 104293 for
+# governmentpublications alone, so they add almost nothing on their own.
+government = [
+    "albertagovernmentpublications", "uoftgovpubs", "ministryoffinance_ontario",
+    "ocul_govinfocommunity", "hpl-govdocs", "canadianmunicipal",
+    "ontarioeconomiccouncil", "taskforce_reports",
+]
+
+# microlog: a 207863-item Canadian government/institutional documents collection.
+# Including it is what lets housing and immigration clear the 2500 floor, but it is
+# microfiche-sourced and its OCR quality is UNVERIFIED here (the OCR spot check
+# covered governmentpublications items, not microlog). Spot-check before adopting.
+optional_needs_ocr_check = ["microlog"]
+
+# Excluded: digitization/library/format sources, not government issuers, and they
+# break the "Canadian public record" scope: toronto, robarts, university_of_toronto,
+# university_of_alberta_libraries, microfiche.
 
 [[audit.candidates]]
 name = "housing_affordability"
-query = 'housing OR "affordable housing" OR affordability OR "housing conditions" OR "cost of living"'
+query = 'housing OR "housing affordability" OR "affordable housing" OR "public housing" OR "cost of living" OR tenancy OR rental OR "national housing act" OR CMHC OR shelter OR homelessness'
 
 [[audit.candidates]]
 name = "immigration"
-query = "immigration OR immigrant OR immigrants OR refugee OR refugees OR migration"
+query = 'immigration OR immigrant OR immigrants OR migrant OR migration OR refugee OR refugees OR "immigration act" OR naturalization OR citizenship OR settlement'
 
 [[audit.candidates]]
 name = "public_health"
-query = 'health OR "public health" OR healthcare OR hospital OR disease'
+query = 'health OR "public health" OR healthcare OR hospital OR disease OR epidemic OR "medical care" OR sanitation OR "communicable disease" OR vaccination OR "health insurance"'
