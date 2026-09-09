@@ -1,0 +1,95 @@
+{
+  "items": [
+    {
+      "identifier": "00generalindexto00ontauoft",
+      "title": "General index to the journals and sessional papers of the Legislative Assembly, Ontario, 1889-1900, 52 to 63 Vict., also, Index to the divisions in House and list of appendixes to journals, 1867-8 to 1900, 31 to 63 Vict.",
+      "creator": [
+        "Ontario. Legislative Assembly",
+        "Sydere, Arthur H. (Arthur Henry), 1841-1926"
+      ],
+      "mediatype": "texts",
+      "date": "1889-01-01T00:00:00Z",
+      "publisher": "Toronto : L.K. Cameron",
+      "language": "eng",
+      "collection": [
+        "ontla",
+        "toronto",
+        "governmentpublications",
+        "fav-optimate_popularis"
+      ],
+      "year": 1889
+    },
+    {
+      "title": "Ambient air survey in Mississauga : April 1978.",
+      "publisher": "Ontario Ministry of the Environment",
+      "date": "1980-01-01T00:00:00Z",
+      "language": "eng",
+      "mediatype": "texts",
+      "identifier": "01ambientairsurvey00onta",
+      "collection": [
+        "omote",
+        "toronto",
+        "governmentpublications"
+      ],
+      "year": 1980
+    },
+    {
+      "title": "Amherstburg area water system : annual report - 1986 /",
+      "publisher": "Ontario Ministry of the Environment",
+      "language": "eng",
+      "mediatype": "texts",
+      "identifier": "01amherstburgareaw00onta",
+      "collection": [
+        "omote",
+        "toronto",
+        "governmentpublications"
+      ]
+    },
+    {
+      "title": "Amherstburg water supply system : annual report 1988.",
+      "publisher": "Ontario Ministry of the Environment",
+      "date": "1990-01-01T00:00:00Z",
+      "language": "eng",
+      "mediatype": "texts",
+      "identifier": "01amherstburgwater00onta",
+      "collection": [
+        "omote",
+        "toronto",
+        "governmentpublications"
+      ],
+      "year": 1990
+    },
+    {
+      "title": "An analysis of the impact of smelter emissions on precipitation quality and wet deposition in the Sudbury area : Sudbury environmental study event precipitation network results - SES 006/82.",
+      "publisher": "Ontario Ministry of the Environment",
+      "date": "1982-01-01T00:00:00Z",
+      "language": "eng",
+      "mediatype": "texts",
+      "identifier": "01analysisofimpact00onta",
+      "collection": [
+        "omote",
+        "toronto",
+        "governmentpublications"
+      ],
+      "year": 1982
+    },
+    {
+      "title": "Analytical data : 1980-1981, Volume 2, Analytical data for southern Ontario /",
+      "creator": "Griffith, M.A.",
+      "publisher": "Ontario Ministry of the Environment",
+      "date": "1984-01-01T00:00:00Z",
+      "language": "eng",
+      "mediatype": "texts",
+      "identifier": "01analyticaldata1900grif",
+      "collection": [
+        "omote",
+        "toronto",
+        "governmentpublications"
+      ],
+      "year": 1984
+    }
+  ],
+  "count": 6,
+  "cursor": "W3siaWRlbnRpZmllclNvcnRlciI6IjAyYXNzZXNzbWVudG9mcGVyZjAwYmFyZCJ9XQ==",
+  "total": 104298
+}

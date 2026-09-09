@@ -1,0 +1,39 @@
+# Week 1 coverage-audit candidates.
+#
+# This file is separate from config/pilot.toml on purpose. pilot.toml holds the
+# ONE chosen pilot corpus (filled in after this audit). This file holds the 2-3
+# CANDIDATE civic topics we compare before choosing.
+#
+# The audit query for each candidate is built as:
+#     mediatype:texts AND collection:(<collections>) AND (<candidate query>)
+#
+# Only "governmentpublications" is confirmed real and Canadian (verified against
+# the scrape API: ~104k texts, e.g. Ontario Legislative Assembly, Ontario
+# Ministry of the Environment). The others are plausible but UNVERIFIED here
+# because the scrape API throttled repeated probes; the audit run reports a
+# per-collection item count so any invalid identifier shows up as zero. Edit
+# this list before the run.
+
+[audit]
+fields = "identifier,title,creator,publisher,date,year,collection,language,mediatype"
+count = 100          # scrape API minimum page size is 100
+max_items = 8000     # safety cap per candidate; keeps the pilot bounded
+mediatype = "texts"  # scanned-OCR items
+
+[audit.collections]
+# Canadian government collections to search within.
+confirmed = ["governmentpublications"]
+# Add after confirming with the run's per-collection counts:
+candidate = ["statisticscanada", "canadiana"]
+
+[[audit.candidates]]
+name = "housing_affordability"
+query = 'housing OR "affordable housing" OR affordability OR "housing conditions" OR "cost of living"'
+
+[[audit.candidates]]
+name = "immigration"
+query = "immigration OR immigrant OR immigrants OR refugee OR refugees OR migration"
+
+[[audit.candidates]]
+name = "public_health"
+query = 'health OR "public health" OR healthcare OR hospital OR disease'
