@@ -218,5 +218,26 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Agents
-AGENTS.md 
-CLAUDE.md 
+AGENTS.md
+CLAUDE.md
+
+# --- archive-argues-with-itself ---
+
+# Harvested raw material (IA responses, OCR derivatives). Never committed;
+# rebuild it from config/pilot.toml via the harvest layer.
+raw/
+
+# Built indexes and any local sqlite stores.
+*.db
+
+# Node / Next.js (web/)
+node_modules/
+.next/
+next-env.d.ts
+web/out/
+
+# Keep a tiny real test-fixture cache in the repo. These negations must come
+# after the patterns above (raw/, *.db) so fixtures survive them.
+!tests/fixtures/
+!tests/fixtures/**
+!tests/fixtures/**/*.db

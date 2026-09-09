@@ -1,0 +1,42 @@
+# Pilot corpus configuration.
+#
+# This file defines the bounded pilot: the civic topic, the time window, the
+# comparison years, and the exact Internet Archive queries used to assemble the
+# corpus. Values are left as TODO on purpose. They are set during the Week 1
+# collection audit, after confirming the topic actually has longitudinal
+# coverage. Do not fill these with guesses.
+
+[corpus]
+# The single civic topic for the pilot. Proposal leans toward housing
+# affordability, pending the coverage audit.
+topic = "TODO"                       # e.g. "housing affordability"
+jurisdiction_scope = "TODO"          # e.g. "Canada: federal + provincial"
+
+[corpus.window]
+start_year = 0                       # TODO
+end_year = 0                         # TODO
+comparison_years = []                # TODO, e.g. [1995, 2005, 2025]
+
+[corpus.queries]
+# Internet Archive advanced-search queries that define the corpus. Kept explicit
+# so the pilot is reproducible from this file alone.
+internet_archive = []                # TODO, list of IA search query strings
+collections = []                     # TODO, list of IA collection identifiers
+mediatype = "texts"
+
+[corpus.limits]
+# Keep the pilot deliberately bounded. Do not index the whole collection.
+max_items = 0                        # TODO, target a few thousand
+max_pages_per_item = 0               # TODO or 0 for no per-item cap
+
+[harvest]
+# Internet Archive automated-access etiquette.
+user_agent = "TODO"                  # identify the client, e.g. contact email
+request_delay_seconds = 1.0
+max_retries = 5
+use_existing_ocr = true              # prefer existing OCR derivatives
+cache_dir = "raw"                    # not committed; see .gitignore
+
+[index]
+db_path = "index.db"                 # local sqlite store; not committed
+embedding_model = "TODO"             # fastembed model id

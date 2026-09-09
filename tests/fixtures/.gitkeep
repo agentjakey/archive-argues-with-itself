@@ -1,0 +1,4 @@
+# This directory holds small, real fixtures for the test suite: trimmed
+# Internet Archive responses and short OCR page samples captured from actual
+# items. Prefer real captured fixtures over mocks. Do not place fabricated data
+# here. It is kept in version control on purpose (see .gitignore negations).

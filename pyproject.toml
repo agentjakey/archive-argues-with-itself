@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "archive-argues-with-itself"
+version = "0.0.0"
+description = "A civic memory debugger for Canada's public record: page-level provenance, temporal comparison, and visible archival uncertainty."
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Jacob Ortiz" }]
+
+# Pins are intentional for reproducibility. They have not yet been resolved
+# together by a real installer on this machine; run a lock/install pass before
+# relying on them (see UNCERTAIN in the phase report).
+dependencies = [
+    "internetarchive==4.1.0",   # harvest: IA metadata + OCR derivative access
+    "requests==2.32.3",         # harvest: raw HTTP where the IA client is not used
+    "lxml==5.3.0",              # ingest: parse OCR/XML derivatives
+    "sqlite-vec==0.1.6",        # ingest/retrieve: vector index inside sqlite (inspectable, single file)
+    "fastembed==0.4.2",         # ingest/retrieve: small ONNX embedding models, no torch
+    "fastapi==0.115.6",         # api: read-only serve layer
+    "uvicorn[standard]==0.34.0",# api: ASGI server
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+]
+
+[project.urls]
+Homepage = "https://github.com/agentjakey/archive-argues-with-itself"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
