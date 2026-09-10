@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 from pathlib import Path
 
 import pytest
@@ -343,6 +344,92 @@ def test_download_corpus_new_limit_and_faults(tmp_path):
     r2 = fetch.download_corpus(records, tmp_path, downloader=downloader, sleeper=lambda s: None)
     assert r2["failed"] >= 1
     assert any(f["identifier"] == "bad" for f in r2["failures"])
+
+
+def test_download_corpus_parallel_skips_cached(tmp_path):
+    # Pre-place one item's source file; the downloader must not be called for it.
+    calls = []
+    lock = __import__("threading").Lock()
+
+    def downloader(identifier, filename, dest_path):
+        with lock:
+            calls.append(filename)
+        Path(dest_path).write_text("x", encoding="utf-8")
+
+    rec = _dl_record("a", "111")
+    pre = fetch.content_path(tmp_path, "111", "a_djvu.txt")
+    pre.parent.mkdir(parents=True, exist_ok=True)
+    pre.write_text("already here", encoding="utf-8")
+
+    r = fetch.download_corpus([rec], tmp_path, downloader=downloader, sleeper=lambda s: None, workers=4)
+    assert r["already_cached"] >= 1
+    assert "a_djvu.txt" not in calls  # cached file skipped, never downloaded
+
+
+def test_download_corpus_retries_transient_then_lists(tmp_path):
+    attempts = {}
+    lock = __import__("threading").Lock()
+
+    def downloader(identifier, filename, dest_path):
+        with lock:
+            attempts[filename] = attempts.get(filename, 0) + 1
+        if identifier == "bad":
+            raise RuntimeError("500 Server Error")     # transient -> retried
+        Path(dest_path).write_text("ok", encoding="utf-8")
+
+    records = [_dl_record("good", "1"), _dl_record("bad", "2")]
+    r = fetch.download_corpus(records, tmp_path, downloader=downloader, sleeper=lambda s: None,
+                              max_retries=3, workers=4)
+    # bad item's source file was attempted exactly max_retries times, then listed.
+    assert attempts["bad_djvu.txt"] == 3
+    assert r["failed"] >= 1
+    assert any(f["identifier"] == "bad" for f in r["failures"])
+
+
+def test_download_corpus_no_retry_on_permanent_error(tmp_path):
+    attempts = {}
+
+    def downloader(identifier, filename, dest_path):
+        attempts[filename] = attempts.get(filename, 0) + 1
+        raise RuntimeError("404 Not Found")            # permanent -> no retry
+
+    r = fetch.download_corpus([_dl_record("x", "9")], tmp_path, downloader=downloader,
+                              sleeper=lambda s: None, max_retries=3, workers=2)
+    assert attempts["x_djvu.txt"] == 1                  # tried once, not retried
+    assert r["failed"] >= 1
+
+
+def test_download_corpus_worker_cap_holds(tmp_path):
+    import threading
+    active = {"now": 0, "max": 0}
+    lock = threading.Lock()
+
+    def downloader(identifier, filename, dest_path):
+        with lock:
+            active["now"] += 1
+            active["max"] = max(active["max"], active["now"])
+        time.sleep(0.01)  # force overlap so concurrency is observable
+        with lock:
+            active["now"] -= 1
+        Path(dest_path).write_text("x", encoding="utf-8")
+
+    records = [_dl_record(f"i{i}", f"{i:03d}") for i in range(40)]
+    r = fetch.download_corpus(records, tmp_path, downloader=downloader, sleeper=lambda s: None,
+                              workers=99)  # request over the cap
+    assert r["workers"] == fetch.MAX_WORKERS == 8       # clamped to hard cap
+    assert active["max"] <= fetch.MAX_WORKERS           # never exceeded at runtime
+
+
+def test_download_corpus_canary_aborts(tmp_path):
+    def downloader(identifier, filename, dest_path):
+        raise AssertionError("must not download when canary fails")
+
+    def canary():
+        raise discover.ThrottleError("service throttled")
+
+    with pytest.raises(discover.ThrottleError):
+        fetch.download_corpus([_dl_record("a", "1")], tmp_path, downloader=downloader,
+                              sleeper=lambda s: None, canary=canary)
 
 
 def test_integrity_check_flags_missing_and_empty(tmp_path):

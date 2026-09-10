@@ -76,18 +76,49 @@ def _write_item(conn: sqlite3.Connection, item_id: str, pages: list[dict], passa
     )
 
 
-def _flag_alignment(conn: sqlite3.Connection, item_id: str, parsed: int, expected: Optional[int]) -> None:
+def _flag_alignment(conn: sqlite3.Connection, item_id: str, parsed: int, expected: Optional[int], source: Optional[str]) -> None:
     conn.execute(
         "INSERT OR REPLACE INTO gaps (gap_id, gap_type, scope, metric, value, examples_json) VALUES (?,?,?,?,?,?)",
-        (f"align:{item_id}", "citation-alignment-risk", item_id, "parsed_vs_leaves",
-         float(parsed), json.dumps({"parsed_pages": parsed, "page_map_leaves": expected})),
+        (f"align:{item_id}", "citation-alignment-risk", item_id, "parsed_vs_expected",
+         float(parsed), json.dumps({"parsed_pages": parsed, "expected_leaves": expected, "expected_source": source})),
     )
 
 
-def build_corpus(conn: sqlite3.Connection, records: list[dict], cache_dir: Path, *, limit: Optional[int] = None) -> dict:
+def _parsed_item_ids(conn: sqlite3.Connection) -> set:
+    return {r[0] for r in conn.execute("SELECT DISTINCT item_id FROM pages")}
+
+
+def _clear_parse(conn: sqlite3.Connection) -> None:
+    # Fresh build: drop prior parse output (FK-safe order) and only the gaps this
+    # stage owns. items and eval_* are left untouched.
+    conn.execute("DELETE FROM passages")
+    conn.execute("DELETE FROM pages")
+    conn.execute("DELETE FROM gaps WHERE gap_type='citation-alignment-risk'")
+    conn.commit()
+
+
+def build_corpus(
+    conn: sqlite3.Connection,
+    records: list[dict],
+    cache_dir: Path,
+    *,
+    limit: Optional[int] = None,
+    resume: bool = False,
+    fresh: bool = False,
+    commit_every: int = 50,
+) -> dict:
+    """Parse cached OCR into pages/passages.
+
+    fresh:  clear any prior parse output first (uniform semantics across a rebuild).
+    resume: skip items already present in pages, so a killed run continues where it
+            stopped. Progress is committed every `commit_every` items, so a mid-run
+            kill loses at most one batch (each item's write is idempotent anyway).
+    """
     stats = {
         "items_parsed": 0,
+        "items_skipped_done": 0,
         "items_pending_download": 0,
+        "items_no_page_numbers": 0,
         "total_pages": 0,
         "total_passages": 0,
         "by_source": Counter(),
@@ -95,28 +126,43 @@ def build_corpus(conn: sqlite3.Connection, records: list[dict], cache_dir: Path,
         "alignment_risk": 0,
         "zero_usable_text_items": 0,
     }
-    n = 0
+    if fresh:
+        _clear_parse(conn)
+    done = _parsed_item_ids(conn) if resume else set()
+    n = since_commit = 0
     for record in records:
         if limit is not None and n >= limit:
             break
+        item_id = record["identifier"]
+        if item_id in done:
+            stats["items_skipped_done"] += 1
+            continue
         source_path = _cached_source(record, cache_dir)
         if source_path is None:
             stats["items_pending_download"] += 1
             continue
-        item_id = record["identifier"]
         printed = _printed_pages(record, cache_dir)
-        expected = len(printed) if printed is not None else None
+        if printed is None:
+            stats["items_no_page_numbers"] += 1
+        # Validate parsed page count against page_numbers leaves first, else the
+        # metadata page_count. On a page_numbers mismatch we DROP the positional
+        # printed-page map for the item rather than trust a map we just flagged.
+        expected = len(printed) if printed is not None else record.get("page_count")
+        expected_source = "page_numbers" if printed is not None else ("metadata" if record.get("page_count") is not None else None)
 
         page_texts = _parse_pages(record, source_path)
         parsed_count = len(page_texts)
-        pages = ocr.build_pages(item_id, page_texts, printed)
+        mismatch = expected is not None and parsed_count != expected
+        printed_for_pages = None if (printed is not None and mismatch) else printed
+
+        pages = ocr.build_pages(item_id, page_texts, printed_for_pages)
         passages: list[dict] = []
         for page in pages:
             passages.extend(ocr.build_passages(item_id, page))
 
         _write_item(conn, item_id, pages, passages)
-        if expected is not None and parsed_count != expected:
-            _flag_alignment(conn, item_id, parsed_count, expected)
+        if mismatch:
+            _flag_alignment(conn, item_id, parsed_count, expected, expected_source)
             stats["alignment_risk"] += 1
 
         stats["items_parsed"] += 1
@@ -127,7 +173,11 @@ def build_corpus(conn: sqlite3.Connection, records: list[dict], cache_dir: Path,
             stats["quality_buckets"][ocr.quality_bucket(p["ocr_quality"])] += 1
         if not any(p["has_text"] for p in pages):
             stats["zero_usable_text_items"] += 1
+        since_commit += 1
         n += 1
+        if since_commit >= commit_every:
+            conn.commit()
+            since_commit = 0
     conn.commit()
     stats["by_source"] = dict(stats["by_source"])
     stats["quality_buckets"] = dict(stats["quality_buckets"])
@@ -140,6 +190,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--items", default="data/harvest/items.jsonl", type=Path)
     p.add_argument("--cache-dir", default="raw", type=Path)
     p.add_argument("--limit", type=int, default=None)
+    p.add_argument("--resume", action="store_true", help="skip items already parsed into pages")
+    p.add_argument("--fresh", action="store_true", help="clear prior parse output before running")
     return p
 
 
@@ -158,7 +210,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     conn = db.init_db(db.resolve_db_path(args.config))
     try:
         records = _read_records(args.items)
-        stats = build_corpus(conn, records, args.cache_dir, limit=args.limit)
+        stats = build_corpus(conn, records, args.cache_dir, limit=args.limit, resume=args.resume, fresh=args.fresh)
     finally:
         conn.close()
     print(json.dumps(stats, ensure_ascii=False))

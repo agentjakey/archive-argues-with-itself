@@ -30,9 +30,11 @@ import logging
 import os
 import random
 import sys
+import threading
 import time
 import tomllib
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Optional
@@ -446,6 +448,51 @@ def _write_checkpoint(path: Optional[Path], data: dict) -> None:
         json.dump(data, fh, ensure_ascii=False, indent=2)
 
 
+MAX_WORKERS = 8   # hard cap on download concurrency; never exceed this
+MAX_DELAY = 60.0
+TRANSIENT_MARKERS = ("500", "timeout", "timed out", "connection", "temporarily")
+
+
+def _is_transient(exc: Exception) -> bool:
+    """Retry only IA 500 / timeout / connection blips, not permanent errors (404)."""
+    msg = str(exc).lower()
+    return any(m in msg for m in TRANSIENT_MARKERS)
+
+
+def _download_one(
+    ident: str,
+    entry: dict,
+    dest: Path,
+    *,
+    downloader: Callable[[str, str, str], None],
+    sleeper: Callable[[float], None],
+    rng: random.Random,
+    delay: float,
+    max_retries: int,
+) -> tuple[str, str, str, Optional[str]]:
+    """Worker: download one file to its content-addressed path with retries on
+    transient errors. Returns (status, identifier, filename, error)."""
+    if dest.exists():  # race-safe re-check
+        return ("cached", ident, entry["name"], None)
+    last_err = None
+    for attempt in range(max_retries):
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            # Unique temp name so two workers never collide on a shared-md5 file.
+            tmp = dest.with_name(f"{dest.name}.{threading.get_ident()}.part")
+            downloader(ident, entry["name"], str(tmp))
+            os.replace(tmp, dest)
+            return ("downloaded", ident, entry["name"], None)
+        except Exception as exc:  # noqa: BLE001
+            last_err = str(exc)[:200]
+            if _is_transient(exc) and attempt < max_retries - 1:
+                backoff = min(MAX_DELAY, delay * (2 ** attempt)) + rng.uniform(0.0, delay)
+                sleeper(backoff)
+                continue
+            break
+    return ("failed", ident, entry["name"], last_err)
+
+
 def download_corpus(
     records: list[dict],
     cache_dir: Path,
@@ -457,36 +504,81 @@ def download_corpus(
     batch: int = 100,
     checkpoint_path: Optional[Path] = None,
     keys: tuple = DOWNLOAD_KEYS,
+    workers: int = 4,
+    max_retries: int = 3,
+    rng: Optional[random.Random] = None,
+    canary: Optional[Callable[[], None]] = None,
 ) -> dict:
-    """Download the given file keys per item into the content-addressed cache.
-    Streams to disk (never holds a file in memory); skip-cached; fault-tolerant
-    (a per-file error is recorded, not fatal). Writes a checkpoint every `batch`
-    new downloads so a kill loses at most one batch. `new_limit` caps NEW
-    downloads this call for bounded, resumable runs."""
-    downloaded = cached = failed = 0
-    failures: list[dict] = []
+    """Download the given file keys per item into the content-addressed cache using
+    a bounded thread pool (latency-bound small files). Streams to disk; skip-cached;
+    per-file transient errors are retried up to `max_retries`, then logged and
+    listed (never fatal). A checkpoint is written every `batch` completions, so a
+    kill loses at most the in-flight batch. `new_limit` caps NEW downloads this call.
+
+    workers is clamped to [1, MAX_WORKERS] (hard cap 8). If `canary` is given it is
+    run once before any download and may raise to abort the run."""
+    workers = max(1, min(workers, MAX_WORKERS))
+    rng = rng or random.Random()
+    if canary is not None:
+        canary()  # may raise (e.g. ThrottleError) to abort before downloading
+
+    # Build the task list, applying the content-addressed skip-cached check up
+    # front and de-duplicating by destination (shared-md5 files map to one path).
+    cached = 0
+    seen_dest: set = set()
+    tasks: list[tuple[str, dict, Path]] = []
     for record in records:
-        ident = record["identifier"]
         for entry in _iter_item_files(record, keys):
             dest = content_path(cache_dir, entry["md5"], entry["name"])
+            if dest in seen_dest:
+                continue
+            seen_dest.add(dest)
             if dest.exists():
                 cached += 1
                 continue
-            try:
-                download_file(ident, entry, cache_dir, downloader=downloader, sleeper=sleeper, delay=delay)
+            tasks.append((record["identifier"], entry, dest))
+
+    total_uncached = len(tasks)
+    if new_limit is not None:
+        tasks = tasks[:new_limit]
+    complete = new_limit is None or new_limit >= total_uncached
+
+    downloaded = failed = 0
+    failures: list[dict] = []
+    completed = 0
+
+    def work(task):
+        ident, entry, dest = task
+        return _download_one(
+            ident, entry, dest, downloader=downloader, sleeper=sleeper,
+            rng=rng, delay=delay, max_retries=max_retries,
+        )
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(work, t) for t in tasks]
+        for fut in as_completed(futures):
+            status, ident, fname, err = fut.result()
+            if status == "downloaded":
                 downloaded += 1
-            except Exception as exc:  # noqa: BLE001 - one bad file must not abort the run
+            elif status == "cached":
+                cached += 1
+            else:
                 failed += 1
-                failures.append({"identifier": ident, "file": entry["name"], "error": str(exc)[:200]})
-                log.warning("download failed %s/%s: %s", ident, entry["name"], exc)
-                continue
-            if downloaded % batch == 0:
-                _write_checkpoint(checkpoint_path, {"downloaded": downloaded, "cached": cached, "failed": failed, "last_identifier": ident})
-            if new_limit is not None and downloaded >= new_limit:
-                _write_checkpoint(checkpoint_path, {"downloaded": downloaded, "cached": cached, "failed": failed, "last_identifier": ident, "complete": False})
-                return {"downloaded": downloaded, "already_cached": cached, "failed": failed, "failures": failures, "complete": False}
-    _write_checkpoint(checkpoint_path, {"downloaded": downloaded, "cached": cached, "failed": failed, "complete": True})
-    return {"downloaded": downloaded, "already_cached": cached, "failed": failed, "failures": failures, "complete": True}
+                failures.append({"identifier": ident, "file": fname, "error": err})
+                log.warning("download failed after retries %s/%s: %s", ident, fname, err)
+            completed += 1
+            if completed % batch == 0:
+                _write_checkpoint(checkpoint_path, {"downloaded": downloaded, "cached": cached, "failed": failed, "completed": completed})
+
+    _write_checkpoint(checkpoint_path, {"downloaded": downloaded, "cached": cached, "failed": failed, "complete": complete})
+    return {
+        "downloaded": downloaded,
+        "already_cached": cached,
+        "failed": failed,
+        "failures": failures,
+        "complete": complete,
+        "workers": workers,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -777,16 +869,20 @@ def run(
     return summary
 
 
-def run_download_all(config_path: Path, out_dir: Path, *, contact: str, new_limit: Optional[int]) -> dict:
+def run_download_all(config_path: Path, out_dir: Path, *, contact: str, new_limit: Optional[int], workers: int = 4) -> dict:
     """Standalone: download every source derivative for the already-enriched
-    items.jsonl. Resumable via the content-addressed cache."""
+    items.jsonl, in parallel. Resumable via the content-addressed cache. A health
+    canary (advancedsearch) runs first so a throttled service aborts the run
+    rather than hammering it."""
     cfg = load_pilot(config_path)
     if contact:
         cfg.contact = contact
     records = load_records(out_dir / "items.jsonl")
+    canary_ctx = _make_ctx(cfg, cfg.cache_dir / "search_cache", offline=False)
+    canary = lambda: discover.assert_healthy(collection_clause(cfg.collections), ctx=canary_ctx)
     return download_corpus(
         records, cfg.cache_dir, delay=cfg.request_delay, new_limit=new_limit,
-        checkpoint_path=out_dir / "download_checkpoint.json",
+        checkpoint_path=out_dir / "download_checkpoint.json", workers=workers, canary=canary,
     )
 
 
@@ -811,6 +907,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--download-all", action="store_true", help="standalone: download all sources for items.jsonl")
     p.add_argument("--integrity", action="store_true", help="standalone: integrity pass + re-fetch")
     p.add_argument("--new-limit", type=int, default=None, help="cap NEW downloads this call (resumable batches)")
+    p.add_argument("--workers", type=int, default=4, help=f"parallel download workers (default 4, hard cap {MAX_WORKERS})")
     p.add_argument("--enrich-limit", type=int, default=None, help="cap items enriched (debug)")
     p.add_argument("--offline", action="store_true", help="use cache only; fail on cache miss")
     p.add_argument("--verbose", action="store_true")
@@ -837,8 +934,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     if args.download_all:
-        dl = run_download_all(args.config, args.out, contact=args.contact, new_limit=args.new_limit)
-        print(f"download-all: {dl['downloaded']} new, {dl['already_cached']} cached, {dl['failed']} failed, complete={dl['complete']}")
+        try:
+            dl = run_download_all(args.config, args.out, contact=args.contact, new_limit=args.new_limit, workers=args.workers)
+        except ThrottleError as exc:
+            print(f"Aborted (health canary): {exc}", file=sys.stderr)
+            return 3
+        print(
+            f"download-all: {dl['downloaded']} new, {dl['already_cached']} cached, "
+            f"{dl['failed']} failed (listed in result), workers={dl['workers']}, complete={dl['complete']}"
+        )
         return 0
     if args.integrity:
         rep = run_integrity_pass(args.config, args.out, contact=args.contact)
