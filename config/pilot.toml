@@ -64,4 +64,15 @@ cache_dir = "raw"                    # not committed; see .gitignore
 
 [index]
 db_path = "civic.db"                 # local sqlite store; not committed
-embedding_model = "TODO"             # fastembed model id, set in the ingest phase
+embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+embedding_dim = 384                   # dimensionality of the dense vectors
+
+[retrieve]
+index_path = "index/vectors.db"      # separate artifact, not committed, like raw/ocr/
+embedder = "fastembed"               # tests/CI override to "stub"
+batch_size = 256
+candidates = 200                     # top-N per arm fed into RRF
+rrf_k = 60
+downweight_high = 1.0
+downweight_medium = 0.9
+downweight_low = 0.75

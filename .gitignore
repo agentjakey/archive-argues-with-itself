@@ -229,6 +229,7 @@ raw/
 
 # Built indexes and any local sqlite stores.
 *.db
+index/
 
 # Harvest outputs (regenerable from config/pilot.toml + the cache under raw/).
 data/
