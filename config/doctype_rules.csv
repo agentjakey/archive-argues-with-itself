@@ -1,0 +1,21 @@
+pattern,doc_type,specificity
+royal commission,royal_commission,3
+commission of inquiry,commission,2
+commission to investigate,commission,2
+sars commission,commission,2
+commission on,commission,1
+inquiry into,commission,2
+standing committee,standing_committee,2
+select committee,standing_committee,2
+sub-committee,standing_committee,2
+subcommittee,standing_committee,2
+annual report,annual_report,2
+rapport annuel,annual_report,2
+appeal board,board_or_appeal,2
+advisory and appeal board,board_or_appeal,2
+board of inquiry,board_or_appeal,2
+tribunal,board_or_appeal,2
+vital statistics,statistical_report,2
+statistical report,statistical_report,2
+statistical,statistical_report,1
+statistics,statistical_report,1

@@ -1,0 +1,34 @@
+kind,pattern,jurisdiction,specificity
+text,world health organization,international,2
+text,queen's printer for canada,federal,2
+text,national health and welfare,federal,2
+text,dept. of national health,federal,2
+text,department of national health,federal,2
+text,statistics canada,federal,2
+text,statistique canada,federal,2
+text,health canada,federal,2
+text,public health agency of canada,federal,2
+text,government of canada,federal,2
+text,govt. of canada,federal,2
+text,house of commons,federal,2
+text,senate of canada,federal,2
+text,parliament,federal,2
+text,labour canada,federal,2
+text,environment canada,federal,2
+text,agriculture canada,federal,2
+text,queen's printer for ontario,ontario,2
+text,ontario ministry,ontario,2
+text,ontario,ontario,1
+text,toronto,ontario,1
+text,hamilton,ontario,1
+text,government of alberta,alberta,2
+text,province of alberta,alberta,2
+text,alberta health services,alberta,2
+text,alberta health,alberta,2
+text,alberta,alberta,1
+text,edmonton,alberta,1
+text,calgary,alberta,1
+text,ottawa,federal,1
+collection,albertagovernmentpublications,alberta,1
+collection,ministryoffinance_ontario,ontario,1
+collection,ontarioeconomiccouncil,ontario,1
