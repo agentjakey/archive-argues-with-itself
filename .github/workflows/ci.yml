@@ -56,3 +56,26 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/health > /dev/null && break; sleep 1; done
           python scripts/smoke.py http://127.0.0.1:8000 || { cat "$RUNNER_TEMP/uvicorn.log"; exit 1; }
           kill %1
+
+  clean-clone:
+    # Build from a fresh clone that contains only committed files, so a source file
+    # that is tracked-but-missing (for example hidden by a stray .gitignore rule)
+    # fails here before it reaches a deploy. This is what the web/src/lib case needed.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: clone the committed tree and build it
+        run: |
+          git clone --quiet . "$RUNNER_TEMP/clone"
+          cd "$RUNNER_TEMP/clone/web"
+          npm ci
+          npm run build
+          cd "$RUNNER_TEMP/clone"
+          python -m pip install -e ".[dev]"
+          python -m pytest -q

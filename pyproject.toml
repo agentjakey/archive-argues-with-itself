@@ -16,7 +16,6 @@ authors = [{ name = "Jacob Ortiz" }]
 dependencies = [
     "internetarchive==4.1.0",   # harvest: IA metadata + OCR derivative access
     "requests==2.32.3",         # harvest: raw HTTP where the IA client is not used
-    "lxml==5.3.0",              # ingest: parse OCR/XML derivatives
     "sqlite-vec==0.1.6",        # ingest/retrieve: vector index inside sqlite (inspectable, single file)
     "fastembed==0.4.2",         # ingest/retrieve: small ONNX embedding models, no torch
     "fastapi==0.115.6",         # api: read-only serve layer

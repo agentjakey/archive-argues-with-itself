@@ -1,5 +1,12 @@
 # Proposal: The Archive Argues With Itself: A Civic Memory Debugger
 
+> This is the original fellowship proposal, kept as written for provenance. Some
+> specifics changed during the build: the pilot topic became public health rather
+> than housing (housing did not clear the item floor in a clean government scope),
+> the interface was built with Vite and React rather than Next.js, and the corpus
+> reaches about 2009 rather than the present. See the README and docs/METHODS.md
+> for what was actually built.
+
 The Archive Argues With Itself: A Civic Memory Debugger
 
 Project summary

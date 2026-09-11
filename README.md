@@ -17,6 +17,31 @@ by decade, and a plain statement when the record is too thin to answer.
 
 **Try it:** LIVE_URL
 
+## Why it exists
+
+An official answer to a civic question is not fixed. What a government said caused
+a problem, or how it described a program, changes from one decade's report to the
+next, and the wording of the change is often the point. Most tools flatten that
+into a single summary. This one does the opposite: it puts the scanned pages in
+front of you, keeps every sentence tied to a page you can open, and marks the
+places where the record is thin or silent instead of guessing past them.
+
+## Contents
+
+- [What it is, and is not](#what-it-is-and-is-not)
+- [The numbers](#the-numbers)
+- [Quickstart](#quickstart)
+- [Run it yourself](#run-it-yourself)
+- [The four rules](#the-four-rules)
+- [How it works](#how-it-works-briefly)
+- [Methods and gaps](#methods-and-gaps)
+- [Reproducing the evaluation](#reproducing-the-evaluation)
+- [Contributing](#contributing)
+- [Acknowledgements](#acknowledgements)
+- [Citation](#citation)
+- [License](#license)
+- [Security](SECURITY.md)
+
 ## What it is, and is not
 
 It is a civic memory debugger: page-level provenance on every claim, a comparison
@@ -110,6 +135,19 @@ python -m archive_debugger.eval.questions --file eval/seed_questions.jsonl      
 python -m archive_debugger.eval.label --from-worksheet reports/phase7/label_worksheet.jsonl --apply-decisions eval/gold_decisions.json
 python -m archive_debugger.eval.report
 ```
+
+## Reproducing the evaluation
+
+The evaluation gold is committed: 50 questions in `eval/seed_questions.jsonl`, the
+relevance decisions in `eval/gold_decisions.json` and the two additive extensions
+`eval/gold_extension_decisions*.json`, the held-out set in
+`eval/holdout_questions.jsonl`, and the sentence judgments in
+`eval/judgments_phase16.json`, each with a notes file giving the reasons. With a
+built `civic.db` and index in place, `python -m archive_debugger.eval.report`
+writes the retrieval scores, `python -m archive_debugger.eval.retrieval_sweep`
+reruns the before/after configuration sweep, and `python scripts/audit_report.py`
+recomputes the five headline numbers from the judgments. Every number in the
+README and the reports comes from one of these; none is typed in by hand.
 
 ## The four rules
 
