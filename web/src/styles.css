@@ -2,8 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Reading room, not chat. Paper and ink; one accent, used only for Cited.
+   Two body sizes (1rem and .875rem); headings in serif; rules, not boxes. */
+
 :root {
-  /* Fluid type: scales with the viewport; kiosk multiplies it. */
   --scale: 1;
   font-size: calc(clamp(15px, 0.95vw + 11px, 19px) * var(--scale));
 }
@@ -17,12 +19,15 @@ body {
   margin: 0;
 }
 
-/* Every interactive control is at least 44px on its short side. */
+h1, h2, h3, h4 {
+  @apply font-serif;
+}
+
 button,
 [role="button"],
 select,
 input {
-  min-height: 44px;
+  min-height: 44px; /* every control is at least 44px on its short side */
 }
 
 :focus-visible {
@@ -30,6 +35,7 @@ input {
   outline-offset: 2px;
 }
 
+/* --- type --- */
 .excerpt {
   @apply font-serif leading-relaxed;
 }
@@ -43,22 +49,53 @@ input {
   font-weight: 600;
 }
 
-.card {
-  @apply bg-sheet border border-rule rounded-sm p-5;
+.tag {
+  @apply font-sans text-xs text-muted;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
 }
 
-.card--cited {
-  @apply border-accent border-l-4;
+.cited {
+  @apply font-sans text-xs text-accent;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  border-bottom: 2px solid theme("colors.accent");
+  padding-bottom: 1px;
 }
 
-.badge {
-  @apply inline-block text-xs font-sans uppercase tracking-wide border border-ink px-2 py-0.5 rounded-sm;
+/* --- structure: rules --- */
+.rule-left {
+  @apply mt-6 border-l-2 border-ink pl-5 py-1;
 }
 
-.badge--cited {
-  @apply border-accent text-accent;
+.evidence {
+  @apply flex gap-4 py-4 border-b border-rule;
 }
 
+.evidence .thumb {
+  @apply shrink-0 bg-paper p-0 border-0;
+  width: 120px;
+  min-height: 0;
+}
+
+.evidence .thumb img {
+  @apply block w-full h-auto;
+  box-shadow: 0 1px 3px rgba(28, 26, 23, 0.18), 0 6px 14px rgba(28, 26, 23, 0.08);
+}
+
+.lane {
+  @apply mt-6;
+}
+
+.lane-heading {
+  @apply font-serif text-lg border-b border-ink pb-1;
+}
+
+.lane[data-empty="true"] .lane-heading {
+  @apply border-rule text-sm;
+}
+
+/* --- controls --- */
 .chip {
   @apply inline-flex items-center font-sans text-sm border border-ink bg-sheet px-3 py-1.5 rounded-sm cursor-pointer;
 }
@@ -67,16 +104,112 @@ input {
   @apply bg-ink text-paper;
 }
 
+body.kiosk .chip {
+  font-size: 1.1em;
+  padding: 0.75em 1.1em;
+}
+
+.linkish {
+  @apply font-sans text-ink underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer;
+  min-height: 0;
+}
+
+.actions .linkish {
+  @apply text-muted;
+}
+
+.mark {
+  @apply font-sans text-xs align-super mx-0.5 px-1 bg-transparent border-0 cursor-pointer text-ink;
+  min-height: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.popover {
+  @apply absolute left-0 top-full z-10 mt-1 w-[min(28rem,80vw)] bg-sheet border border-rule p-3 text-sm;
+}
+
+/* --- coverage grid --- */
+.grid-table {
+  @apply w-full text-sm border-collapse;
+}
+
+.grid-table th,
+.grid-table td {
+  @apply text-right px-2 py-1 border-b border-rule font-normal;
+}
+
+.grid-table th[scope="row"],
+.grid-table thead th:first-child {
+  @apply text-left;
+}
+
+.grid-table thead th {
+  @apply font-sans text-xs text-muted;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+}
+
+.grid-table .baseline td,
+.grid-table .baseline th {
+  @apply border-t border-ink font-semibold;
+}
+
+/* --- drawn timeline --- */
+.timeline {
+  @apply mt-3;
+}
+
+.timeline-track {
+  @apply relative flex justify-between list-none m-0 p-0;
+}
+
+.timeline-track::before {
+  content: "";
+  @apply absolute left-0 right-0 border-t border-ink;
+  top: 2.15rem;
+}
+
+.timeline-tick {
+  @apply flex-1 text-center;
+}
+
+.timeline-btn {
+  @apply flex flex-col items-center w-full bg-transparent border-0 cursor-pointer text-ink font-sans;
+}
+
+.timeline-label {
+  @apply text-sm;
+  height: 1.5rem;
+}
+
+.timeline-mark {
+  @apply block w-px bg-ink;
+  height: 1.25rem;
+}
+
+.timeline-counts {
+  @apply mt-1 flex flex-col text-xs text-muted leading-tight;
+}
+
+.timeline-btn.is-active .timeline-label {
+  @apply font-bold;
+}
+
+.timeline-btn.is-zero .timeline-label,
+.timeline-btn.is-zero .timeline-counts {
+  @apply text-muted;
+}
+
+.timeline-btn.is-zero .timeline-mark {
+  @apply bg-rule;
+}
+
+/* --- drawer --- */
 .drawer {
-  @apply fixed top-0 right-0 z-30 h-full w-full md:w-[min(720px,60vw)] bg-sheet border-l border-rule shadow-none overflow-y-auto;
+  @apply fixed top-0 right-0 z-30 h-full w-full md:w-[min(720px,60vw)] bg-sheet border-l border-rule overflow-y-auto;
 }
 
 .backdrop {
   @apply fixed inset-0 z-20 bg-ink/30;
-}
-
-/* Kiosk: larger, easier-to-hit chips; filters and the More toggle are hidden by the app. */
-body.kiosk .chip {
-  font-size: 1.1em;
-  padding: 0.75em 1.1em;
 }

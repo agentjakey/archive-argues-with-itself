@@ -8,6 +8,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/ask": API,
+      "/coverage": API,
       "/examples": API,
       "/health": API,
     },

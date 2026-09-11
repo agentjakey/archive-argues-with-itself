@@ -19,7 +19,7 @@ carries a page-level citation, and the tool never claims to reach the present
 | Page-level citations + verifier | done | fixed IA deep links + deterministic 3-check verifier |
 | Evaluation | done | 50 human-labeled questions; `reports/phase7/eval_report.md` |
 | Synthesis (`generate/`) | done | cited answers with code-decided abstention; deterministic citation verification |
-| Read-only API (`api/`) | done | FastAPI `/ask`, `/examples`, `/health` |
+| Read-only API (`api/`) | done | FastAPI `/ask` (cached), `/coverage`, `/examples`, `/health` |
 | Web UI (`web/`) | done | reading-room evidence trail: answer with page-level citation chips, abstention card, decade timeline, page drawer, compare view; kiosk mode |
 
 ## Quickstart
@@ -69,10 +69,20 @@ python -m archive_debugger.eval.report                       # -> reports/phase7
 .\.venv\Scripts\python.exe -m uvicorn archive_debugger.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-`GET /health`, `GET /examples` (seed questions with gold verdicts), `POST /ask`
-`{question, filters?, provider?, model?}` -> `{answer, evidence}`. Set
-`ALLOWED_ORIGINS` (comma-separated) to enable CORS; unset means same-origin only.
-When `web/dist` exists it is served at `/` with an `index.html` fallback.
+`GET /health` (corpus facts: true dated span as `corpus.window`, the config
+binning window as `corpus.pilot_window`), `GET /examples` (seed questions with
+gold verdicts), `POST /ask` `{question, filters?, provider?, model?, nocache?}`
+-> `{answer, evidence}` (also `GET /ask?q=&period=&jurisdiction=&doc_type=`),
+and `GET /coverage?q=&period=&jurisdiction=&doc_type=`: lexical passage counts
+per salient question term by decade and by jurisdiction, using the abstention
+gate's term rule as FTS5 queries. Counts are matches, not relevance.
+
+Answers are cached in `data/cache/answers.db` (git-ignored; civic.db stays
+read-only) keyed by question, filters, provider, model, prompt hash, top_k and
+temperature; a cached response carries `answer.cached.created_at`, and
+`nocache=1` (or `"nocache": true`) forces regeneration. Set `ALLOWED_ORIGINS`
+(comma-separated) to enable CORS; unset means same-origin only. When `web/dist`
+exists it is served at `/` with an `index.html` fallback.
 
 ### Web app (`web/`)
 
@@ -85,7 +95,7 @@ npm ci                     # reproducible install from package-lock.json
 npm run typecheck          # tsc --noEmit
 npm test                   # vitest
 npm run build              # -> web/dist, served by the API at /
-npm run dev                # dev server on http://127.0.0.1:5173 proxying /ask /examples /health to :8000
+npm run dev                # dev server on http://127.0.0.1:5173 proxying /ask /coverage /examples /health to :8000
 ```
 
 To view the built app, start the API (previous section) and open

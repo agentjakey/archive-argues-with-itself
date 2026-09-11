@@ -1,4 +1,4 @@
-// API contracts. Mirrors src/archive_debugger/api/app.py exactly.
+// API contracts. Mirrors src/archive_debugger/api/app.py and api/coverage.py exactly.
 
 export type Period =
   | "pre-1960"
@@ -32,6 +32,7 @@ export interface AskRequest {
   filters?: Filters;
   provider?: "stub" | "anthropic";
   model?: string;
+  nocache?: boolean;
 }
 
 export interface Sentence {
@@ -82,6 +83,7 @@ export interface Answer {
   coverage: Coverage;
   abstention_text: string | null;
   generation: Generation;
+  cached?: { created_at: string } | null;
 }
 
 export interface EvidenceRow {
@@ -116,12 +118,18 @@ export interface Example {
   gold: "answerable" | "abstain" | null;
 }
 
+export interface YearWindow {
+  min_year: number | null;
+  max_year: number | null;
+}
+
 export interface CorpusFacts {
   items: number;
   passages: number;
   passages_undated: number;
   undated_share: number;
-  window: { min_year: number | null; max_year: number | null };
+  window: YearWindow;        // true dated span
+  pilot_window: YearWindow;  // config binning window
 }
 
 export interface Health {
@@ -129,4 +137,25 @@ export interface Health {
   provider: string;
   model: string;
   corpus: CorpusFacts;
+}
+
+export interface DecadeCoverage {
+  decade: string;
+  items: number;
+  passages: number;
+  undated_passages: number;
+  matched: number;                 // passages matching ANY salient term
+  terms: Record<string, number>;   // passages matching each term
+}
+
+export interface JurisdictionCoverage {
+  jurisdiction: string;
+  passages: number;
+  terms: Record<string, number>;
+}
+
+export interface CoverageResponse {
+  salient_terms: string[];
+  by_decade: DecadeCoverage[];
+  by_jurisdiction: JurisdictionCoverage[];
 }

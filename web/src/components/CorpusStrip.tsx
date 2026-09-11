@@ -7,24 +7,17 @@ interface Props {
 
 /** Four labeled figures from /health plus the one-line meaning of "Cited". */
 export function CorpusStrip({ corpus }: Props) {
-  const figures = corpus
-    ? [
-        { label: "items", value: formatInt(corpus.items) },
-        { label: "passages", value: formatInt(corpus.passages) },
-        { label: "window", value: windowLabel(corpus) },
-        { label: "of passages undated", value: formatShare(corpus.undated_share) },
-      ]
-    : [];
   return (
     <div className="mt-4 border-t border-b border-rule py-3">
       {corpus ? (
         <dl className="flex flex-wrap gap-x-8 gap-y-2" aria-label="Corpus facts">
-          {figures.map((f) => (
-            <div key={f.label} className="flex items-baseline gap-2">
-              <dd className="font-serif text-xl m-0">{f.value}</dd>
-              <dt className="text-sm text-muted">{f.label}</dt>
-            </div>
-          ))}
+          <Figure value={formatInt(corpus.items)} label="items" />
+          <Figure value={formatInt(corpus.passages)} label="passages" />
+          <Figure
+            value={`${windowLabel({ window: corpus.pilot_window })} pilot window`}
+            label={`dated items span ${windowLabel({ window: corpus.window })}`}
+          />
+          <Figure value={formatShare(corpus.undated_share)} label="of passages undated" />
         </dl>
       ) : (
         <p className="text-sm text-muted" aria-live="polite">
@@ -32,9 +25,18 @@ export function CorpusStrip({ corpus }: Props) {
         </p>
       )}
       <p className="mt-2 text-sm text-muted">
-        <span className="badge badge--cited mr-2">Cited</span>= the passage exists, was retrieved for this question,
-        and resolves to a page on archive.org
+        <span className="cited mr-2">Cited</span>= the passage exists, was retrieved for this question, and resolves
+        to a page on archive.org
       </p>
+    </div>
+  );
+}
+
+function Figure({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="flex flex-col">
+      <dd className="font-serif text-xl m-0">{value}</dd>
+      <dt className="text-sm text-muted">{label}</dt>
     </div>
   );
 }

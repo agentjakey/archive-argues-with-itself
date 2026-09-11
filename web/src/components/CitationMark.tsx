@@ -3,19 +3,24 @@ import { chipLabel } from "../lib/format";
 import type { EvidenceRow } from "../types";
 
 interface Props {
+  n: number;
   row: EvidenceRow | undefined;
   passageId: string;
   onOpen: (row: EvidenceRow) => void;
 }
 
-/** Claim-adjacent citation. Focus or first tap reveals snippet and metadata;
+/** Numbered citation mark [n]. Focus or first tap reveals the excerpt popover;
  *  Enter, or a second tap, opens the Page drawer. */
-export function CitationChip({ row, passageId, onOpen }: Props) {
+export function CitationMark({ n, row, passageId, onOpen }: Props) {
   const [shown, setShown] = useState(false);
   const popId = useId();
 
   if (!row) {
-    return <span className="chip font-mono text-xs">{passageId}</span>;
+    return (
+      <sup className="mark" title={passageId}>
+        [{n}]
+      </sup>
+    );
   }
 
   const open = () => onOpen(row);
@@ -25,35 +30,26 @@ export function CitationChip({ row, passageId, onOpen }: Props) {
       open();
     }
   };
-  const onClick = () => {
-    if (shown) open();
-    else setShown(true);
-  };
 
   return (
-    <span className="relative inline-block align-baseline mx-1">
+    <span className="relative inline-block">
       <button
         type="button"
-        className="chip"
-        aria-label={`Citation: ${chipLabel(row)}. Enter opens the page.`}
+        className="mark"
+        aria-label={`Citation ${n}: ${chipLabel(row)}. Enter opens the page.`}
         aria-describedby={shown ? popId : undefined}
         aria-expanded={shown}
         onFocus={() => setShown(true)}
         onBlur={() => setShown(false)}
         onKeyDown={onKey}
-        onClick={onClick}
+        onClick={() => (shown ? open() : setShown(true))}
       >
-        <span className="font-mono text-xs">{row.item_id}</span>
-        <span className="ml-2">{row.printed_page ? `p. ${row.printed_page}` : `leaf ${row.leaf_index}`}</span>
+        [{n}]
       </button>
       {shown && (
-        <span
-          id={popId}
-          role="tooltip"
-          className="absolute left-0 top-full z-10 mt-1 w-[min(28rem,80vw)] card text-sm"
-        >
-          <span className="block font-sans text-muted text-xs">
-            {chipLabel(row)} <span className="font-mono">leaf {row.leaf_index}</span>
+        <span id={popId} role="tooltip" className="popover">
+          <span className="block text-sm text-muted">
+            {chipLabel(row)} <span className="font-mono">{row.item_id}</span>
           </span>
           <span className="block excerpt mt-1">{row.snippet}</span>
         </span>

@@ -7,10 +7,12 @@ import { CoveragePanel } from "./components/CoveragePanel";
 import { ErrorCard } from "./components/ErrorCard";
 import { EvidenceTrail } from "./components/EvidenceTrail";
 import { ExampleChips } from "./components/ExampleChips";
+import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { PageDrawer } from "./components/PageDrawer";
 import { WaitingLabel } from "./components/WaitingLabel";
 import { useAsk } from "./hooks/useAsk";
+import { useCoverage } from "./hooks/useCoverage";
 import { useExamples } from "./hooks/useExamples";
 import { useHealth } from "./hooks/useHealth";
 import { useKiosk } from "./hooks/useKiosk";
@@ -27,9 +29,11 @@ export default function App() {
   const [question, setQuestion] = useState(initial.current.q);
   const [filters, setFilters] = useState<Filters>(initial.current.filters);
   const [asked, setAsked] = useState(initial.current.q);
+  const [askedFilters, setAskedFilters] = useState<Filters>(initial.current.filters);
   const [pins, setPins] = useState<string[]>(initial.current.pins);
   const [drawer, setDrawer] = useState<EvidenceRow | null>(null);
   const [chipsCollapsed, setChipsCollapsed] = useState(false);
+  const coverage = useCoverage(asked, askedFilters);
 
   // Restore from the URL on load and run the ask.
   useEffect(() => {
@@ -42,9 +46,17 @@ export default function App() {
     return m;
   }, [response]);
 
+  const matched = useMemo(() => {
+    if (!coverage) return null;
+    const m: Record<string, number> = {};
+    coverage.by_decade.forEach((d) => (m[d.decade] = d.matched));
+    return m;
+  }, [coverage]);
+
   const ask = useCallback(
     (q: string, f: Filters) => {
       setAsked(q);
+      setAskedFilters(f);
       setPins([]);
       setDrawer(null);
       setChipsCollapsed(true);
@@ -69,21 +81,22 @@ export default function App() {
     (row: EvidenceRow) => {
       setPins((p) => {
         const next = p.includes(row.passage_id) ? p.filter((x) => x !== row.passage_id) : [...p, row.passage_id].slice(-2);
-        applyState({ q: asked, filters, pins: next, kiosk }, "replace");
+        applyState({ q: asked, filters: askedFilters, pins: next, kiosk }, "replace");
         return next;
       });
     },
-    [asked, filters, kiosk],
+    [asked, askedFilters, kiosk],
   );
 
   const clearPins = useCallback(() => {
     setPins([]);
-    applyState({ q: asked, filters, pins: [], kiosk }, "replace");
-  }, [asked, filters, kiosk]);
+    applyState({ q: asked, filters: askedFilters, pins: [], kiosk }, "replace");
+  }, [asked, askedFilters, kiosk]);
 
   const pinned = pins.map((id) => byId.get(id)).filter((r): r is EvidenceRow => Boolean(r));
   const salient = response?.answer.coverage.salient_terms ?? [];
   const busy = status === "waiting";
+  const undatedShare = health?.corpus.undated_share ?? null;
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6">
@@ -117,7 +130,10 @@ export default function App() {
       {response && (
         <main>
           {response.answer.abstained ? (
-            <AbstentionCard answer={response.answer} />
+            <>
+              <AbstentionCard answer={response.answer} />
+              <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation />
+            </>
           ) : (
             <AnswerCard answer={response.answer} byId={byId} onOpen={setDrawer} />
           )}
@@ -131,13 +147,15 @@ export default function App() {
             salientTerms={salient}
             pinned={pins}
             heading={response.answer.abstained ? "Nearest evidence, not an answer" : "Evidence trail"}
+            matched={matched}
             onOpen={setDrawer}
             onPin={togglePin}
           />
-          <CoveragePanel />
+          {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} />}
         </main>
       )}
 
+      <Footer />
       <PageDrawer row={drawer} onClose={() => setDrawer(null)} />
     </div>
   );

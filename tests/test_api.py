@@ -55,6 +55,7 @@ def _retriever(tmp_path, items, *, seed_questions=None):
 def _app(tmp_path, r, **kw):
     kw.setdefault("provider", "stub")
     kw.setdefault("web_dist", tmp_path / "nodist")
+    kw.setdefault("cache_path", tmp_path / "cache" / "answers.db")
     return create_app(CFG, retriever=r, load_env=False, **kw)
 
 
@@ -66,7 +67,42 @@ def test_health_with_corpus_facts(tmp_path):
     corpus = body["corpus"]
     assert corpus["items"] == 3 and corpus["passages"] == 6 and corpus["passages_undated"] == 2
     assert corpus["undated_share"] == round(2 / 6, 4)
-    assert corpus["window"] == {"min_year": 1975, "max_year": 1990}
+    assert corpus["window"] == {"min_year": 1975, "max_year": 1990}            # true dated span
+    assert corpus["pilot_window"] == {"min_year": 1960, "max_year": 2009}     # config binning window
+
+
+def test_ask_is_cached_and_nocache_bypasses(tmp_path):
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
+    hits = r.search("vaccination hospital", top_k=12)
+    llm = StubLLM(Draft(sentences=[CitedSentence(text="A programme ran.", cited_ids=[hits[0]["passage_id"]])]))
+    with TestClient(_app(tmp_path, r, llm=llm)) as c:
+        first = c.post("/ask", json={"question": "vaccination hospital"}).json()
+        second = c.post("/ask", json={"question": "vaccination hospital"}).json()
+        fresh = c.post("/ask", json={"question": "vaccination hospital", "nocache": True}).json()
+        other = c.post("/ask", json={"question": "vaccination hospital", "filters": {"jurisdiction": "ontario"}}).json()
+        via_get = c.get("/ask", params={"q": "vaccination hospital"}).json()
+    assert first["answer"]["cached"] is None
+    assert second["answer"]["cached"] is not None and "created_at" in second["answer"]["cached"]
+    assert second["answer"]["text"] == first["answer"]["text"] and second["evidence"] == first["evidence"]
+    assert fresh["answer"]["cached"] is None                                  # nocache recomputed
+    assert other["answer"]["cached"] is None                                  # different filters, different key
+    assert other["answer"]["abstained"]                                       # 2 ontario passages < min_passages: thin, no model call
+    assert via_get["answer"]["cached"] is not None                            # GET shares the cache
+    assert llm.calls == 2                                                     # first and nocache only
+    assert (tmp_path / "cache" / "answers.db").exists()
+
+
+def test_coverage_endpoint(tmp_path):
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario"), ("c", None, "federal")])
+    with TestClient(_app(tmp_path, r)) as c:
+        cov = c.get("/coverage", params={"q": "vaccination covid", "jurisdiction": "alberta"}).json()
+        again = c.get("/coverage", params={"q": "vaccination covid", "jurisdiction": "alberta"}).json()
+    assert cov["salient_terms"] == ["vaccination", "covid"]
+    lanes = {row["decade"]: row for row in cov["by_decade"]}
+    assert lanes["1980s"]["terms"] == {"vaccination": 2, "covid": 0} and lanes["1980s"]["passages"] == 2
+    assert lanes["1990s"]["passages"] == 0                                    # filtered out (ontario)
+    assert all(row["terms"]["covid"] == 0 for row in cov["by_decade"])
+    assert again == cov                                                       # in-process cache is stable
 
 
 def test_ask_evidence_ordered_year_asc_undated_last(tmp_path):

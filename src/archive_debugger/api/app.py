@@ -1,6 +1,7 @@
 """Read-only serve layer (FastAPI). One Retriever opened at startup; every request
 runs retrieve -> compose and returns the Answer plus an evidence timeline. Reuses
-generate/cli.py's config loading and filter construction. Never writes civic.db.
+generate/cli.py's config loading and filter construction. Never writes civic.db;
+the only write is the separate answer cache file.
 
 CORS: ALLOWED_ORIGINS env (comma-separated); empty means same-origin only.
 Static: serves web/dist when it exists, with index.html fallback for client routes.
@@ -8,9 +9,11 @@ Static: serves web/dist when it exists, with index.html fallback for client rout
 unchanged); load_dotenv never overrides variables already set in the environment."""
 from __future__ import annotations
 
+import copy
 import functools
 import os
 import threading
+import tomllib
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -20,6 +23,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
+from archive_debugger.api.cache import AnswerCache, cache_key
+from archive_debugger.api.coverage import coverage as compute_coverage
 from archive_debugger.eval import store
 from archive_debugger.eval.questions import load_seed
 from archive_debugger.generate.answer import compose, generation_meta
@@ -31,6 +36,7 @@ from archive_debugger.retrieve.search import Retriever
 REPO_ROOT = Path(__file__).resolve().parents[3]
 WEB_DIST = REPO_ROOT / "web" / "dist"
 DEFAULT_SEED = Path("eval/seed_questions.jsonl")
+DEFAULT_CACHE = Path("data/cache/answers.db")
 SNIPPET = 300
 MISSING_KEY = "ANTHROPIC_API_KEY is not set on the server"
 
@@ -40,6 +46,7 @@ class AskRequest(BaseModel):
     filters: Optional[dict] = None
     provider: Optional[str] = None
     model: Optional[str] = None
+    nocache: bool = False
 
 
 def evidence_rows(hits: list[dict], verified: list[dict]) -> list[dict]:
@@ -59,7 +66,7 @@ def evidence_rows(hits: list[dict], verified: list[dict]) -> list[dict]:
     } for h in ordered]
 
 
-def corpus_facts(conn) -> dict:
+def corpus_facts(conn, pilot_window: dict) -> dict:
     """Whole-corpus figures for the header strip, computed once at startup."""
     items = conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
     passages = conn.execute("SELECT COUNT(*) FROM passages").fetchone()[0]
@@ -72,8 +79,15 @@ def corpus_facts(conn) -> dict:
         "passages": passages,
         "passages_undated": undated,
         "undated_share": round(undated / passages, 4) if passages else 0.0,
-        "window": {"min_year": mn, "max_year": mx},
+        "window": {"min_year": mn, "max_year": mx},          # true dated span
+        "pilot_window": pilot_window,                         # config binning window
     }
+
+
+def _pilot_window(config_path: Path) -> dict:
+    with Path(config_path).open("rb") as fh:
+        w = tomllib.load(fh).get("corpus", {}).get("window", {})
+    return {"min_year": w.get("start_year"), "max_year": w.get("end_year")}
 
 
 def _allowed_origins() -> list[str]:
@@ -87,24 +101,33 @@ def _key_available() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
 
 
+def _clean_filters(period: Optional[str], jurisdiction: Optional[str], doc_type: Optional[str]) -> dict:
+    return {k: v for k, v in (("period", period), ("jurisdiction", jurisdiction), ("doc_type", doc_type)) if v}
+
+
 def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Optional[Retriever] = None,
                provider: Optional[str] = None, llm: Optional[LLM] = None,
-               seed_path: Path = DEFAULT_SEED, web_dist: Path = WEB_DIST, load_env: bool = True) -> FastAPI:
+               seed_path: Path = DEFAULT_SEED, web_dist: Path = WEB_DIST, load_env: bool = True,
+               cache_path: Path = DEFAULT_CACHE) -> FastAPI:
     if load_env:
         from dotenv import load_dotenv
         load_dotenv()
     gcfg = load_generate_config(config_path)
+    pilot_window = _pilot_window(config_path)
     own_retriever = retriever is None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.retriever = retriever or Retriever(config_path)
         app.state.lock = threading.Lock()   # one sqlite connection; sync endpoints run in a threadpool
+        app.state.cache = AnswerCache(cache_path)
+        app.state.coverage_cache = {}
         with app.state.lock:
-            app.state.corpus = corpus_facts(app.state.retriever.conn)
+            app.state.corpus = corpus_facts(app.state.retriever.conn, pilot_window)
         try:
             yield
         finally:
+            app.state.cache.close()
             if own_retriever:
                 app.state.retriever.close()
 
@@ -113,16 +136,25 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["*"])
 
-    def answer(question: str, filters: Optional[dict], req_provider: Optional[str], req_model: Optional[str]):
+    def answer(question: str, filters: Optional[dict], req_provider: Optional[str], req_model: Optional[str],
+               nocache: bool):
         r = app.state.retriever
         kind = req_provider or provider or gcfg["provider"]
         model_id = req_model or gcfg["model"]
         temp = sent_temperature(kind, gcfg)
+        gen = generation_meta(provider=kind, model=model_id, temperature=temp,
+                              max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
+        key = cache_key(question=question, filters=filters, provider=kind, model=model_id,
+                        prompt_sha256=gen["prompt_sha256"], top_k=gcfg["top_k"], temperature=temp)
+        if not nocache:
+            hit = app.state.cache.get(key)
+            if hit is not None:
+                served = copy.deepcopy(hit["response"])
+                served["answer"]["cached"] = {"created_at": hit["created_at"]}
+                return served
         if kind == "anthropic" and llm is None and not _key_available():
             return JSONResponse(status_code=503, content={"error": MISSING_KEY})
         model = llm or make_llm(kind, model_id, gcfg["max_tokens"], temperature=temp)
-        gen = generation_meta(provider=kind, model=model_id, temperature=temp,
-                              max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
         with app.state.lock:   # retrieval, the LLM call, and verification all read through r.conn
             hits = r.search(question, filters=build_filters(filters), top_k=gcfg["top_k"])
             verify = functools.partial(citation.verify_citations, r.conn)
@@ -130,7 +162,10 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 ans = compose(question, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
             except Exception as exc:  # noqa: BLE001 - surfaced verbatim, never swallowed
                 return JSONResponse(status_code=502, content={"error": f"{type(exc).__name__}: {exc}"})
-        return {"answer": ans.to_dict(), "evidence": evidence_rows(hits, ans.verified_citations)}
+        result = {"answer": ans.to_dict(), "evidence": evidence_rows(hits, ans.verified_citations)}
+        app.state.cache.put(key, result)
+        result["answer"]["cached"] = None
+        return result
 
     @app.get("/health")
     def health() -> dict:
@@ -150,16 +185,28 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                             "gold": None if gold is None else ("answerable" if gold["answerable"] else "abstain")})
         return out
 
+    @app.get("/coverage")
+    def coverage_view(q: str = Query(..., min_length=1), period: Optional[str] = None,
+                      jurisdiction: Optional[str] = None, doc_type: Optional[str] = None) -> dict:
+        filters = _clean_filters(period, jurisdiction, doc_type)
+        ck = (q, tuple(sorted(filters.items())))
+        cached = app.state.coverage_cache.get(ck)
+        if cached is not None:
+            return cached
+        with app.state.lock:
+            result = compute_coverage(app.state.retriever.conn, q, build_filters(filters))
+        app.state.coverage_cache[ck] = result
+        return result
+
     @app.post("/ask")
     def ask_post(req: AskRequest):
-        return answer(req.question, req.filters, req.provider, req.model)
+        return answer(req.question, req.filters, req.provider, req.model, req.nocache)
 
     @app.get("/ask")
     def ask_get(q: str = Query(..., min_length=1), period: Optional[str] = None,
-                jurisdiction: Optional[str] = None, doc_type: Optional[str] = None):
+                jurisdiction: Optional[str] = None, doc_type: Optional[str] = None, nocache: int = 0):
         """Permalink form: same handler as POST, filters from query params."""
-        filters = {k: v for k, v in (("period", period), ("jurisdiction", jurisdiction), ("doc_type", doc_type)) if v}
-        return answer(q, filters, None, None)
+        return answer(q, _clean_filters(period, jurisdiction, doc_type), None, None, bool(nocache))
 
     if Path(web_dist).is_dir():
         dist = Path(web_dist)
