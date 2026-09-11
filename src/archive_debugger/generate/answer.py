@@ -1,34 +1,90 @@
 """Compose a cited answer or abstain. Two abstentions, both decided by code:
-(1) thin FTS-matched evidence before any model call; (2) no sentence survived the
-3-check citation verifier. Failing or uncited sentences are dropped and listed."""
+(1) thin evidence by QUESTION-TERM COVERAGE before any model call; (2) no sentence
+survived the 3-check citation verifier. Failing or uncited sentences are dropped and
+listed.
+
+Thinness rule (fixed a priori, not tuned on eval labels): tokenize the question with
+the same tokenizer as the FTS leg; a salient term is a non-stopword token of length
+>= 3 or a 4-digit number; a term is covered if any retrieved passage contains an
+equal token or (for terms of length >= 5) a token sharing its first 5 characters.
+Thin if any salient term is uncovered, or fewer than min_passages were retrieved."""
 from __future__ import annotations
 
 import re
 from collections import Counter
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Callable, Optional
 
 from archive_debugger.generate.llm import LLM
 from archive_debugger.generate.prompt import SYSTEM, build_user_prompt
 
 ABSTAIN_THIN = (
-    "the record here is thin: {n_fts_items} items and {n_fts_passages} passages match the "
-    "question's terms ({n_undated} of {n_passages} retrieved passages are undated)"
+    "the record here is thin: no retrieved passage mentions {uncovered} "
+    "({n_undated} of {n_passages} retrieved passages are undated)"
 )
 ABSTAIN_UNVERIFIED = "no claim in the retrieved passages survived citation verification"
+
+_TOKEN = re.compile(r"[^\W_]+", re.UNICODE)   # same tokenizer as retrieve.search._fts_query
 _YEAR = re.compile(r"\b(1[89]\d\d|20\d\d)\b")
 _PAGE = re.compile(r"\b(?:p\.|page)\s*(\d+)\b", re.IGNORECASE)
+PREFIX = 5
+
+# Fixed English stopwords: articles, conjunctions, prepositions, pronouns,
+# auxiliaries, question words. Deliberately no domain words.
+STOPWORDS = frozenset({
+    "a", "an", "the",
+    "and", "or", "but", "if", "so", "than", "as", "not", "no",
+    "of", "to", "in", "on", "at", "by", "for", "from", "with", "about", "into",
+    "over", "under", "between", "through", "during", "before", "after",
+    "i", "me", "my", "we", "our", "you", "your", "he", "him", "his", "she", "her",
+    "it", "its", "they", "them", "their", "this", "that", "these", "those",
+    "is", "are", "was", "were", "be", "been", "being", "do", "does", "did",
+    "have", "has", "had", "will", "would", "shall", "should", "can", "could",
+    "may", "might", "must",
+    "what", "which", "who", "whom", "whose", "when", "where", "why", "how",
+})
+
+
+def tokens(text: str) -> list[str]:
+    return _TOKEN.findall((text or "").lower())
+
+
+def salient_terms(question: str) -> list[str]:
+    out = []
+    for t in tokens(question):
+        if t in STOPWORDS:
+            continue
+        if len(t) >= 3 or (t.isdigit() and len(t) == 4):
+            if t not in out:
+                out.append(t)
+    return out
+
+
+def uncovered_terms(question: str, hits: list[dict]) -> list[str]:
+    passage_tokens: set[str] = set()
+    for h in hits:
+        passage_tokens.update(tokens(h.get("text")))
+    prefixes = {p[:PREFIX] for p in passage_tokens if len(p) >= PREFIX}
+    missing = []
+    for term in salient_terms(question):
+        if term in passage_tokens:
+            continue
+        if len(term) >= PREFIX and term[:PREFIX] in prefixes:
+            continue
+        missing.append(term)
+    return missing
 
 
 @dataclass
 class Coverage:
-    n_items: int            # full retrieved set (for the UI)
+    n_items: int
     n_passages: int
     n_undated: int
     periods: dict
     jurisdictions: dict
-    n_fts_items: int        # FTS-matched subset (drives thinness)
-    n_fts_passages: int
+    salient_terms: list = field(default_factory=list)
+    uncovered_terms: list = field(default_factory=list)
+    single_source: bool = False      # UI flag only; never an abstention
 
 
 @dataclass
@@ -45,21 +101,22 @@ class Answer:
         return asdict(self)
 
 
-def coverage_of(hits: list[dict]) -> Coverage:
-    fts = [h for h in hits if h.get("bm25_rank") is not None]
+def coverage_of(question: str, hits: list[dict]) -> Coverage:
+    items = {h["item_id"] for h in hits}
     return Coverage(
-        n_items=len({h["item_id"] for h in hits}),
+        n_items=len(items),
         n_passages=len(hits),
         n_undated=sum(1 for h in hits if not h.get("dated")),
         periods=dict(Counter(str(h.get("decade") or "undated") for h in hits)),
         jurisdictions=dict(Counter(str(h.get("jurisdiction") or "unknown") for h in hits)),
-        n_fts_items=len({h["item_id"] for h in fts}),
-        n_fts_passages=len(fts),
+        salient_terms=salient_terms(question),
+        uncovered_terms=uncovered_terms(question, hits),
+        single_source=(len(items) == 1),
     )
 
 
-def is_thin(cov: Coverage, *, min_items: int, min_passages: int) -> bool:
-    return cov.n_fts_items < min_items or cov.n_fts_passages < min_passages
+def is_thin(cov: Coverage, *, min_passages: int) -> bool:
+    return bool(cov.uncovered_terms) or cov.n_passages < min_passages
 
 
 def _citation_dict(h: dict) -> dict:
@@ -84,12 +141,12 @@ def _abstain(msg: str, cov: Coverage, unsupported: list[dict]) -> "Answer":
                   abstained=True, coverage=cov, abstention_text=msg)
 
 
-def compose(question: str, hits: list[dict], llm: LLM, verify: Callable, *,
-            min_items: int, min_passages: int) -> Answer:
-    cov = coverage_of(hits)
-    if is_thin(cov, min_items=min_items, min_passages=min_passages):
-        return _abstain(ABSTAIN_THIN.format(n_fts_items=cov.n_fts_items, n_fts_passages=cov.n_fts_passages,
-                                            n_undated=cov.n_undated, n_passages=cov.n_passages), cov, [])
+def compose(question: str, hits: list[dict], llm: LLM, verify: Callable, *, min_passages: int) -> Answer:
+    cov = coverage_of(question, hits)
+    if is_thin(cov, min_passages=min_passages):
+        uncovered = ", ".join(cov.uncovered_terms) if cov.uncovered_terms else "the question's terms"
+        return _abstain(ABSTAIN_THIN.format(uncovered=uncovered, n_undated=cov.n_undated,
+                                            n_passages=cov.n_passages), cov, [])
 
     retrieved_ids = [h["passage_id"] for h in hits]
     by_id = {h["passage_id"]: h for h in hits}

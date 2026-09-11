@@ -31,7 +31,6 @@ def load_generate_config(config_path: Path) -> dict:
         "model": g.get("model", "claude-haiku-4-5-20251001"),
         "max_tokens": int(g.get("max_tokens", 2048)),
         "top_k": int(g.get("top_k", 12)),
-        "min_items": int(g.get("min_items", 2)),
         "min_passages": int(g.get("min_passages", 3)),
     }
 
@@ -52,8 +51,7 @@ def answer_question(config_path: Path, question: str, *, provider: Optional[str]
         hits = retriever.search(question, filters=_filters(filters), top_k=top_k or gcfg["top_k"])
         llm = make_llm(provider or gcfg["provider"], gcfg["model"], gcfg["max_tokens"])
         verify = functools.partial(citation.verify_citations, retriever.conn)
-        return compose(question, hits, llm, verify,
-                       min_items=gcfg["min_items"], min_passages=gcfg["min_passages"]).to_dict()
+        return compose(question, hits, llm, verify, min_passages=gcfg["min_passages"]).to_dict()
     finally:
         if own:
             retriever.close()
@@ -69,14 +67,14 @@ def sweep(config_path: Path, seed_path: Path, *, top_k: Optional[int] = None,
     try:
         for q in load_seed(seed_path):
             hits = retriever.search(q["text"], filters=_filters(q.get("filters")), top_k=top_k or gcfg["top_k"])
-            cov = coverage_of(hits)
+            cov = coverage_of(q["text"], hits)
             gold = store.gold_verdict(retriever.conn, q["qid"])
             rows.append({
                 "qid": q["qid"],
                 "gold": None if gold is None else ("answerable" if gold["answerable"] else "abstain"),
-                "n_fts_items": cov.n_fts_items,
-                "n_fts_passages": cov.n_fts_passages,
-                "would_abstain": is_thin(cov, min_items=gcfg["min_items"], min_passages=gcfg["min_passages"]),
+                "uncovered_terms": cov.uncovered_terms,
+                "single_source": cov.single_source,
+                "would_abstain": is_thin(cov, min_passages=gcfg["min_passages"]),
             })
     finally:
         if own:
@@ -90,9 +88,10 @@ def sweep(config_path: Path, seed_path: Path, *, top_k: Optional[int] = None,
 
 
 def _print_sweep(result: dict) -> None:
-    print(f"{'qid':6} {'gold':11} {'fts_items':>9} {'fts_pass':>8}  would_abstain")
+    print(f"{'qid':6} {'gold':11} {'single_source':13} {'would_abstain':13} uncovered_terms")
     for r in result["rows"]:
-        print(f"{r['qid']:6} {str(r['gold']):11} {r['n_fts_items']:>9} {r['n_fts_passages']:>8}  {r['would_abstain']}")
+        print(f"{r['qid']:6} {str(r['gold']):11} {str(r['single_source']):13} {str(r['would_abstain']):13} "
+              f"{', '.join(r['uncovered_terms'])}")
     print()
     print(f"answerable questions that would abstain: {result['answerable_would_abstain']}")
     print(f"abstain questions that would answer:     {result['abstain_would_answer']}")

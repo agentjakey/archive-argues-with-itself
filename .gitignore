@@ -243,6 +243,7 @@ data/*
 reports/phase*/*
 !reports/phase7/eval_report.md
 !reports/phase8/citation_report.md
+!reports/phase9/generation_report.md
 reports/unmapped/
 
 # Node / Next.js (web/)

@@ -15,7 +15,7 @@ from archive_debugger.retrieve import citation, index, search
 from archive_debugger.retrieve.config import RetrieveConfig
 from archive_debugger.retrieve.embed import StubEmbedder
 
-MIN = {"min_items": 2, "min_passages": 3}
+MIN = {"min_passages": 3}
 
 
 def _seed(conn, n_items=3, per_item=2, text="vaccination programme text", fts=True):
@@ -43,6 +43,10 @@ def _compose(conn, hits, draft):
     return gen.compose("q", hits, StubLLM(draft), functools.partial(citation.verify_citations, conn), **MIN)
 
 
+def _compose_q(conn, question, hits, draft):
+    return gen.compose(question, hits, StubLLM(draft), functools.partial(citation.verify_citations, conn), **MIN)
+
+
 def test_unknown_id_is_rejected_then_abstains_unverified():
     conn = db.init_db(":memory:")
     hits = _seed(conn)
@@ -63,15 +67,33 @@ def test_id_outside_retrieved_set_is_rejected():
     conn.close()
 
 
-def test_thin_fts_subset_abstains_without_calling_model():
+def test_uncovered_term_abstains_and_names_it_without_calling_model():
     conn = db.init_db(":memory:")
-    hits = _seed(conn, n_items=3, per_item=2, fts=False)   # 6 dense-only hits, 0 FTS matches
+    hits = _seed(conn)   # passages say "vaccination programme text"; nothing mentions covid
     llm = StubLLM(Draft(sentences=[CitedSentence(text="x", cited_ids=[hits[0]["passage_id"]])]))
-    a = gen.compose("q", hits, llm, functools.partial(citation.verify_citations, conn), **MIN)
-    assert a.abstained
-    assert a.text == ("the record here is thin: 0 items and 0 passages match the question's terms "
-                      "(0 of 6 retrieved passages are undated)")
-    assert llm.calls == 0 and a.coverage.n_fts_passages == 0
+    a = gen.compose("covid vaccination", hits, llm, functools.partial(citation.verify_citations, conn), **MIN)
+    assert a.abstained and llm.calls == 0
+    assert a.coverage.uncovered_terms == ["covid"]
+    assert a.text == "the record here is thin: no retrieved passage mentions covid (0 of 6 retrieved passages are undated)"
+    conn.close()
+
+
+def test_prefix_match_covers_term():
+    conn = db.init_db(":memory:")
+    hits = _seed(conn, text="sanatorium treatment beds")   # question says sanatoria -> shares 'sanat'
+    ids = [hits[0]["passage_id"]]
+    a = _compose_q(conn, "sanatoria treatment", hits, Draft(sentences=[CitedSentence(text="Beds were provided.", cited_ids=ids)]))
+    assert not a.abstained and a.coverage.uncovered_terms == [] and a.text == "Beds were provided."
+    conn.close()
+
+
+def test_single_source_answers_and_is_flagged():
+    conn = db.init_db(":memory:")
+    hits = _seed(conn, n_items=1, per_item=3)   # 3 passages, one item, all terms covered
+    ids = [hits[0]["passage_id"]]
+    a = _compose_q(conn, "vaccination programme", hits, Draft(sentences=[CitedSentence(text="A programme ran.", cited_ids=ids)]))
+    assert not a.abstained and a.text == "A programme ran."
+    assert a.coverage.single_source is True and a.coverage.n_items == 1
     conn.close()
 
 
