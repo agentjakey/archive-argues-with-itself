@@ -54,34 +54,102 @@ def label_question(q, retriever, conn, top_n, prompt_fn, print_fn, existing=None
     print_fn(f"  saved {q['qid']}")
 
 
+def _fmt_ws(c: dict) -> str:
+    proposed = "relevant" if c.get("proposed_relevance") else "not"
+    return "\n".join([
+        f"[{c.get('rank')}] year={c.get('year')}  {c.get('jurisdiction')}  {c.get('doc_type')}  ocr={c.get('ocr_quality')}",
+        f"     {c.get('title')}  (leaf {c.get('leaf_index')}, printed p.{c.get('printed_page')})",
+        f"     {c.get('deep_link')}",
+        f"     {c.get('excerpt')}",
+        f"     [proposed: {proposed}] {c.get('reason', '')}",
+    ])
+
+
+def _read_worksheet(path):
+    order, summaries, cands = [], {}, {}
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        r = json.loads(line)
+        qid = r.get("qid")
+        if r.get("kind") == "summary":
+            if qid not in summaries:
+                order.append(qid)
+            summaries[qid] = r
+        elif r.get("kind") == "candidate":
+            cands.setdefault(qid, []).append(r)
+    for qid in cands:
+        cands[qid].sort(key=lambda c: c.get("rank", 0))
+    return order, summaries, cands
+
+
+def label_from_worksheet(summary, candidates, conn, prompt_fn, print_fn, existing=None) -> None:
+    print_fn(f"\n=== {summary['qid']}  [{summary.get('qtype')}] ===")
+    print_fn(summary.get("text", ""))
+    for c in candidates:
+        print_fn(_fmt_ws(c))
+        cur = None if existing is None else existing.get(c["passage_id"])
+        tag = "" if cur is None else f" [current: {'relevant' if cur else 'not'}]"
+        ans = prompt_fn(f"  [{c.get('rank')}] r=relevant / n=not / s=skip "
+                        f"(blank does NOT accept the proposal){tag}: ").strip().lower()
+        if ans == "r":
+            store.write_label(conn, summary["qid"], c["passage_id"], 1)
+        elif ans == "n":
+            store.write_label(conn, summary["qid"], c["passage_id"], 0)
+        # blank / s / anything else: no write -- the proposal is never auto-accepted
+    proposed = "answerable" if summary.get("proposed_answerable") else "should-abstain"
+    v = prompt_fn(f"  QUESTION verdict -- a=answerable / x=should-abstain "
+                  f"(proposed: {proposed}; a key is required, blank skips): ").strip().lower()
+    if v == "a":
+        store.write_gold(conn, summary["qid"], 1)
+    elif v == "x":
+        store.write_gold(conn, summary["qid"], 0)
+    # blank / anything else: no gold written -- question stays unlabeled
+    print_fn(f"  {summary['qid']} reviewed")
+
+
 def _eval_top_n(config_path: Path) -> int:
     with Path(config_path).open("rb") as fh:
         return int(tomllib.load(fh).get("eval", {}).get("label_top_n", 30))
 
 
 def run(config_path=None, *, conn=None, qid=None, top_n=None, revise=False,
-        prompt_fn=input, print_fn=print, retriever=None) -> None:
+        prompt_fn=input, print_fn=print, retriever=None, worksheet=None) -> None:
     own_conn = conn is None
     if own_conn:
         conn = db.init_db(db.resolve_db_path(config_path))
-    if top_n is None:
-        top_n = _eval_top_n(config_path) if config_path is not None else 30
-    own_retriever = retriever is None
-    if own_retriever:
-        from archive_debugger.retrieve.search import Retriever  # lazy: keeps import light
-        retriever = Retriever(config_path)
     try:
-        questions = [store.get_question(conn, qid)] if qid else store.list_questions(conn)
-        for q in [x for x in questions if x]:
-            labeled = store.is_labeled(conn, q["qid"])
-            if labeled and not revise:
-                print_fn(f"skip {q['qid']} (already labeled; use --revise to edit)")
-                continue
-            existing = store.get_labels(conn, q["qid"]) if (labeled and revise) else None
-            label_question(q, retriever, conn, top_n, prompt_fn, print_fn, existing=existing)
-    finally:
+        if worksheet is not None:
+            order, summaries, cands = _read_worksheet(worksheet)
+            targets = [qid] if qid else order
+            for qq in [x for x in targets if x in summaries]:
+                labeled = store.is_labeled(conn, qq)
+                if labeled and not revise:
+                    print_fn(f"skip {qq} (already labeled; use --revise to edit)")
+                    continue
+                existing = store.get_labels(conn, qq) if (labeled and revise) else None
+                label_from_worksheet(summaries[qq], cands.get(qq, []), conn, prompt_fn, print_fn, existing=existing)
+            return
+        if top_n is None:
+            top_n = _eval_top_n(config_path) if config_path is not None else 30
+        own_retriever = retriever is None
         if own_retriever:
-            retriever.close()
+            from archive_debugger.retrieve.search import Retriever  # lazy: keeps import light
+            retriever = Retriever(config_path)
+        try:
+            questions = [store.get_question(conn, qid)] if qid else store.list_questions(conn)
+            for q in [x for x in questions if x]:
+                labeled = store.is_labeled(conn, q["qid"])
+                if labeled and not revise:
+                    print_fn(f"skip {q['qid']} (already labeled; use --revise to edit)")
+                    continue
+                existing = store.get_labels(conn, q["qid"]) if (labeled and revise) else None
+                label_question(q, retriever, conn, top_n, prompt_fn, print_fn, existing=existing)
+        finally:
+            if own_retriever:
+                retriever.close()
+    finally:
         if own_conn:
             conn.close()
 
@@ -92,8 +160,10 @@ def main(argv=None) -> int:
     p.add_argument("--qid", default=None, help="label/revise a single question")
     p.add_argument("--top-n", type=int, default=None)
     p.add_argument("--revise", action="store_true", help="re-open already-labeled questions")
+    p.add_argument("--from-worksheet", dest="worksheet", default=None, type=Path,
+                   help="review advisory proposals from label_worksheet.jsonl instead of live retrieval")
     args = p.parse_args(argv)
-    run(args.config, qid=args.qid, top_n=args.top_n, revise=args.revise)
+    run(args.config, qid=args.qid, top_n=args.top_n, revise=args.revise, worksheet=args.worksheet)
     return 0
 
 

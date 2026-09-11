@@ -10,6 +10,7 @@ from typing import Optional
 
 import sqlite_vec
 
+from archive_debugger.retrieve import citation
 from archive_debugger.retrieve.config import RetrieveConfig, load_retrieve_config
 from archive_debugger.retrieve.embed import Embedder, make_embedder
 from archive_debugger.retrieve.filters import Filters, build_where
@@ -95,7 +96,7 @@ class Retriever:
             "title": r["title"],
             "leaf_index": leaf,
             "printed_page": r["printed_page"],
-            "page_deep_link": f"https://archive.org/details/{r['item_id']}/page/n{leaf}",
+            "page_deep_link": citation.deep_link(r["item_id"], leaf),
             "details_url": r["details_url"],
             "year": r["year"],
             "decade": r["decade"],
