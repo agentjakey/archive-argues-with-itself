@@ -17,6 +17,9 @@ class Draft(BaseModel):
     sentences: list[CitedSentence]
 
 
+TEMPERATURE = 0.0   # deterministic-as-possible drafting; reported in Answer.generation
+
+
 class LLM(Protocol):
     def draft(self, system: str, user: str) -> Draft: ...
 
@@ -47,6 +50,7 @@ class AnthropicLLM:
             max_tokens=self.max_tokens,
             system=system,
             messages=[{"role": "user", "content": user}],
+            temperature=TEMPERATURE,
             output_format=Draft,
         )
         return resp.parsed_output

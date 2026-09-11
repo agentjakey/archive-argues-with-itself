@@ -16,8 +16,8 @@ from typing import Optional
 
 from archive_debugger.eval import store
 from archive_debugger.eval.questions import load_seed
-from archive_debugger.generate.answer import compose, coverage_of, is_thin
-from archive_debugger.generate.llm import make_llm
+from archive_debugger.generate.answer import compose, coverage_of, generation_meta, is_thin
+from archive_debugger.generate.llm import TEMPERATURE, make_llm
 from archive_debugger.retrieve import citation
 from archive_debugger.retrieve.filters import Filters
 from archive_debugger.retrieve.search import Retriever
@@ -50,16 +50,21 @@ def _filters(d: Optional[dict]) -> Filters:
 
 
 def answer_question(config_path: Path, question: str, *, provider: Optional[str] = None,
-                    top_k: Optional[int] = None, filters: Optional[dict] = None,
-                    retriever: Optional[Retriever] = None) -> dict:
+                    model: Optional[str] = None, top_k: Optional[int] = None,
+                    filters: Optional[dict] = None, retriever: Optional[Retriever] = None) -> dict:
     gcfg = load_generate_config(config_path)
+    kind = provider or gcfg["provider"]
+    model_id = model or gcfg["model"]
+    k = top_k or gcfg["top_k"]
     own = retriever is None
     retriever = retriever or Retriever(config_path)
     try:
-        hits = retriever.search(question, filters=_filters(filters), top_k=top_k or gcfg["top_k"])
-        llm = make_llm(provider or gcfg["provider"], gcfg["model"], gcfg["max_tokens"])
+        hits = retriever.search(question, filters=_filters(filters), top_k=k)
+        llm = make_llm(kind, model_id, gcfg["max_tokens"])
         verify = functools.partial(citation.verify_citations, retriever.conn)
-        return compose(question, hits, llm, verify, min_passages=gcfg["min_passages"]).to_dict()
+        gen = generation_meta(provider=kind, model=model_id, temperature=TEMPERATURE,
+                              max_tokens=gcfg["max_tokens"], top_k=k)
+        return compose(question, hits, llm, verify, min_passages=gcfg["min_passages"], generation=gen).to_dict()
     finally:
         if own:
             retriever.close()
@@ -118,6 +123,7 @@ def main(argv=None) -> int:
     target.add_argument("--qid", default=None, help="run the seed question with this id, using its text AND filters")
     p.add_argument("--seed", default=Path("eval/seed_questions.jsonl"), type=Path, help="seed file for --qid")
     p.add_argument("--provider", choices=["stub", "anthropic"], default=None, help="override [generate].provider")
+    p.add_argument("--model", default=None, help="override [generate].model for this run")
     p.add_argument("--top-k", dest="top_k", type=int, default=None)
     p.add_argument("--sweep", default=None, type=Path,
                    help="seed_questions.jsonl: run retrieval + thinness only for every question; no model call")
@@ -127,13 +133,13 @@ def main(argv=None) -> int:
         return 0
     if args.qid:
         q = question_from_seed(args.seed, args.qid)
-        print(json.dumps(answer_question(args.config, q["text"], provider=args.provider, top_k=args.top_k,
-                                         filters=q.get("filters")), ensure_ascii=False, indent=2))
+        print(json.dumps(answer_question(args.config, q["text"], provider=args.provider, model=args.model,
+                                         top_k=args.top_k, filters=q.get("filters")), ensure_ascii=False, indent=2))
         return 0
     if not args.question:
         p.error("provide --question, --qid, or --sweep")
-    print(json.dumps(answer_question(args.config, args.question, provider=args.provider, top_k=args.top_k),
-                     ensure_ascii=False, indent=2))
+    print(json.dumps(answer_question(args.config, args.question, provider=args.provider, model=args.model,
+                                     top_k=args.top_k), ensure_ascii=False, indent=2))
     return 0
 
 

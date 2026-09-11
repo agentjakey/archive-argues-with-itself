@@ -13,6 +13,7 @@ Amended once after sweep 1 (stoplist criteria a/b, plural stemming, year/decade
 coverage); frozen thereafter."""
 from __future__ import annotations
 
+import hashlib
 import re
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -26,6 +27,7 @@ ABSTAIN_THIN = (
     "({n_undated} of {n_passages} retrieved passages are undated)"
 )
 ABSTAIN_UNVERIFIED = "no claim in the retrieved passages survived citation verification"
+ABSTAIN_UNCITED = "the retrieved passages did not yield any cited claim"
 
 _TOKEN = re.compile(r"[^\W_]+", re.UNICODE)   # same tokenizer as retrieve.search._fts_query
 _YEAR = re.compile(r"\b(1[89]\d\d|20\d\d)\b")
@@ -136,9 +138,18 @@ class Answer:
     abstained: bool
     coverage: Coverage
     abstention_text: Optional[str] = None
+    generation: dict = field(default_factory=dict)   # provider/model/temperature/prompt_sha256/max_tokens/top_k
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def generation_meta(*, provider: str, model: str, temperature: float, max_tokens: int, top_k: int) -> dict:
+    """Run metadata attached to every Answer (abstentions included). prompt_sha256 is
+    the hash of the SYSTEM prompt actually in force."""
+    return {"provider": provider, "model": model, "temperature": temperature,
+            "prompt_sha256": hashlib.sha256(SYSTEM.encode("utf-8")).hexdigest(),
+            "max_tokens": max_tokens, "top_k": top_k}
 
 
 def coverage_of(question: str, hits: list[dict]) -> Coverage:
@@ -176,29 +187,32 @@ def _leaks_facts(text: str, cited: list[dict]) -> bool:
     return any(p not in pages for p in _PAGE.findall(text))
 
 
-def _abstain(msg: str, cov: Coverage, unsupported: list[dict]) -> "Answer":
+def _abstain(msg: str, cov: Coverage, unsupported: list[dict], generation: Optional[dict]) -> "Answer":
     return Answer(text=msg, sentences=[], verified_citations=[], unsupported=unsupported,
-                  abstained=True, coverage=cov, abstention_text=msg)
+                  abstained=True, coverage=cov, abstention_text=msg, generation=generation or {})
 
 
-def compose(question: str, hits: list[dict], llm: LLM, verify: Callable, *, min_passages: int) -> Answer:
+def compose(question: str, hits: list[dict], llm: LLM, verify: Callable, *,
+            min_passages: int, generation: Optional[dict] = None) -> Answer:
     cov = coverage_of(question, hits)
     if is_thin(cov, min_passages=min_passages):
         uncovered = ", ".join(cov.uncovered_terms) if cov.uncovered_terms else "the question's terms"
         return _abstain(ABSTAIN_THIN.format(uncovered=uncovered, n_undated=cov.n_undated,
-                                            n_passages=cov.n_passages), cov, [])
+                                            n_passages=cov.n_passages), cov, [], generation)
 
     retrieved_ids = [h["passage_id"] for h in hits]
     by_id = {h["passage_id"]: h for h in hits}
     draft = llm.draft(SYSTEM, build_user_prompt(question, hits))
 
     kept, unsupported, verified = [], [], {}
+    reached_verifier = False   # did any cited sentence reach the 3-check verifier?
     for s in draft.sentences:
         cited = list(dict.fromkeys(s.cited_ids))  # dedupe, order-preserving
         row = {"text": s.text, "cited_ids": cited}
         if not cited:
             unsupported.append({**row, "reason": "no citation"})
             continue
+        reached_verifier = True
         failed = sorted({c.passage_id for c in verify(cited, retrieved_ids) if not c.ok})
         if failed:
             unsupported.append({**row, "reason": f"citation failed verification: {failed}"})
@@ -212,7 +226,9 @@ def compose(question: str, hits: list[dict], llm: LLM, verify: Callable, *, min_
             verified[h["passage_id"]] = _citation_dict(h)
 
     if not kept:
-        return _abstain(ABSTAIN_UNVERIFIED, cov, unsupported)
+        # UNVERIFIED: cited sentences reached the verifier and none survived.
+        # UNCITED: nothing reached the verifier (all sentences uncited, or a zero-sentence draft).
+        return _abstain(ABSTAIN_UNVERIFIED if reached_verifier else ABSTAIN_UNCITED, cov, unsupported, generation)
     return Answer(text=" ".join(r["text"] for r in kept), sentences=kept,
                   verified_citations=list(verified.values()), unsupported=unsupported,
-                  abstained=False, coverage=cov)
+                  abstained=False, coverage=cov, generation=generation or {})

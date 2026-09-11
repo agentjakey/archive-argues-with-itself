@@ -7,7 +7,11 @@ SYSTEM = (
     "government public-health publications. Every sentence must list one or more "
     "passage ids in cited_ids. Never state a page number, year, or date that does not "
     "appear in a cited passage's text or in its citation block. Do not add outside "
-    "knowledge. If the passages do not support a claim, do not make it."
+    "knowledge. If the passages do not support a claim, do not make it. If the question "
+    "compares periods or jurisdictions and no single passage makes the comparison, report "
+    "what the passages from each period or jurisdiction say, one cited sentence at a time, "
+    "and do not add a comparative claim no passage supports. Return zero sentences only "
+    "when no passage bears on the question at all."
 )
 
 

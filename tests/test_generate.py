@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import functools
+import hashlib
 import json
 import subprocess
 import sys
@@ -9,7 +10,8 @@ from pathlib import Path
 
 from archive_debugger.eval import questions, store
 from archive_debugger.generate import answer as gen
-from archive_debugger.generate.llm import CitedSentence, Draft, StubLLM
+from archive_debugger.generate.llm import TEMPERATURE, CitedSentence, Draft, StubLLM
+from archive_debugger.generate.prompt import SYSTEM
 from archive_debugger.ingest import db
 from archive_debugger.retrieve import citation, index, search
 from archive_debugger.retrieve.config import RetrieveConfig
@@ -231,7 +233,7 @@ def test_cli_stub_provider_is_offline_and_abstains_unverified(tmp_path):
         out = cli.answer_question(Path("config/pilot.toml"), "vaccination hospital", provider="stub", retriever=r)
     finally:
         r.close()
-    assert out["abstained"] is True and out["text"] == gen.ABSTAIN_UNVERIFIED
+    assert out["abstained"] is True and out["text"] == gen.ABSTAIN_UNCITED
     assert "anthropic" not in sys.modules
 
 
@@ -244,11 +246,69 @@ def test_cli_qid_loads_text_and_filters_from_seed(tmp_path):
         assert q["text"] == "vaccination hospital" and q["filters"] == {}
         out = cli.answer_question(Path("config/pilot.toml"), q["text"], provider="stub",
                                   filters=q["filters"], retriever=r)
-        assert out["abstained"] is True and out["text"] == gen.ABSTAIN_UNVERIFIED
+        assert out["abstained"] is True and out["text"] == gen.ABSTAIN_UNCITED
         with pytest.raises(KeyError):
             cli.question_from_seed(seed, "nope")
     finally:
         r.close()
+
+
+def test_uncited_sentences_abstain_uncited():
+    conn = db.init_db(":memory:")
+    hits = _seed(conn)
+    llm = StubLLM(Draft(sentences=[CitedSentence(text="One.", cited_ids=[]), CitedSentence(text="Two.", cited_ids=[])]))
+    a = gen.compose("q", hits, llm, functools.partial(citation.verify_citations, conn), **MIN)
+    assert a.abstained and a.text == gen.ABSTAIN_UNCITED and llm.calls == 1
+    assert [u["reason"] for u in a.unsupported] == ["no citation", "no citation"]
+    # A zero-sentence draft also never reaches the verifier -> UNCITED, not UNVERIFIED.
+    a0 = _compose(conn, hits, Draft(sentences=[]))
+    assert a0.abstained and a0.text == gen.ABSTAIN_UNCITED and a0.unsupported == []
+    conn.close()
+
+
+def test_cited_but_failing_abstains_unverified():
+    conn = db.init_db(":memory:")
+    hits = _seed(conn)
+    # One uncited sentence plus one that cites an unknown id: the verifier WAS reached.
+    a = _compose(conn, hits, Draft(sentences=[CitedSentence(text="Loose.", cited_ids=[]),
+                                             CitedSentence(text="Bad.", cited_ids=["ghost#0:0"])]))
+    assert a.abstained and a.text == gen.ABSTAIN_UNVERIFIED and len(a.unsupported) == 2
+    conn.close()
+
+
+def test_generation_metadata_present_and_prompt_sha():
+    conn = db.init_db(":memory:")
+    hits = _seed(conn)
+    meta = gen.generation_meta(provider="stub", model="m", temperature=TEMPERATURE, max_tokens=2048, top_k=12)
+    a = gen.compose("q", hits, StubLLM(Draft(sentences=[CitedSentence(text="Ran.", cited_ids=[hits[0]["passage_id"]])])),
+                    functools.partial(citation.verify_citations, conn), generation=meta, **MIN)
+    assert set(a.generation) == {"provider", "model", "temperature", "prompt_sha256", "max_tokens", "top_k"}
+    assert a.generation["prompt_sha256"] == hashlib.sha256(SYSTEM.encode("utf-8")).hexdigest()
+    assert a.generation["provider"] == "stub" and a.generation["temperature"] == 0.0
+    # abstentions carry it too
+    t = gen.compose("covid", hits, StubLLM(Draft(sentences=[])), functools.partial(citation.verify_citations, conn),
+                    generation=meta, **MIN)
+    assert t.abstained and t.generation["prompt_sha256"] == meta["prompt_sha256"]
+    conn.close()
+
+
+def test_cli_model_override_reaches_make_llm(tmp_path, monkeypatch):
+    from archive_debugger.generate import cli
+    seen = {}
+
+    def fake_make_llm(kind, model, max_tokens):
+        seen.update(kind=kind, model=model, max_tokens=max_tokens)
+        return StubLLM(Draft(sentences=[]))
+
+    monkeypatch.setattr(cli, "make_llm", fake_make_llm)
+    r, _ = _fixture_retriever_and_seed(tmp_path)
+    try:
+        out = cli.answer_question(Path("config/pilot.toml"), "vaccination hospital",
+                                  provider="stub", model="claude-sonnet-5", retriever=r)
+    finally:
+        r.close()
+    assert seen["kind"] == "stub" and seen["model"] == "claude-sonnet-5"
+    assert out["generation"]["model"] == "claude-sonnet-5" and out["generation"]["provider"] == "stub"
 
 
 def test_importing_generate_does_not_import_anthropic():
