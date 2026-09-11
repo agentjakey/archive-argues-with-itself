@@ -13,6 +13,8 @@ the window fold into "pre-1960" and "post-2009" and appear only when the current
 filters leave passages there."""
 from __future__ import annotations
 
+from typing import Optional
+
 from archive_debugger.generate.answer import PREFIX, _DECADE, _stem, salient_terms
 from archive_debugger.retrieve.filters import Filters, build_where
 
@@ -55,8 +57,8 @@ def _empty_lane(lane: str) -> dict:
     return {"decade": lane, "items": 0, "passages": 0, "undated_passages": 0, "matched": 0, "terms": {}}
 
 
-def coverage(conn, question: str, filters: Filters) -> dict:
-    where, params = build_where(filters)
+def coverage(conn, question: str, filters: Filters, *, doc_type_families: Optional[dict] = None) -> dict:
+    where, params = build_where(filters, doc_type_families=doc_type_families)
     terms = salient_terms(question)
 
     by_decade: dict[str, dict] = {lane: _empty_lane(lane) for lane in FIXED_LANES}

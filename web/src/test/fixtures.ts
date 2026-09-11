@@ -19,6 +19,9 @@ export function row(over: Partial<EvidenceRow> = {}): EvidenceRow {
     bm25_rank: 1,
     dense_rank: 3,
     cited: false,
+    in_prompt: true,
+    section_class: "body",
+    later_years: null,
     ...over,
   };
 }

@@ -6,18 +6,31 @@ no network. The DB path is read from config/pilot.toml [index].db_path.
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import tomllib
 from pathlib import Path
 
 from archive_debugger.ingest import schema
 
+# Deployments mount the data files outside the repo; these env vars override the
+# config paths everywhere a path is resolved (db here, index in retrieve.config,
+# answer cache in api.app). Unset means the config value.
+ENV_DB_PATH = "CIVIC_DB_PATH"
+ENV_INDEX_PATH = "CIVIC_INDEX_PATH"
+ENV_CACHE_PATH = "CIVIC_CACHE_PATH"
+
+
+def env_path(var: str, default) -> Path:
+    value = os.environ.get(var)
+    return Path(value) if value else Path(default)
+
 
 def resolve_db_path(config_path: Path) -> Path:
-    """Read [index].db_path from the pilot config."""
+    """[index].db_path from the pilot config, unless CIVIC_DB_PATH is set."""
     with Path(config_path).open("rb") as fh:
         raw = tomllib.load(fh)
-    return Path(raw["index"]["db_path"])
+    return env_path(ENV_DB_PATH, raw["index"]["db_path"])
 
 
 def connect(db_path: Path | str) -> sqlite3.Connection:

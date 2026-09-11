@@ -1,0 +1,18 @@
+# Data artifacts live on the volume, never in the image.
+raw/
+*.db
+index/
+data/
+reports/
+notes/
+# Environments and tooling.
+.venv/
+.git/
+.github/
+.pytest_cache/
+__pycache__/
+web/node_modules/
+web/src/
+tests/
+.env
+.env.*

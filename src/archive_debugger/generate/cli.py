@@ -58,6 +58,14 @@ def sent_temperature(kind: str, gcfg: dict) -> Optional[float]:
     return gcfg["temperature"] if kind == "anthropic" else None
 
 
+def retrieve_pool(retriever: Retriever, question: str, filters: Filters, top_k: int) -> tuple[list[dict], list[dict]]:
+    """ONE ranking, two views: the pool of [retrieve].pool_size hits for the evidence
+    trail, and its top_k prefix for the model. The model never sees a passage the
+    trail does not show, and the trail never shows a different ranking."""
+    pool = retriever.search(question, filters=filters, top_k=max(retriever.cfg.pool_size, top_k))
+    return pool, pool[:top_k]
+
+
 def answer_question(config_path: Path, question: str, *, provider: Optional[str] = None,
                     model: Optional[str] = None, top_k: Optional[int] = None,
                     filters: Optional[dict] = None, retriever: Optional[Retriever] = None) -> dict:
@@ -69,7 +77,7 @@ def answer_question(config_path: Path, question: str, *, provider: Optional[str]
     own = retriever is None
     retriever = retriever or Retriever(config_path)
     try:
-        hits = retriever.search(question, filters=build_filters(filters), top_k=k)
+        _pool, hits = retrieve_pool(retriever, question, build_filters(filters), k)
         llm = make_llm(kind, model_id, gcfg["max_tokens"], temperature=temp)
         verify = functools.partial(citation.verify_citations, retriever.conn)
         gen = generation_meta(provider=kind, model=model_id, temperature=temp,
@@ -89,7 +97,7 @@ def sweep(config_path: Path, seed_path: Path, *, top_k: Optional[int] = None,
     rows = []
     try:
         for q in load_seed(seed_path):
-            hits = retriever.search(q["text"], filters=build_filters(q.get("filters")), top_k=top_k or gcfg["top_k"])
+            _pool, hits = retrieve_pool(retriever, q["text"], build_filters(q.get("filters")), top_k or gcfg["top_k"])
             cov = coverage_of(q["text"], hits)
             gold = store.gold_verdict(retriever.conn, q["qid"])
             rows.append({

@@ -103,6 +103,16 @@ To view the built app, start the API (previous section) and open
 filters hidden, QR placeholder). `VITE_API_BASE` points the app at a remote API;
 empty means same-origin.
 
+### Deploy
+
+`Dockerfile` (python 3.11-slim, editable install, web/dist copied in, embedding
+model baked at build time, uvicorn on `$PORT`), `fly.toml` (10 GB volume at
+`/data`, secrets `ANTHROPIC_API_KEY` and `ALLOWED_ORIGINS`), and `web/vercel.json`
+(Vite build with `VITE_API_BASE`). The data-file paths are overridable by
+`CIVIC_DB_PATH`, `CIVIC_INDEX_PATH`, and `CIVIC_CACHE_PATH`. Exact commands,
+including the volume upload and the single-process laptop fallback, are in
+`docs/DEPLOY.md`. Nothing deploys automatically.
+
 ### Scope is config-driven
 
 The pilot corpus is defined entirely by `config/pilot.toml`: topic term-set,
@@ -115,7 +125,9 @@ housing) is a new config plus a new manifest, not a code change.
 
 `raw/` (harvested OCR), `civic.db` (parsed and normalized corpus), and
 `index/vectors.db` (dense vectors) are git-ignored and rebuilt with the commands
-above. The reproducible gold -- `eval/seed_questions.jsonl` and
+above. Keep `civic.db` and the index out of any synced folder (OneDrive, Dropbox):
+point `CIVIC_DB_PATH` / `CIVIC_INDEX_PATH` at a plain local directory instead,
+otherwise long write transactions fail with "database is locked". The reproducible gold -- `eval/seed_questions.jsonl` and
 `eval/gold_decisions.json` -- is committed, as is `data/manifest/`.
 
 ## Architecture
@@ -127,10 +139,11 @@ the Internet Archive.
 - `ingest/` -- local parse, normalize, and `civic.db` build.
 - `retrieve/` -- hybrid retrieval and page-level citations (`citation.py` is the
   single source of the deep-link format and the 3-check verifier).
-- `generate/` -- synthesis grounded strictly in retrieved passages *(planned;
-  config-driven external LLM, isolated, stubbed in tests)*.
+- `generate/` -- synthesis grounded strictly in retrieved passages; config-driven
+  external LLM, isolated, stubbed in tests; code-decided abstention.
 - `eval/` -- retrieval evaluation against human gold labels.
-- `api/`, `web/` -- read-only serve layer and Next.js interface *(planned)*.
+- `api/`, `web/` -- read-only FastAPI serve layer (answer cache, coverage view)
+  and the Vite + React reading-room interface.
 
 ### Retrieval
 

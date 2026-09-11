@@ -104,6 +104,9 @@ export interface EvidenceRow {
   bm25_rank: number | null;
   dense_rank: number | null;
   cited: boolean;
+  in_prompt: boolean;               // false for pool rows the model never saw
+  section_class: "front" | "body" | "back" | string;
+  later_years: number[] | null;     // years in the text later than the item year + 1
 }
 
 export interface AskResponse {

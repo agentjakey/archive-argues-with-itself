@@ -1,5 +1,9 @@
 """Metadata filters compiled to SQL predicates. Pre-filter (candidate-set
-restriction) on both arms; compose with AND."""
+restriction) on both arms; compose with AND.
+
+doc_type families (Phase 13, config-driven): when a mapping is supplied and the
+requested doc_type names a family or one of its members, the predicate matches
+every member. Stored values are never rewritten."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -27,7 +31,15 @@ def period_predicate(period: str) -> tuple[str, list]:
     raise ValueError(f"unknown period: {period}")
 
 
-def build_where(f: Filters) -> tuple[str, list]:
+def family_members(doc_type: str, families: Optional[dict]) -> list[str]:
+    """Members of the family doc_type names or belongs to; [] when there is none."""
+    for name, members in (families or {}).items():
+        if doc_type == name or doc_type in members:
+            return list(members)
+    return []
+
+
+def build_where(f: Filters, *, doc_type_families: Optional[dict] = None) -> tuple[str, list]:
     clauses: list[str] = []
     params: list = []
     if f.period:
@@ -38,8 +50,13 @@ def build_where(f: Filters) -> tuple[str, list]:
         clauses.append("i.jurisdiction_norm = ?")
         params.append(f.jurisdiction)
     if f.doc_type:
-        clauses.append("i.doc_type_norm = ?")
-        params.append(f.doc_type)
+        members = family_members(f.doc_type, doc_type_families)
+        if members:
+            clauses.append("i.doc_type_norm IN (" + ",".join("?" * len(members)) + ")")
+            params += members
+        else:
+            clauses.append("i.doc_type_norm = ?")
+            params.append(f.doc_type)
     if f.min_ocr and f.min_ocr > 0:
         clauses.append("CAST(p.ocr_quality AS REAL) >= ?")
         params.append(f.min_ocr)

@@ -56,7 +56,9 @@ CREATE TABLE IF NOT EXISTS pages (
     printed_page  TEXT,                       -- nullable; the printed page label
     char_count    INTEGER,
     ocr_conf_mean REAL,                       -- nullable
-    has_text      INTEGER
+    has_text      INTEGER,
+    section_class  TEXT,                      -- Phase 13: front | body | back (ingest.sections); NULL = unclassified
+    section_method TEXT                       -- the deciding signal, for eyeballing samples
 );
 CREATE INDEX IF NOT EXISTS idx_pages_item ON pages(item_id);
 
@@ -191,4 +193,5 @@ def create_schema(conn: sqlite3.Connection) -> None:
     idempotent column migrations for tables that predate a column."""
     conn.executescript(SCHEMA_SQL)
     _ensure_columns(conn, "eval_questions", (("qtype", "qtype TEXT"), ("filters_json", "filters_json TEXT")))
+    _ensure_columns(conn, "pages", (("section_class", "section_class TEXT"), ("section_method", "section_method TEXT")))
     conn.commit()

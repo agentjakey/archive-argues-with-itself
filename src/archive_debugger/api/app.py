@@ -23,13 +23,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from archive_debugger.api.cache import AnswerCache, cache_key
+from archive_debugger.api.cache import AnswerCache, cache_key, retrieval_fingerprint
 from archive_debugger.api.coverage import coverage as compute_coverage
 from archive_debugger.eval import store
 from archive_debugger.eval.questions import load_seed
 from archive_debugger.generate.answer import compose, generation_meta
-from archive_debugger.generate.cli import build_filters, load_generate_config, sent_temperature
+from archive_debugger.generate.cli import build_filters, load_generate_config, retrieve_pool, sent_temperature
 from archive_debugger.generate.llm import LLM, make_llm
+from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path
 from archive_debugger.retrieve import citation
 from archive_debugger.retrieve.search import Retriever
 
@@ -49,10 +50,14 @@ class AskRequest(BaseModel):
     nocache: bool = False
 
 
-def evidence_rows(hits: list[dict], verified: list[dict]) -> list[dict]:
+def evidence_rows(hits: list[dict], verified: list[dict], prompt_ids: Optional[set] = None) -> list[dict]:
+    """hits is the whole pool shown in the trail; prompt_ids marks the prefix the model saw."""
     cited_ids = {c["passage_id"] for c in verified}
     ordered = sorted(hits, key=lambda h: (h.get("year") is None, h.get("year") or 0))  # undated last
     return [{
+        "in_prompt": True if prompt_ids is None else h["passage_id"] in prompt_ids,
+        "section_class": h.get("section_class") or "body",
+        "later_years": h.get("later_years"),
         "passage_id": h["passage_id"], "item_id": h["item_id"], "title": h.get("title"),
         "year": h.get("year"), "decade": h.get("decade"), "jurisdiction": h.get("jurisdiction"),
         "doc_type": h.get("doc_type"), "leaf_index": h["leaf_index"], "printed_page": h.get("printed_page"),
@@ -108,10 +113,11 @@ def _clean_filters(period: Optional[str], jurisdiction: Optional[str], doc_type:
 def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Optional[Retriever] = None,
                provider: Optional[str] = None, llm: Optional[LLM] = None,
                seed_path: Path = DEFAULT_SEED, web_dist: Path = WEB_DIST, load_env: bool = True,
-               cache_path: Path = DEFAULT_CACHE) -> FastAPI:
+               cache_path: Optional[Path] = None) -> FastAPI:
     if load_env:
         from dotenv import load_dotenv
         load_dotenv()
+    cache_path = cache_path or env_path(ENV_CACHE_PATH, DEFAULT_CACHE)
     gcfg = load_generate_config(config_path)
     pilot_window = _pilot_window(config_path)
     own_retriever = retriever is None
@@ -122,6 +128,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         app.state.lock = threading.Lock()   # one sqlite connection; sync endpoints run in a threadpool
         app.state.cache = AnswerCache(cache_path)
         app.state.coverage_cache = {}
+        app.state.retrieval_sha256 = retrieval_fingerprint(app.state.retriever.cfg)
         with app.state.lock:
             app.state.corpus = corpus_facts(app.state.retriever.conn, pilot_window)
         try:
@@ -145,7 +152,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         gen = generation_meta(provider=kind, model=model_id, temperature=temp,
                               max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
         key = cache_key(question=question, filters=filters, provider=kind, model=model_id,
-                        prompt_sha256=gen["prompt_sha256"], top_k=gcfg["top_k"], temperature=temp)
+                        prompt_sha256=gen["prompt_sha256"], top_k=gcfg["top_k"], temperature=temp,
+                        retrieval_sha256=app.state.retrieval_sha256)
         if not nocache:
             hit = app.state.cache.get(key)
             if hit is not None:
@@ -156,13 +164,15 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             return JSONResponse(status_code=503, content={"error": MISSING_KEY})
         model = llm or make_llm(kind, model_id, gcfg["max_tokens"], temperature=temp)
         with app.state.lock:   # retrieval, the LLM call, and verification all read through r.conn
-            hits = r.search(question, filters=build_filters(filters), top_k=gcfg["top_k"])
+            # One ranking: the pool is the trail, its top_k prefix is what the model sees.
+            pool, hits = retrieve_pool(r, question, build_filters(filters), gcfg["top_k"])
             verify = functools.partial(citation.verify_citations, r.conn)
             try:
                 ans = compose(question, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
             except Exception as exc:  # noqa: BLE001 - surfaced verbatim, never swallowed
                 return JSONResponse(status_code=502, content={"error": f"{type(exc).__name__}: {exc}"})
-        result = {"answer": ans.to_dict(), "evidence": evidence_rows(hits, ans.verified_citations)}
+        result = {"answer": ans.to_dict(),
+                  "evidence": evidence_rows(pool, ans.verified_citations, {h["passage_id"] for h in hits})}
         app.state.cache.put(key, result)
         result["answer"]["cached"] = None
         return result
@@ -194,7 +204,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         if cached is not None:
             return cached
         with app.state.lock:
-            result = compute_coverage(app.state.retriever.conn, q, build_filters(filters))
+            r = app.state.retriever
+            result = compute_coverage(r.conn, q, build_filters(filters), doc_type_families=r.cfg.active_families())
         app.state.coverage_cache[ck] = result
         return result
 

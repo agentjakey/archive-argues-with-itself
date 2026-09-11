@@ -1,10 +1,19 @@
 """Hybrid retrieval: BM25 (FTS5) + dense (sqlite-vec flat, exact) fused with RRF,
 OCR soft down-weight, page-level provenance attached. Read-only over civic.db and
-the vectors.db artifact."""
+the vectors.db artifact.
+
+Phase 13 switches, all read from RetrieveConfig and off by default:
+- fts_drop_stopwords: drop the frozen stoplist before building the OR query.
+- section_demote: multiply the fused score by a per-class weight for pages the
+  ingest classifier marked front or back matter (never excludes).
+- doc_type_family_filter: a doc_type filter matches its whole configured family.
+- per_item_cap: at most N passages per item in the ranking (0 = off).
+- later_years_flag: annotate a hit with years in its text later than item year + 1."""
 from __future__ import annotations
 
 import re
 import sqlite3
+from collections import Counter
 from pathlib import Path
 from typing import Optional
 
@@ -14,9 +23,11 @@ from archive_debugger.retrieve import citation
 from archive_debugger.retrieve.config import RetrieveConfig, load_retrieve_config
 from archive_debugger.retrieve.embed import Embedder, make_embedder
 from archive_debugger.retrieve.filters import Filters, build_where
-from archive_debugger.retrieve.fusion import apply_downweight, rrf
+from archive_debugger.retrieve.fusion import apply_downweight, apply_section_weight, rrf
+from archive_debugger.stopwords import STOPWORDS
 
 _WORD = re.compile(r"[^\W_]+", re.UNICODE)
+_YEAR = re.compile(r"\b(1[89]\d\d|20\d\d)\b")
 
 
 class Retriever:
@@ -32,12 +43,17 @@ class Retriever:
         self.conn.enable_load_extension(False)
         self.conn.execute("ATTACH DATABASE ? AS vec", (f"file:{self.cfg.index_path}?mode=ro",))
         self.embedder = embedder or make_embedder(self.cfg.embedder, self.cfg.embedding_model, self.cfg.embedding_dim)
+        # A db built before Phase 13 has no section column; treat every page as body.
+        self._has_sections = "section_class" in {r[1] for r in self.conn.execute("PRAGMA table_info(pages)")}
 
     def close(self) -> None:
         self.conn.close()
 
     def _fts_query(self, query: str) -> str:
         terms = _WORD.findall(query.lower())
+        if self.cfg.fts_drop_stopwords:
+            kept = [t for t in terms if t not in STOPWORDS]
+            terms = kept or terms            # an all-stopword question still queries something
         if not terms:
             return '""'
         return " OR ".join('"' + t.replace('"', '""') + '"' for t in terms)
@@ -58,15 +74,39 @@ class Retriever:
                " ORDER BY vec_distance_cosine(v.embedding, ?) LIMIT ?")
         return [r[0] for r in self.conn.execute(sql, [*params, sqlite_vec.serialize_float32(qvec), k])]
 
-    def _quality_for(self, pids: set) -> dict:
+    def _passage_meta(self, pids: set) -> dict:
+        """pid -> (ocr_quality, section_class, item_id) for the fused candidates."""
         if not pids:
             return {}
         marks = ",".join("?" * len(pids))
+        section = "g.section_class" if self._has_sections else "NULL"
         rows = self.conn.execute(
-            f"SELECT passage_id, CAST(ocr_quality AS REAL) FROM passages WHERE passage_id IN ({marks})",
+            f"SELECT p.passage_id, CAST(p.ocr_quality AS REAL), {section}, p.item_id "
+            f"FROM passages p LEFT JOIN pages g ON g.page_id = p.page_id WHERE p.passage_id IN ({marks})",
             list(pids),
         )
-        return {pid: (q if q is not None else 1.0) for pid, q in rows}
+        return {pid: ((q if q is not None else 1.0), sec, item) for pid, q, sec, item in rows}
+
+    def _rank(self, final: dict, item_of: dict) -> list[str]:
+        ranked = sorted(final, key=lambda p: final[p], reverse=True)
+        cap = self.cfg.per_item_cap
+        if cap <= 0:
+            return ranked
+        out: list[str] = []
+        per_item: Counter = Counter()
+        for pid in ranked:
+            item = item_of.get(pid)
+            if per_item[item] >= cap:
+                continue
+            per_item[item] += 1
+            out.append(pid)
+        return out
+
+    def _later_years(self, year, text: str):
+        if not self.cfg.later_years_flag or year is None:
+            return None
+        later = sorted({int(y) for y in _YEAR.findall(text or "") if int(y) > int(year) + 1})
+        return later or None
 
     def _provenance(self, pid: str, score: float) -> dict:
         # LEFT JOIN + fail-loud: a retrieved passage that cannot resolve to a real
@@ -106,10 +146,11 @@ class Retriever:
             "jurisdiction": r["jurisdiction_norm"],
             "issuer": r["issuer_norm"],
             "doc_type": r["doc_type_norm"],
+            "later_years": self._later_years(r["year"], r["text"]),
         }
 
     def search(self, query: str, filters: Optional[Filters] = None, top_k: int = 20) -> list[dict]:
-        where, params = build_where(filters or Filters())
+        where, params = build_where(filters or Filters(), doc_type_families=self.cfg.active_families())
         bm = self._bm25(query, where, params, self.cfg.candidates)
         qvec = self.embedder.embed_query(query)
         dn = self._dense(qvec, where, params, self.cfg.candidates)
@@ -118,13 +159,16 @@ class Retriever:
             return []
         bm_rank = {pid: i + 1 for i, pid in enumerate(bm)}
         dn_rank = {pid: i + 1 for i, pid in enumerate(dn)}
-        quality = self._quality_for(set(fused))
-        final = apply_downweight(fused, quality, self.cfg.downweights)
-        ranked = sorted(final, key=lambda p: final[p], reverse=True)[:top_k]
+        meta = self._passage_meta(set(fused))
+        final = apply_downweight(fused, {pid: m[0] for pid, m in meta.items()}, self.cfg.downweights)
+        if self.cfg.section_demote:
+            final = apply_section_weight(final, {pid: m[1] for pid, m in meta.items()}, self.cfg.section_weights)
+        ranked = self._rank(final, {pid: m[2] for pid, m in meta.items()})[:top_k]
         out = []
         for pid in ranked:
             hit = self._provenance(pid, final[pid])
             hit["bm25_rank"] = bm_rank.get(pid)    # None if the passage came only from the dense leg
             hit["dense_rank"] = dn_rank.get(pid)   # None if it came only from BM25
+            hit["section_class"] = (meta.get(pid, (None, None, None))[1]) or "body"
             out.append(hit)
         return out

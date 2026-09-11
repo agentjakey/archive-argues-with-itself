@@ -37,6 +37,9 @@ export function EvidenceCard({ row, salientTerms, pinned, onOpen, onPin }: Props
           <span className="tag">{(row.doc_type ?? "unknown").replace(/_/g, " ")}</span>
           {row.bm25_rank != null && <span className="tag">lexical</span>}
           {row.dense_rank != null && <span className="tag">semantic</span>}
+          {row.section_class === "front" && <span className="tag">front matter</span>}
+          {row.section_class === "back" && <span className="tag">back matter</span>}
+          {!row.in_prompt && <span className="tag">not sent to the model</span>}
           {row.cited && <span className="cited">Cited</span>}
         </div>
         <h4 className="mt-1 font-serif text-lg leading-snug">{shortTitle(row.title, 96)}</h4>
@@ -44,6 +47,11 @@ export function EvidenceCard({ row, salientTerms, pinned, onOpen, onPin }: Props
           {row.item_id} leaf {row.leaf_index}
           {row.printed_page ? `, p. ${row.printed_page}` : ""}
         </p>
+        {row.later_years && row.later_years.length > 0 && (
+          <p className="text-sm text-muted">
+            mentions {row.later_years.join(", ")} ({row.year == null ? "item undated" : `item dated ${row.year}`})
+          </p>
+        )}
         <p className="excerpt mt-2">
           {segments.map((s, i) => (s.hit ? <mark key={i}>{s.text}</mark> : <span key={i}>{s.text}</span>))}
         </p>

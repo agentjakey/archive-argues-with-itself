@@ -1,0 +1,42 @@
+# Fly.io app config for the read-only API (+ served web/dist).
+#
+# Secrets are never written here. Set them once:
+#   fly secrets set ANTHROPIC_API_KEY=... ALLOWED_ORIGINS=https://<vercel-app>.vercel.app
+# The data files are uploaded to the volume by hand; see docs/DEPLOY.md.
+
+app = "archive-argues-with-itself"
+primary_region = "sea"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  CIVIC_DB_PATH = "/data/civic.db"
+  CIVIC_INDEX_PATH = "/data/index/vectors.db"
+  CIVIC_CACHE_PATH = "/data/cache/answers.db"
+
+[[mounts]]
+  source = "civic_data"
+  destination = "/data"
+  initial_size = "10gb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # The machine holds a 1.9 GB sqlite file and a 1.5 GB vector file in page cache;
+  # a cold start reloads both, so it is kept running rather than autostopped.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "180s"
+    interval = "30s"
+    timeout = "10s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "4gb"

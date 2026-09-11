@@ -1,6 +1,7 @@
 """Phase 7 eval tests. Hermetic: no model, no index, no network."""
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 
@@ -187,6 +188,63 @@ def test_report_partial_and_abstention_leakage():
     assert "abstention_correct" not in rep["aggregate"]         # no abstention rate reported
     assert rep["abstention_leakage"] == [{"qid": "qa", "n_surfaced": 30, "n_marked_relevant": 1}]
     conn.close()
+
+
+# ---- Phase 13: unjudged@k and the switch-state sweep ----------------------
+
+
+def test_unjudged_at_k():
+    from archive_debugger.eval.metrics import unjudged_at_k
+    assert unjudged_at_k(["a", "b", "c", "d"], {"a", "c"}, 4) == 0.5
+    assert unjudged_at_k(["a", "b"], {"a", "b"}, 10) == 0.0         # short ranking: denominator is what was retrieved
+    assert unjudged_at_k([], {"a"}, 10) is None
+
+
+def test_retrieval_sweep_states_and_report(tmp_path):
+    from archive_debugger.eval import retrieval_sweep
+    from archive_debugger.retrieve import index
+    from archive_debugger.retrieve.embed import StubEmbedder
+    civ, vectors = tmp_path / "civic.db", tmp_path / "vectors.db"
+    conn = db.init_db(str(civ))
+    for k in range(3):
+        item = f"it{k}"
+        conn.execute("INSERT INTO items (item_id, title, dated, year, decade, jurisdiction_norm, doc_type_norm, details_url) "
+                     "VALUES (?,?,1,?,?, 'alberta', 'other', 'u')", (item, item, 1980 + k, "1980s"))
+        for leaf in range(4):
+            conn.execute("INSERT INTO pages (page_id, item_id, leaf_index, has_text, section_class) VALUES (?,?,?,1,?)",
+                         (f"{item}#{leaf}", item, leaf, "front" if leaf == 0 else "body"))
+            conn.execute("INSERT INTO passages (passage_id, item_id, page_id, leaf_index, char_start, char_end, text, token_count, ocr_quality) "
+                         "VALUES (?,?,?,?,0,30,'vaccination hospital programme',3,'0.95')", (f"{item}#{leaf}:0", item, f"{item}#{leaf}", leaf))
+    questions.insert_questions(conn, [{"qid": "q001", "text": "vaccination hospital", "qtype": "factual", "filters": {}}])
+    store.write_label(conn, "q001", "it0#1:0", 1)
+    store.write_label(conn, "q001", "it0#0:0", 0)
+    store.write_gold(conn, "q001", 1)
+    conn.commit()
+    conn.close()
+    index.build_index(civ, vectors, StubEmbedder(dim=64), model_id="stub", batch_size=8)
+    cfg = tmp_path / "pilot.toml"
+    cfg.write_text(
+        f'[index]\ndb_path = "{civ.as_posix()}"\nembedding_model = "stub"\nembedding_dim = 64\n'
+        f'[retrieve]\nindex_path = "{vectors.as_posix()}"\nembedder = "stub"\ncandidates = 50\n'
+        '[retrieve.doc_type_families]\ncommission = ["commission", "royal_commission"]\n'
+        '[generate]\ntop_k = 12\nmin_passages = 3\n[eval]\nlabel_top_n = 30\nrecall_ks = [5, 10, 20]\nndcg_k = 10\n',
+        encoding="utf-8")
+    seed = tmp_path / "seed.jsonl"
+    seed.write_text(json.dumps({"qid": "q001", "text": "vaccination hospital", "qtype": "factual", "filters": {}}) + "\n",
+                    encoding="utf-8")
+    out = retrieval_sweep.run(cfg, seed_path=seed, out_dir=tmp_path / "out", embedder=StubEmbedder(dim=64))
+    names = [n for n, _ in retrieval_sweep.STATES]
+    assert list(out["states"]) == names and len(names) == 9
+    for st in out["states"].values():
+        assert {"recall@5", "recall@10", "recall@20", "ndcg@10", "unjudged@10", "unjudged@20"} <= set(st["aggregate"])
+    assert out["states"]["baseline"]["aggregate"]["unjudged@10"] == 0.8          # 10 retrieved, 2 judged
+    assert set(out["sweeps"]) == {"baseline", "all_on_cap3", "all_on_cap5"}
+    conn = db.init_db(str(civ))
+    rows = conn.execute("SELECT run_id, config_json FROM eval_runs WHERE run_id LIKE 'p13-%'").fetchall()
+    conn.close()
+    assert len(rows) == 9 and all(json.loads(r["config_json"])["phase"] == 13 for r in rows)
+    md = (tmp_path / "out" / "retrieval_report.md").read_text(encoding="utf-8")
+    assert "| all_on_cap5 |" in md and "## Thinness sweep, state baseline" in md
 
 
 # ---- CI guard -------------------------------------------------------------

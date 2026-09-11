@@ -22,6 +22,7 @@ from typing import Callable, Optional
 
 from archive_debugger.generate.llm import LLM
 from archive_debugger.generate.prompt import SYSTEM, build_user_prompt
+from archive_debugger.stopwords import STOPWORDS  # noqa: F401 - frozen list; public name kept here
 
 ABSTAIN_THIN = (
     "the record here is thin: no retrieved passage mentions {uncovered} "
@@ -36,34 +37,8 @@ _PAGE = re.compile(r"\b(?:p\.|page)\s*(\d+)\b", re.IGNORECASE)
 _DECADE = re.compile(r"^\d{3}0s$")            # e.g. 1980s
 PREFIX = 5
 
-# Fixed English stopwords: articles, conjunctions, prepositions, pronouns,
-# auxiliaries, question words. Deliberately no domain words.
-_STOP_FUNCTION = frozenset({
-    "a", "an", "the",
-    "and", "or", "but", "if", "so", "than", "as", "not", "no",
-    "of", "to", "in", "on", "at", "by", "for", "from", "with", "about", "into",
-    "over", "under", "between", "through", "during", "before", "after",
-    "i", "me", "my", "we", "our", "you", "your", "he", "him", "his", "she", "her",
-    "it", "its", "they", "them", "their", "this", "that", "these", "those",
-    "is", "are", "was", "were", "be", "been", "being", "do", "does", "did",
-    "have", "has", "had", "will", "would", "shall", "should", "can", "could",
-    "may", "might", "must",
-    "what", "which", "who", "whom", "whose", "when", "where", "why", "how",
-})
-# Amendment, made once after sweep 1. Criterion (a): verbs and nouns that describe
-# the act of asking or the form of the answer, not the subject matter.
-_STOP_ASKING = frozenset({
-    "describe", "explain", "discuss", "compare", "conclude", "conclusion", "conclusions",
-    "recommend", "recommendation", "recommendations", "report", "reported", "state",
-    "stated", "say", "said", "address", "addressed", "identify", "shift", "shifted",
-    "change", "changed", "evolve", "evolved", "differ", "differed",
-})
-# Criterion (b): generic actor nouns that name who acted, not what was done.
-_STOP_ACTORS = frozenset({
-    "authorities", "authority", "officials", "government", "governments",
-    "department", "departments", "ministry", "agency", "agencies",
-})
-STOPWORDS = _STOP_FUNCTION | _STOP_ASKING | _STOP_ACTORS
+# The stoplist itself lives in archive_debugger.stopwords (frozen; shared with the
+# optional FTS stopword drop without retrieve/ importing generate/).
 
 
 def tokens(text: str) -> list[str]:

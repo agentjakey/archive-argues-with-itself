@@ -18,7 +18,7 @@ CFG = Path("config/pilot.toml")
 TEXT = "vaccination hospital programme"
 
 
-def _retriever(tmp_path, items, *, seed_questions=None):
+def _retriever(tmp_path, items, *, seed_questions=None, candidates=10):
     """items: [(item_id, year_or_None, jurisdiction)]; two passages each, all matching the query.
     seed_questions: optional [(qid, gold_or_None)] -> eval_questions (+gold) and a seed file."""
     civ = tmp_path / "civic.db"
@@ -48,7 +48,7 @@ def _retriever(tmp_path, items, *, seed_questions=None):
     vectors = tmp_path / "vectors.db"
     index.build_index(civ, vectors, StubEmbedder(dim=64), model_id="stub", batch_size=8)
     cfg = RetrieveConfig(db_path=civ, index_path=vectors, embedder="stub", embedding_model="stub", embedding_dim=64,
-                         batch_size=8, candidates=10, rrf_k=60, downweights={"high": 1.0, "medium": 0.9, "low": 0.75})
+                         batch_size=8, candidates=candidates, rrf_k=60, downweights={"high": 1.0, "medium": 0.9, "low": 0.75})
     return search.Retriever(None, embedder=StubEmbedder(dim=64), cfg=cfg), seed
 
 
@@ -90,6 +90,28 @@ def test_ask_is_cached_and_nocache_bypasses(tmp_path):
     assert via_get["answer"]["cached"] is not None                            # GET shares the cache
     assert llm.calls == 2                                                     # first and nocache only
     assert (tmp_path / "cache" / "answers.db").exists()
+
+
+def test_trail_pool_marks_what_the_model_saw(tmp_path):
+    items = [(f"i{k}", 1970 + k, "alberta") for k in range(8)]          # 16 passages > top_k 12
+    r, _ = _retriever(tmp_path, items, candidates=50)
+    with TestClient(_app(tmp_path, r)) as c:
+        body = c.post("/ask", json={"question": "vaccination hospital"}).json()
+    rows = body["evidence"]
+    assert len(rows) == 16                                                # the whole pool is the trail
+    assert sum(row["in_prompt"] for row in rows) == 12                    # exactly top_k reached the model
+    assert body["answer"]["coverage"]["n_passages"] == 12
+    assert all(row["section_class"] == "body" and row["later_years"] is None for row in rows)
+
+
+def test_cache_path_from_env(tmp_path, monkeypatch):
+    target = tmp_path / "volume" / "cache" / "answers.db"
+    monkeypatch.setenv("CIVIC_CACHE_PATH", str(target))
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta")])
+    app = create_app(CFG, retriever=r, load_env=False, provider="stub", web_dist=tmp_path / "nodist")
+    with TestClient(app) as c:
+        assert c.get("/health").status_code == 200
+    assert target.exists()                                                    # created under the env path
 
 
 def test_coverage_endpoint(tmp_path):

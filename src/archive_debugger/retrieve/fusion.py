@@ -16,6 +16,15 @@ def rrf(rank_lists: list[list[str]], k: int = 60) -> dict:
     return dict(scores)
 
 
+def apply_section_weight(scores: dict, section_by_pid: dict, weights: dict) -> dict:
+    """Soft multiplier on the fused score by page section class (front/body/back).
+    Unknown or NULL class counts as body (1.0). Never excludes."""
+    return {
+        pid: s * weights.get(section_by_pid.get(pid) or "body", 1.0)
+        for pid, s in scores.items()
+    }
+
+
 def apply_downweight(scores: dict, quality_by_pid: dict, weights: dict) -> dict:
     """Soft multiplier on the fused score by passage OCR bucket. Separate from the
     min-ocr hard filter. A passage with unknown quality is treated as high (1.0)."""

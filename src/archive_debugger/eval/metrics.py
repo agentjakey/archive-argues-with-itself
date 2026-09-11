@@ -27,6 +27,18 @@ def ndcg_at_k(ranked: list[str], gold_rel: dict, k: int):
     return dcg(rels) / idcg
 
 
+def unjudged_at_k(ranked: list[str], judged: set, k: int):
+    """Share of the top k that carries NO human label for this question. Gold was
+    pooled from one retriever's top-N, so a changed ranking surfaces unjudged
+    passages; this is the honesty column beside recall. None when nothing was
+    retrieved. Denominator is the retrieved prefix (shorter than k when the ranking
+    is short, e.g. under a per-item cap with narrow filters)."""
+    top = ranked[:k]
+    if not top:
+        return None
+    return sum(1 for pid in top if pid not in judged) / len(top)
+
+
 def relevant_in_topk(ranked: list[str], gold_rel: dict, k: int) -> int:
     return sum(1 for pid in ranked[:k] if gold_rel.get(pid, 0) > 0)
 

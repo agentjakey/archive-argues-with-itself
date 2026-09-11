@@ -35,13 +35,15 @@ def _mean(xs):
     return round(sum(xs) / len(xs), 4) if xs else None
 
 
-def evaluate(conn, retriever, *, recall_ks, ndcg_k, min_relevant, top_n) -> dict:
+def evaluate(conn, retriever, *, recall_ks, ndcg_k, min_relevant, top_n, unjudged_ks=(10, 20)) -> dict:
     questions = store.list_questions(conn)
     per_q = []
     agg = {f"recall@{k}": [] for k in recall_ks}
     agg[f"ndcg@{ndcg_k}"] = []
+    for k in unjudged_ks:
+        agg[f"unjudged@{k}"] = []
     leakage = []
-    fetch = max([top_n, ndcg_k, *recall_ks])
+    fetch = max([top_n, ndcg_k, *recall_ks, *unjudged_ks])
     for q in questions:
         verdict = store.gold_verdict(conn, q["qid"])
         if verdict is None:
@@ -60,6 +62,11 @@ def evaluate(conn, retriever, *, recall_ks, ndcg_k, min_relevant, top_n) -> dict
         row[f"ndcg@{ndcg_k}"] = nd
         if nd is not None:
             agg[f"ndcg@{ndcg_k}"].append(nd)
+        for k in unjudged_ks:
+            u = metrics.unjudged_at_k(ranked, set(labels), k)
+            row[f"unjudged@{k}"] = u
+            if u is not None:
+                agg[f"unjudged@{k}"].append(u)
         # Abstention view keys on the HUMAN verdict, not qtype. For should-abstain
         # questions any relevant marks are retrieval leakage worth seeing.
         if verdict["answerable"] == 0:
@@ -70,8 +77,8 @@ def evaluate(conn, retriever, *, recall_ks, ndcg_k, min_relevant, top_n) -> dict
             "aggregate": aggregate, "per_question": per_q, "abstention_leakage": leakage}
 
 
-def _persist(conn, report, config_json) -> None:
-    run_id = datetime.now(timezone.utc).strftime("run-%Y%m%dT%H%M%SZ")
+def _persist(conn, report, config_json, run_id=None) -> str:
+    run_id = run_id or datetime.now(timezone.utc).strftime("run-%Y%m%dT%H%M%SZ")
     conn.execute("INSERT OR REPLACE INTO eval_runs (run_id, git_sha, config_json, ts) VALUES (?,?,?,?)",
                  (run_id, _git_sha(), config_json, datetime.now(timezone.utc).isoformat(timespec="seconds")))
     for row in report["per_question"]:
@@ -81,6 +88,7 @@ def _persist(conn, report, config_json) -> None:
             conn.execute("INSERT OR REPLACE INTO eval_results (run_id, qid, metric, value) VALUES (?,?,?,?)",
                          (run_id, row["qid"], metric, float(value)))
     conn.commit()
+    return run_id
 
 
 def run(config_path) -> dict:

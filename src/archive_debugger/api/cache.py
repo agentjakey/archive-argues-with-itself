@@ -1,14 +1,21 @@
 """Answer cache: a separate SQLite file (default data/cache/answers.db, git-ignored)
 keyed by the full generation context, so civic.db stays read-only and a repeated
-question is served without a second model call."""
+question is served without a second model call.
+
+The key also covers a retrieval fingerprint: the retrieval config plus the size and
+mtime of civic.db and vectors.db, so a rebuilt corpus or a flipped switch never
+serves an answer generated against the old ranking."""
 from __future__ import annotations
 
 import hashlib
 import json
 import sqlite3
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+from archive_debugger.retrieve.config import RetrieveConfig
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS answers (
@@ -19,11 +26,20 @@ CREATE TABLE IF NOT EXISTS answers (
 """
 
 
+def retrieval_fingerprint(cfg: RetrieveConfig) -> str:
+    parts: dict = {"config": {k: (str(v) if isinstance(v, Path) else v) for k, v in asdict(cfg).items()}}
+    for name in ("db_path", "index_path"):
+        st = Path(getattr(cfg, name)).stat()
+        parts[name] = {"size": st.st_size, "mtime_ns": st.st_mtime_ns}
+    return hashlib.sha256(json.dumps(parts, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
 def cache_key(*, question: str, filters: Optional[dict], provider: str, model: str,
-              prompt_sha256: str, top_k: int, temperature: Optional[float]) -> str:
+              prompt_sha256: str, top_k: int, temperature: Optional[float], retrieval_sha256: str) -> str:
     material = json.dumps({
         "question": question, "filters": filters or {}, "provider": provider, "model": model,
         "prompt_sha256": prompt_sha256, "top_k": top_k, "temperature": temperature,
+        "retrieval_sha256": retrieval_sha256,
     }, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 

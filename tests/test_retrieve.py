@@ -150,6 +150,142 @@ def test_provenance_missing_page_raises_lookuperror(tmp_path):
         r.close()
 
 
+# ---- Phase 13 switches ----------------------------------------------------
+
+
+def _many(tmp_path: Path, n_items: int = 4, per_item: int = 4) -> RetrieveConfig:
+    """n_items x per_item passages, all matching the query; item k is dated 1970+k."""
+    civ = tmp_path / "civic.db"
+    conn = db.init_db(str(civ))
+    for k in range(n_items):
+        item = f"item{k}"
+        conn.execute("INSERT INTO items (item_id, title, dated, year, decade, jurisdiction_norm, doc_type_norm, details_url) VALUES (?,?,1,?,?,?,?,?)",
+                     (item, item, 1970 + k, "1970s", "alberta", ["commission", "royal_commission", "other", "other"][k % 4], "u"))
+        for leaf in range(per_item):
+            text = "vaccination hospital programme" + (" in 1999 and 2001" if k == 0 and leaf == 0 else "")
+            conn.execute("INSERT INTO pages (page_id, item_id, leaf_index, printed_page, char_count, has_text, section_class) VALUES (?,?,?,?,40,1,?)",
+                         (f"{item}#{leaf}", item, leaf, str(leaf + 1), "front" if leaf == 0 else "body"))
+            conn.execute("INSERT INTO passages (passage_id, item_id, page_id, leaf_index, char_start, char_end, text, token_count, ocr_quality) VALUES (?,?,?,?,0,40,?,4,'0.95')",
+                         (f"{item}#{leaf}:0", item, f"{item}#{leaf}", leaf, text))
+    conn.commit()
+    conn.close()
+    vectors = tmp_path / "vectors.db"
+    index.build_index(civ, vectors, StubEmbedder(dim=64), model_id="stub", batch_size=8)
+    return RetrieveConfig(db_path=civ, index_path=vectors, embedder="stub", embedding_model="stub", embedding_dim=64,
+                          batch_size=8, candidates=50, rrf_k=60, downweights={"high": 1.0, "medium": 0.9, "low": 0.75},
+                          doc_type_families={"commission": ["commission", "royal_commission"]})
+
+
+def _search(cfg, query="vaccination hospital", **kw):
+    r = search.Retriever(None, embedder=StubEmbedder(dim=64), cfg=cfg)
+    try:
+        return r.search(query, **kw)
+    finally:
+        r.close()
+
+
+def test_section_weight_multiplies_never_excludes():
+    from archive_debugger.retrieve.fusion import apply_section_weight
+    out = apply_section_weight({"a": 0.10, "b": 0.10, "c": 0.10}, {"a": "front", "b": None, "c": "back"},
+                               {"front": 0.5, "body": 1.0, "back": 0.5})
+    assert out == {"a": 0.05, "b": 0.10, "c": 0.05}
+
+
+def test_section_demote_switch(tmp_path):
+    from dataclasses import replace
+    cfg = _many(tmp_path)
+    off = _search(cfg, top_k=16)
+    assert {h["section_class"] for h in off} == {"front", "body"}          # class always reported
+    on = _search(replace(cfg, section_demote=True), top_k=16)
+    assert len(on) == len(off) == 16                                        # nothing excluded
+    assert all(h["section_class"] == "body" for h in on[:12])              # front pages sink to the bottom
+    assert all(h["section_class"] == "front" for h in on[12:])
+
+
+def test_fts_query_drops_stopwords_only_when_on(tmp_path):
+    from dataclasses import replace
+    cfg = _many(tmp_path)
+    r = search.Retriever(None, embedder=StubEmbedder(dim=64), cfg=cfg)
+    try:
+        assert r._fts_query("what did the report say about vaccination") == \
+            '"what" OR "did" OR "the" OR "report" OR "say" OR "about" OR "vaccination"'
+        r.cfg = replace(cfg, fts_drop_stopwords=True)
+        assert r._fts_query("what did the report say about vaccination") == '"vaccination"'
+        assert r._fts_query("what did they say") == '"what" OR "did" OR "they" OR "say"'   # all stopwords: fall back
+    finally:
+        r.close()
+
+
+def test_doc_type_family_filter(tmp_path):
+    from dataclasses import replace
+    from archive_debugger.retrieve.filters import family_members
+    fam = {"commission": ["commission", "royal_commission"]}
+    assert family_members("royal_commission", fam) == ["commission", "royal_commission"]
+    assert family_members("commission", fam) == ["commission", "royal_commission"]
+    assert family_members("annual_report", fam) == []
+    w, p = build_where(Filters(doc_type="royal_commission"), doc_type_families=fam)
+    assert w == " AND i.doc_type_norm IN (?,?)" and p == ["commission", "royal_commission"]
+    assert build_where(Filters(doc_type="royal_commission")) == (" AND i.doc_type_norm = ?", ["royal_commission"])
+    cfg = _many(tmp_path)
+    off = _search(cfg, filters=Filters(doc_type="commission"), top_k=16)
+    assert {h["item_id"] for h in off} == {"item0"}
+    on = _search(replace(cfg, doc_type_family_filter=True), filters=Filters(doc_type="commission"), top_k=16)
+    assert {h["item_id"] for h in on} == {"item0", "item1"}
+
+
+def test_per_item_cap(tmp_path):
+    from collections import Counter
+    from dataclasses import replace
+    cfg = _many(tmp_path)
+    off = Counter(h["item_id"] for h in _search(cfg, top_k=16))
+    assert max(off.values()) == 4
+    capped = _search(replace(cfg, per_item_cap=3), top_k=16)
+    assert max(Counter(h["item_id"] for h in capped).values()) == 3 and len(capped) == 12
+    assert len(_search(replace(cfg, per_item_cap=1), top_k=16)) == 4
+
+
+def test_later_years_flag(tmp_path):
+    from dataclasses import replace
+    cfg = _many(tmp_path)
+    off = {h["passage_id"]: h["later_years"] for h in _search(cfg, top_k=16)}
+    assert set(off.values()) == {None}
+    on = {h["passage_id"]: h["later_years"] for h in _search(replace(cfg, later_years_flag=True), top_k=16)}
+    assert on["item0#0:0"] == [1999, 2001]                                 # item dated 1970; text mentions 1999, 2001
+    assert on["item1#0:0"] is None
+
+
+def test_retrieval_fingerprint_tracks_config_and_files(tmp_path):
+    from dataclasses import replace
+    from archive_debugger.api.cache import cache_key, retrieval_fingerprint
+    cfg = _many(tmp_path)
+    a = retrieval_fingerprint(cfg)
+    assert a == retrieval_fingerprint(cfg)
+    assert a != retrieval_fingerprint(replace(cfg, per_item_cap=3))
+    with open(cfg.index_path, "ab") as fh:
+        fh.write(b"\0")
+    assert a != retrieval_fingerprint(cfg)                                 # size/mtime changed
+    common = dict(question="q", filters=None, provider="stub", model="m", prompt_sha256="p", top_k=12, temperature=None)
+    assert cache_key(**common, retrieval_sha256="x") != cache_key(**common, retrieval_sha256="y")
+
+
+# ---- env path overrides (deployments mount data outside the repo) ---------
+
+
+def test_env_overrides_config_paths(monkeypatch):
+    from archive_debugger.retrieve.config import load_retrieve_config
+    cfg_path = Path("config/pilot.toml")
+    monkeypatch.setenv("CIVIC_DB_PATH", "/data/civic.db")
+    monkeypatch.setenv("CIVIC_INDEX_PATH", "/data/index/vectors.db")
+    cfg = load_retrieve_config(cfg_path)
+    assert cfg.db_path == Path("/data/civic.db") and cfg.index_path == Path("/data/index/vectors.db")
+    assert db.resolve_db_path(cfg_path) == Path("/data/civic.db")
+    monkeypatch.delenv("CIVIC_DB_PATH")
+    monkeypatch.delenv("CIVIC_INDEX_PATH")
+    cfg = load_retrieve_config(cfg_path)
+    assert cfg.db_path == Path("civic.db") and cfg.index_path == Path("index/vectors.db")   # config values
+    assert db.resolve_db_path(cfg_path) == Path("civic.db")
+
+
 # ---- CI guard: real model never imported ----------------------------------
 
 

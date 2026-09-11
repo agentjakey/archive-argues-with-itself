@@ -20,7 +20,7 @@ help:
 	@echo "  index        parse, normalize, and build the hybrid index (local)"
 	@echo "  eval         run retrieval + citation-support evaluation (local)"
 	@echo "  serve        run the read-only api over the built index (local)"
-	@echo "  web          run the Next.js interface in web/ (dev)"
+	@echo "  web          run the Vite dev server in web/"
 	@echo "  test         run pytest"
 
 install:
