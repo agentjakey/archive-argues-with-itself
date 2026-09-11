@@ -51,6 +51,7 @@ python -m archive_debugger.ingest.build --fresh
 
 # 3. Normalize dates / jurisdiction / issuer / doc_type and build coverage cells
 python -m archive_debugger.ingest.normalize
+python -m archive_debugger.ingest.sections                   # front/body/back page classes (~3 min; --limit N to time)
 
 # 4. Build the dense vector index (one-time, ~45-90 min on CPU, resumable)
 python -m archive_debugger.retrieve.index
@@ -60,6 +61,9 @@ python -m archive_debugger.eval.questions --file eval/seed_questions.jsonl
 python -m archive_debugger.eval.assist                       # writes the retrieval worksheet
 python -m archive_debugger.eval.label --from-worksheet reports/phase7/label_worksheet.jsonl --apply-decisions eval/gold_decisions.json
 python -m archive_debugger.eval.report                       # -> reports/phase7/
+
+# 6. Retrieval-quality sweep over the [retrieve] switches (resumable; --state NAME runs one)
+python -m archive_debugger.eval.retrieval_sweep              # -> reports/phase13/retrieval_report.md
 ```
 
 ### Serve (read-only API)
@@ -149,7 +153,14 @@ the Internet Archive.
 
 BM25 over an FTS5 index fused with dense cosine search via Reciprocal Rank Fusion
 (k=60), a soft OCR-quality down-weight, and composable pre-filters (period /
-jurisdiction / doc_type / min-OCR). Dense vectors use
+jurisdiction / doc_type / min-OCR). Five independently switchable Phase 13 changes
+live under `[retrieve]` in `config/pilot.toml`, all off by default so the Phase 7
+numbers reproduce: front/back-matter demotion (`section_demote`, from the
+`ingest.sections` page classes), FTS stopword dropping, doc_type family filtering,
+a per-item cap on the ranking, and a later-years annotation on hits whose text
+mentions years after the item's date. The retriever returns a pool of
+`pool_size` hits for the evidence trail; the model sees only the first
+`[generate].top_k` of that same ranking, and the trail marks the rest. Dense vectors use
 `paraphrase-multilingual-MiniLM-L12-v2` (384-dim, EN/FR) in a standalone
 `index/vectors.db` via sqlite-vec (flat, exact). Every result carries page-level
 provenance and the deep link

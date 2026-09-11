@@ -12,7 +12,9 @@ them; unjudged@k says how much of each top-k the labels cannot see."""
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import time
 import tomllib
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -42,8 +44,54 @@ STATES: list[tuple[str, dict]] = [
 SWEEP_STATES = ("baseline", "all_on_cap3", "all_on_cap5")
 
 
+def _state_file(out_dir: Path, name: str) -> Path:
+    return Path(out_dir) / "states" / f"{name}.json"
+
+
+class DenseMemo:
+    """On-disk memo of the dense leg. The dense candidate list for a query depends only
+    on the query vector, the WHERE clause and its params, k, and the index file, none
+    of which the Phase 13 switches change (except the family filter's WHERE, which is
+    part of the key), so states after the first reuse it instead of re-scanning 745k
+    vectors per question. Keys include the index file's size and mtime."""
+
+    def __init__(self, path: Path, index_path: Path):
+        self.path = Path(path)
+        st = Path(index_path).stat()
+        self.index_tag = f"{st.st_size}:{st.st_mtime_ns}"
+        self.data: dict = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else {}
+        self.hits = self.misses = 0
+
+    def key(self, qvec, where, params, k) -> str:
+        material = json.dumps([self.index_tag, [round(x, 7) for x in qvec], where, params, k])
+        return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+    def wrap(self, retriever: Retriever) -> None:
+        inner = retriever._dense
+
+        def cached(qvec, where, params, k):
+            key = self.key(qvec, where, params, k)
+            if key in self.data:
+                self.hits += 1
+                return list(self.data[key])
+            self.misses += 1
+            out = inner(qvec, where, params, k)
+            self.data[key] = out
+            return out
+
+        retriever._dense = cached  # type: ignore[method-assign]
+
+    def save(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(self.data), encoding="utf-8")
+
+
 def run(config_path: Path, *, seed_path: Path = Path("eval/seed_questions.jsonl"), out_dir: Path = OUT_DIR,
-        embedder=None, conn=None, states: Optional[list] = None) -> dict:
+        embedder=None, conn=None, states: Optional[list] = None, only: Optional[list[str]] = None,
+        resume: bool = True, dense_memo: bool = True, progress=print) -> dict:
+    """Evaluate each state, checkpointing one JSON per state under out_dir/states so an
+    interrupted sweep resumes; `only` restricts this call to named states; the report is
+    assembled from every checkpoint present."""
     with Path(config_path).open("rb") as fh:
         cfg_all = tomllib.load(fh)
     ecfg = cfg_all.get("eval", {})
@@ -57,35 +105,73 @@ def run(config_path: Path, *, seed_path: Path = Path("eval/seed_questions.jsonl"
         if not Path(db_path).exists():
             raise FileNotFoundError(f"civic.db not found at {db_path}; set CIVIC_DB_PATH or fix [index].db_path")
         conn = db.init_db(db_path)     # writes eval_runs / eval_results only
-    embedder = embedder or make_embedder(base.embedder, base.embedding_model, base.embedding_dim)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     section_rows = conn.execute("SELECT COUNT(section_class) FROM pages").fetchone()[0]
-    out: dict = {"ts": ts, "states": {}, "sweeps": {}, "run_ids": {}}
+    out_dir = Path(out_dir)
+    todo = [(n, o) for n, o in (states or STATES) if only is None or n in only]
+    memo = DenseMemo(out_dir / "states" / "dense_memo.json", base.index_path) if dense_memo else None
     try:
-        for name, over in (states or STATES):
+        for name, over in todo:
+            path = _state_file(out_dir, name)
+            if resume and path.exists():
+                progress(f"state {name}: checkpoint present, skipped")
+                continue
             cfg = replace(base, **over)
             if cfg.section_demote and section_rows == 0:
                 raise RuntimeError("pages.section_class is empty: run `python -m archive_debugger.ingest.sections` first")
+            embedder = embedder or make_embedder(base.embedder, base.embedding_model, base.embedding_dim)
+            t0 = time.perf_counter()
             r = Retriever(None, cfg=cfg, embedder=embedder)
+            if memo is not None:
+                memo.wrap(r)
             try:
                 rep = report.evaluate(conn, r, recall_ks=recall_ks, ndcg_k=ndcg_k,
                                       min_relevant=int(ecfg.get("abstention_min_relevant", 1)), top_n=top_n)
                 run_id = report._persist(conn, rep, json.dumps(
                     {"phase": 13, "state": name, "retrieve": cfg.switches(), "eval": ecfg}, ensure_ascii=False),
                     run_id=f"p13-{name}-{ts}")
-                out["states"][name] = {"switches": cfg.switches(), "aggregate": rep["aggregate"],
-                                       "per_question": rep["per_question"], "labeled": rep["labeled"]}
-                out["run_ids"][name] = run_id
+                state = {"name": name, "ts": ts, "run_id": run_id, "switches": cfg.switches(),
+                         "aggregate": rep["aggregate"], "per_question": rep["per_question"], "labeled": rep["labeled"],
+                         "sweep": None, "seconds": None}
                 if name in SWEEP_STATES and Path(seed_path).exists():
-                    out["sweeps"][name] = gen_cli.sweep(config_path, seed_path, retriever=r)
+                    state["sweep"] = gen_cli.sweep(config_path, seed_path, retriever=r)
+                state["seconds"] = round(time.perf_counter() - t0, 1)
             finally:
                 r.close()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+            if memo is not None:
+                memo.save()
+                progress(f"state {name}: done in {state['seconds']} s, run_id {run_id} "
+                         f"(dense memo hits {memo.hits}, misses {memo.misses})")
+            else:
+                progress(f"state {name}: done in {state['seconds']} s, run_id {run_id}")
     finally:
         if own_conn:
             conn.close()
-    sections = Path(out_dir) / "sections_report.json"
+    return assemble(out_dir, states=states)
+
+
+def assemble(out_dir: Path, *, states: Optional[list] = None) -> dict:
+    """Build the report from whatever state checkpoints exist, in canonical order."""
+    out_dir = Path(out_dir)
+    out: dict = {"ts": None, "states": {}, "sweeps": {}, "run_ids": {}}
+    for name, _ in (states or STATES):
+        path = _state_file(out_dir, name)
+        if not path.exists():
+            continue
+        st = json.loads(path.read_text(encoding="utf-8"))
+        out["ts"] = out["ts"] or st["ts"]
+        out["states"][name] = {"switches": st["switches"], "aggregate": st["aggregate"],
+                               "per_question": st["per_question"], "labeled": st["labeled"],
+                               "run_id": st["run_id"], "ts": st["ts"], "seconds": st.get("seconds")}
+        out["run_ids"][name] = st["run_id"]
+        if st.get("sweep"):
+            out["sweeps"][name] = st["sweep"]
+    sections = out_dir / "sections_report.json"
     out["sections"] = json.loads(sections.read_text(encoding="utf-8")) if sections.exists() else None
-    write_report(out, Path(out_dir))
+    if out["states"]:
+        write_report(out, out_dir)
     return out
 
 
@@ -108,8 +194,9 @@ def write_report(out: dict, out_dir: Path) -> None:
     (out_dir / "retrieval_report.json").write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     states = out["states"]
     metrics = list(next(iter(states.values()))["aggregate"].keys()) if states else []
+    runs = ", ".join(f"`{st['run_id']}`" for st in states.values() if st.get("run_id"))
     lines = ["# Phase 13 retrieval report", "",
-             f"run {out['ts']} (UTC); one eval_runs row per state, ids `p13-<state>-{out['ts']}`", "",
+             f"one eval_runs row per state: {runs}", "",
              "Pooled values: gold was labeled from the BASELINE retriever's top-30 (Phase 7), so",
              "recall and nDCG denominators are that judged pool, not the corpus. A state that",
              "surfaces passages the labels never saw cannot be credited for them; unjudged@k is the",
@@ -143,7 +230,8 @@ def write_report(out: dict, out_dir: Path) -> None:
     sec = out.get("sections")
     if sec:
         lines += ["", "## Section classifier (ingest.sections, one-time; copied from sections_report.md)", "",
-                  f"- pages classified: {sec['pages_classified']}; NULL (no text): {sec['pages_unclassified_no_text']}"]
+                  f"- pages classified: {sec['pages_classified']}; NULL (no text): {sec['pages_unclassified_null']}; "
+                  f"{sec['timing']['pages_per_s']} pages/s"]
         for c in ("front", "body", "back"):
             lines.append(f"- {c}: {sec['counts'][c]} pages, {sec['passages_by_class'].get(c, 0)} passages")
         lines += ["", "| method | pages |", "| --- | ---: |"]
@@ -165,8 +253,14 @@ def main(argv=None) -> int:
     p.add_argument("--config", default="config/pilot.toml", type=Path)
     p.add_argument("--seed", default=Path("eval/seed_questions.jsonl"), type=Path)
     p.add_argument("--out", default=OUT_DIR, type=Path)
+    p.add_argument("--state", action="append", default=None, help="run only this state (repeatable); default all")
+    p.add_argument("--report-only", action="store_true", help="assemble the report from existing checkpoints")
+    p.add_argument("--no-resume", action="store_true", help="recompute states even when a checkpoint exists")
     args = p.parse_args(argv)
-    out = run(args.config, seed_path=args.seed, out_dir=args.out)
+    if args.report_only:
+        out = assemble(args.out)
+    else:
+        out = run(args.config, seed_path=args.seed, out_dir=args.out, only=args.state, resume=not args.no_resume)
     print(json.dumps({name: st["aggregate"] for name, st in out["states"].items()}, ensure_ascii=False, indent=2))
     return 0
 
