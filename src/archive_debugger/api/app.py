@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 import os
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -69,6 +70,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.retriever = retriever or Retriever(config_path)
+        app.state.lock = threading.Lock()   # one sqlite connection; sync endpoints run in a threadpool
         try:
             yield
         finally:
@@ -88,12 +90,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
     def examples() -> list[dict]:
         if not Path(seed_path).exists():
             return []
-        conn = app.state.retriever.conn
         out = []
-        for q in load_seed(seed_path):
-            gold = store.gold_verdict(conn, q["qid"])
-            out.append({"qid": q["qid"], "text": q["text"], "filters": q.get("filters") or {},
-                        "gold": None if gold is None else ("answerable" if gold["answerable"] else "abstain")})
+        with app.state.lock:
+            conn = app.state.retriever.conn
+            for q in load_seed(seed_path):
+                gold = store.gold_verdict(conn, q["qid"])
+                out.append({"qid": q["qid"], "text": q["text"], "filters": q.get("filters") or {},
+                            "gold": None if gold is None else ("answerable" if gold["answerable"] else "abstain")})
         return out
 
     @app.post("/ask")
@@ -102,12 +105,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         kind = req.provider or provider or gcfg["provider"]
         model_id = req.model or gcfg["model"]
         temp = sent_temperature(kind, gcfg)
-        hits = r.search(req.question, filters=build_filters(req.filters), top_k=gcfg["top_k"])
         model = llm or make_llm(kind, model_id, gcfg["max_tokens"], temperature=temp)
-        verify = functools.partial(citation.verify_citations, r.conn)
         gen = generation_meta(provider=kind, model=model_id, temperature=temp,
                               max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
-        ans = compose(req.question, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
+        with app.state.lock:   # retrieval, the LLM call, and verification all read through r.conn
+            hits = r.search(req.question, filters=build_filters(req.filters), top_k=gcfg["top_k"])
+            verify = functools.partial(citation.verify_citations, r.conn)
+            ans = compose(req.question, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
         return {"answer": ans.to_dict(), "evidence": evidence_rows(hits, ans.verified_citations)}
 
     if Path(web_dist).is_dir():

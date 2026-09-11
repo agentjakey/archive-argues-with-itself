@@ -298,8 +298,8 @@ def test_cli_model_override_reaches_make_llm(tmp_path, monkeypatch):
     from archive_debugger.generate import cli
     seen = {}
 
-    def fake_make_llm(kind, model, max_tokens):
-        seen.update(kind=kind, model=model, max_tokens=max_tokens)
+    def fake_make_llm(kind, model, max_tokens, **kw):
+        seen.update(kind=kind, model=model, max_tokens=max_tokens, **kw)
         return StubLLM(Draft(sentences=[]))
 
     monkeypatch.setattr(cli, "make_llm", fake_make_llm)
@@ -309,8 +309,9 @@ def test_cli_model_override_reaches_make_llm(tmp_path, monkeypatch):
                                   provider="stub", model="claude-sonnet-5", retriever=r)
     finally:
         r.close()
-    assert seen["kind"] == "stub" and seen["model"] == "claude-sonnet-5"
+    assert seen["kind"] == "stub" and seen["model"] == "claude-sonnet-5" and seen["temperature"] is None
     assert out["generation"]["model"] == "claude-sonnet-5" and out["generation"]["provider"] == "stub"
+    assert out["generation"]["temperature"] is None
 
 
 class _FakeMessages:
@@ -339,7 +340,7 @@ class _FakeClient:
 
 def test_anthropic_llm_call_shape_with_fake_client():
     fake = _FakeClient()
-    llm = AnthropicLLM("claude-haiku-4-5-20251001", 2048, client=fake)   # no real client constructed
+    llm = AnthropicLLM("claude-haiku-4-5-20251001", 2048, client=fake, temperature=0.0)  # no real client
     d = llm.draft("SYS", "USER")
     kw = fake.messages.kwargs
     assert kw["model"] == "claude-haiku-4-5-20251001" and kw["max_tokens"] == 2048
@@ -348,6 +349,12 @@ def test_anthropic_llm_call_shape_with_fake_client():
     assert kw["system"] == "SYS" and kw["messages"] == [{"role": "user", "content": "USER"}]
     assert d.sentences[0].text == "Canned."
     assert "anthropic" not in sys.modules                                 # injection kept it lazy
+
+
+def test_anthropic_llm_omits_temperature_when_null():
+    fake = _FakeClient()
+    AnthropicLLM("claude-haiku-4-5-20251001", 2048, client=fake, temperature=None).draft("SYS", "USER")
+    assert "extra_body" not in fake.messages.kwargs                        # nothing sent -> API default
 
 
 def test_importing_generate_does_not_import_anthropic():

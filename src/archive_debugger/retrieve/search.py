@@ -23,7 +23,9 @@ class Retriever:
     def __init__(self, config_path: Optional[Path], *, embedder: Optional[Embedder] = None,
                  cfg: Optional[RetrieveConfig] = None):
         self.cfg = cfg or load_retrieve_config(config_path)
-        self.conn = sqlite3.connect(f"file:{self.cfg.db_path}?mode=ro", uri=True)
+        # Read-only. check_same_thread=False lets a server's worker threads use the one
+        # connection; callers that share a Retriever across threads must serialize access.
+        self.conn = sqlite3.connect(f"file:{self.cfg.db_path}?mode=ro", uri=True, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.enable_load_extension(True)
         sqlite_vec.load(self.conn)
