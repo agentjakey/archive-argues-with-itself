@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it."
+type: software
+title: "archive-argues-with-itself: a civic memory debugger"
+version: 0.0.0
+license: MIT
+repository-code: "https://github.com/agentjakey/archive-argues-with-itself"
+authors:
+  - family-names: Ortiz
+    given-names: Jacob

@@ -1,0 +1,19 @@
+{
+  "topic": "public_health",
+  "query": "health OR \"public health\" OR healthcare OR hospital OR disease OR epidemic OR \"medical care\" OR sanitation OR \"communicable disease\" OR vaccination OR \"health insurance\"",
+  "mediatype": "texts",
+  "collections": [
+    "governmentpublications",
+    "albertagovernmentpublications",
+    "uoftgovpubs",
+    "ministryoffinance_ontario",
+    "ocul_govinfocommunity",
+    "hpl-govdocs",
+    "canadianmunicipal",
+    "ontarioeconomiccouncil",
+    "taskforce_reports"
+  ],
+  "count": 3477,
+  "manifest_date": "2026-09-08",
+  "note": "Item set retrieved by archive_debugger.harvest.fetch via advancedsearch.php with the query and collection clause above; identifiers listed in public_health.identifiers.txt."
+}

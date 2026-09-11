@@ -217,9 +217,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Agents
-AGENTS.md
-CLAUDE.md
+# Local working notes (never published)
+notes/
 
 # --- archive-argues-with-itself ---
 
@@ -232,7 +231,17 @@ raw/
 index/
 
 # Harvest outputs (regenerable from config/pilot.toml + the cache under raw/).
-data/
+# The corpus manifest (IA identifiers + scope query) IS committed so the same
+# items can be re-downloaded.
+data/*
+!data/manifest/
+!data/manifest/**
+
+# Regenerable per-phase build reports; only the human-readable eval summary is kept.
+reports/phase*/*
+!reports/phase7/eval_report.md
+!reports/phase8/citation_report.md
+reports/unmapped/
 
 # Node / Next.js (web/)
 node_modules/
