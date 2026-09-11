@@ -1,0 +1,539 @@
+{
+  "labeled": 50,
+  "total": 50,
+  "aggregate": {
+    "recall@5": 0.1928,
+    "recall@10": 0.4083,
+    "recall@20": 0.6823,
+    "ndcg@10": 0.442
+  },
+  "per_question": [
+    {
+      "qid": "q001",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.1111111111111111,
+      "recall@10": 0.3333333333333333,
+      "recall@20": 0.7777777777777778,
+      "ndcg@10": 0.25961479091060796
+    },
+    {
+      "qid": "q002",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.16666666666666666,
+      "recall@10": 0.375,
+      "recall@20": 0.7083333333333334,
+      "ndcg@10": 0.7799082337019199
+    },
+    {
+      "qid": "q003",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.3333333333333333,
+      "recall@10": 0.4166666666666667,
+      "recall@20": 0.75,
+      "ndcg@10": 0.6332196796270029
+    },
+    {
+      "qid": "q004",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.09090909090909091,
+      "recall@10": 0.45454545454545453,
+      "recall@20": 0.7272727272727273,
+      "ndcg@10": 0.4115325995630326
+    },
+    {
+      "qid": "q005",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.21428571428571427,
+      "recall@10": 0.42857142857142855,
+      "recall@20": 0.7142857142857143,
+      "ndcg@10": 0.6620158551732016
+    },
+    {
+      "qid": "q006",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.15789473684210525,
+      "recall@10": 0.42105263157894735,
+      "recall@20": 0.6842105263157895,
+      "ndcg@10": 0.8200685179888283
+    },
+    {
+      "qid": "q007",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.0,
+      "recall@10": 0.0,
+      "recall@20": 0.3333333333333333,
+      "ndcg@10": 0.0
+    },
+    {
+      "qid": "q008",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.3076923076923077,
+      "recall@10": 0.46153846153846156,
+      "recall@20": 0.7692307692307693,
+      "ndcg@10": 0.6906478832608419
+    },
+    {
+      "qid": "q009",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.16666666666666666,
+      "recall@10": 0.3333333333333333,
+      "recall@20": 0.5833333333333334,
+      "ndcg@10": 0.40067051810063
+    },
+    {
+      "qid": "q010",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.05,
+      "recall@10": 0.2,
+      "recall@20": 0.55,
+      "ndcg@10": 0.284449351231739
+    },
+    {
+      "qid": "q011",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.0,
+      "recall@10": 0.0,
+      "recall@20": 0.0,
+      "ndcg@10": 0.0
+    },
+    {
+      "qid": "q012",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.2,
+      "recall@10": 0.3,
+      "recall@20": 0.7,
+      "ndcg@10": 0.2735872697693364
+    },
+    {
+      "qid": "q013",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.09090909090909091,
+      "recall@10": 0.18181818181818182,
+      "recall@20": 0.6363636363636364,
+      "ndcg@10": 0.1487639058405727
+    },
+    {
+      "qid": "q014",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.14285714285714285,
+      "recall@10": 0.2857142857142857,
+      "recall@20": 0.5714285714285714,
+      "ndcg@10": 0.19796212533499344
+    },
+    {
+      "qid": "q015",
+      "qtype": "factual",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q016",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.36363636363636365,
+      "recall@10": 0.6363636363636364,
+      "recall@20": 0.9090909090909091,
+      "ndcg@10": 0.7631925784528223
+    },
+    {
+      "qid": "q017",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.1875,
+      "recall@10": 0.1875,
+      "recall@20": 0.5625,
+      "ndcg@10": 0.4537425745411855
+    },
+    {
+      "qid": "q018",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.16666666666666666,
+      "recall@10": 0.3333333333333333,
+      "recall@20": 0.6666666666666666,
+      "ndcg@10": 0.21793006430423467
+    },
+    {
+      "qid": "q019",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.2777777777777778,
+      "recall@10": 0.5,
+      "recall@20": 0.8333333333333334,
+      "ndcg@10": 0.9305687780632227
+    },
+    {
+      "qid": "q020",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.25,
+      "recall@10": 0.5,
+      "recall@20": 0.75,
+      "ndcg@10": 0.8236998933965709
+    },
+    {
+      "qid": "q021",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.3333333333333333,
+      "recall@10": 0.6666666666666666,
+      "recall@20": 0.6666666666666666,
+      "ndcg@10": 0.35853358850813305
+    },
+    {
+      "qid": "q022",
+      "qtype": "factual",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q023",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.3333333333333333,
+      "recall@10": 0.4166666666666667,
+      "recall@20": 0.6666666666666666,
+      "ndcg@10": 0.5072380780124418
+    },
+    {
+      "qid": "q024",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.0,
+      "recall@10": 0.5,
+      "recall@20": 0.5,
+      "ndcg@10": 0.17723928678404774
+    },
+    {
+      "qid": "q025",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.375,
+      "recall@10": 0.375,
+      "recall@20": 0.5,
+      "ndcg@10": 0.4772656487866461
+    },
+    {
+      "qid": "q026",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.0,
+      "recall@10": 0.0,
+      "recall@20": 1.0,
+      "ndcg@10": 0.0
+    },
+    {
+      "qid": "q027",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.36363636363636365,
+      "recall@10": 0.5454545454545454,
+      "recall@20": 0.9090909090909091,
+      "ndcg@10": 0.6968404678259545
+    },
+    {
+      "qid": "q028",
+      "qtype": "factual",
+      "answerable": 1,
+      "recall@5": 0.0,
+      "recall@10": 0.0,
+      "recall@20": 0.0,
+      "ndcg@10": 0.0
+    },
+    {
+      "qid": "q029",
+      "qtype": "temporal_comparison",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q030",
+      "qtype": "temporal_comparison",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q031",
+      "qtype": "temporal_comparison",
+      "answerable": 1,
+      "recall@5": 0.5,
+      "recall@10": 0.8333333333333334,
+      "recall@20": 0.8333333333333334,
+      "ndcg@10": 0.5906474401874701
+    },
+    {
+      "qid": "q032",
+      "qtype": "temporal_comparison",
+      "answerable": 1,
+      "recall@5": 0.0,
+      "recall@10": 1.0,
+      "recall@20": 1.0,
+      "ndcg@10": 0.31546487678572877
+    },
+    {
+      "qid": "q033",
+      "qtype": "temporal_comparison",
+      "answerable": 1,
+      "recall@5": 0.25,
+      "recall@10": 0.25,
+      "recall@20": 0.5,
+      "ndcg@10": 0.19519002499605084
+    },
+    {
+      "qid": "q034",
+      "qtype": "temporal_comparison",
+      "answerable": 1,
+      "recall@5": 0.14285714285714285,
+      "recall@10": 0.42857142857142855,
+      "recall@20": 0.8571428571428571,
+      "ndcg@10": 0.46441470256902223
+    },
+    {
+      "qid": "q035",
+      "qtype": "temporal_comparison",
+      "answerable": 1,
+      "recall@5": 0.5,
+      "recall@10": 0.75,
+      "recall@20": 1.0,
+      "ndcg@10": 0.7668091220635322
+    },
+    {
+      "qid": "q036",
+      "qtype": "temporal_comparison",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q037",
+      "qtype": "temporal_comparison",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q038",
+      "qtype": "temporal_comparison",
+      "answerable": 1,
+      "recall@5": 0.3333333333333333,
+      "recall@10": 0.6666666666666666,
+      "recall@20": 0.6666666666666666,
+      "ndcg@10": 0.6114902967340503
+    },
+    {
+      "qid": "q039",
+      "qtype": "abstention_probe",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q040",
+      "qtype": "abstention_probe",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q041",
+      "qtype": "abstention_probe",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q042",
+      "qtype": "abstention_probe",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q043",
+      "qtype": "abstention_probe",
+      "answerable": 1,
+      "recall@5": 0.2,
+      "recall@10": 0.7,
+      "recall@20": 0.9,
+      "ndcg@10": 0.5999767516907479
+    },
+    {
+      "qid": "q044",
+      "qtype": "abstention_probe",
+      "answerable": 1,
+      "recall@5": 0.0,
+      "recall@10": 0.5,
+      "recall@20": 1.0,
+      "ndcg@10": 0.17723928678404774
+    },
+    {
+      "qid": "q045",
+      "qtype": "abstention_probe",
+      "answerable": 1,
+      "recall@5": 0.13793103448275862,
+      "recall@10": 0.3103448275862069,
+      "recall@20": 0.6551724137931034,
+      "ndcg@10": 0.7799082337019199
+    },
+    {
+      "qid": "q046",
+      "qtype": "abstention_probe",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q047",
+      "qtype": "abstention_probe",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q048",
+      "qtype": "abstention_probe",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q049",
+      "qtype": "abstention_probe",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    },
+    {
+      "qid": "q050",
+      "qtype": "abstention_probe",
+      "answerable": 0,
+      "recall@5": null,
+      "recall@10": null,
+      "recall@20": null,
+      "ndcg@10": null
+    }
+  ],
+  "abstention_leakage": [
+    {
+      "qid": "q015",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q022",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q029",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q030",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q036",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q037",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q039",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q040",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q041",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q042",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q046",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q047",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q048",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q049",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    },
+    {
+      "qid": "q050",
+      "n_surfaced": 30,
+      "n_marked_relevant": 0
+    }
+  ]
+}

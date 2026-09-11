@@ -109,6 +109,60 @@ def label_from_worksheet(summary, candidates, conn, prompt_fn, print_fn, existin
     print_fn(f"  {summary['qid']} reviewed")
 
 
+def _load_decisions(path):
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    return {k: v for k, v in data.items() if k != "_meta"}
+
+
+def apply_decisions(conn, worksheet_path, decisions_path, *, expected_qids=50, candidates_per_q=30) -> dict:
+    """Non-interactive apply of reviewed decisions. For each qid, the listed 'r'
+    ranks are relevant (1); every other rank 1..candidates_per_q is not-relevant
+    (0); 'v' is the verdict (a->answerable, x->abstain). Writes through the SAME
+    store.py writers the interactive path uses (revise semantics: clear then write).
+    All-or-nothing: everything is validated before any write."""
+    order, summaries, cands = _read_worksheet(worksheet_path)
+    decisions = _load_decisions(decisions_path)
+
+    if len(decisions) != expected_qids:
+        raise ValueError(f"decisions cover {len(decisions)} qids, expected exactly {expected_qids}")
+    plan = []
+    for qid, dec in decisions.items():
+        if qid not in summaries:
+            raise ValueError(f"{qid}: missing from worksheet")
+        cs = cands.get(qid, [])
+        if len(cs) != candidates_per_q:
+            raise ValueError(f"{qid}: worksheet has {len(cs)} candidates, expected {candidates_per_q}")
+        v = dec.get("v")
+        if v not in ("a", "x"):
+            raise ValueError(f"{qid}: verdict must be 'a' or 'x', got {v!r}")
+        by_rank = {c.get("rank"): c for c in cs}
+        rset = set(dec.get("r", []))
+        for rank in rset:
+            if rank not in by_rank:
+                raise ValueError(f"{qid}: relevant rank {rank} has no worksheet record")
+        rows = []
+        for rank in range(1, candidates_per_q + 1):
+            c = by_rank.get(rank)
+            if c is None:
+                raise ValueError(f"{qid}: worksheet missing rank {rank}")
+            rows.append((c["passage_id"], 1 if rank in rset else 0))
+        plan.append((qid, rows, 1 if v == "a" else 0))
+
+    for qid, rows, answerable in plan:
+        store.clear_labels(conn, qid)          # revise: drop any prior labels/verdict
+        for passage_id, relevance in rows:
+            store.write_label(conn, qid, passage_id, relevance)
+        store.write_gold(conn, qid, answerable)
+
+    return {
+        "qids": len(plan),
+        "labels": sum(len(rows) for _, rows, _ in plan),
+        "relevant": sum(rel for _, rows, _ in plan for _, rel in rows),
+        "answerable": sum(1 for _, _, a in plan if a == 1),
+        "abstain": sum(1 for _, _, a in plan if a == 0),
+    }
+
+
 def _eval_top_n(config_path: Path) -> int:
     with Path(config_path).open("rb") as fh:
         return int(tomllib.load(fh).get("eval", {}).get("label_top_n", 30))
@@ -162,7 +216,19 @@ def main(argv=None) -> int:
     p.add_argument("--revise", action="store_true", help="re-open already-labeled questions")
     p.add_argument("--from-worksheet", dest="worksheet", default=None, type=Path,
                    help="review advisory proposals from label_worksheet.jsonl instead of live retrieval")
+    p.add_argument("--apply-decisions", dest="apply_decisions", default=None, type=Path,
+                   help="non-interactive: apply a reviewed decisions JSON against the worksheet")
     args = p.parse_args(argv)
+    if args.apply_decisions:
+        if not args.worksheet:
+            p.error("--apply-decisions requires --from-worksheet")
+        conn = db.init_db(db.resolve_db_path(args.config))
+        try:
+            summary = apply_decisions(conn, args.worksheet, args.apply_decisions)
+        finally:
+            conn.close()
+        print(json.dumps(summary, ensure_ascii=False))
+        return 0
     run(args.config, qid=args.qid, top_n=args.top_n, revise=args.revise, worksheet=args.worksheet)
     return 0
 

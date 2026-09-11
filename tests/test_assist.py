@@ -108,6 +108,82 @@ def test_from_worksheet_blank_writes_nothing(tmp_path):
     conn.close()
 
 
+def _write_full_ws(path, qids, per_q=30):
+    with Path(path).open("w", encoding="utf-8") as fh:
+        for qid in qids:
+            fh.write(json.dumps({"kind": "summary", "qid": qid, "text": "t", "qtype": "factual",
+                                 "filters": {}, "proposed_answerable": 0, "reason": "x"}) + "\n")
+            for rank in range(1, per_q + 1):
+                fh.write(json.dumps({"kind": "candidate", "qid": qid, "passage_id": f"{qid}#p{rank}",
+                                     "rank": rank, "proposed_relevance": 0, "reason": "r"}) + "\n")
+
+
+def _seed_qids_and_passages(conn, qids, per_q=30):
+    conn.execute("INSERT OR IGNORE INTO items (item_id) VALUES ('itemA')")
+    conn.execute("INSERT OR IGNORE INTO pages (page_id,item_id,leaf_index) VALUES ('p0','itemA',0)")
+    for qid in qids:
+        questions.insert_questions(conn, [{"qid": qid, "text": "t", "qtype": "factual", "filters": {}}])
+        for rank in range(1, per_q + 1):
+            conn.execute("INSERT OR IGNORE INTO passages (passage_id,item_id,page_id,leaf_index,text) "
+                         "VALUES (?,?,?,?,?)", (f"{qid}#p{rank}", "itemA", "p0", 0, "x"))
+    conn.commit()
+
+
+def test_apply_decisions_writes_full_grid_and_overwrites(tmp_path):
+    conn = db.init_db(":memory:")
+    qids = ["qA", "qB"]
+    _seed_qids_and_passages(conn, qids)
+    ws = tmp_path / "ws.jsonl"
+    _write_full_ws(ws, qids)
+    # pre-existing stale label on qA that apply must overwrite (revise semantics).
+    store.write_label(conn, "qA", "qA#p1", 0)
+    store.write_gold(conn, "qA", 0)
+    dec = tmp_path / "dec.json"
+    dec.write_text(json.dumps({"_meta": {"source": "test"},
+                               "qA": {"v": "a", "r": [1, 3]},
+                               "qB": {"v": "x", "r": []}}), encoding="utf-8")
+    summary = label.apply_decisions(conn, ws, dec, expected_qids=2, candidates_per_q=30)
+    assert summary == {"qids": 2, "labels": 60, "relevant": 2, "answerable": 1, "abstain": 1}
+    assert conn.execute("SELECT COUNT(*) FROM eval_labels").fetchone()[0] == 60
+    assert conn.execute("SELECT COUNT(*) FROM eval_labels WHERE qid='qA'").fetchone()[0] == 30
+    assert {p for p, r in store.get_labels(conn, "qA").items() if r == 1} == {"qA#p1", "qA#p3"}
+    assert all(r == 0 for r in store.get_labels(conn, "qB").values())
+    assert store.gold_verdict(conn, "qA")["answerable"] == 1  # overwritten from 0 to 1
+    assert store.gold_verdict(conn, "qB")["answerable"] == 0
+    conn.close()
+
+
+def test_apply_decisions_bad_rank_refuses_without_writing(tmp_path):
+    conn = db.init_db(":memory:")
+    qids = ["qA", "qB"]
+    _seed_qids_and_passages(conn, qids)
+    ws = tmp_path / "ws.jsonl"
+    _write_full_ws(ws, qids)
+    dec = tmp_path / "dec.json"
+    dec.write_text(json.dumps({"qA": {"v": "a", "r": [99]}, "qB": {"v": "x", "r": []}}), encoding="utf-8")
+    import pytest
+    with pytest.raises(ValueError):
+        label.apply_decisions(conn, ws, dec, expected_qids=2, candidates_per_q=30)
+    # all-or-nothing: nothing written
+    assert conn.execute("SELECT COUNT(*) FROM eval_labels").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM eval_question_gold").fetchone()[0] == 0
+    conn.close()
+
+
+def test_apply_decisions_wrong_qid_count_refuses(tmp_path):
+    conn = db.init_db(":memory:")
+    _seed_qids_and_passages(conn, ["qA"])
+    ws = tmp_path / "ws.jsonl"
+    _write_full_ws(ws, ["qA"])
+    dec = tmp_path / "dec.json"
+    dec.write_text(json.dumps({"qA": {"v": "a", "r": [1]}}), encoding="utf-8")
+    import pytest
+    with pytest.raises(ValueError):
+        label.apply_decisions(conn, ws, dec, expected_qids=50, candidates_per_q=30)
+    assert conn.execute("SELECT COUNT(*) FROM eval_labels").fetchone()[0] == 0
+    conn.close()
+
+
 def test_from_worksheet_override_beats_proposal(tmp_path):
     conn = db.init_db(":memory:")
     _seed_q(conn, "q1", "tuberculosis treatment")
