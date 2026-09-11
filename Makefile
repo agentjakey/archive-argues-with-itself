@@ -26,8 +26,11 @@ help:
 install:
 	$(PYTHON) -m pip install -e ".[dev]"
 
-install-web:
-	cd web && npm install
+install-web web-install:
+	cd web && npm ci
+
+web-build:
+	cd web && npm run typecheck && npm test && npm run build
 
 harvest:
 	@echo "harvest: not implemented yet -> src/archive_debugger/harvest (config: $(CONFIG))"

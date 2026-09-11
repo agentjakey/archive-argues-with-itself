@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Fluid type: scales with the viewport; kiosk multiplies it. */
+  --scale: 1;
+  font-size: calc(clamp(15px, 0.95vw + 11px, 19px) * var(--scale));
+}
+
+body.kiosk {
+  --scale: 1.35;
+}
+
+body {
+  @apply bg-paper text-ink font-sans antialiased;
+  margin: 0;
+}
+
+/* Every interactive control is at least 44px on its short side. */
+button,
+[role="button"],
+select,
+input {
+  min-height: 44px;
+}
+
+:focus-visible {
+  outline: 3px solid theme("colors.ink");
+  outline-offset: 2px;
+}
+
+.excerpt {
+  @apply font-serif leading-relaxed;
+}
+
+.excerpt mark {
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+
+.card {
+  @apply bg-sheet border border-rule rounded-sm p-5;
+}
+
+.card--cited {
+  @apply border-accent border-l-4;
+}
+
+.badge {
+  @apply inline-block text-xs font-sans uppercase tracking-wide border border-ink px-2 py-0.5 rounded-sm;
+}
+
+.badge--cited {
+  @apply border-accent text-accent;
+}
+
+.chip {
+  @apply inline-flex items-center font-sans text-sm border border-ink bg-sheet px-3 py-1.5 rounded-sm cursor-pointer;
+}
+
+.chip[aria-pressed="true"] {
+  @apply bg-ink text-paper;
+}
+
+.drawer {
+  @apply fixed top-0 right-0 z-30 h-full w-full md:w-[min(720px,60vw)] bg-sheet border-l border-rule shadow-none overflow-y-auto;
+}
+
+.backdrop {
+  @apply fixed inset-0 z-20 bg-ink/30;
+}
+
+/* Kiosk: larger, easier-to-hit chips; filters and the More toggle are hidden by the app. */
+body.kiosk .chip {
+  font-size: 1.1em;
+  padding: 0.75em 1.1em;
+}

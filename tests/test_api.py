@@ -1,4 +1,4 @@
-"""Phase 10a read-only API tests. Hermetic: TestClient, stub LLM, stub embedder, temp db."""
+"""Phase 10 read-only API tests. Hermetic: TestClient, stub LLM, stub embedder, temp db."""
 from __future__ import annotations
 
 import json
@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from archive_debugger.api.app import create_app
+from archive_debugger.api.app import MISSING_KEY, create_app
 from archive_debugger.eval import questions, store
 from archive_debugger.generate.llm import CitedSentence, Draft, StubLLM
 from archive_debugger.ingest import db
@@ -52,16 +52,26 @@ def _retriever(tmp_path, items, *, seed_questions=None):
     return search.Retriever(None, embedder=StubEmbedder(dim=64), cfg=cfg), seed
 
 
-def test_health(tmp_path):
-    r, _ = _retriever(tmp_path, [("a", 1985, "alberta")])
-    with TestClient(create_app(CFG, retriever=r, provider="stub", web_dist=tmp_path / "nodist")) as c:
+def _app(tmp_path, r, **kw):
+    kw.setdefault("provider", "stub")
+    kw.setdefault("web_dist", tmp_path / "nodist")
+    return create_app(CFG, retriever=r, load_env=False, **kw)
+
+
+def test_health_with_corpus_facts(tmp_path):
+    r, _ = _retriever(tmp_path, [("late", 1990, "ontario"), ("early", 1975, "federal"), ("nodate", None, "alberta")])
+    with TestClient(_app(tmp_path, r)) as c:
         body = c.get("/health").json()
     assert body["status"] == "ok" and body["provider"] == "stub"
+    corpus = body["corpus"]
+    assert corpus["items"] == 3 and corpus["passages"] == 6 and corpus["passages_undated"] == 2
+    assert corpus["undated_share"] == round(2 / 6, 4)
+    assert corpus["window"] == {"min_year": 1975, "max_year": 1990}
 
 
 def test_ask_evidence_ordered_year_asc_undated_last(tmp_path):
     r, _ = _retriever(tmp_path, [("late", 1990, "ontario"), ("early", 1975, "federal"), ("nodate", None, "alberta")])
-    with TestClient(create_app(CFG, retriever=r, provider="stub", web_dist=tmp_path / "nodist")) as c:
+    with TestClient(_app(tmp_path, r)) as c:
         ev = c.post("/ask", json={"question": "vaccination hospital"}).json()["evidence"]
     years = [e["year"] for e in ev]
     dated = [y for y in years if y is not None]
@@ -73,12 +83,22 @@ def test_ask_evidence_ordered_year_asc_undated_last(tmp_path):
     assert row["embed_url"] == citation.embed_url(row["item_id"], row["leaf_index"])
 
 
+def test_ask_get_permalink_matches_post(tmp_path):
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
+    with TestClient(_app(tmp_path, r)) as c:
+        got = c.get("/ask", params={"q": "vaccination hospital", "jurisdiction": "alberta"}).json()
+        posted = c.post("/ask", json={"question": "vaccination hospital", "filters": {"jurisdiction": "alberta"}}).json()
+    assert [e["passage_id"] for e in got["evidence"]] == [e["passage_id"] for e in posted["evidence"]]
+    assert all(e["jurisdiction"] == "alberta" for e in got["evidence"])
+    assert got["answer"]["abstained"] == posted["answer"]["abstained"]
+
+
 def test_ask_cited_flags_match_verified_citations(tmp_path):
     r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
     hits = r.search("vaccination hospital", top_k=12)
     cited = hits[0]["passage_id"]
     llm = StubLLM(Draft(sentences=[CitedSentence(text="A programme ran.", cited_ids=[cited])]))
-    with TestClient(create_app(CFG, retriever=r, provider="stub", llm=llm, web_dist=tmp_path / "nodist")) as c:
+    with TestClient(_app(tmp_path, r, llm=llm)) as c:
         body = c.post("/ask", json={"question": "vaccination hospital", "model": "claude-sonnet-5"}).json()
     verified = {v["passage_id"] for v in body["answer"]["verified_citations"]}
     assert verified == {cited} and body["answer"]["abstained"] is False
@@ -90,7 +110,7 @@ def test_ask_cited_flags_match_verified_citations(tmp_path):
 
 def test_ask_abstention_shape(tmp_path):
     r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
-    with TestClient(create_app(CFG, retriever=r, provider="stub", web_dist=tmp_path / "nodist")) as c:
+    with TestClient(_app(tmp_path, r)) as c:
         body = c.post("/ask", json={"question": "covid vaccination"}).json()   # 'covid' uncovered
     a = body["answer"]
     assert a["abstained"] is True and a["abstention_text"].startswith("the record here is thin")
@@ -98,9 +118,29 @@ def test_ask_abstention_shape(tmp_path):
     assert body["evidence"] and not any(e["cited"] for e in body["evidence"])
 
 
+def test_ask_503_when_no_key_for_anthropic(tmp_path, monkeypatch):
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    with TestClient(_app(tmp_path, r, provider="anthropic")) as c:
+        res = c.post("/ask", json={"question": "vaccination hospital"})
+    assert res.status_code == 503 and res.json() == {"error": MISSING_KEY}
+
+
+def test_ask_502_on_llm_failure(tmp_path):
+    class Boom:
+        def draft(self, system, user):
+            raise RuntimeError("boom")
+
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
+    with TestClient(_app(tmp_path, r, llm=Boom())) as c:
+        res = c.post("/ask", json={"question": "vaccination hospital"})
+    assert res.status_code == 502 and res.json() == {"error": "RuntimeError: boom"}
+
+
 def test_examples_with_gold(tmp_path):
     r, seed = _retriever(tmp_path, [("a", 1985, "alberta")], seed_questions=[("qA", 1), ("qB", 0), ("qC", None)])
-    with TestClient(create_app(CFG, retriever=r, provider="stub", seed_path=seed, web_dist=tmp_path / "nodist")) as c:
+    with TestClient(_app(tmp_path, r, seed_path=seed)) as c:
         ex = c.get("/examples").json()
     by = {e["qid"]: e for e in ex}
     assert set(by) == {"qA", "qB", "qC"}
@@ -114,8 +154,9 @@ def test_spa_fallback_serves_index_when_dist_exists(tmp_path):
     (dist / "index.html").write_text("<h1>app</h1>", encoding="utf-8")
     (dist / "asset.js").write_text("1;", encoding="utf-8")
     r, _ = _retriever(tmp_path, [("a", 1985, "alberta")])
-    with TestClient(create_app(CFG, retriever=r, provider="stub", web_dist=dist)) as c:
+    with TestClient(_app(tmp_path, r, web_dist=dist)) as c:
         assert c.get("/").text == "<h1>app</h1>"
         assert c.get("/asset.js").text == "1;"
         assert c.get("/some/client/route").text == "<h1>app</h1>"   # fallback
         assert c.get("/health").json()["status"] == "ok"          # API routes still win
+        assert c.get("/ask", params={"q": "vaccination hospital"}).status_code == 200  # GET /ask beats the catch-all

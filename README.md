@@ -20,7 +20,7 @@ carries a page-level citation, and the tool never claims to reach the present
 | Evaluation | done | 50 human-labeled questions; `reports/phase7/eval_report.md` |
 | Synthesis (`generate/`) | done | cited answers with code-decided abstention; deterministic citation verification |
 | Read-only API (`api/`) | done | FastAPI `/ask`, `/examples`, `/health` |
-| Web UI (`web/`) | planned | -- |
+| Web UI (`web/`) | done | reading-room evidence trail: answer with page-level citation chips, abstention card, decade timeline, page drawer, compare view; kiosk mode |
 
 ## Quickstart
 
@@ -73,6 +73,25 @@ python -m archive_debugger.eval.report                       # -> reports/phase7
 `{question, filters?, provider?, model?}` -> `{answer, evidence}`. Set
 `ALLOWED_ORIGINS` (comma-separated) to enable CORS; unset means same-origin only.
 When `web/dist` exists it is served at `/` with an `index.html` fallback.
+
+### Web app (`web/`)
+
+Vite + React + TypeScript + Tailwind; no router, no state library. Node 20 LTS
+(`web/.nvmrc`); `web/dist` is a build artifact and is not committed.
+
+```powershell
+cd web
+npm ci                     # reproducible install from package-lock.json
+npm run typecheck          # tsc --noEmit
+npm test                   # vitest
+npm run build              # -> web/dist, served by the API at /
+npm run dev                # dev server on http://127.0.0.1:5173 proxying /ask /examples /health to :8000
+```
+
+To view the built app, start the API (previous section) and open
+`http://127.0.0.1:8000/`. Append `?kiosk=1` for the exhibit mode (larger type,
+filters hidden, QR placeholder). `VITE_API_BASE` points the app at a remote API;
+empty means same-origin.
 
 ### Scope is config-driven
 
