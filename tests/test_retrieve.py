@@ -284,6 +284,9 @@ def test_env_overrides_config_paths(monkeypatch):
     cfg = load_retrieve_config(cfg_path)
     assert cfg.db_path == Path("civic.db") and cfg.index_path == Path("index/vectors.db")   # config values
     assert db.resolve_db_path(cfg_path) == Path("civic.db")
+    assert cfg.embedder == "fastembed"
+    monkeypatch.setenv("CIVIC_EMBEDDER", "stub")
+    assert load_retrieve_config(cfg_path).embedder == "stub"                                  # CI smoke override
 
 
 # ---- CI guard: real model never imported ----------------------------------

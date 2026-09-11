@@ -104,6 +104,43 @@ def test_trail_pool_marks_what_the_model_saw(tmp_path):
     assert all(row["section_class"] == "body" and row["later_years"] is None for row in rows)
 
 
+def test_get_ask_provider_stub_needs_no_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta")])
+    with TestClient(_app(tmp_path, r, provider=None)) as c:            # config provider: anthropic
+        assert c.get("/ask", params={"q": "vaccination hospital"}).status_code == 503
+        body = c.get("/ask", params={"q": "vaccination hospital", "provider": "stub", "nocache": 1})
+        assert body.status_code == 200 and {"answer", "evidence"} <= set(body.json())
+        assert c.get("/ask", params={"q": "x", "provider": "bogus"}).status_code == 422
+
+
+def test_stories_and_offline_pages(tmp_path):
+    r, _ = _retriever(tmp_path, [("a", 1974, "alberta"), ("b", 1999, "alberta")])
+    stories = tmp_path / "stories.json"
+    stories.write_text(json.dumps([{"id": "s1", "question": "vaccination hospital", "filters": {"jurisdiction": "alberta"},
+                                    "pins": ["b#1:0", "a#0:0"], "caption": "then and later"}]), encoding="utf-8")
+    pages = tmp_path / "pages"
+    (pages / "a").mkdir(parents=True)
+    (pages / "a" / "n0_thumb.jpg").write_bytes(b"\xff\xd8\xff\xe0 fake jpeg")
+    with TestClient(_app(tmp_path, r, pages_dir=pages, stories_path=stories)) as c:
+        body = c.get("/stories").json()
+        assert [s["id"] for s in body] == ["s1"]
+        pins = body[0]["pins"]
+        assert [p["passage_id"] for p in pins] == ["b#1:0", "a#0:0"]                 # pin order kept, not year order
+        a0 = pins[1]
+        assert a0["page_thumb"] == "/pages/a/n0_thumb.jpg" and a0["offline"] is True    # pack preferred
+        assert a0["page_image"].startswith("https://archive.org/")                    # medium absent: archive.org
+        assert pins[0]["offline"] is False and pins[0]["page_thumb"].startswith("https://archive.org/")
+        assert c.get("/pages/a/n0_thumb.jpg").status_code == 200
+        assert c.get("/pages/a/n0_thumb.jpg").headers["content-type"] == "image/jpeg"
+        assert c.get("/pages/a/n1_thumb.jpg").status_code == 404
+        assert c.get("/pages/a/evil.txt").status_code == 404
+        asked = c.post("/ask", json={"question": "vaccination hospital"}).json()
+        row = next(e for e in asked["evidence"] if e["passage_id"] == "a#0:0")
+        assert row["page_thumb"] == "/pages/a/n0_thumb.jpg"                          # /ask evidence prefers the pack too
+
+
 def test_cache_path_from_env(tmp_path, monkeypatch):
     target = tmp_path / "volume" / "cache" / "answers.db"
     monkeypatch.setenv("CIVIC_CACHE_PATH", str(target))

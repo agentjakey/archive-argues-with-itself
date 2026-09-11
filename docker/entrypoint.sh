@@ -1,13 +1,10 @@
 #!/bin/sh
-# Wait for the data files on the volume, then serve. The API opens civic.db and
-# vectors.db read-only at startup, so a first deploy before the upload would
-# crash-loop; waiting keeps the machine up for `fly sftp`.
+# Boot: make sure the two data files are under the data dir and match the published
+# checksums (downloading from DATA_RELEASE_URL with resume when they are absent),
+# then serve. Progress is logged every 100 MB. See docs/DEPLOY.md.
 set -eu
 
-until [ -f "$CIVIC_DB_PATH" ] && [ -f "$CIVIC_INDEX_PATH" ]; do
-  echo "waiting for $CIVIC_DB_PATH and $CIVIC_INDEX_PATH (see docs/DEPLOY.md)"
-  sleep 30
-done
+python -m archive_debugger.data_release
 
 mkdir -p "$(dirname "$CIVIC_CACHE_PATH")"
 exec uvicorn archive_debugger.api.app:app --host 0.0.0.0 --port "${PORT:-8080}"

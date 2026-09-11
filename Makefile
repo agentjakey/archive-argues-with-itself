@@ -44,6 +44,9 @@ eval:
 serve:
 	$(PYTHON) -m uvicorn archive_debugger.api.app:app --host 127.0.0.1 --port 8000
 
+smoke:
+	$(PYTHON) scripts/smoke.py $(or $(BASE_URL),http://127.0.0.1:8000)
+
 web:
 	cd web && npm run dev
 

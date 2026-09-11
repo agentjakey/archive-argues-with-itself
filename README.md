@@ -35,6 +35,35 @@ python -m venv .venv
 For synthesis, copy `.env.example` to `.env` and put your key in `ANTHROPIC_API_KEY`,
 or set `ANTHROPIC_API_KEY` in the environment. The key is never committed.
 
+## Run it yourself
+
+Two ways to get the corpus database and the dense index.
+
+**Fast path: download the data release** (about 3.2 GiB; verify the checksums):
+
+```powershell
+$R = "https://github.com/agentjakey/archive-argues-with-itself/releases/download/data-v1"
+New-Item -ItemType Directory -Force C:\civic-data\index | Out-Null
+curl.exe -L -o C:\civic-data\civic.db          "$R/civic.db"
+curl.exe -L -o C:\civic-data\index\vectors.db  "$R/vectors.db"
+curl.exe -L -o C:\civic-data\data-release.sha256 "$R/data-release.sha256"
+# verify (Git Bash): cd /c/civic-data && sha256sum -c data-release.sha256   (vectors.db is under index/; check that line from index/)
+```
+
+Then put `CIVIC_DB_PATH=C:\civic-data\civic.db` and
+`CIVIC_INDEX_PATH=C:\civic-data\index\vectors.db` in `.env` and start the API
+(Serve, below). Keep the files out of synced folders (OneDrive, Dropbox).
+
+**Reproducible path: rebuild from the manifest** with the Reproduce steps below
+(harvest from the Internet Archive, parse, normalize, classify pages, index).
+The item set is fixed by `data/manifest/`, so the rebuild yields the same corpus;
+the dense index is deterministic for the pinned model.
+
+To host it, see `docs/DEPLOY.md`: one Docker image that downloads the release on
+first boot, Railway steps, and the same image on any Docker host. To run it
+unattended on a laptop with no internet (warm cache, offline pack of page images,
+kiosk attract loop over `config/stories.json`), see `docs/DEMO.md`.
+
 ## Reproduce
 
 Commands use the venv interpreter and default to `--config config/pilot.toml`.
@@ -109,13 +138,21 @@ empty means same-origin.
 
 ### Deploy
 
-`Dockerfile` (python 3.11-slim, editable install, web/dist copied in, embedding
-model baked at build time, uvicorn on `$PORT`), `fly.toml` (10 GB volume at
-`/data`, secrets `ANTHROPIC_API_KEY` and `ALLOWED_ORIGINS`), and `web/vercel.json`
-(Vite build with `VITE_API_BASE`). The data-file paths are overridable by
-`CIVIC_DB_PATH`, `CIVIC_INDEX_PATH`, and `CIVIC_CACHE_PATH`. Exact commands,
-including the volume upload and the single-process laptop fallback, are in
-`docs/DEPLOY.md`. Nothing deploys automatically.
+`Dockerfile` (node stage builds `web/dist`; python 3.11-slim stage with an
+editable install, the embedding model baked at build time; on boot
+`archive_debugger.data_release` downloads and checksum-verifies the two data
+files from `DATA_RELEASE_URL` with resume, then uvicorn serves on `$PORT`),
+`railway.json` (Dockerfile build, `/health` check with a 30-minute first-boot
+window, one replica), and `web/vercel.json` (optional separate web build with
+`VITE_API_BASE`). `scripts/make_data_release.py` writes `data-release.sha256`
+and prints the `gh release create` command. The data-file paths are overridable
+by `CIVIC_DB_PATH`, `CIVIC_INDEX_PATH`, and `CIVIC_CACHE_PATH`;
+`CIVIC_EMBEDDER=stub` serves a fixture index without the model.
+`scripts/smoke.py BASE_URL` checks `/health`, `/examples`, a stub `/ask`, and
+`/coverage` (CI runs it against the served app over
+`scripts/make_fixture_db.py`); `scripts/warm_cache.py BASE_URL` fills the answer
+cache with every seed question after a cost estimate and confirmation. Steps and
+measured sizing are in `docs/DEPLOY.md`. Nothing deploys automatically.
 
 ### Scope is config-driven
 

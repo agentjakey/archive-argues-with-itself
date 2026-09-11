@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import copy
 import functools
+import json
 import os
+import re
 import threading
 import tomllib
 from contextlib import asynccontextmanager
@@ -38,8 +40,31 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 WEB_DIST = REPO_ROOT / "web" / "dist"
 DEFAULT_SEED = Path("eval/seed_questions.jsonl")
 DEFAULT_CACHE = Path("data/cache/answers.db")
+DEFAULT_PAGES = Path("data/cache/pages")           # offline pack of page images (scripts/offline_pack.py)
+DEFAULT_STORIES = Path("config/stories.json")
+ENV_PAGES_DIR = "CIVIC_PAGES_DIR"
 SNIPPET = 300
 MISSING_KEY = "ANTHROPIC_API_KEY is not set on the server"
+_PAGE_FILE = re.compile(r"^n(\d+)_(thumb|medium)\.jpg$")
+
+
+def local_page(pages_dir: Optional[Path], item_id: str, leaf: int, kind: str) -> Optional[str]:
+    """API path of a page image held in the offline pack, or None when absent."""
+    if pages_dir is None:
+        return None
+    name = f"n{leaf}_{kind}.jpg"
+    return f"/pages/{item_id}/{name}" if (Path(pages_dir) / item_id / name).is_file() else None
+
+
+def answer_cache_key(gcfg: dict, kind: str, model_id: str, question: str, filters: Optional[dict],
+                     retrieval_sha256: str) -> str:
+    """The exact key /ask uses, shared with scripts that need to know what is cached."""
+    temp = sent_temperature(kind, gcfg)
+    gen = generation_meta(provider=kind, model=model_id, temperature=temp,
+                          max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
+    return cache_key(question=question, filters=filters, provider=kind, model=model_id,
+                     prompt_sha256=gen["prompt_sha256"], top_k=gcfg["top_k"], temperature=temp,
+                     retrieval_sha256=retrieval_sha256)
 
 
 class AskRequest(BaseModel):
@@ -50,25 +75,44 @@ class AskRequest(BaseModel):
     nocache: bool = False
 
 
-def evidence_rows(hits: list[dict], verified: list[dict], prompt_ids: Optional[set] = None) -> list[dict]:
-    """hits is the whole pool shown in the trail; prompt_ids marks the prefix the model saw."""
+def evidence_rows(hits: list[dict], verified: list[dict], prompt_ids: Optional[set] = None,
+                  pages_dir: Optional[Path] = None) -> list[dict]:
+    """hits is the whole pool shown in the trail; prompt_ids marks the prefix the model saw.
+    When the offline pack holds a page image, its API path replaces the archive.org URL
+    and `offline` is true, so the exhibit shows real pages without a network."""
     cited_ids = {c["passage_id"] for c in verified}
     ordered = sorted(hits, key=lambda h: (h.get("year") is None, h.get("year") or 0))  # undated last
-    return [{
-        "in_prompt": True if prompt_ids is None else h["passage_id"] in prompt_ids,
-        "section_class": h.get("section_class") or "body",
-        "later_years": h.get("later_years"),
-        "passage_id": h["passage_id"], "item_id": h["item_id"], "title": h.get("title"),
-        "year": h.get("year"), "decade": h.get("decade"), "jurisdiction": h.get("jurisdiction"),
-        "doc_type": h.get("doc_type"), "leaf_index": h["leaf_index"], "printed_page": h.get("printed_page"),
-        "deep_link": h["page_deep_link"],
-        "page_thumb": citation.page_thumb(h["item_id"], h["leaf_index"]),
-        "page_image": citation.page_image(h["item_id"], h["leaf_index"]),
-        "embed_url": citation.embed_url(h["item_id"], h["leaf_index"]),
-        "snippet": " ".join((h.get("text") or "").split())[:SNIPPET],
-        "bm25_rank": h.get("bm25_rank"), "dense_rank": h.get("dense_rank"),
-        "cited": h["passage_id"] in cited_ids,
-    } for h in ordered]
+    rows = []
+    for h in ordered:
+        thumb = local_page(pages_dir, h["item_id"], h["leaf_index"], "thumb")
+        image = local_page(pages_dir, h["item_id"], h["leaf_index"], "medium")
+        rows.append({
+            "in_prompt": True if prompt_ids is None else h["passage_id"] in prompt_ids,
+            "section_class": h.get("section_class") or "body",
+            "later_years": h.get("later_years"),
+            "passage_id": h["passage_id"], "item_id": h["item_id"], "title": h.get("title"),
+            "year": h.get("year"), "decade": h.get("decade"), "jurisdiction": h.get("jurisdiction"),
+            "doc_type": h.get("doc_type"), "leaf_index": h["leaf_index"], "printed_page": h.get("printed_page"),
+            "deep_link": h["page_deep_link"],
+            "page_thumb": thumb or citation.page_thumb(h["item_id"], h["leaf_index"]),
+            "page_image": image or citation.page_image(h["item_id"], h["leaf_index"]),
+            "embed_url": citation.embed_url(h["item_id"], h["leaf_index"]),
+            "offline": bool(thumb or image),
+            "snippet": " ".join((h.get("text") or "").split())[:SNIPPET],
+            "bm25_rank": h.get("bm25_rank"), "dense_rank": h.get("dense_rank"),
+            "cited": h["passage_id"] in cited_ids,
+        })
+    return rows
+
+
+def load_stories(path: Path) -> list[dict]:
+    if not Path(path).exists():
+        return []
+    stories = json.loads(Path(path).read_text(encoding="utf-8"))
+    for s in stories:
+        if not (isinstance(s.get("pins"), list) and len(s["pins"]) == 2 and s.get("question") and s.get("id")):
+            raise ValueError(f"story {s.get('id')!r} needs id, question, and exactly two pins")
+    return stories
 
 
 def corpus_facts(conn, pilot_window: dict) -> dict:
@@ -113,11 +157,14 @@ def _clean_filters(period: Optional[str], jurisdiction: Optional[str], doc_type:
 def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Optional[Retriever] = None,
                provider: Optional[str] = None, llm: Optional[LLM] = None,
                seed_path: Path = DEFAULT_SEED, web_dist: Path = WEB_DIST, load_env: bool = True,
-               cache_path: Optional[Path] = None) -> FastAPI:
+               cache_path: Optional[Path] = None, pages_dir: Optional[Path] = None,
+               stories_path: Path = DEFAULT_STORIES) -> FastAPI:
     if load_env:
         from dotenv import load_dotenv
         load_dotenv()
     cache_path = cache_path or env_path(ENV_CACHE_PATH, DEFAULT_CACHE)
+    pages_dir = pages_dir or env_path(ENV_PAGES_DIR, DEFAULT_PAGES)
+    stories = load_stories(stories_path)
     gcfg = load_generate_config(config_path)
     pilot_window = _pilot_window(config_path)
     own_retriever = retriever is None
@@ -151,14 +198,20 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         temp = sent_temperature(kind, gcfg)
         gen = generation_meta(provider=kind, model=model_id, temperature=temp,
                               max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
-        key = cache_key(question=question, filters=filters, provider=kind, model=model_id,
-                        prompt_sha256=gen["prompt_sha256"], top_k=gcfg["top_k"], temperature=temp,
-                        retrieval_sha256=app.state.retrieval_sha256)
+        key = answer_cache_key(gcfg, kind, model_id, question, filters, app.state.retrieval_sha256)
         if not nocache:
             hit = app.state.cache.get(key)
             if hit is not None:
                 served = copy.deepcopy(hit["response"])
                 served["answer"]["cached"] = {"created_at": hit["created_at"]}
+                for row in served["evidence"]:   # the offline pack may have grown since the answer was cached
+                    thumb = local_page(pages_dir, row["item_id"], row["leaf_index"], "thumb")
+                    image = local_page(pages_dir, row["item_id"], row["leaf_index"], "medium")
+                    if thumb:
+                        row["page_thumb"] = thumb
+                    if image:
+                        row["page_image"] = image
+                    row["offline"] = bool(thumb or image)
                 return served
         if kind == "anthropic" and llm is None and not _key_available():
             return JSONResponse(status_code=503, content={"error": MISSING_KEY})
@@ -172,7 +225,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             except Exception as exc:  # noqa: BLE001 - surfaced verbatim, never swallowed
                 return JSONResponse(status_code=502, content={"error": f"{type(exc).__name__}: {exc}"})
         result = {"answer": ans.to_dict(),
-                  "evidence": evidence_rows(pool, ans.verified_citations, {h["passage_id"] for h in hits})}
+                  "evidence": evidence_rows(pool, ans.verified_citations, {h["passage_id"] for h in hits}, pages_dir)}
         app.state.cache.put(key, result)
         result["answer"]["cached"] = None
         return result
@@ -195,6 +248,34 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                             "gold": None if gold is None else ("answerable" if gold["answerable"] else "abstain")})
         return out
 
+    @app.get("/stories")
+    def stories_view() -> list[dict]:
+        """Curated question + two pinned passages + caption, pins expanded to evidence rows
+        (in pin order) so the compare view can render them without a retrieval pool."""
+        out = []
+        with app.state.lock:
+            r = app.state.retriever
+            for s in stories:
+                try:
+                    rows = evidence_rows(r.lookup(s["pins"]), [], set(), pages_dir)
+                except LookupError as exc:
+                    raise HTTPException(status_code=500, detail=f"story {s['id']}: {exc}") from exc
+                by_id = {row["passage_id"]: row for row in rows}
+                out.append({"id": s["id"], "question": s["question"], "filters": s.get("filters") or {},
+                            "caption": s.get("caption", ""), "pins": [by_id[p] for p in s["pins"]]})
+        return out
+
+    @app.get("/pages/{item_id}/{name}")
+    def page_image(item_id: str, name: str):
+        """A page image from the offline pack (data/cache/pages), else 404 so the client
+        falls back to archive.org. Names are n<leaf>_thumb.jpg / n<leaf>_medium.jpg."""
+        if "/" in item_id or "\\" in item_id or item_id in (".", "..") or not _PAGE_FILE.match(name):
+            raise HTTPException(status_code=404)
+        target = Path(pages_dir) / item_id / name
+        if not target.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(target, media_type="image/jpeg")
+
     @app.get("/coverage")
     def coverage_view(q: str = Query(..., min_length=1), period: Optional[str] = None,
                       jurisdiction: Optional[str] = None, doc_type: Optional[str] = None) -> dict:
@@ -215,9 +296,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
 
     @app.get("/ask")
     def ask_get(q: str = Query(..., min_length=1), period: Optional[str] = None,
-                jurisdiction: Optional[str] = None, doc_type: Optional[str] = None, nocache: int = 0):
-        """Permalink form: same handler as POST, filters from query params."""
-        return answer(q, _clean_filters(period, jurisdiction, doc_type), None, None, bool(nocache))
+                jurisdiction: Optional[str] = None, doc_type: Optional[str] = None, nocache: int = 0,
+                provider: Optional[str] = None):
+        """Permalink form: same handler as POST, filters from query params. `provider=stub`
+        exercises retrieval and the response shape without a model call (smoke tests)."""
+        if provider is not None and provider not in ("stub", "anthropic"):
+            raise HTTPException(status_code=422, detail="provider must be 'stub' or 'anthropic'")
+        return answer(q, _clean_filters(period, jurisdiction, doc_type), provider, None, bool(nocache))
 
     if Path(web_dist).is_dir():
         dist = Path(web_dist)

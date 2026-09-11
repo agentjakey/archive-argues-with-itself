@@ -1,17 +1,22 @@
 """Retrieval config loader (reads [index] + [retrieve] from pilot.toml). The two
-data-file paths honor the CIVIC_DB_PATH / CIVIC_INDEX_PATH env overrides.
+data-file paths honor the CIVIC_DB_PATH / CIVIC_INDEX_PATH env overrides, and
+CIVIC_EMBEDDER overrides [retrieve].embedder (CI smoke runs set it to "stub" against
+a fixture index so no model is downloaded).
 
 Phase 13 switches (all default off = Phase 7 behavior): section_demote,
 fts_drop_stopwords, doc_type_family_filter, per_item_cap (0 = off), later_years_flag;
 pool_size is the number of hits handed to the evidence trail."""
 from __future__ import annotations
 
+import os
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from archive_debugger.ingest.db import ENV_DB_PATH, ENV_INDEX_PATH, env_path
+
+ENV_EMBEDDER = "CIVIC_EMBEDDER"
 
 
 def default_section_weights() -> dict:
@@ -62,7 +67,7 @@ def load_retrieve_config(config_path: Path, *, embedder_override: Optional[str] 
     return RetrieveConfig(
         db_path=env_path(ENV_DB_PATH, idx["db_path"]),
         index_path=env_path(ENV_INDEX_PATH, ret.get("index_path", "index/vectors.db")),
-        embedder=embedder_override or ret.get("embedder", "fastembed"),
+        embedder=embedder_override or os.environ.get(ENV_EMBEDDER) or ret.get("embedder", "fastembed"),
         embedding_model=idx.get("embedding_model", ""),
         embedding_dim=int(idx.get("embedding_dim", 384)),
         batch_size=int(ret.get("batch_size", 256)),

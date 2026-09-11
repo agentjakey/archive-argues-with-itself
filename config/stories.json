@@ -1,0 +1,30 @@
+[
+  {
+    "id": "alberta-insurance-1974-1999",
+    "question": "How did Alberta health insurance coverage change between the 1970s and 1990s?",
+    "filters": {"jurisdiction": "alberta"},
+    "pins": ["ableg_33398004781505#52:0", "micro_IA40243301_0385#117:0"],
+    "caption": "1974: a provincial inventory describes the Alberta Health Care Insurance Commission's universal coverage of basic and optional services. 1998-99: the plan's statistical supplement counts the people covered under Alberta Blue Cross non-group coverage. Two pages, twenty-five years apart, from the same insurance plan."
+  },
+  {
+    "id": "ontario-tobacco-1992-1999",
+    "question": "What did Ontario public health authorities recommend about controlling tobacco smoking?",
+    "filters": {"jurisdiction": "ontario"},
+    "pins": ["31761118924968#4:1", "31761118938901#43:0"],
+    "caption": "1992: a report on alcohol and tobacco taxes treats price as a public-health measure. 1999: the expert panel renewing the Ontario Tobacco Strategy places cessation inside a comprehensive program. The same goal, argued from two directions."
+  },
+  {
+    "id": "alberta-mental-health-1988-1993",
+    "question": "How did Alberta's mental health policy change between 1980 and 2000?",
+    "filters": {"jurisdiction": "alberta"},
+    "pins": ["mentalhealthserv00albe_0#8:0", "workinginpartner00albe#3:0"],
+    "caption": "1988: a review of mental health services opens with the 1967 study that shaped them. 1993: a partnership report records that Future Directions for Mental Health Services was approved as government policy in April 1992. Background, then decision."
+  },
+  {
+    "id": "federal-aging-1995-2000",
+    "question": "How did federal policy on aging change between the 1980s and 2000s?",
+    "filters": {"jurisdiction": "federal"},
+    "pins": ["31761115571101#9:0", "micro_IA40243301_0469#9:0"],
+    "caption": "1995: the National Advisory Council on Aging, created in 1980, states its position on community health services for seniors. 2000: a seniors' guide describes the Division of Aging and Seniors as the federal focal point. An advisory voice, then an administrative one."
+  }
+]

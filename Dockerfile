@@ -1,8 +1,18 @@
 # Read-only serve layer image. Expects the two data files on a mounted volume:
 #   $CIVIC_DB_PATH     (default /data/civic.db)
 #   $CIVIC_INDEX_PATH  (default /data/index/vectors.db)
-# The entrypoint waits for both before starting uvicorn on $PORT. Build the web
-# app first (cd web && npm ci && npm run build) so web/dist exists to copy.
+# The entrypoint waits for both before starting uvicorn on $PORT. The web app is
+# built inside the image (node stage), so the image never depends on a laptop build.
+
+# --- stage 1: web app -------------------------------------------------------
+FROM node:20-bookworm-slim AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web/ ./
+RUN npm run build
+
+# --- stage 2: api -----------------------------------------------------------
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -24,7 +34,7 @@ RUN pip install -e .
 # Runtime inputs: config, seed questions (for /examples), the built web app.
 COPY config ./config
 COPY eval/seed_questions.jsonl ./eval/seed_questions.jsonl
-COPY web/dist ./web/dist
+COPY --from=web /web/dist ./web/dist
 COPY docker/entrypoint.sh /entrypoint.sh
 
 # Bake the query embedding model into the image at build time so the running

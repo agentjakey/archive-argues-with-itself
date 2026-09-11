@@ -42,3 +42,17 @@ jobs:
       # Hermetic suite: stub embedder + stub LLM, temp databases, no network, no model
       # download. web/dist is present so the SPA fallback is exercised for real.
       - run: python -m pytest -q
+      # Smoke: the real ASGI app served by uvicorn over a tiny fixture corpus, stub
+      # embedder (CIVIC_EMBEDDER) and stub provider per request; no key, no network.
+      - name: smoke test the served app
+        env:
+          CIVIC_DB_PATH: ${{ runner.temp }}/fixture/civic.db
+          CIVIC_INDEX_PATH: ${{ runner.temp }}/fixture/vectors.db
+          CIVIC_CACHE_PATH: ${{ runner.temp }}/fixture/answers.db
+          CIVIC_EMBEDDER: stub
+        run: |
+          python scripts/make_fixture_db.py "$RUNNER_TEMP/fixture"
+          python -m uvicorn archive_debugger.api.app:app --host 127.0.0.1 --port 8000 > "$RUNNER_TEMP/uvicorn.log" 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/health > /dev/null && break; sleep 1; done
+          python scripts/smoke.py http://127.0.0.1:8000 || { cat "$RUNNER_TEMP/uvicorn.log"; exit 1; }
+          kill %1

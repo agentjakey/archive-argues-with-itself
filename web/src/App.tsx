@@ -16,8 +16,14 @@ import { useCoverage } from "./hooks/useCoverage";
 import { useExamples } from "./hooks/useExamples";
 import { useHealth } from "./hooks/useHealth";
 import { useKiosk } from "./hooks/useKiosk";
-import { applyState, readState } from "./lib/urlstate";
-import type { EvidenceRow, Example, Filters } from "./types";
+import { About } from "./components/pages/About";
+import { Gaps } from "./components/pages/Gaps";
+import { HowItWorks } from "./components/pages/HowItWorks";
+import { Stories } from "./components/Stories";
+import { useAttractLoop } from "./hooks/useAttractLoop";
+import { useStories } from "./hooks/useStories";
+import { applyState, readState, type View } from "./lib/urlstate";
+import type { EvidenceRow, Example, Filters, Story } from "./types";
 
 export default function App() {
   const kiosk = useKiosk();
@@ -33,7 +39,26 @@ export default function App() {
   const [pins, setPins] = useState<string[]>(initial.current.pins);
   const [drawer, setDrawer] = useState<EvidenceRow | null>(null);
   const [chipsCollapsed, setChipsCollapsed] = useState(false);
+  const [view, setView] = useState<View | null>(initial.current.view ?? null);
+  const [storyRows, setStoryRows] = useState<[EvidenceRow, EvidenceRow] | null>(null);
+  const stories = useStories();
   const coverage = useCoverage(asked, askedFilters);
+
+  const goView = useCallback(
+    (next: View | null) => {
+      setView(next);
+      applyState({ q: asked, filters: askedFilters, pins, kiosk, view: next ?? undefined }, "push");
+      window.scrollTo({ top: 0 });
+    },
+    [asked, askedFilters, pins, kiosk],
+  );
+
+  // Back/forward buttons move between the ask view and the reading pages.
+  useEffect(() => {
+    const onPop = () => setView(readState(window.location.search).view ?? null);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   // Restore from the URL on load and run the ask.
   useEffect(() => {
@@ -58,6 +83,7 @@ export default function App() {
       setAsked(q);
       setAskedFilters(f);
       setPins([]);
+      setStoryRows(null);
       setDrawer(null);
       setChipsCollapsed(true);
       applyState({ q, filters: f, pins: [], kiosk }, "push");
@@ -67,6 +93,26 @@ export default function App() {
   );
 
   const onAsk = useCallback(() => ask(question.trim(), filters), [ask, question, filters]);
+
+  // A story asks its question and shows its two pinned pages side by side, whatever
+  // the retrieval pool holds.
+  const openStory = useCallback(
+    (s: Story) => {
+      setView(null);
+      setQuestion(s.question);
+      setFilters(s.filters ?? {});
+      ask(s.question, s.filters ?? {});
+      setStoryRows(s.pins);
+      window.scrollTo({ top: 0 });
+    },
+    [ask],
+  );
+
+  // Kiosk attract loop: idle 60 s -> cycle stories; any touch -> back to the home screen.
+  const goHome = useCallback(() => {
+    window.location.assign(`${window.location.pathname}${kiosk ? "?kiosk=1" : ""}`);
+  }, [kiosk]);
+  useAttractLoop({ enabled: kiosk, stories, onShow: openStory, onHome: goHome });
 
   const pick = useCallback(
     (e: Example) => {
@@ -94,13 +140,21 @@ export default function App() {
   }, [asked, askedFilters, kiosk]);
 
   const pinned = pins.map((id) => byId.get(id)).filter((r): r is EvidenceRow => Boolean(r));
+  const compare: [EvidenceRow, EvidenceRow] | null =
+    storyRows ?? (pinned.length === 2 ? [pinned[0], pinned[1]] : null);
+  const showStories = view === null && response === null && status !== "waiting" && status !== "error";
   const salient = response?.answer.coverage.salient_terms ?? [];
   const busy = status === "waiting";
   const undatedShare = health?.corpus.undated_share ?? null;
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6">
-      <Header corpus={health?.corpus ?? null} kiosk={kiosk} />
+      <Header corpus={health?.corpus ?? null} kiosk={kiosk} view={view} onView={goView} />
+      {view === "how" && <HowItWorks />}
+      {view === "gaps" && <Gaps />}
+      {view === "about" && <About />}
+      {view === null && (
+      <>
       <AskBar
         question={question}
         filters={filters}
@@ -120,6 +174,7 @@ export default function App() {
         kiosk={kiosk}
       />
       <WaitingLabel status={status} elapsed={elapsed} completion={completion} passages={health?.corpus.passages ?? null} />
+      {showStories && <Stories stories={stories} onOpen={openStory} />}
 
       {status === "error" && error && (
         <main>
@@ -138,8 +193,14 @@ export default function App() {
             <AnswerCard answer={response.answer} byId={byId} onOpen={setDrawer} />
           )}
 
-          {pinned.length === 2 && (
-            <CompareView a={pinned[0]} b={pinned[1]} salientTerms={salient} onUnpin={togglePin} onClose={clearPins} />
+          {compare && (
+            <CompareView
+              a={compare[0]}
+              b={compare[1]}
+              salientTerms={salient}
+              onUnpin={storyRows ? () => setStoryRows(null) : togglePin}
+              onClose={storyRows ? () => setStoryRows(null) : clearPins}
+            />
           )}
 
           <EvidenceTrail
@@ -154,8 +215,10 @@ export default function App() {
           {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} />}
         </main>
       )}
+      </>
+      )}
 
-      <Footer />
+      <Footer onAbout={() => goView("about")} />
       <PageDrawer row={drawer} onClose={() => setDrawer(null)} />
     </div>
   );

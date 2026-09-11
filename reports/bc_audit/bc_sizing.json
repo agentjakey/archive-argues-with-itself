@@ -1,0 +1,235 @@
+{
+  "search_surface": "advancedsearch.php",
+  "topic": "public_health",
+  "topic_query": "health OR \"public health\" OR healthcare OR hospital OR disease OR epidemic OR \"medical care\" OR sanitation OR \"communicable disease\" OR vaccination OR \"health insurance\"",
+  "baseline_gov_count": 104302,
+  "bc_issuer_clause": "(publisher:(\"British Columbia\") OR creator:(\"British Columbia\"))",
+  "window": [
+    1960,
+    2009
+  ],
+  "floor": 2500,
+  "discovery": {
+    "sample_size": 30,
+    "collection_frequency": {
+      "medicalheritagelibrary": 16,
+      "medicallibrary": 15,
+      "toronto": 12,
+      "microlog": 12,
+      "microfiche": 12,
+      "mcgilluniversity": 11,
+      "mcgilluniversityosler": 11,
+      "medicalofficerofhealthreports": 5,
+      "wellcomelibrary": 5,
+      "ukmhl": 5,
+      "europeanlibraries": 5,
+      "internetarchivebooks": 2,
+      "inlibrary": 2,
+      "printdisabled": 2,
+      "governmentpublications": 1
+    },
+    "scanningcenter_frequency": {
+      "sanfrancisco": 12,
+      "euston": 5,
+      "cebu": 2
+    },
+    "collections_kept": [
+      "medicalheritagelibrary",
+      "medicallibrary",
+      "microlog",
+      "mcgilluniversity",
+      "mcgilluniversityosler",
+      "medicalofficerofhealthreports",
+      "wellcomelibrary",
+      "ukmhl"
+    ]
+  },
+  "sizes": [
+    {
+      "clause": "(publisher:(\"British Columbia\") OR creator:(\"British Columbia\"))",
+      "texts_items": 15816,
+      "topic_items": 590,
+      "topic_1960_2009": 278,
+      "topic_1990_2009": 209,
+      "topic_2010_plus": 199,
+      "topic_pre_1960": 109,
+      "name": "bc_issuer"
+    },
+    {
+      "clause": "collection:medicalheritagelibrary",
+      "texts_items": 370214,
+      "topic_items": 111052,
+      "topic_1960_2009": 26865,
+      "topic_1990_2009": 4576,
+      "topic_2010_plus": 2481,
+      "topic_pre_1960": 81080,
+      "name": "medicalheritagelibrary"
+    },
+    {
+      "clause": "collection:medicallibrary",
+      "texts_items": 376919,
+      "topic_items": 111680,
+      "topic_1960_2009": 26939,
+      "topic_1990_2009": 4580,
+      "topic_2010_plus": 2496,
+      "topic_pre_1960": 81619,
+      "name": "medicallibrary"
+    },
+    {
+      "clause": "collection:microlog",
+      "texts_items": 207863,
+      "topic_items": 13544,
+      "topic_1960_2009": 8726,
+      "topic_1990_2009": 6598,
+      "topic_2010_plus": 4379,
+      "topic_pre_1960": 0,
+      "name": "microlog"
+    },
+    {
+      "clause": "collection:mcgilluniversity",
+      "texts_items": 28270,
+      "topic_items": 417,
+      "topic_1960_2009": 12,
+      "topic_1990_2009": 3,
+      "topic_2010_plus": 1,
+      "topic_pre_1960": 401,
+      "name": "mcgilluniversity"
+    },
+    {
+      "clause": "collection:mcgilluniversityosler",
+      "texts_items": 1691,
+      "topic_items": 316,
+      "topic_1960_2009": 0,
+      "topic_1990_2009": 0,
+      "topic_2010_plus": 1,
+      "topic_pre_1960": 314,
+      "name": "mcgilluniversityosler"
+    },
+    {
+      "clause": "collection:medicalofficerofhealthreports",
+      "texts_items": 68430,
+      "topic_items": 65698,
+      "topic_1960_2009": 17410,
+      "topic_1990_2009": 20,
+      "topic_2010_plus": 0,
+      "topic_pre_1960": 48287,
+      "name": "medicalofficerofhealthreports"
+    },
+    {
+      "clause": "collection:wellcomelibrary",
+      "texts_items": 190702,
+      "topic_items": 76476,
+      "topic_1960_2009": 18219,
+      "topic_1990_2009": 419,
+      "topic_2010_plus": 31,
+      "topic_pre_1960": 58219,
+      "name": "wellcomelibrary"
+    },
+    {
+      "clause": "collection:ukmhl",
+      "texts_items": 240056,
+      "topic_items": 83111,
+      "topic_1960_2009": 18140,
+      "topic_1990_2009": 417,
+      "topic_2010_plus": 35,
+      "topic_pre_1960": 64927,
+      "name": "ukmhl"
+    },
+    {
+      "clause": "collection:(medicalheritagelibrary OR medicallibrary OR microlog OR mcgilluniversity OR mcgilluniversityosler OR medicalofficerofhealthreports OR wellcomelibrary OR ukmhl)",
+      "texts_items": 612220,
+      "topic_items": 125483,
+      "topic_1960_2009": 35687,
+      "topic_1990_2009": 11183,
+      "topic_2010_plus": 6876,
+      "topic_pre_1960": 81853,
+      "name": "bc_union"
+    },
+    {
+      "clause": "(publisher:(\"British Columbia\") OR creator:(\"British Columbia\")) AND collection:(medicalheritagelibrary OR medicallibrary OR microlog OR mcgilluniversity OR mcgilluniversityosler OR medicalofficerofhealthreports OR wellcomelibrary OR ukmhl)",
+      "texts_items": 5409,
+      "topic_items": 502,
+      "topic_1960_2009": 236,
+      "topic_1990_2009": 193,
+      "topic_2010_plus": 162,
+      "topic_pre_1960": 101,
+      "name": "bc_issuer_in_union"
+    },
+    {
+      "clause": "collection:governmentpublications",
+      "texts_items": 104228,
+      "topic_items": 3413,
+      "topic_1960_2009": 2224,
+      "topic_1990_2009": 1352,
+      "topic_2010_plus": 44,
+      "topic_pre_1960": 151,
+      "name": "pilot_gov"
+    }
+  ],
+  "ocr_spotcheck": {
+    "sample_size": 25,
+    "with_usable_text": 25,
+    "with_usable_text_pct": 100.0,
+    "with_any_ocr": 25,
+    "with_any_ocr_pct": 100.0,
+    "format_counts": {
+      "DjVuTXT": 25,
+      "OCR Search Text": 25,
+      "hOCR": 25,
+      "chOCR": 25,
+      "Djvu XML": 25,
+      "Abbyy GZ": 5
+    },
+    "decade_counts": {
+      "1910s": 2,
+      "1920s": 10,
+      "1930s": 4,
+      "1990s": 1,
+      "2000s": 3,
+      "2010s": 5
+    },
+    "undated": 0
+  },
+  "sample_identifiers": [
+    "McGillLibrary-osl_hospital-medical-nursing-world_v20-n01-july-1921-20393",
+    "McGillLibrary-osl_hospital-medical-nursing-world_v20-n06-dec-1921-20396",
+    "McGillLibrary-osl_hospital-medical-nursing-world_v22-n02-aug-1922-20398",
+    "McGillLibrary-osl_hospital-medical-nursing-world_v28-n03-sept-1925-20421",
+    "McGillLibrary-osl_hospital-medical-nursing-world_v29-n06-june-1926-20424",
+    "McGillLibrary-osl_hospital-medical-nursing-world_v24-n01-july-1923-20400",
+    "McGillLibrary-osl_hospital-medical-nursing-world_v25-n02-feb-1924-20405",
+    "McGillLibrary-osl_hospital-medical-nursing-world_v27-n04-apr-1925-20418",
+    "McGillLibrary-osl_hospital-medical-nursing-world_v5-n05-may-1914-20357",
+    "micro_IA40243301_3030",
+    "micro_IA04244210_0215",
+    "currentissuesinh0000brow",
+    "micro_IA40243303_0715",
+    "healthgoalsforbr0000brit",
+    "b31411897",
+    "micro_IA40242404_0280",
+    "b31411940",
+    "b31411952",
+    "b31411976",
+    "b31412038",
+    "micro_IA42404214_0131",
+    "micro_IA04244210_0207",
+    "McGillLibrary-osl_hospital-medical-nursing-world_v2-n04-oct-1912-20351",
+    "McGillLibrary-osl_hospital-medical-nursing-world_v25-n04-apr-1924-20407",
+    "micro_IA40242404_0284",
+    "micro_IA04244210_0206",
+    "micro_IA40242401_1952",
+    "micro_IA40242404_0295",
+    "micro_IA40242405_3298",
+    "micro_IA40244203_2018"
+  ],
+  "recommendation": {
+    "best_scope": "bc_issuer",
+    "best_clause": "(publisher:(\"British Columbia\") OR creator:(\"British Columbia\"))",
+    "topic_items": 590,
+    "topic_1960_2009": 278,
+    "ocr_usable_share": 1.0,
+    "estimated_usable_in_window": 278,
+    "clears_floor": false,
+    "verdict": "BC does not clear the 2,500 floor in the 1960-2009 window; a BC scope would need a lower floor, a wider window, or a broader topic term-set"
+  }
+}

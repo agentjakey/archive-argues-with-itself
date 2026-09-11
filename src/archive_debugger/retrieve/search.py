@@ -149,6 +149,19 @@ class Retriever:
             "later_years": self._later_years(r["year"], r["text"]),
         }
 
+    def lookup(self, passage_ids: list[str]) -> list[dict]:
+        """Provenance rows for known passage ids, in the given order, without ranking
+        (stories and pinned comparisons). Unknown ids raise LookupError."""
+        meta = self._passage_meta(set(passage_ids))
+        out = []
+        for pid in passage_ids:
+            hit = self._provenance(pid, 0.0)
+            hit["bm25_rank"] = None
+            hit["dense_rank"] = None
+            hit["section_class"] = (meta.get(pid, (None, None, None))[1]) or "body"
+            out.append(hit)
+        return out
+
     def search(self, query: str, filters: Optional[Filters] = None, top_k: int = 20) -> list[dict]:
         where, params = build_where(filters or Filters(), doc_type_families=self.cfg.active_families())
         bm = self._bm25(query, where, params, self.cfg.candidates)

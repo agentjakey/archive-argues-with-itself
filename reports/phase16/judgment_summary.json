@@ -1,0 +1,11 @@
+{
+  "questions": 50,
+  "cached": 50,
+  "missing": [],
+  "answered": 40,
+  "abstained": 10,
+  "sentences": 190,
+  "unsupported_sentences": 3,
+  "model": "claude-haiku-4-5-20251001",
+  "provider": "anthropic"
+}

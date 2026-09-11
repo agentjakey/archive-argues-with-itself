@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-_ENV_OVERRIDES = ("CIVIC_DB_PATH", "CIVIC_INDEX_PATH", "CIVIC_CACHE_PATH")
+_ENV_OVERRIDES = ("CIVIC_DB_PATH", "CIVIC_INDEX_PATH", "CIVIC_CACHE_PATH", "CIVIC_EMBEDDER")
 
 
 @pytest.fixture(autouse=True)

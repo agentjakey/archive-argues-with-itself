@@ -1,0 +1,84 @@
+{
+  "items": 3477,
+  "coverage_cells": 1075,
+  "undated_before_recovery": {
+    "items": 1029,
+    "passages": 347807
+  },
+  "recovered_from_title": {
+    "items": 36,
+    "passages": 9469
+  },
+  "undated_after_recovery": {
+    "items": 993,
+    "passages": 338338
+  },
+  "jurisdiction_distribution": {
+    "ontario": 1024,
+    "unknown": 301,
+    "alberta": 949,
+    "federal": 1198,
+    "international": 5
+  },
+  "jurisdiction_unknown_pct": 8.66,
+  "issuer_method_distribution": {
+    "alias": 1437,
+    "unmapped": 1836,
+    "unknown": 204
+  },
+  "unmapped_issuer_items": 1836,
+  "unmapped_issuer_distinct": 805,
+  "doc_type_distribution": {
+    "other": 2466,
+    "statistical_report": 156,
+    "annual_report": 282,
+    "royal_commission": 351,
+    "standing_committee": 170,
+    "commission": 28,
+    "board_or_appeal": 24
+  },
+  "jurisdiction_by_period": {
+    "alberta": {
+      "1960s": 61,
+      "1970s": 94,
+      "1980s": 168,
+      "1990s": 374,
+      "2000s": 185,
+      "post-2009": 6,
+      "pre-1960": 57,
+      "undated": 4
+    },
+    "federal": {
+      "1960s": 40,
+      "1970s": 52,
+      "1980s": 215,
+      "1990s": 257,
+      "2000s": 193,
+      "post-2009": 10,
+      "pre-1960": 55,
+      "undated": 376
+    },
+    "international": {
+      "1980s": 5
+    },
+    "ontario": {
+      "1960s": 10,
+      "1970s": 75,
+      "1980s": 169,
+      "1990s": 165,
+      "2000s": 61,
+      "post-2009": 28,
+      "pre-1960": 29,
+      "undated": 487
+    },
+    "unknown": {
+      "1960s": 5,
+      "1970s": 3,
+      "1980s": 38,
+      "1990s": 62,
+      "2000s": 49,
+      "pre-1960": 18,
+      "undated": 126
+    }
+  }
+}

@@ -11,8 +11,11 @@ notes/
 .github/
 .pytest_cache/
 __pycache__/
-web/node_modules/
-web/src/
 tests/
+scripts/
+docs/
 .env
 .env.*
+# The web app is built inside the image (node stage); a laptop build must not leak in.
+web/node_modules/
+web/dist/

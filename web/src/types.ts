@@ -107,6 +107,15 @@ export interface EvidenceRow {
   in_prompt: boolean;               // false for pool rows the model never saw
   section_class: "front" | "body" | "back" | string;
   later_years: number[] | null;     // years in the text later than the item year + 1
+  offline?: boolean;                // page images come from the offline pack (API path), not archive.org
+}
+
+export interface Story {
+  id: string;
+  question: string;
+  filters: Filters;
+  caption: string;
+  pins: [EvidenceRow, EvidenceRow];
 }
 
 export interface AskResponse {

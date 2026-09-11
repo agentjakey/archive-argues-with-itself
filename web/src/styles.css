@@ -205,6 +205,34 @@ body.kiosk .chip {
   @apply bg-rule;
 }
 
+/* --- stories --- */
+.thumb-sm {
+  @apply block h-auto bg-paper;
+  width: 72px;
+  box-shadow: 0 1px 3px rgba(28, 26, 23, 0.18), 0 6px 14px rgba(28, 26, 23, 0.08);
+}
+
+/* --- reading pages (How this works, Gaps, About) --- */
+.reading-body p {
+  @apply mb-4;
+}
+
+.reading-body h3 {
+  @apply font-serif text-lg mt-6 mb-2 border-b border-rule pb-1;
+}
+
+.reading-body ol {
+  @apply list-decimal pl-6 space-y-2 mb-4;
+}
+
+.reading-body .tag {
+  @apply ml-1;
+}
+
+.no-underline {
+  text-decoration: none;
+}
+
 /* --- drawer --- */
 .drawer {
   @apply fixed top-0 right-0 z-30 h-full w-full md:w-[min(720px,60vw)] bg-sheet border-l border-rule overflow-y-auto;

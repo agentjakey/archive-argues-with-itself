@@ -1,121 +1,145 @@
 # Deploying
 
-Two pieces: the read-only API (FastAPI, Docker, Fly.io, with the two data files
-on a volume) and the web app (Vite, Vercel, pointed at the API). The API also
-serves `web/dist` itself, so Vercel is optional; the single-process laptop
-fallback at the end needs neither.
+The API runs from one Docker image on any host with a persistent disk. On first
+boot the container downloads the two data files (about 3.2 GiB) from a GitHub
+release, verifies their checksums, and serves; on every later boot it verifies
+the files already on the disk and starts in seconds. The web app is built inside
+the image and served at `/`.
 
-Nothing here is automatic. Every command is run by hand; nothing in CI deploys.
+The steps below use Railway. Nothing deploys automatically from CI.
 
-## Paths and environment
+## What you need
 
-The config paths in `config/pilot.toml` are overridable by environment
-variables, so the same image runs against a mounted volume:
+- A GitHub account with this repository (fork or clone), `gh` installed and
+  logged in (`gh auth login`), for the one-time data release.
+- A Railway account connected to GitHub.
+- Your Anthropic API key.
+- The two data files on your machine, built by the Reproduce steps in the README
+  (or downloaded from an existing release, see the README "Run it yourself").
 
-| variable | overrides | container default |
+## Environment variables
+
+| variable | value on Railway | meaning |
 | --- | --- | --- |
-| `CIVIC_DB_PATH` | `[index].db_path` | `/data/civic.db` |
-| `CIVIC_INDEX_PATH` | `[retrieve].index_path` | `/data/index/vectors.db` |
-| `CIVIC_CACHE_PATH` | answer cache file | `/data/cache/answers.db` |
-| `PORT` | uvicorn port | `8080` |
-| `ALLOWED_ORIGINS` | CORS allow-list (comma-separated); unset = same-origin only | (secret) |
-| `ANTHROPIC_API_KEY` | the only external call the server makes | (secret) |
+| `CIVIC_DB_PATH` | `/data/civic.db` | corpus database on the volume |
+| `CIVIC_INDEX_PATH` | `/data/index/vectors.db` | dense index on the volume |
+| `CIVIC_CACHE_PATH` | `/data/cache/answers.db` | answer cache (image default; set it only to move it) |
+| `DATA_RELEASE_URL` | `https://github.com/<you>/archive-argues-with-itself/releases/download/data-v1` | base URL of the release assets; the container downloads `civic.db`, `vectors.db`, `data-release.sha256` from it |
+| `ANTHROPIC_API_KEY` | your key | the only external call the server makes |
+| `ALLOWED_ORIGINS` | (unset) | only for a separately hosted web app; comma-separated origins |
+| `PORT` | set by Railway | uvicorn listens on it |
 
-The Dockerfile bakes the query embedding model into the image at build time, so
-the running container makes no download; its only network call is the LLM API.
+## Steps
 
-## 1. Fly.io (API)
+1. **Push** the repository to GitHub (your fork or your own repo).
 
-Prerequisites: `flyctl` installed and logged in (`fly auth login`); the web app
-built locally so `web/dist` exists (`cd web && npm ci && npm run build`); the
-two data files present locally (`civic.db` ~1.9 GB, `index/vectors.db` ~1.5 GB).
+2. **Publish the data release** (one time, from the repo root, with the data files
+   at the paths in your `.env`):
 
-```powershell
-# from the repo root
+   ```powershell
+   .\.venv\Scripts\python.exe scripts\make_data_release.py
+   ```
 
-# 1. Create the app from fly.toml without deploying. Accept the existing config.
-fly launch --no-deploy --copy-config --name archive-argues-with-itself --region sea
+   It writes `data-release.sha256` and prints the exact `gh release create data-v1 ...`
+   command with both files and the checksum file as assets. Run that command. The
+   upload is bound by your uplink (3.2 GiB; at 25 Mbps about 18 minutes). Each asset
+   is under GitHub's 2 GiB per-file limit; the script refuses larger files.
 
-# 2. Create the 10 GB volume the config mounts at /data.
-fly volumes create civic_data --region sea --size 10 --app archive-argues-with-itself
+3. **Railway: New Project -> Deploy from GitHub repo**, pick the repository.
+   Railway reads `railway.json` (Dockerfile build, health check on `/health`,
+   one replica, restart on failure). The first build takes several minutes:
+   node stage, python stage, and the embedding model baked into the image.
 
-# 3. Secrets. ALLOWED_ORIGINS is the Vercel origin(s); omit it if the API serves
-#    the web app itself (same origin).
-fly secrets set --app archive-argues-with-itself `
-  ANTHROPIC_API_KEY=<your key> `
-  ALLOWED_ORIGINS=https://<vercel-app>.vercel.app
+4. **Add a volume**: in the service, Settings -> Volumes -> Add Volume, mount
+   path `/data`, size 10 GB (data 3.2 GiB, cache, and headroom for a resumed
+   download's partial file).
 
-# 4. First deploy. The container starts, finds no data files, and waits (the
-#    entrypoint polls every 30 s); the health check stays red until step 5.
-fly deploy --app archive-argues-with-itself
+5. **Set variables** (service -> Variables): `CIVIC_DB_PATH`, `CIVIC_INDEX_PATH`,
+   `DATA_RELEASE_URL` (with your GitHub user and the tag from step 2), and
+   `ANTHROPIC_API_KEY`, with the values from the table above.
 
-# 5. Upload the data files onto the volume (sftp goes through the running
-#    machine; 3.4 GB takes a while on a home uplink).
-fly sftp shell --app archive-argues-with-itself
-#   at the ">>" prompt:
-#   mkdir /data/index
-#   put civic.db /data/civic.db
-#   put index/vectors.db /data/index/vectors.db
-#   exit
+6. **Deploy** (Railway redeploys when variables change; otherwise Deploy from
+   the service menu).
 
-# 6. The waiting entrypoint picks the files up on its next poll and starts
-#    uvicorn. Confirm:
-fly logs --app archive-argues-with-itself
-curl https://archive-argues-with-itself.fly.dev/health
-```
+7. **Watch the logs**. You will see `civic.db: downloading from ...`, a line every
+   100 MB with the rate, `checksum ok` for each file, then
+   `Application startup complete`. The health check waits up to 30 minutes for
+   this first boot (`healthcheckTimeout` in `railway.json`); GitHub releases
+   usually download at tens of MB/s, so expect a few minutes. If the download is
+   interrupted the container restarts and resumes from the partial file.
 
-Redeploys (`fly deploy`) keep the volume; the data files are uploaded once.
-Rebuilding the corpus locally means re-running step 5 and deleting
-`/data/cache/answers.db` on the volume (`fly ssh console` then `rm`), because
-cached answers were generated against the old index.
+8. **Open the public domain**: Settings -> Networking -> Generate Domain. Open it;
+   the reading-room UI loads, `/health` shows `items: 3477`.
 
-Sizing: `[[vm]] memory = "4gb"` in `fly.toml` is the working assumption for a
-flat cosine scan over 745,893 vectors plus the sqlite page cache; watch
-`fly status` and query latency before dropping it. `auto_stop_machines` is off
-so the page cache is not lost between visitors.
+9. **Smoke test** from your machine (no key needed, no model called):
 
-## 2. Vercel (web app)
+   ```powershell
+   .\.venv\Scripts\python.exe scripts\smoke.py https://<your-service>.up.railway.app
+   ```
 
-The web app is a static Vite build under `web/`. `web/vercel.json` sets the
-framework, install/build commands, output directory, and the SPA rewrite. The
-one variable is `VITE_API_BASE`, the API origin without a trailing slash; it is
-compiled into the bundle at build time.
+10. **Warm the answer cache** (real provider; prints a cost estimate and asks
+    before sending; safe to re-run, cached questions are free):
 
-Dashboard route: New Project, import the GitHub repo, set **Root Directory** to
-`web`, add environment variable `VITE_API_BASE = https://archive-argues-with-itself.fly.dev`
-for Production (and Preview if wanted), Deploy.
+    ```powershell
+    .\.venv\Scripts\python.exe scripts\warm_cache.py https://<your-service>.up.railway.app
+    ```
 
-CLI route:
+Later deploys keep the volume; the files are verified, not re-downloaded. A new
+corpus is a new release tag (`data-v2`) and a changed `DATA_RELEASE_URL`: the
+container sees the checksum mismatch, re-downloads, and the answer cache
+invalidates itself because its key includes the data files' size and mtime.
 
-```powershell
-cd web
-vercel link                                           # choose or create the project; root is this directory
-vercel env add VITE_API_BASE production               # paste: https://archive-argues-with-itself.fly.dev
-vercel --prod
-```
+## Sizing (measured)
 
-Then put the resulting origin into the API's `ALLOWED_ORIGINS` secret (step 3
-above; comma-separate several origins, for example a preview URL). Without it
-the browser blocks the cross-origin `/ask` call.
+- Disk: data 3.2 GiB (civic.db 1,878,642,688 bytes, vectors.db 1,557,426,176
+  bytes) plus the answer cache; a resumed download needs no extra space beyond
+  the partial file itself. 10 GB is comfortable; 5 GB works.
+- Memory: inside this image on a Linux volume, after `/health`, `/examples`,
+  `/ask`, `/coverage`: RSS high-water mark 737 MB, container 681 MiB. 2 GB runs
+  it; 4 GB also keeps both data files in page cache, which is what makes the
+  dense flat scan take about two seconds instead of a disk read per query
+  (stub `/ask` 1.6 s, `/coverage` 2.2 s measured with the files cached). On
+  Railway, memory is allocated on demand up to the plan limit; if `/ask` is slow,
+  the plan's memory ceiling is the first thing to check.
 
-## 3. Laptop fallback (single process, no cloud)
+## Fly, Hugging Face Space, or any Docker host
 
-The API serves `web/dist` at `/`, so one process is the whole demo:
+The same image and the same environment variables work anywhere with a
+persistent disk mounted at the `CIVIC_*` paths: build the `Dockerfile`, mount a
+disk at `/data`, set `DATA_RELEASE_URL` and `ANTHROPIC_API_KEY`, expose `$PORT`
+(default 8080), and point the host's health check at `/health` with a start
+period long enough for the first download. Without `DATA_RELEASE_URL` the
+container waits for the files to appear under `/data` (for hosts where you copy
+them in by hand) and starts as soon as they do, without checksum verification.
 
-```powershell
-cd web; npm ci; npm run build; cd ..
-.\.venv\Scripts\python.exe -m uvicorn archive_debugger.api.app:app --host 0.0.0.0 --port 8000
-```
-
-Open `http://<laptop-ip>:8000/` from any device on the same network (append
-`?kiosk=1` for the exhibit mode). `ANTHROPIC_API_KEY` comes from `.env` in the
-repo root; `ALLOWED_ORIGINS` is not needed because everything is same-origin.
-The same container runs locally too:
+## Local check with Docker
 
 ```powershell
 docker build -t archive-argues .
-docker run --rm -p 8080:8080 --env-file .env `
-  -v "${PWD}\civic.db:/data/civic.db:ro" `
-  -v "${PWD}\index\vectors.db:/data/index/vectors.db:ro" `
-  archive-argues
+docker volume create civic_data_local
+docker run -d --name archive-argues -p 8080:8080 --memory 4g --env-file .env `
+  -e DATA_RELEASE_URL=https://github.com/<you>/archive-argues-with-itself/releases/download/data-v1 `
+  -v civic_data_local:/data archive-argues
+docker logs -f archive-argues                    # download progress, then "Application startup complete"
+.\.venv\Scripts\python.exe scripts\smoke.py http://127.0.0.1:8080
+docker rm -f archive-argues                      # the volume keeps the files
 ```
+
+(Use a named volume, not a Windows bind mount of the data files: Docker
+Desktop's file share cannot stream the 1.45 GiB flat scan and `/ask` times out.)
+
+## Troubleshooting
+
+- Log says `missing [...] and DATA_RELEASE_URL is not set`: set the variable
+  (step 5); the container retries every 30 s.
+- `download error: HTTP Error 404`: the tag or asset name in `DATA_RELEASE_URL`
+  is wrong; it must end in `/releases/download/<tag>` and the release must hold
+  `civic.db`, `vectors.db`, `data-release.sha256`.
+- `downloaded file does not match data-release.sha256`: the release assets and
+  the checksum file are from different builds; re-run `make_data_release.py`
+  and upload all three together.
+- `/ask` returns `{"error": "ANTHROPIC_API_KEY is not set on the server"}`: set
+  the variable; Railway redeploys.
+- Health check fails after the download finished: check the service is on the
+  port Railway injects as `PORT` (the entrypoint uses it) and that the volume is
+  mounted at `/data`.

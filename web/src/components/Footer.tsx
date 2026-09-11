@@ -1,4 +1,8 @@
-export function Footer() {
+interface Props {
+  onAbout?: () => void;
+}
+
+export function Footer({ onAbout }: Props) {
   return (
     <footer className="mt-12 border-t border-rule pt-4 text-sm text-muted">
       <p>
@@ -6,7 +10,16 @@ export function Footer() {
         <a className="linkish" href="https://github.com/agentjakey/archive-argues-with-itself" target="_blank" rel="noopener noreferrer">
           Source on GitHub
         </a>
-        . Evidence links open archive.org.
+        , MIT. Evidence links open archive.org; page images are served by archive.org and not redistributed.
+        {onAbout && (
+          <>
+            {" "}
+            <button type="button" className="linkish" onClick={onAbout}>
+              About
+            </button>
+            .
+          </>
+        )}
       </p>
     </footer>
   );
