@@ -1,5 +1,5 @@
 {
-"_meta": {"source": "Phase 13 pooled-labels extension, batch 2: the 35 passages left uncertain in batch 1, decided from the same worksheet excerpts. Rule unchanged: r only if the passage text itself answers the question; single-period statements count for comparison questions, as in Phase 7; named-body questions require the named body; out-of-window probes stay n. Proposed by an LLM assistant, reviewed and decided by Jake. Additive: no earlier label changed. Reasons in eval/gold_extension_notes.md, batch 2.", "worksheet": "reports/phase13/extension_worksheet.jsonl"},
+"_meta": {"source": "Phase 13 pooled-labels extension, batch 2: the 35 passages left uncertain in batch 1, decided from the same worksheet excerpts. Rule unchanged: r only if the passage text itself answers the question; single-period statements count for comparison questions, as in Phase 7; named-body questions require the named body; out-of-window probes stay n. Proposed by an LLM assistant, reviewed and decided by Jacob Ortiz. Additive: no earlier label changed. Reasons in eval/gold_extension_notes.md, batch 2.", "worksheet": "reports/phase13/extension_worksheet.jsonl"},
 "q001": {"r": [], "n": [12, 19]},
 "q002": {"r": [], "n": [20]},
 "q003": {"r": [], "n": [17]},

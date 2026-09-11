@@ -1,10 +1,19 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it."
 type: software
-title: "archive-argues-with-itself: a civic memory debugger"
-version: 0.0.0
+title: "Archive Argues With Itself: a civic memory debugger"
+version: 1.0.0
+date-released: 2026-09-11
 license: MIT
 repository-code: "https://github.com/agentjakey/archive-argues-with-itself"
+url: "https://github.com/agentjakey/archive-argues-with-itself"
+abstract: "A civic memory tool over Canadian government public-health publications held by the Internet Archive (about 1960-2009): page-level provenance on every claim, decade comparison, visible coverage gaps and OCR uncertainty, and code-decided abstention."
 authors:
   - family-names: Ortiz
     given-names: Jacob
+keywords:
+  - civic memory
+  - Internet Archive
+  - retrieval
+  - provenance
+  - Canadian government publications

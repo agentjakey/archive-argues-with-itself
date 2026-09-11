@@ -80,7 +80,7 @@ gives the measurements.
 
 Sources: `eval/labeling_notes.md`, `reports/phase7/eval_report.md`.
 
-50 seed questions. The candidate pool for each was the retriever's top-30; Jake
+50 seed questions. The candidate pool for each was the retriever's top-30; Jacob Ortiz
 labeled every candidate (r only if the passage text itself answers the
 question) and gave each question a verdict: 35 answerable, 15 should-abstain;
 1,500 candidate labels, 340 relevant. Metrics are pooled recall@k and nDCG@10
@@ -158,7 +158,7 @@ page range or an author entry with a nearby year and read 18 / 20.
 
 The candidate configuration (demotion with front 0.5 / back 0.5, stopword
 dropping, doc_type family filter, per-item cap 5, later-years annotation)
-surfaced 315 passages in its top-20 that no human had judged. Jake labeled them
+surfaced 315 passages in its top-20 that no human had judged. Jacob Ortiz labeled them
 in two batches: 280 labels (30 relevant) with 35 left uncertain, then those 35
 (6 relevant, 29 not). No earlier label or verdict changed. Gold is now 1,815
 labels, 376 relevant, and every passage in the candidate's top-20 is judged.
@@ -179,14 +179,45 @@ q008 (0.69 -> 0.61), q033 (0.20 -> 0.13). The frozen thinness sweep on the
 candidate: 0 answerable would abstain, 6 of 15 should-abstain abstain, 9 would
 answer; the baseline sweep still reads 1 / 6.
 
-Disclosure, from `eval/labeling_notes.md` (Methods): candidate labels for both
-extension batches were proposed by an LLM assistant from the worksheet excerpts
-and each was reviewed and decided by Jake. The same model family generates the
-system's answers, so the judge is not independent of the system.
+Disclosure, from `eval/labeling_notes.md` (Methods): All labels and judgments
+were decided by the author. To speed adjudication, candidate labels for the
+Phase 13 extension and the Phase 16 support judgments were first proposed by an
+assistant model and each was reviewed and decided by the author; the same model
+family generates the tool's answers, so this judge is not independent of the
+system.
 
-## 8. What is fixed by rule
+## 8. Audit of the shipped system (Phase 16)
 
-Four standing rules bind every phase (project `CLAUDE.md`): the only network
+Sources: `reports/phase16/audit_report.md`, `reports/phase16/holdout_run.md`,
+`eval/judgments_phase16.json`, `eval/judgments_phase16_notes.md`.
+
+Every seed question was run once through `/ask` with the configured model on the
+final configuration: 40 answered, 10 abstained; 190 sentences kept, 3 drafted
+sentences dropped by the verifier or the fact-leak guard. The author judged
+every kept sentence against the full text of its cited passages (s = every
+factual claim appears in the cited text; p = a claim, date or attribution is
+added or shifted; n = the sentence misstates the passage).
+
+| number | value |
+| --- | --- |
+| Citation support, strict (s only), kept sentences on the 35 answerable questions | 93.3% (166 of 178) |
+| Citation support, lenient (s + p) | 99.4% (177 of 178) |
+| Abstention, in-sample (15 should-abstain questions) | 10 of 15 abstained; 5 answered off target |
+| False abstentions, in-sample (35 answerable) | 0 of 35 |
+| Abstention, held-out (`eval/holdout_questions.jsonl`, one run) | 9 of 10 probes abstained (h009 answered); 4 of 5 answerable answered (h015 abstained at the gate on the word "federal") |
+| Retrieval recall@10 on the final gold, before -> after Phase 13 | 0.3470 -> 0.4581 |
+| Cited passages resolving to a recorded page | 119 of 119 (verifier check 3 guarantees it) |
+
+The five off-target answers (q015, q030, q036, q037, q049) are all-supported
+answers to a different question than the one asked, on the wrong period or the
+wrong object: verification guarantees support by the page, not relevance to the
+question. The 12 p and 1 n sentences are listed with the author's reason for each
+in the audit report; the shifts are added dates or periods, attributions moved
+from a quoted body to the report's author, and one inverted relation.
+
+## 9. What is fixed by rule
+
+Four standing rules bind every phase (the project's standing rules): the only network
 call outside harvest is the configured LLM API; citation verification is the
 three structural checks and text overlap is never reported as correctness;
 citations are page-level deep links with no coordinate storage; evaluation gold

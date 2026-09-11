@@ -2,25 +2,27 @@
 #
 # Layer separation is enforced by which target may touch the network:
 #   harvest -> network (Internet Archive) only.
-#   index / eval / serve -> local only, no network.
-#
-# Targets currently print a not-implemented notice. They name the entry points
-# that the corresponding layers will expose; wiring lands in later phases.
+#   ingest / index / eval / serve -> local only, no network (serve calls the configured model API).
 
 PYTHON ?= python
 CONFIG ?= config/pilot.toml
+CONTACT ?=
+BASE_URL ?= http://127.0.0.1:8000
 
-.PHONY: help install install-web harvest index eval serve web test
+.PHONY: help install install-web web-install web-build harvest ingest index eval serve web smoke test
 
 help:
 	@echo "Targets:"
 	@echo "  install      install the python package with dev extras"
 	@echo "  install-web  install web/ node dependencies"
-	@echo "  harvest      collect IA metadata + OCR into raw/ (network layer)"
-	@echo "  index        parse, normalize, and build the hybrid index (local)"
-	@echo "  eval         run retrieval + citation-support evaluation (local)"
-	@echo "  serve        run the read-only api over the built index (local)"
+	@echo "  web-build    typecheck, test, and build the web app into web/dist"
+	@echo "  harvest      collect IA metadata + OCR into raw/ (network layer; needs CONTACT=you@example.com)"
+	@echo "  ingest       load items, parse OCR, normalize, classify front/back matter (local)"
+	@echo "  index        build the dense vector index (local, one-time)"
+	@echo "  eval         load questions, apply the committed gold labels, score (local)"
+	@echo "  serve        run the read-only api over the built index"
 	@echo "  web          run the Vite dev server in web/"
+	@echo "  smoke        smoke-test a running api (BASE_URL=...)"
 	@echo "  test         run pytest"
 
 install:
@@ -33,22 +35,30 @@ web-build:
 	cd web && npm run typecheck && npm test && npm run build
 
 harvest:
-	@echo "harvest: not implemented yet -> src/archive_debugger/harvest (config: $(CONFIG))"
+	$(PYTHON) -m archive_debugger.harvest.fetch --config $(CONFIG) --download-all --contact "$(CONTACT)"
+
+ingest:
+	$(PYTHON) -m archive_debugger.ingest.loader --config $(CONFIG)
+	$(PYTHON) -m archive_debugger.ingest.build --config $(CONFIG) --fresh
+	$(PYTHON) -m archive_debugger.ingest.normalize --config $(CONFIG)
+	$(PYTHON) -m archive_debugger.ingest.sections --config $(CONFIG)
 
 index:
-	@echo "index: not implemented yet -> src/archive_debugger/ingest"
+	$(PYTHON) -m archive_debugger.retrieve.index --config $(CONFIG)
 
 eval:
-	@echo "eval: not implemented yet -> src/archive_debugger/eval"
+	$(PYTHON) -m archive_debugger.eval.questions --config $(CONFIG) --file eval/seed_questions.jsonl
+	$(PYTHON) -m archive_debugger.eval.label --config $(CONFIG) --from-worksheet reports/phase7/label_worksheet.jsonl --apply-decisions eval/gold_decisions.json
+	$(PYTHON) -m archive_debugger.eval.report --config $(CONFIG)
 
 serve:
 	$(PYTHON) -m uvicorn archive_debugger.api.app:app --host 127.0.0.1 --port 8000
 
-smoke:
-	$(PYTHON) scripts/smoke.py $(or $(BASE_URL),http://127.0.0.1:8000)
-
 web:
 	cd web && npm run dev
+
+smoke:
+	$(PYTHON) scripts/smoke.py $(BASE_URL)
 
 test:
 	$(PYTHON) -m pytest

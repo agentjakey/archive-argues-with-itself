@@ -1,5 +1,5 @@
 {
-"_meta": {"source": "Phase 13 pooled-labels extension. Decisions by Jake over reports/phase13/extension_worksheet.jsonl (candidate retriever top-20, passages with no Phase 7 label). Same rule as gold_decisions.json: r only if the passage text itself answers the question. u = uncertain: no label written, passage stays unjudged. Additive: no Phase 7 label was changed. Reasons per question in eval/gold_extension_notes.md.", "worksheet": "reports/phase13/extension_worksheet.jsonl", "applied_with": "python -m archive_debugger.eval.extend --apply eval/gold_extension_decisions.json"},
+"_meta": {"source": "Phase 13 pooled-labels extension. Decisions by Jacob Ortiz over reports/phase13/extension_worksheet.jsonl (candidate retriever top-20, passages with no Phase 7 label). Same rule as gold_decisions.json: r only if the passage text itself answers the question. u = uncertain: no label written, passage stays unjudged. Additive: no Phase 7 label was changed. Reasons per question in eval/gold_extension_notes.md.", "worksheet": "reports/phase13/extension_worksheet.jsonl", "applied_with": "python -m archive_debugger.eval.extend --apply eval/gold_extension_decisions.json"},
 "q001": {"r": [6, 7, 9, 10, 13, 20], "u": [12, 19]},
 "q002": {"r": [9, 11, 14, 19], "u": [20]},
 "q003": {"r": [14], "u": [17]},

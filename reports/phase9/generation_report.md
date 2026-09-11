@@ -194,7 +194,7 @@ abstain to answer under the amendment because "recommend" is now a stopword and
 ## Live samples
 
 Recorded live runs (provider anthropic, model claude-haiku-4-5-20251001, temperature
-0.0 sent in the request body), saved by Jake under reports/phase9/samples/ and
+0.0 sent in the request body), saved by Jacob Ortiz under reports/phase9/samples/ and
 reproduced here verbatim, trimmed to sentences, citations, unsupported, coverage,
 and generation. The files carry a UTF-8 BOM from the PowerShell redirect.
 q034.json and q034_rerun.json are byte-identical (sha256

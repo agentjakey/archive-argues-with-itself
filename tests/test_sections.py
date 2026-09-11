@@ -54,7 +54,7 @@ AUTHORS = ("Kaiserman MJ, Collishaw NE. Trends in Canadian tobacco consumption, 
            "Gordon, P.R., Carlson, L., et coll. 1996. A multisite collaborative for the development.\n")
 MINUTES = ("Thursday, May 26, 1988. The Chairman: The Chair sees a quorum.\n"
            "Members present: Bridgman, M.P., Culbert, M.P., Hill, M.P., Jackson, M.P., Patry, M.P., Picard, M.P.\n"
-           "Epp, P.C., Hon. Jake, Minister of National Health and Welfare, appeared as a witness.\n"
+           "Epp, P.C., Hon. Jacob Ortiz, Minister of National Health and Welfare, appeared as a witness.\n"
            "Anderson, R. C., M.D., F.R.C.S. Chief of Surgery. Bell, J. A., M.D. Director of Laboratories.\n"
            "Carter, W. H., M.D. Chief of Medicine. Dawson, K. L., M.D. Chief of Paediatrics.\n")
 

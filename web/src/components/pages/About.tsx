@@ -4,9 +4,10 @@ export function About() {
   return (
     <Page title="About">
       <p>
-        Archive Argues With Itself was built during the AI Builders Fellowship of the BC + AI Ecosystem, with
-        the Internet Archive. The pilot corpus is 3,477 Canadian government public-health publications held by
-        the Internet Archive, roughly 1960 to 2009.
+        The public record disagrees with itself across decades; this tool shows you the pages. It was built
+        by Jacob Ortiz during the AI Builders Fellowship of the BC + AI Ecosystem, with the Internet Archive,
+        whose collections, OCR and page images make it possible. The pilot corpus is 3,477 Canadian government
+        public-health publications held by the Internet Archive, roughly 1960 to 2009.
       </p>
       <h3>Where the pages come from</h3>
       <p>
@@ -21,8 +22,8 @@ export function About() {
       </p>
       <h3>Source</h3>
       <p>
-        The code, the evaluation questions, the human labels and the phase reports are open source under the
-        MIT licence at{" "}
+        The code, the evaluation questions, the human labels and the reports are open source under the MIT
+        licence at{" "}
         <a className="linkish" href="https://github.com/agentjakey/archive-argues-with-itself" target="_blank" rel="noopener noreferrer">
           github.com/agentjakey/archive-argues-with-itself
         </a>

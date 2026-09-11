@@ -81,7 +81,7 @@ The Hospital for Sick Children inquiry items are classified
 filter is `doc_type=commission`, so the filter routed away from the documents.
 Phase 13 added a configurable doc_type family (commission includes
 royal_commission) for filtering; stored values were not rewritten. q022 remains
-a should-abstain question by Jake's verdict.
+a should-abstain question by Jacob Ortiz's verdict.
 
 ## Housing was the proposal's example, not the pilot
 
@@ -116,11 +116,28 @@ downstream, sentence by sentence.
 
 Source: `eval/labeling_notes.md` (Methods).
 
-For the Phase 13 gold extension (315 passages in two batches), candidate labels
-were proposed by an LLM assistant from the worksheet excerpts and each was
-reviewed and decided by Jake. The same model family generates the answers. The
-labels are Jake's decisions, but the proposals that framed them were not, and
-the numbers in the Phase 13 table should be read with that in mind.
+All labels and judgments were decided by the author. To speed adjudication,
+candidate labels for the Phase 13 extension and the Phase 16 support judgments
+were first proposed by an assistant model and each was reviewed and decided by
+the author; the same model family generates the tool's answers, so this judge is
+not independent of the system. The Phase 13 retrieval table and the Phase 16
+support rates should be read with that in mind.
+
+## What the audit measured
+
+Source: `reports/phase16/audit_report.md`, `reports/phase16/holdout_run.md`.
+
+Every seed question once, configured model, final configuration; sentence
+judgments by the author. Strict citation support (every claim in the cited
+text) 93.3% (166 of 178 kept sentences on the 35 answerable questions); lenient
+(supported or partly) 99.4% (177 of 178); the one "not" sentence inverted a
+relation ("part of a series from the Centre" read as the Centre being part of a
+series); the 11 "partly" sentences added a date or period, or moved an
+attribution from a quoted body to the report's author. Abstention 10 of 15
+in-sample; held-out 9 of 10 probes abstained and 4 of 5 answerable questions
+answered; false abstentions 0 of 35 in-sample and 1 of 5 held-out (h015, on the
+question word "federal", which no passage repeats). Recall@10 0.3470 -> 0.4581.
+Cited passages resolving to a recorded page 119 of 119.
 
 ## Verification checks support, not relevance
 
@@ -128,7 +145,7 @@ Source: `reports/phase16/audit_report.md`; `reports/phase13/retrieval_report.md`
 
 In the Phase 16 audit run (every seed question once, real provider, final
 configuration), the tool abstained on 10 of the 15 should-abstain questions and
-answered 5 (q015, q030, q036, q037, q049). Jake's judgment of those five: each
+answered 5 (q015, q030, q036, q037, q049). Jacob Ortiz's judgment of those five: each
 is an all-supported answer to a different question than the one asked, on the
 wrong period or the wrong object. Every sentence cited a real passage that was
 in the evidence and resolved to a recorded page, and said what the passage said;
@@ -140,6 +157,32 @@ pass the gate (`retrieval_report.md`, final sweep); five did and answered off
 target, four passed the gate and then abstained downstream when no sentence
 survived. False abstentions on the 35 answerable questions: 0 in the run, as
 the sweep predicted.
+
+Held out: 15 questions written after the rule and the retrieval configuration
+were frozen, never used in any sweep or design decision, verdicts assigned before
+the single run (`eval/holdout_questions.jsonl`, `reports/phase16/holdout_run.md`).
+9 of 10 should-abstain probes abstained; 4 of 5 answerable questions answered.
+These are the only abstention figures that were not available while the rule
+was designed. The two misses, recorded after that single run with no rule
+changed:
+
+- **h009, "What did reports say about injuries from electric scooters?"
+  answered.** The gate covers a term if any retrieved passage contains it, and
+  "scooters" is covered: the two kept sentences cite an undated child-safety
+  pamphlet ("tricycles, carts, wagons and scooters are very dangerous under a
+  child's care") and a 1988 occupational-health report ("steering on scooters
+  needs adjusting" under equipment maintenance). The lexical gate cannot
+  separate electric scooters from toy or workplace scooters, and every sentence
+  is supported by its page. Same class as the five in-sample off-target answers:
+  verification checks support, not relevance.
+- **h015, "What did federal reports say about the mass influenza vaccination
+  program announced in 1976?" abstained at the gate.** "federal" is a salient
+  term under the frozen rule and no retrieved passage contains the word; the
+  passages that describe the program refer to the federal government by other
+  names. The frozen stoplist's actor-noun criterion holds "government",
+  "department", "ministry" and "agency" but not "federal" (nor "provincial").
+  "federal" is the first candidate for a v2 stoplist, if one is ever opened; the
+  v1 rule stands unchanged, and this false abstention counts against it.
 
 ## British Columbia is not a second scope on this archive
 

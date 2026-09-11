@@ -49,7 +49,7 @@ to a page.
 ## Phase 7: evaluation
 `reports/phase7/eval_report.md`, `eval/labeling_notes.md`
 
-50 seed questions; Jake labeled the top-30 candidates of each (1,500 labels, 340
+50 seed questions; Jacob Ortiz labeled the top-30 candidates of each (1,500 labels, 340
 relevant) and gave verdicts (35 answerable, 15 should-abstain). Pooled
 recall@5/10/20 = 0.1928 / 0.4083 / 0.6823, nDCG@10 = 0.442. No abstention rate is
 reported; an abstention-leakage view shows 0 relevant marks on every
@@ -106,7 +106,7 @@ Five switchable changes measured one at a time and together: front/back-matter
 demotion from a deterministic page classifier (back precision 18 / 20 after a
 tightened citation pattern), stopword dropping, a doc_type family filter, a
 per-item cap, and a later-years annotation. The candidate's 315 unjudged top-20
-passages were labeled by Jake in two batches (additive; gold now 1,815 labels,
+passages were labeled by Jacob Ortiz in two batches (additive; gold now 1,815 labels,
 376 relevant). On the fully judged gold: baseline recall@10 0.3470 /
 nDCG@10 0.4174 versus candidate 0.4581 / 0.5082. The candidate is on in config;
 the correlated-judge disclosure is recorded in the labeling notes.
@@ -126,14 +126,25 @@ returns home). An offline pack of page images fetched once from archive.org and
 served by the API when present, so a laptop with no internet still shows real
 pages; the model is called only for questions not in the cache.
 
-## Phase 16: audit run (in progress)
-`reports/phase16/judgment_worksheet.md`
+## Phase 16: audit
+`reports/phase16/audit_report.md`, `reports/phase16/holdout_run.md`, `eval/judgments_phase16.json`
 
-Every seed question answered once by the real provider on the final
-configuration: 40 answered, 10 abstained, 190 kept sentences, 3 sentences
-dropped by the verifier or fact-leak guard. The sentence-level judgment
-worksheet (each sentence with the full text of its cited passages) awaits Jake's
-supported / partly / not marks; the headline numbers follow from those.
+Every seed question answered once by the configured model on the final
+configuration: 40 answered, 10 abstained, 190 kept sentences, 3 dropped by the
+verifier or fact-leak guard. Every kept sentence judged by the author against the
+full text of its cited passages: on the 35 answerable questions 166 supported, 11
+partly, 1 not (strict 93.3%, lenient 99.4%). Abstention 10 of 15 in-sample, with
+the 5 answered being supported answers to the wrong period or object; false
+abstentions 0 of 35. Fifteen held-out questions written after everything was
+frozen: 9 of 10 probes abstained, 4 of 5 answerable answered. Recall@10 0.3470 to
+0.4581; 119 of 119 cited passages resolve to a recorded page.
+
+## Public release 1.0.0
+`README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CITATION.cff`
+
+README rewritten around the mission and the audit numbers; contribution guide,
+code of conduct, issue and pull-request templates; disclosure wording unified;
+author named throughout; phase numbering kept to reports and this changelog.
 
 ## BC scope audit
 `reports/bc_audit/bc_sizing.md`

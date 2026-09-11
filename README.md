@@ -1,26 +1,56 @@
-# archive-argues-with-itself
+# Archive Argues With Itself
 
-An open-source civic-memory tool over Canadian government public-health
-publications held by the Internet Archive. It answers civic questions from
-page-level evidence, compares how the record describes an issue across decades,
-and makes coverage gaps and OCR uncertainty visible. It is not a chatbot:
-provenance, coverage, and uncertainty are prioritized over fluency, every claim
-carries a page-level citation, and the tool never claims to reach the present
-(the pilot corpus is ~1960-2009). Scope is fixed by `docs/PROPOSAL.md`.
+[![CI](https://github.com/agentjakey/archive-argues-with-itself/actions/workflows/ci.yml/badge.svg)](https://github.com/agentjakey/archive-argues-with-itself/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](pyproject.toml)
+[![Node 20](https://img.shields.io/badge/node-20-blue.svg)](web/.nvmrc)
+[![Data release](https://img.shields.io/github/v/release/agentjakey/archive-argues-with-itself?filter=data-*&label=data%20release)](https://github.com/agentjakey/archive-argues-with-itself/releases)
 
-## Current state
+The public record disagrees with itself across decades. This tool shows you the pages.
 
-| Stage | Status | Output |
+Ask a civic question about Canadian government public-health publications (1960 to
+2009, held by the Internet Archive) and get the scanned pages that bear on it, an
+answer in which every sentence cites a page, a timeline of what the record holds
+by decade, and a plain statement when the record is too thin to answer.
+
+![Answer with page-level citations and the evidence trail](docs/images/hero.png)
+
+**Try it:** LIVE_URL
+
+## What it is, and is not
+
+It is a civic memory debugger: page-level provenance on every claim, a comparison
+view for how official language changes between decades, and a coverage view that
+shows where the archive is silent or undated. It is not a chatbot. Provenance,
+coverage and uncertainty are ranked above fluency; the model may only write
+sentences it can cite to a retrieved page, and the tool abstains when the
+evidence is thin. It never claims to reach the present: scanned government
+publications with OCR effectively stop around 2009.
+
+| Abstention with the coverage grid | Two pages, decades apart |
+| --- | --- |
+| ![Abstention card and coverage grid](docs/images/abstention.png) | ![Compare view](docs/images/compare.png) |
+
+## The numbers
+
+Measured on an audit run of all 50 evaluation questions with the shipped
+configuration; judgments and labels by the author. Details and every source file
+in [`reports/phase16/audit_report.md`](reports/phase16/audit_report.md).
+
+| what | value | where |
 | --- | --- | --- |
-| Harvest (IA metadata + OCR) | done | 3,477 Canadian-government texts (DjVu XML) under `raw/` |
-| Load + parse | done | 468,405 pages / 745,893 passages in `civic.db` |
-| Normalize + coverage | done | date / jurisdiction / issuer / doc_type + 1,075 coverage cells |
-| Hybrid index | done | `index/vectors.db` (BM25 + 384-dim dense) |
-| Page-level citations + verifier | done | fixed IA deep links + deterministic 3-check verifier |
-| Evaluation | done | 50 human-labeled questions; `reports/phase7/eval_report.md` |
-| Synthesis (`generate/`) | done | cited answers with code-decided abstention; deterministic citation verification |
-| Read-only API (`api/`) | done | FastAPI `/ask` (cached), `/coverage`, `/examples`, `/health` |
-| Web UI (`web/`) | done | reading-room evidence trail: answer with page-level citation chips, abstention card, decade timeline, page drawer, compare view; kiosk mode |
+| Citation support, strict: every claim in the sentence appears in the cited page (178 kept sentences on the 35 answerable questions) | 93.3% | [audit report](reports/phase16/audit_report.md), [judgments](eval/judgments_phase16.json) |
+| Citation support, lenient: supported or partly supported (same 178 sentences) | 99.4% | [audit report](reports/phase16/audit_report.md) |
+| Cited passages that resolve to a recorded page | 119/119 | [audit report](reports/phase16/audit_report.md) |
+| Abstention on questions the archive cannot answer | 10/15 in-sample; 9/10 held out | [audit report](reports/phase16/audit_report.md), [held-out run](reports/phase16/holdout_run.md) |
+| False abstention on answerable questions | 0/35 in-sample; 1/5 held out | [audit report](reports/phase16/audit_report.md), [held-out run](reports/phase16/holdout_run.md) |
+| Retrieval recall@10 on the fully judged gold, before and after the retrieval changes | 0.347 to 0.458 | [retrieval report](reports/phase13/retrieval_report.md) |
+
+Read these with two caveats stated in the reports: the abstention rule was
+amended once against the same 50 questions (the held-out set is the exception),
+and the candidate labels behind the gold extension and the sentence judgments
+were first proposed by an assistant model of the same family that writes the
+answers, then decided by the author.
 
 ## Quickstart
 
@@ -32,204 +62,115 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pytest        # hermetic: no network, no model, no index
 ```
 
-For synthesis, copy `.env.example` to `.env` and put your key in `ANTHROPIC_API_KEY`,
-or set `ANTHROPIC_API_KEY` in the environment. The key is never committed.
+For synthesis, copy `.env.example` to `.env` and fill in the API key line. The key
+is never committed.
 
 ## Run it yourself
 
-Two ways to get the corpus database and the dense index.
+Two ways to get the corpus database and the dense index (about 3.2 GiB).
 
-**Fast path: download the data release** (about 3.2 GiB; verify the checksums):
+**Fast path: download the data release** and verify the checksums:
 
 ```powershell
 $R = "https://github.com/agentjakey/archive-argues-with-itself/releases/download/data-v1"
 New-Item -ItemType Directory -Force C:\civic-data\index | Out-Null
-curl.exe -L -o C:\civic-data\civic.db          "$R/civic.db"
-curl.exe -L -o C:\civic-data\index\vectors.db  "$R/vectors.db"
+curl.exe -L -o C:\civic-data\civic.db            "$R/civic.db"
+curl.exe -L -o C:\civic-data\index\vectors.db    "$R/vectors.db"
 curl.exe -L -o C:\civic-data\data-release.sha256 "$R/data-release.sha256"
-# verify (Git Bash): cd /c/civic-data && sha256sum -c data-release.sha256   (vectors.db is under index/; check that line from index/)
+# verify (Git Bash): cd /c/civic-data && sha256sum -c data-release.sha256   (vectors.db is under index/)
 ```
 
-Then put `CIVIC_DB_PATH=C:\civic-data\civic.db` and
-`CIVIC_INDEX_PATH=C:\civic-data\index\vectors.db` in `.env` and start the API
-(Serve, below). Keep the files out of synced folders (OneDrive, Dropbox).
-
-**Reproducible path: rebuild from the manifest** with the Reproduce steps below
-(harvest from the Internet Archive, parse, normalize, classify pages, index).
-The item set is fixed by `data/manifest/`, so the rebuild yields the same corpus;
-the dense index is deterministic for the pinned model.
-
-To host it, see `docs/DEPLOY.md`: one Docker image that downloads the release on
-first boot, Railway steps, and the same image on any Docker host. To run it
-unattended on a laptop with no internet (warm cache, offline pack of page images,
-kiosk attract loop over `config/stories.json`), see `docs/DEMO.md`.
-
-## Reproduce
-
-Commands use the venv interpreter and default to `--config config/pilot.toml`.
-Only step 1 touches the network (Internet Archive); everything after runs offline
-from `raw/` and `civic.db`.
+Put `CIVIC_DB_PATH=C:\civic-data\civic.db` and
+`CIVIC_INDEX_PATH=C:\civic-data\index\vectors.db` in `.env` (keep the files out of
+synced folders), build the web app once, and serve:
 
 ```powershell
-# 1. Harvest: manifest, per-item metadata, and OCR derivatives into raw/
-python -m archive_debugger.harvest.fetch --download-all --contact you@example.com
-
-# 2. Ingest: load raw items, then parse cached OCR into pages and passages
-python -m archive_debugger.ingest.loader
-python -m archive_debugger.ingest.build --fresh
-
-# 3. Normalize dates / jurisdiction / issuer / doc_type and build coverage cells
-python -m archive_debugger.ingest.normalize
-python -m archive_debugger.ingest.sections                   # front/body/back page classes (~3 min; --limit N to time)
-
-# 4. Build the dense vector index (one-time, ~45-90 min on CPU, resumable)
-python -m archive_debugger.retrieve.index
-
-# 5. Evaluate: load questions, apply the committed gold labels, score
-python -m archive_debugger.eval.questions --file eval/seed_questions.jsonl
-python -m archive_debugger.eval.assist                       # writes the retrieval worksheet
-python -m archive_debugger.eval.label --from-worksheet reports/phase7/label_worksheet.jsonl --apply-decisions eval/gold_decisions.json
-python -m archive_debugger.eval.report                       # -> reports/phase7/
-
-# 6. Retrieval-quality sweep over the [retrieve] switches (resumable; --state NAME runs one)
-python -m archive_debugger.eval.retrieval_sweep              # -> reports/phase13/retrieval_report.md
-```
-
-### Serve (read-only API)
-
-```powershell
-# Windows, no make needed:
+cd web; npm ci; npm run build; cd ..
 .\.venv\Scripts\python.exe -m uvicorn archive_debugger.api.app:app --host 127.0.0.1 --port 8000
 ```
 
-`GET /health` (corpus facts: true dated span as `corpus.window`, the config
-binning window as `corpus.pilot_window`), `GET /examples` (seed questions with
-gold verdicts), `POST /ask` `{question, filters?, provider?, model?, nocache?}`
--> `{answer, evidence}` (also `GET /ask?q=&period=&jurisdiction=&doc_type=`),
-and `GET /coverage?q=&period=&jurisdiction=&doc_type=`: lexical passage counts
-per salient question term by decade and by jurisdiction, using the abstention
-gate's term rule as FTS5 queries. Counts are matches, not relevance.
+Open `http://127.0.0.1:8000/`. `?kiosk=1` is the exhibit mode; see
+[`docs/DEMO.md`](docs/DEMO.md) for the unattended, offline setup and
+[`docs/DEPLOY.md`](docs/DEPLOY.md) to host it (one Docker image that downloads the
+release on first boot; Railway steps; any Docker host).
 
-Answers are cached in `data/cache/answers.db` (git-ignored; civic.db stays
-read-only) keyed by question, filters, provider, model, prompt hash, top_k and
-temperature; a cached response carries `answer.cached.created_at`, and
-`nocache=1` (or `"nocache": true`) forces regeneration. Set `ALLOWED_ORIGINS`
-(comma-separated) to enable CORS; unset means same-origin only. When `web/dist`
-exists it is served at `/` with an `index.html` fallback.
-
-### Web app (`web/`)
-
-Vite + React + TypeScript + Tailwind; no router, no state library. Node 20 LTS
-(`web/.nvmrc`); `web/dist` is a build artifact and is not committed.
+**Reproducible path: rebuild from the manifest.** The item set is fixed by
+[`data/manifest/`](data/manifest/); the rebuild yields the same corpus, and the
+dense index is deterministic for the pinned model. Only step 1 touches the
+network.
 
 ```powershell
-cd web
-npm ci                     # reproducible install from package-lock.json
-npm run typecheck          # tsc --noEmit
-npm test                   # vitest
-npm run build              # -> web/dist, served by the API at /
-npm run dev                # dev server on http://127.0.0.1:5173 proxying /ask /coverage /examples /health to :8000
+python -m archive_debugger.harvest.fetch --download-all --contact you@example.com   # 1. cache metadata + OCR under raw/
+python -m archive_debugger.ingest.loader                                              # 2. load items
+python -m archive_debugger.ingest.build --fresh                                       #    parse OCR into pages and passages
+python -m archive_debugger.ingest.normalize                                           # 3. dates, jurisdiction, issuer, doc type
+python -m archive_debugger.ingest.sections                                            #    front / body / back page classes
+python -m archive_debugger.retrieve.index                                             # 4. dense index (45-90 min on CPU)
+python -m archive_debugger.eval.questions --file eval/seed_questions.jsonl            # 5. evaluation questions and gold
+python -m archive_debugger.eval.label --from-worksheet reports/phase7/label_worksheet.jsonl --apply-decisions eval/gold_decisions.json
+python -m archive_debugger.eval.report
 ```
 
-To view the built app, start the API (previous section) and open
-`http://127.0.0.1:8000/`. Append `?kiosk=1` for the exhibit mode (larger type,
-filters hidden, QR placeholder). `VITE_API_BASE` points the app at a remote API;
-empty means same-origin.
+## The four rules
 
-### Deploy
+Every phase of the work was bound by four rules that never moved. The only
+network call outside the harvest layer is the configured language-model API;
+nothing downstream re-fetches the archive. Citation verification is three
+structural checks (the cited passage exists, it was in the evidence retrieved for
+that question, it resolves to a recorded page) and text overlap is never reported
+as correctness. Citations are page-level deep links of one fixed form, with no
+coordinate storage. Evaluation gold is never edited to improve a run;
+configuration changes are logged in `eval_runs`, and gold extensions are additive
+and recorded with who decided what.
 
-`Dockerfile` (node stage builds `web/dist`; python 3.11-slim stage with an
-editable install, the embedding model baked at build time; on boot
-`archive_debugger.data_release` downloads and checksum-verifies the two data
-files from `DATA_RELEASE_URL` with resume, then uvicorn serves on `$PORT`),
-`railway.json` (Dockerfile build, `/health` check with a 30-minute first-boot
-window, one replica), and `web/vercel.json` (optional separate web build with
-`VITE_API_BASE`). `scripts/make_data_release.py` writes `data-release.sha256`
-and prints the `gh release create` command. The data-file paths are overridable
-by `CIVIC_DB_PATH`, `CIVIC_INDEX_PATH`, and `CIVIC_CACHE_PATH`;
-`CIVIC_EMBEDDER=stub` serves a fixture index without the model.
-`scripts/smoke.py BASE_URL` checks `/health`, `/examples`, a stub `/ask`, and
-`/coverage` (CI runs it against the served app over
-`scripts/make_fixture_db.py`); `scripts/warm_cache.py BASE_URL` fills the answer
-cache with every seed question after a cost estimate and confirmation. Steps and
-measured sizing are in `docs/DEPLOY.md`. Nothing deploys automatically.
+## Methods and gaps
 
-### Scope is config-driven
+- [`docs/METHODS.md`](docs/METHODS.md): how the corpus was chosen, parsed,
+  indexed, retrieved, cited and measured, every number tied to its report file.
+- [`docs/GAP_REPORT.md`](docs/GAP_REPORT.md): what the archive cannot tell you
+  (45% undated passages, no record after 2009, front-matter pollution, metadata
+  dates that disagree with the text, why housing was not the pilot, what the
+  abstention sweeps showed, why verification checks support and not relevance).
+- [`CHANGELOG.md`](CHANGELOG.md): one entry per phase, from the reports.
+- The same content is in the app under "How this works" and "Gaps".
 
-The pilot corpus is defined entirely by `config/pilot.toml`: topic term-set,
-Internet Archive collection clause, binning window, and usable-item floor. The
-resulting item set is recorded in `data/manifest/` (IA identifiers plus the exact
-scope query) so anyone can re-download the same items. Another topic (for example
-housing) is a new config plus a new manifest, not a code change.
+## How it works, briefly
 
-### Data artifacts are not in the repo
+`harvest/` caches Internet Archive metadata and existing OCR derivatives.
+`ingest/` parses them into a SQLite database of items, pages and passages, fills
+dates, jurisdiction, issuer and document type without imputation, and classifies
+front and back matter. `retrieve/` fuses BM25 and dense cosine search (384-dim
+multilingual MiniLM in sqlite-vec) with Reciprocal Rank Fusion, a soft OCR
+down-weight, front/back demotion and a per-item cap, and attaches page-level
+provenance to every hit. `generate/` drafts cited sentences with the configured
+model, verifies each citation with the three checks, drops what fails, and
+abstains by rule when the record is thin. `eval/` scores retrieval against human
+labels and holds the labeling tools. `api/` is a read-only FastAPI layer with an
+answer cache; `web/` is the Vite + React interface. Layout: `src/archive_debugger/`
+(one package per layer), `web/`, `config/`, `eval/`, `reports/`, `docs/`, `scripts/`.
 
-`raw/` (harvested OCR), `civic.db` (parsed and normalized corpus), and
-`index/vectors.db` (dense vectors) are git-ignored and rebuilt with the commands
-above. Keep `civic.db` and the index out of any synced folder (OneDrive, Dropbox):
-point `CIVIC_DB_PATH` / `CIVIC_INDEX_PATH` at a plain local directory instead,
-otherwise long write transactions fail with "database is locked". The reproducible gold -- `eval/seed_questions.jsonl` and
-`eval/gold_decisions.json` -- is committed, as is `data/manifest/`.
+## Contributing
 
-## Architecture
+Issues are welcome, especially corpus gaps: a question the archive should answer
+and does not, a page that resolves to the wrong scan, a date the metadata gets
+wrong. Use the issue templates. To add a second scope (another topic or
+jurisdiction), write a new `config/pilot.toml` (query, collections, window) and a
+new `data/manifest/`; the code does not change. Run the audit method first: the
+British Columbia sizing in [`reports/bc_audit/bc_sizing.md`](reports/bc_audit/bc_sizing.md)
+shows what a scope that does not clear the floor looks like. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-Layers are separated by a load-bearing network boundary: only `harvest/` reaches
-the Internet Archive.
+## Acknowledgements
 
-- `harvest/` -- network layer; caches IA metadata and OCR under `raw/`.
-- `ingest/` -- local parse, normalize, and `civic.db` build.
-- `retrieve/` -- hybrid retrieval and page-level citations (`citation.py` is the
-  single source of the deep-link format and the 3-check verifier).
-- `generate/` -- synthesis grounded strictly in retrieved passages; config-driven
-  external LLM, isolated, stubbed in tests; code-decided abstention.
-- `eval/` -- retrieval evaluation against human gold labels.
-- `api/`, `web/` -- read-only FastAPI serve layer (answer cache, coverage view)
-  and the Vite + React reading-room interface.
+Built during the AI Builders Fellowship of the BC + AI Ecosystem, with the
+Internet Archive, whose collections, OCR and page images make the tool possible.
+Page images are served by archive.org and are not redistributed here. The
+publications are Canadian government documents and remain under their own terms.
 
-### Retrieval
+## Citation
 
-BM25 over an FTS5 index fused with dense cosine search via Reciprocal Rank Fusion
-(k=60), a soft OCR-quality down-weight, and composable pre-filters (period /
-jurisdiction / doc_type / min-OCR). Five independently switchable Phase 13 changes
-live under `[retrieve]` in `config/pilot.toml`: front/back-matter demotion
-(`section_demote`, from the `ingest.sections` page classes), FTS stopword
-dropping, doc_type family filtering, a per-item cap on the ranking, and a
-later-years annotation on hits whose text mentions years after the item's date.
-The shipped values are the Phase 13 candidate (all on, cap 5), chosen against
-labeled numbers on an additively extended gold set
-(`reports/phase13/retrieval_report.md`); setting all five off reproduces the
-Phase 7 retriever. The retriever returns a pool of `pool_size` hits for the
-evidence trail; the model sees only the first `[generate].top_k` of that same
-ranking, and the trail marks the rest. Dense vectors use
-`paraphrase-multilingual-MiniLM-L12-v2` (384-dim, EN/FR) in a standalone
-`index/vectors.db` via sqlite-vec (flat, exact). Every result carries page-level
-provenance and the deep link
-`https://archive.org/details/{item_id}/page/n{leaf_index}`; no coordinates are
-stored.
-
-### Evaluation
-
-Gold labels are human judgments (relevance per candidate; answerable or
-should-abstain per question) and are never inferred by the tool; see
-`eval/labeling_notes.md` for the labeling rule and methods. Metrics are pooled
-recall@k and nDCG@10 over the judged pool plus an abstention-leakage view.
-Automated citation checking is a deterministic 3-check verifier (passage exists /
-was in the retrieved evidence / resolves to a real page); citation *support* is a
-manual audit, never an overlap score.
-
-## Layout
-
-```
-config/pilot.toml          pilot scope, window, retrieval and eval settings
-data/manifest/             committed corpus manifest (IA identifiers + scope query)
-docs/PROPOSAL.md           submitted proposal (source of truth for scope)
-eval/                      seed questions, gold decisions, labeling notes
-src/archive_debugger/      harvest / ingest / retrieve / generate / eval / api
-tests/                     hermetic pytest suite (tests/fixtures/ holds real fixtures)
-reports/                   coverage audit and the eval summary
-web/                       Next.js read-only interface (planned)
-```
+See [`CITATION.cff`](CITATION.cff). Author: Jacob Ortiz.
 
 ## License
 
-MIT. See `LICENSE` and `CITATION.cff`.
+MIT. See [`LICENSE`](LICENSE).

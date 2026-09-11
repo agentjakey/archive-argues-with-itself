@@ -495,7 +495,7 @@ Everything above was scored on the Phase 7 gold, pooled from the baseline
 retriever's top-30. The candidate (section_demote with front 0.5 / back 0.5,
 fts_drop_stopwords, doc_type_family_filter, per_item_cap 5, later_years_flag)
 surfaced 315 passages in its top-20 that no human had judged, across 45
-questions. Jake labeled them in two batches from
+questions. Jacob Ortiz labeled them in two batches from
 `reports/phase13/extension_worksheet.jsonl`: batch 1
 (`eval/gold_extension_decisions.json`) wrote 280 labels (30 relevant) and left 35
 uncertain; batch 2 (`eval/gold_extension_decisions_2.json`) decided those 35
@@ -553,7 +553,7 @@ be served; there was no cache file on disk to delete.
 
 Caveats carried forward. The judge for both extension batches was not
 independent of the system: candidate labels were proposed by an LLM assistant
-and decided by Jake (`eval/labeling_notes.md`, Methods). The back-matter
+and decided by Jacob Ortiz (`eval/labeling_notes.md`, Methods). The back-matter
 estimate is from 20 pages, by one reader. The per-item cap costs a few
 questions their second and third same-item passages inside the top-10 (q009,
 q034) while lifting recall@20; that trade is now measured, not guessed.

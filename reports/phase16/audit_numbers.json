@@ -1,0 +1,71 @@
+{
+  "run": {
+    "questions": 50,
+    "answered": 40,
+    "abstained": 10,
+    "model": "claude-haiku-4-5-20251001",
+    "kept_sentences_total": 190,
+    "dropped_unsupported": 3
+  },
+  "judged_sentences_answerable": 178,
+  "supported": 166,
+  "partly": 11,
+  "not": 1,
+  "strict_support_rate": 0.9326,
+  "lenient_support_rate": 0.9944,
+  "abstention_on_gold_abstain_in_sample": "10/15",
+  "off_target_answers": [
+    "q015",
+    "q030",
+    "q036",
+    "q037",
+    "q049"
+  ],
+  "off_target_marks": {
+    "q015": {
+      "s": 3
+    },
+    "q030": {
+      "s": 3
+    },
+    "q036": {
+      "p": 1,
+      "s": 1
+    },
+    "q037": {
+      "s": 2,
+      "p": 1
+    },
+    "q049": {
+      "s": 1
+    }
+  },
+  "false_abstentions_on_answerable_in_sample": "0/35",
+  "holdout": {
+    "gold_abstain": "9/10",
+    "gold_abstain_answered": [
+      "h009"
+    ],
+    "gold_answerable": "4/5",
+    "gold_answerable_abstained": [
+      "h015"
+    ],
+    "ts": "2026-09-11T19:45:29+00:00"
+  },
+  "recall10_before_after": [
+    0.347,
+    0.4581
+  ],
+  "recall20_before_after": [
+    0.5928,
+    0.7276
+  ],
+  "ndcg10_before_after": [
+    0.4174,
+    0.5082
+  ],
+  "citations_resolving": "119/119 = 1.0 (verifier check 3)",
+  "judgment_meta": {
+    "source": "Phase 16 sentence-support judgments over reports/phase16/judgment_worksheet.jsonl. Rule: s = every factual claim in the sentence appears in the cited passage text; p = a claim, date, or attribution is added or shifted; n = the sentence misstates the passage. Candidate judgments were first proposed by an assistant model from the full cited passage text; each was reviewed and decided by Jacob Ortiz. Reasons for every p and n in eval/judgments_phase16_notes.md."
+  }
+}

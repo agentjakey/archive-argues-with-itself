@@ -1,5 +1,5 @@
 """Phase 16 judgment worksheet: every kept (verified) sentence of every cached real-
-provider answer, with the FULL text of each passage it cites, so Jake can mark each
+provider answer, with the FULL text of each passage it cites, so Jacob Ortiz can mark each
 sentence supported / partly / not. Reads the answer cache and civic.db only; no model,
 no network. Writes reports/phase16/judgment_worksheet.jsonl (one record per sentence,
 judgment left empty) and judgment_worksheet.md (readable form), plus a summary of

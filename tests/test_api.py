@@ -194,12 +194,12 @@ def test_ask_cited_flags_match_verified_citations(tmp_path):
     cited = hits[0]["passage_id"]
     llm = StubLLM(Draft(sentences=[CitedSentence(text="A programme ran.", cited_ids=[cited])]))
     with TestClient(_app(tmp_path, r, llm=llm)) as c:
-        body = c.post("/ask", json={"question": "vaccination hospital", "model": "claude-sonnet-5"}).json()
+        body = c.post("/ask", json={"question": "vaccination hospital", "model": "other-model-id"}).json()
     verified = {v["passage_id"] for v in body["answer"]["verified_citations"]}
     assert verified == {cited} and body["answer"]["abstained"] is False
     assert {e["passage_id"] for e in body["evidence"] if e["cited"]} == verified
     gen = body["answer"]["generation"]
-    assert gen["model"] == "claude-sonnet-5" and gen["provider"] == "stub" and gen["temperature"] is None
+    assert gen["model"] == "other-model-id" and gen["provider"] == "stub" and gen["temperature"] is None
     assert len(gen["prompt_sha256"]) == 64
 
 

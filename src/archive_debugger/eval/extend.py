@@ -4,7 +4,7 @@ top-30, so a changed ranking surfaces passages no human has judged. This module:
 - build: writes a worksheet of every passage in the CANDIDATE retriever's top-N for
   each question that has no label yet, in the Phase 7 assist format (advisory
   proposals only, never written as gold), blind to which switch surfaced it.
-- apply: applies Jake's reviewed decisions ADDITIVELY: new (qid, passage) labels
+- apply: applies Jacob Ortiz's reviewed decisions ADDITIVELY: new (qid, passage) labels
   only; an existing label is never overwritten (N4); a verdict changes only when
   the decisions say so, and every change is returned for the changelog."""
 from __future__ import annotations

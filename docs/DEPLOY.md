@@ -13,7 +13,7 @@ The steps below use Railway. Nothing deploys automatically from CI.
 - A GitHub account with this repository (fork or clone), `gh` installed and
   logged in (`gh auth login`), for the one-time data release.
 - A Railway account connected to GitHub.
-- Your Anthropic API key.
+- Your API key for the configured language-model provider (the variable named in `.env.example`).
 - The two data files on your machine, built by the Reproduce steps in the README
   (or downloaded from an existing release, see the README "Run it yourself").
 

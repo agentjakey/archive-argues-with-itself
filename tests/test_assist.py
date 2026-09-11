@@ -197,7 +197,7 @@ def test_from_worksheet_override_beats_proposal(tmp_path):
                {"qid": "q1", "passage_id": "pB", "rank": 2, "proposed_relevance": 0, "reason": "r",
                 "excerpt": "e", "year": 1985, "jurisdiction": "alberta", "doc_type": "other",
                 "ocr_quality": 0.9, "title": "T", "leaf_index": 0, "printed_page": "1", "deep_link": "u"}])
-    # proposal: pA=relevant, pB=not, verdict=should-abstain. Jake overrides all three.
+    # proposal: pA=relevant, pB=not, verdict=should-abstain. Jacob Ortiz overrides all three.
     ans = iter(["n", "r", "a"])
     label.run(conn=conn, worksheet=ws, prompt_fn=lambda p: next(ans), print_fn=lambda *a: None)
     assert store.get_labels(conn, "q1") == {"pA": 0, "pB": 1}     # overrides applied

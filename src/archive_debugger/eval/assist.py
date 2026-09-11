@@ -1,8 +1,8 @@
 """Phase 7 labeling assist. Pre-analyzes the corpus and writes an ADVISORY
-worksheet of proposed labels for Jake to review. Proposals are a deterministic,
+worksheet of proposed labels for Jacob Ortiz to review. Proposals are a deterministic,
 transparent triage heuristic -- never an LLM, never a retrieval score -- and are
 CANDIDATE VALUES ONLY. This command never writes to eval_labels or
-eval_question_gold; only Jake's keypresses (eval.label --from-worksheet) become
+eval_question_gold; only Jacob Ortiz's keypresses (eval.label --from-worksheet) become
 gold (N2, N4)."""
 from __future__ import annotations
 

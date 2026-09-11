@@ -1,6 +1,6 @@
 # Phase 13 gold extension: decisions and notes
 
-Jake's per-question decisions over `reports/phase13/extension_worksheet.jsonl`
+Jacob Ortiz's per-question decisions over `reports/phase13/extension_worksheet.jsonl`
 (the candidate retriever's top-20, passages that carried no Phase 7 label).
 Ranks are the candidate's ranks as printed in the worksheet. r = relevant,
 n = not relevant, uncertain = no label written (the passage stays unjudged).

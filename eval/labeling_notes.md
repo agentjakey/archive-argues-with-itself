@@ -58,7 +58,7 @@ verdict.
 - 2026-09-11, Phase 13 pooled-labels extension (additive). Gold had been pooled
   from the Phase 7 retriever's top-30; the Phase 13 candidate retriever surfaced
   315 unjudged passages in its top-20 across 45 questions
-  (`reports/phase13/extension_worksheet.jsonl`). Jake labeled them: 280 labels
+  (`reports/phase13/extension_worksheet.jsonl`). Jacob Ortiz labeled them: 280 labels
   written (30 relevant, 250 not) and 35 marked uncertain, which received NO label
   and stay unjudged. No Phase 7 label was changed; no verdict changed (the three
   verdict notes in the extension concern questions whose gold was already
@@ -73,6 +73,17 @@ verdict.
   verdict changed. Totals now 1,815 labels, 376 relevant; every passage in the
   candidate retriever's top-20 is judged. Eval rows scored on this set carry
   `"gold": "phase7+phase13_extension_b2"`.
+- 2026-09-11, Phase 16 support judgments. Every kept sentence of the audit run
+  (40 answered questions, 190 sentences; `reports/phase16/judgment_worksheet.jsonl`)
+  marked s / p / n by Jacob Ortiz in `eval/judgments_phase16.json`, reasons for
+  every p and n in `eval/judgments_phase16_notes.md`. On the 35 gold-answerable
+  questions: 166 supported, 11 partly, 1 not, of 178. Report:
+  `reports/phase16/audit_report.md`.
+- 2026-09-11, held-out questions. `eval/holdout_questions.jsonl` (15 questions:
+  10 should-abstain probes, 5 answerable) were written after the abstention rule
+  and retrieval configuration were frozen, never used in any sweep or design
+  decision, and their verdicts were assigned by Jacob Ortiz before the single
+  run recorded in `reports/phase16/holdout_run.md`.
 - The Phase 7 worksheet `reports/phase7/label_worksheet.jsonl` is tracked from
   Phase 13 on, so the ranks cited in `eval/gold_decisions.json` resolve without
   regeneration. It was produced by `python -m archive_debugger.eval.assist` with
@@ -80,20 +91,12 @@ verdict.
 
 ## Methods
 
-Gold labels were assigned by Jake by reviewing the retrieval worksheet excerpts
+Gold labels were assigned by Jacob Ortiz by reviewing the retrieval worksheet excerpts
 and deciding relevance per candidate and answerable/abstain per question; they are
 human-reviewed judgments, not authored from scratch.
 
-For the Phase 13 extension, candidate labels were proposed by an LLM assistant
-from the worksheet excerpts and each was reviewed and decided by Jake. The same
-model family generates the system's answers, so the judge is not independent of
-the system; the labels are Jake's decisions, but the proposals that framed them
-were not. Batch 2 (the 35 passages left uncertain in batch 1) was proposed by an
-LLM assistant from the worksheet excerpts and reviewed and decided by Jake, the
-same as batch 1.
-
-Phase 16 sentence judgments (`eval/judgments_phase16.json`: supported / partly /
-not for every kept sentence of the audit run, against the full text of each
-cited passage) carry the same disclosure: proposed by an LLM assistant from the
-full cited passage text, reviewed and decided by Jake. The same model family
-generates the answers being judged.
+All labels and judgments were decided by the author. To speed adjudication,
+candidate labels for the Phase 13 extension and the Phase 16 support judgments
+were first proposed by an assistant model and each was reviewed and decided by
+the author; the same model family generates the tool's answers, so this judge is
+not independent of the system. The author is Jacob Ortiz.

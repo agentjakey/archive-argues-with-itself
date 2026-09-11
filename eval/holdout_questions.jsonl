@@ -1,0 +1,15 @@
+{"qid":"h001","text":"What did public health authorities report about the Zika virus in 2016?","filters":{},"gold":"abstain"}
+{"qid":"h002","text":"What guidance did Canadian health authorities issue on mpox in 2022?","filters":{},"gold":"abstain"}
+{"qid":"h003","text":"What did reports say about microplastics in drinking water?","filters":{},"gold":"abstain"}
+{"qid":"h004","text":"What did health authorities report about vaping-associated lung injury in 2019?","filters":{},"gold":"abstain"}
+{"qid":"h005","text":"What did reports say about the safety of semaglutide and other GLP-1 drugs?","filters":{},"gold":"abstain"}
+{"qid":"h006","text":"How did rental housing supply in Vancouver change between 2000 and 2020?","filters":{},"gold":"abstain"}
+{"qid":"h007","text":"What did public health authorities report about wildfire smoke exposure in 2023?","filters":{},"gold":"abstain"}
+{"qid":"h008","text":"What guidance was issued on cannabis edibles after legalization?","filters":{},"gold":"abstain"}
+{"qid":"h009","text":"What did reports say about injuries from electric scooters?","filters":{},"gold":"abstain"}
+{"qid":"h010","text":"What did Canadian health authorities report about measles outbreaks in 2024?","filters":{},"gold":"abstain"}
+{"qid":"h011","text":"How did federal reports describe the purpose of the Tuberculosis Control Grant?","filters":{"jurisdiction":"federal"},"gold":"answerable"}
+{"qid":"h012","text":"What did the Ontario SARS Commission say about the Ministry of Labour's inspection of hospitals?","filters":{"jurisdiction":"ontario","doc_type":"commission"},"gold":"answerable"}
+{"qid":"h013","text":"What benefits did the Alberta Nursing Home Plan provide when it was established?","filters":{"jurisdiction":"alberta"},"gold":"answerable"}
+{"qid":"h014","text":"What three mechanisms did the 1986 federal health promotion framework identify?","filters":{"jurisdiction":"federal"},"gold":"answerable"}
+{"qid":"h015","text":"What did federal reports say about the mass influenza vaccination program announced in 1976?","filters":{"jurisdiction":"federal"},"gold":"answerable"}

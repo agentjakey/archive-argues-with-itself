@@ -306,11 +306,11 @@ def test_cli_model_override_reaches_make_llm(tmp_path, monkeypatch):
     r, _ = _fixture_retriever_and_seed(tmp_path)
     try:
         out = cli.answer_question(Path("config/pilot.toml"), "vaccination hospital",
-                                  provider="stub", model="claude-sonnet-5", retriever=r)
+                                  provider="stub", model="other-model-id", retriever=r)
     finally:
         r.close()
-    assert seen["kind"] == "stub" and seen["model"] == "claude-sonnet-5" and seen["temperature"] is None
-    assert out["generation"]["model"] == "claude-sonnet-5" and out["generation"]["provider"] == "stub"
+    assert seen["kind"] == "stub" and seen["model"] == "other-model-id" and seen["temperature"] is None
+    assert out["generation"]["model"] == "other-model-id" and out["generation"]["provider"] == "stub"
     assert out["generation"]["temperature"] is None
 
 

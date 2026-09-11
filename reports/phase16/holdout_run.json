@@ -1,0 +1,263 @@
+{
+  "ts": "2026-09-11T19:45:29+00:00",
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5-20251001",
+  "n": 15,
+  "failed": 0,
+  "gold_abstain": {
+    "n": 10,
+    "abstained": 9,
+    "answered": [
+      "h009"
+    ]
+  },
+  "gold_answerable": {
+    "n": 5,
+    "answered": 4,
+    "abstained": [
+      "h015"
+    ]
+  },
+  "results": [
+    {
+      "qid": "h001",
+      "text": "What did public health authorities report about the Zika virus in 2016?",
+      "filters": {},
+      "gold": "abstain",
+      "status": 200,
+      "outcome": "abstained",
+      "cached": false,
+      "abstention_text": "the record here is thin: no retrieved passage mentions zika (5 of 12 retrieved passages are undated)",
+      "sentences": 0,
+      "verified_citations": 0,
+      "uncovered_terms": [
+        "zika"
+      ],
+      "seconds": 71.2
+    },
+    {
+      "qid": "h002",
+      "text": "What guidance did Canadian health authorities issue on mpox in 2022?",
+      "filters": {},
+      "gold": "abstain",
+      "status": 200,
+      "outcome": "abstained",
+      "cached": false,
+      "abstention_text": "the record here is thin: no retrieved passage mentions mpox (3 of 12 retrieved passages are undated)",
+      "sentences": 0,
+      "verified_citations": 0,
+      "uncovered_terms": [
+        "mpox"
+      ],
+      "seconds": 13.3
+    },
+    {
+      "qid": "h003",
+      "text": "What did reports say about microplastics in drinking water?",
+      "filters": {},
+      "gold": "abstain",
+      "status": 200,
+      "outcome": "abstained",
+      "cached": false,
+      "abstention_text": "the retrieved passages did not yield any cited claim",
+      "sentences": 0,
+      "verified_citations": 0,
+      "uncovered_terms": [],
+      "seconds": 12.0
+    },
+    {
+      "qid": "h004",
+      "text": "What did health authorities report about vaping-associated lung injury in 2019?",
+      "filters": {},
+      "gold": "abstain",
+      "status": 200,
+      "outcome": "abstained",
+      "cached": false,
+      "abstention_text": "the record here is thin: no retrieved passage mentions vaping (0 of 12 retrieved passages are undated)",
+      "sentences": 0,
+      "verified_citations": 0,
+      "uncovered_terms": [
+        "vaping"
+      ],
+      "seconds": 11.1
+    },
+    {
+      "qid": "h005",
+      "text": "What did reports say about the safety of semaglutide and other GLP-1 drugs?",
+      "filters": {},
+      "gold": "abstain",
+      "status": 200,
+      "outcome": "abstained",
+      "cached": false,
+      "abstention_text": "the record here is thin: no retrieved passage mentions semaglutide (4 of 12 retrieved passages are undated)",
+      "sentences": 0,
+      "verified_citations": 0,
+      "uncovered_terms": [
+        "semaglutide"
+      ],
+      "seconds": 12.3
+    },
+    {
+      "qid": "h006",
+      "text": "How did rental housing supply in Vancouver change between 2000 and 2020?",
+      "filters": {},
+      "gold": "abstain",
+      "status": 200,
+      "outcome": "abstained",
+      "cached": false,
+      "abstention_text": "the record here is thin: no retrieved passage mentions 2000, 2020 (9 of 12 retrieved passages are undated)",
+      "sentences": 0,
+      "verified_citations": 0,
+      "uncovered_terms": [
+        "2000",
+        "2020"
+      ],
+      "seconds": 9.3
+    },
+    {
+      "qid": "h007",
+      "text": "What did public health authorities report about wildfire smoke exposure in 2023?",
+      "filters": {},
+      "gold": "abstain",
+      "status": 200,
+      "outcome": "abstained",
+      "cached": false,
+      "abstention_text": "the record here is thin: no retrieved passage mentions 2023 (2 of 12 retrieved passages are undated)",
+      "sentences": 0,
+      "verified_citations": 0,
+      "uncovered_terms": [
+        "2023"
+      ],
+      "seconds": 10.2
+    },
+    {
+      "qid": "h008",
+      "text": "What guidance was issued on cannabis edibles after legalization?",
+      "filters": {},
+      "gold": "abstain",
+      "status": 200,
+      "outcome": "abstained",
+      "cached": false,
+      "abstention_text": "the record here is thin: no retrieved passage mentions edibles (2 of 12 retrieved passages are undated)",
+      "sentences": 0,
+      "verified_citations": 0,
+      "uncovered_terms": [
+        "edibles"
+      ],
+      "seconds": 9.3
+    },
+    {
+      "qid": "h009",
+      "text": "What did reports say about injuries from electric scooters?",
+      "filters": {},
+      "gold": "abstain",
+      "status": 200,
+      "outcome": "answered",
+      "cached": false,
+      "abstention_text": null,
+      "sentences": 2,
+      "verified_citations": 2,
+      "uncovered_terms": [],
+      "seconds": 12.4
+    },
+    {
+      "qid": "h010",
+      "text": "What did Canadian health authorities report about measles outbreaks in 2024?",
+      "filters": {},
+      "gold": "abstain",
+      "status": 200,
+      "outcome": "abstained",
+      "cached": false,
+      "abstention_text": "the record here is thin: no retrieved passage mentions 2024 (4 of 12 retrieved passages are undated)",
+      "sentences": 0,
+      "verified_citations": 0,
+      "uncovered_terms": [
+        "2024"
+      ],
+      "seconds": 11.4
+    },
+    {
+      "qid": "h011",
+      "text": "How did federal reports describe the purpose of the Tuberculosis Control Grant?",
+      "filters": {
+        "jurisdiction": "federal"
+      },
+      "gold": "answerable",
+      "status": 200,
+      "outcome": "answered",
+      "cached": false,
+      "abstention_text": null,
+      "sentences": 2,
+      "verified_citations": 3,
+      "uncovered_terms": [],
+      "seconds": 12.5
+    },
+    {
+      "qid": "h012",
+      "text": "What did the Ontario SARS Commission say about the Ministry of Labour's inspection of hospitals?",
+      "filters": {
+        "jurisdiction": "ontario",
+        "doc_type": "commission"
+      },
+      "gold": "answerable",
+      "status": 200,
+      "outcome": "answered",
+      "cached": false,
+      "abstention_text": null,
+      "sentences": 8,
+      "verified_citations": 5,
+      "uncovered_terms": [],
+      "seconds": 27.1
+    },
+    {
+      "qid": "h013",
+      "text": "What benefits did the Alberta Nursing Home Plan provide when it was established?",
+      "filters": {
+        "jurisdiction": "alberta"
+      },
+      "gold": "answerable",
+      "status": 200,
+      "outcome": "answered",
+      "cached": false,
+      "abstention_text": null,
+      "sentences": 4,
+      "verified_citations": 1,
+      "uncovered_terms": [],
+      "seconds": 18.1
+    },
+    {
+      "qid": "h014",
+      "text": "What three mechanisms did the 1986 federal health promotion framework identify?",
+      "filters": {
+        "jurisdiction": "federal"
+      },
+      "gold": "answerable",
+      "status": 200,
+      "outcome": "answered",
+      "cached": false,
+      "abstention_text": null,
+      "sentences": 1,
+      "verified_citations": 1,
+      "uncovered_terms": [],
+      "seconds": 15.2
+    },
+    {
+      "qid": "h015",
+      "text": "What did federal reports say about the mass influenza vaccination program announced in 1976?",
+      "filters": {
+        "jurisdiction": "federal"
+      },
+      "gold": "answerable",
+      "status": 200,
+      "outcome": "abstained",
+      "cached": false,
+      "abstention_text": "the record here is thin: no retrieved passage mentions federal (2 of 12 retrieved passages are undated)",
+      "sentences": 0,
+      "verified_citations": 0,
+      "uncovered_terms": [
+        "federal"
+      ],
+      "seconds": 10.0
+    }
+  ]
+}

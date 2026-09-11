@@ -33,14 +33,14 @@ export function Gaps() {
         version was about 60% precise on back matter because a citation pattern fired on years beside times and
         ratios in tables; the second version, needing a page range or an author entry with a nearby year, read 18
         of 20 on a fresh sample. Demoting those pages (score halved, never excluded) moved recall@20 from 0.6823
-        to 0.8061 on the Phase 7 gold. The evidence cards show the class as a small tag so you can judge it.{" "}
+        to 0.8061 on the original gold. The evidence cards show the class as a small tag so you can judge it.{" "}
         <Source file="reports/phase13/sections_report.md" /> <Source file="reports/phase13/retrieval_report.md" />
       </p>
 
       <h3>Metadata dates can disagree with the text</h3>
       <p>
         Evaluation question q018, rank 25: the item is dated 1984 in its metadata, but the passage is H1N1 and
-        2009 pandemic content dated 2010-10-22. The label was left as decided. Since Phase 13 an evidence card
+        2009 pandemic content dated 2010-10-22. The label was left as decided. Since the retrieval update an evidence card
         says "mentions 2010 (item dated 1984)" whenever a passage's text names years well after its item's date;
         nothing is re-ranked and no side is taken. <Source file="eval/labeling_notes.md" />
       </p>
@@ -71,8 +71,39 @@ export function Gaps() {
         an all-supported answer to a different question than the one asked, on the wrong period or the wrong
         object: every sentence cites a real page that says what the sentence says. The three checks guarantee
         that a kept sentence is supported by its page; nothing guarantees the page is about what was asked. Read
-        the pages. False abstentions on the 35 answerable questions: 0.{" "}
-        <Source file="reports/phase16/audit_report.md" />
+        the pages. False abstentions on the 35 answerable questions: 0. On 15 held-out questions written after
+        everything was frozen and never used in any sweep, 9 of 10 probes abstained and 4 of 5 answerable
+        questions were answered. <Source file="reports/phase16/audit_report.md" />{" "}
+        <Source file="reports/phase16/holdout_run.md" />
+      </p>
+
+      <h3>Two held-out misses, rule unchanged</h3>
+      <p>
+        "What did reports say about injuries from electric scooters?" was answered. The gate covers a word if
+        any retrieved page contains it, and "scooters" was covered by an undated child-safety pamphlet (tricycles,
+        carts, wagons and scooters under a child's care) and a 1988 occupational-health report (scooter steering
+        under equipment maintenance). A lexical gate cannot tell electric scooters from toy or workplace scooters;
+        every sentence is supported by its page and none is about the question. Same class as the five above.
+      </p>
+      <p>
+        "What did federal reports say about the mass influenza vaccination program announced in 1976?" was
+        abstained at the gate: "federal" counts as a salient word under the frozen rule, no retrieved page
+        contains it, and the pages that describe the program name the federal government in other ways. The
+        stoplist's actor-noun criterion holds "government", "department", "ministry" and "agency" but not
+        "federal". Both results were recorded after a single held-out run and no rule was changed; "federal" is
+        the first candidate for a v2 stoplist if one is ever opened.{" "}
+        <Source file="reports/phase16/holdout_run.md" /> <Source file="docs/GAP_REPORT.md" />
+      </p>
+
+      <h3>What the audit measured</h3>
+      <p>
+        Every question once, the configured model, the shipped configuration; every kept sentence judged by the
+        author against the full text of the pages it cites. Strict support (every claim in the cited text):
+        93.3%, 166 of 178 sentences on the 35 answerable questions. Lenient (supported or partly): 99.4%, 177 of
+        178. The 12 sentences that fell short added a date or a period, moved an attribution from a quoted body
+        to the report's author, or, once, inverted a relation. Retrieval recall@10 on the fully judged gold:
+        0.3470 before the retrieval changes, 0.4581 after. Cited passages resolving to a recorded page: 119 of
+        119. <Source file="reports/phase16/audit_report.md" />
       </p>
 
       <h3>British Columbia is not a second scope here</h3>
@@ -85,9 +116,10 @@ export function Gaps() {
 
       <h3>The judge is not independent</h3>
       <p>
-        The last 315 gold labels were proposed by an LLM assistant from the worksheet excerpts and each was
-        reviewed and decided by Jake. The same model family writes the answers.{" "}
-        <Source file="eval/labeling_notes.md" />
+        All labels and judgments were decided by the author. To speed adjudication, candidate labels for the
+        Phase 13 extension and the Phase 16 support judgments were first proposed by an assistant model and each
+        was reviewed and decided by the author; the same model family generates the tool's answers, so this
+        judge is not independent of the system. <Source file="eval/labeling_notes.md" />
       </p>
       <p className="text-sm text-muted">The full gap report with sources: docs/GAP_REPORT.md in the repository.</p>
     </Page>
