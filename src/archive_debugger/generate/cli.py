@@ -35,6 +35,14 @@ def load_generate_config(config_path: Path) -> dict:
     }
 
 
+def question_from_seed(seed_path: Path, qid: str) -> dict:
+    """The seed record for qid, so a live run uses the same text and filters the sweep does."""
+    for q in load_seed(seed_path):
+        if q.get("qid") == qid:
+            return q
+    raise KeyError(f"qid {qid} not found in {seed_path}")
+
+
 def _filters(d: Optional[dict]) -> Filters:
     d = d or {}
     return Filters(period=d.get("period"), jurisdiction=d.get("jurisdiction"),
@@ -105,7 +113,10 @@ def main(argv=None) -> int:
 
     p = argparse.ArgumentParser(description="Cited synthesis over the civic corpus, or a no-model abstention sweep.")
     p.add_argument("--config", default="config/pilot.toml", type=Path)
-    p.add_argument("--question", default=None)
+    target = p.add_mutually_exclusive_group()
+    target.add_argument("--question", default=None)
+    target.add_argument("--qid", default=None, help="run the seed question with this id, using its text AND filters")
+    p.add_argument("--seed", default=Path("eval/seed_questions.jsonl"), type=Path, help="seed file for --qid")
     p.add_argument("--provider", choices=["stub", "anthropic"], default=None, help="override [generate].provider")
     p.add_argument("--top-k", dest="top_k", type=int, default=None)
     p.add_argument("--sweep", default=None, type=Path,
@@ -114,8 +125,13 @@ def main(argv=None) -> int:
     if args.sweep:
         _print_sweep(sweep(args.config, args.sweep, top_k=args.top_k))
         return 0
+    if args.qid:
+        q = question_from_seed(args.seed, args.qid)
+        print(json.dumps(answer_question(args.config, q["text"], provider=args.provider, top_k=args.top_k,
+                                         filters=q.get("filters")), ensure_ascii=False, indent=2))
+        return 0
     if not args.question:
-        p.error("provide --question or --sweep")
+        p.error("provide --question, --qid, or --sweep")
     print(json.dumps(answer_question(args.config, args.question, provider=args.provider, top_k=args.top_k),
                      ensure_ascii=False, indent=2))
     return 0

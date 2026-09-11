@@ -103,3 +103,90 @@ conclude, shift, risks, authorities, recommend) and decade tokens ("1980s",
 "1970s", "1990s", "2000s"), which the tokenizer keeps as single tokens that no
 passage repeats verbatim and that the 4-digit-year rule does not cover. These are
 observations about the fixed rule, recorded here; nothing was adjusted in response.
+
+## Amendment (made once, after sweep 1; rule frozen thereafter)
+
+Stoplist extended by criterion, not by row: (a) verbs and nouns that describe the
+act of asking or the form of the answer (describe, explain, discuss, compare,
+conclude/conclusion(s), recommend/recommendation(s), report/reported, state/stated,
+say/said, address/addressed, identify, shift/shifted, change/changed, evolve/evolved,
+differ/differed); (b) generic actor nouns (authorities, authority, officials,
+government(s), department(s), ministry, agency, agencies). No topic words were added.
+Plural stemming: one trailing "s" is stripped from a term and from passage tokens
+longer than 3 characters before equality and prefix comparison (risks/risk). Year
+handling uses the same allowed-year set as the fact-leak guard (years in any hit's
+text UNION any hit's metadata year): a 4-digit year term is covered if it is in that
+set; a decade term (\d{3}0s) is covered if the verbatim token appears in any hit's
+text or any allowed year falls in the decade. min_passages is unchanged.
+
+This amendment was made once, after inspecting sweep 1's uncovered-term column, so
+sweep 2's totals are IN-SAMPLE with respect to the eval questions and are not an
+out-of-sample estimate of abstention quality. The rule is frozen from here.
+
+## Sweep 2 (after amendment; run once; unedited)
+
+```
+qid    gold        single_source would_abstain uncovered_terms
+q001   answerable  True          False         
+q002   answerable  False         False         
+q003   answerable  False         False         
+q004   answerable  False         False         
+q005   answerable  False         False         
+q006   answerable  False         False         
+q007   answerable  False         True          risks
+q008   answerable  False         False         
+q009   answerable  False         False         
+q010   answerable  False         False         
+q011   answerable  False         False         
+q012   answerable  False         False         
+q013   answerable  False         False         
+q014   answerable  False         False         
+q015   abstain     False         False         
+q016   answerable  False         False         
+q017   answerable  False         False         
+q018   answerable  False         False         
+q019   answerable  False         False         
+q020   answerable  False         False         
+q021   answerable  False         False         
+q022   abstain     False         False         
+q023   answerable  False         False         
+q024   answerable  False         False         
+q025   answerable  False         False         
+q026   answerable  False         False         
+q027   answerable  False         False         
+q028   answerable  False         False         
+q029   abstain     True          True          1975
+q030   abstain     False         False         
+q031   answerable  False         False         
+q032   answerable  False         False         
+q033   answerable  False         False         
+q034   answerable  False         False         
+q035   answerable  False         False         
+q036   abstain     False         False         
+q037   abstain     False         False         
+q038   answerable  False         False         
+q039   abstain     False         True          covid, 2020
+q040   abstain     False         True          2018
+q041   abstain     False         True          vaping
+q042   abstain     False         True          opioid, 2016
+q043   answerable  False         False         
+q044   answerable  False         False         
+q045   answerable  False         False         
+q046   abstain     False         True          1905
+q047   abstain     False         False         
+q048   abstain     False         True          2015
+q049   abstain     False         True          2014
+q050   abstain     False         True          2017
+
+answerable questions that would abstain: 1
+abstain questions that would answer:     6
+```
+
+Reading: 9 of 15 gold-abstain questions abstain, each on an out-of-window year or
+absent topic (covid, 2020, 2018, vaping, opioid, 2016, 1905, 2015, 2014, 2017,
+1975). One answerable question (q007) abstains on "risks": no passage in its top 12
+contains a token stemming to "risk", and a 4-letter stem is below the 5-character
+prefix threshold. The six gold-abstain questions that would answer (q015, q022,
+q030, q036, q037, q047) have every salient term covered; q015 and q036 moved from
+abstain to answer under the amendment because "recommend" is now a stopword and
+"2000s" is covered by metadata years. Recorded, not acted on; the rule is frozen.

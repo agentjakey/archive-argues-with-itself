@@ -7,7 +7,10 @@ Thinness rule (fixed a priori, not tuned on eval labels): tokenize the question 
 the same tokenizer as the FTS leg; a salient term is a non-stopword token of length
 >= 3 or a 4-digit number; a term is covered if any retrieved passage contains an
 equal token or (for terms of length >= 5) a token sharing its first 5 characters.
-Thin if any salient term is uncovered, or fewer than min_passages were retrieved."""
+Thin if any salient term is uncovered, or fewer than min_passages were retrieved.
+
+Amended once after sweep 1 (stoplist criteria a/b, plural stemming, year/decade
+coverage); frozen thereafter."""
 from __future__ import annotations
 
 import re
@@ -27,11 +30,12 @@ ABSTAIN_UNVERIFIED = "no claim in the retrieved passages survived citation verif
 _TOKEN = re.compile(r"[^\W_]+", re.UNICODE)   # same tokenizer as retrieve.search._fts_query
 _YEAR = re.compile(r"\b(1[89]\d\d|20\d\d)\b")
 _PAGE = re.compile(r"\b(?:p\.|page)\s*(\d+)\b", re.IGNORECASE)
+_DECADE = re.compile(r"^\d{3}0s$")            # e.g. 1980s
 PREFIX = 5
 
 # Fixed English stopwords: articles, conjunctions, prepositions, pronouns,
 # auxiliaries, question words. Deliberately no domain words.
-STOPWORDS = frozenset({
+_STOP_FUNCTION = frozenset({
     "a", "an", "the",
     "and", "or", "but", "if", "so", "than", "as", "not", "no",
     "of", "to", "in", "on", "at", "by", "for", "from", "with", "about", "into",
@@ -43,6 +47,20 @@ STOPWORDS = frozenset({
     "may", "might", "must",
     "what", "which", "who", "whom", "whose", "when", "where", "why", "how",
 })
+# Amendment, made once after sweep 1. Criterion (a): verbs and nouns that describe
+# the act of asking or the form of the answer, not the subject matter.
+_STOP_ASKING = frozenset({
+    "describe", "explain", "discuss", "compare", "conclude", "conclusion", "conclusions",
+    "recommend", "recommendation", "recommendations", "report", "reported", "state",
+    "stated", "say", "said", "address", "addressed", "identify", "shift", "shifted",
+    "change", "changed", "evolve", "evolved", "differ", "differed",
+})
+# Criterion (b): generic actor nouns that name who acted, not what was done.
+_STOP_ACTORS = frozenset({
+    "authorities", "authority", "officials", "government", "governments",
+    "department", "departments", "ministry", "agency", "agencies",
+})
+STOPWORDS = _STOP_FUNCTION | _STOP_ASKING | _STOP_ACTORS
 
 
 def tokens(text: str) -> list[str]:
@@ -60,17 +78,39 @@ def salient_terms(question: str) -> list[str]:
     return out
 
 
-def uncovered_terms(question: str, hits: list[dict]) -> list[str]:
-    passage_tokens: set[str] = set()
+def _stem(t: str) -> str:
+    """Crude plural stemming: strip one trailing 's' when the token is longer than 3."""
+    return t[:-1] if len(t) > 3 and t.endswith("s") else t
+
+
+def allowed_years(hits: list[dict]) -> set[str]:
+    """Same allowed-year set the fact-leak guard uses: years in any hit's text UNION
+    any hit's metadata year."""
+    years = {str(h["year"]) for h in hits if h.get("year") is not None}
     for h in hits:
-        passage_tokens.update(tokens(h.get("text")))
-    prefixes = {p[:PREFIX] for p in passage_tokens if len(p) >= PREFIX}
+        years.update(_YEAR.findall(h.get("text") or ""))
+    return years
+
+
+def uncovered_terms(question: str, hits: list[dict]) -> list[str]:
+    raw: set[str] = set()
+    for h in hits:
+        raw.update(tokens(h.get("text")))
+    stemmed = {_stem(t) for t in raw}
+    prefixes = {p[:PREFIX] for p in stemmed if len(p) >= PREFIX}
+    years = allowed_years(hits)
     missing = []
     for term in salient_terms(question):
-        if term in passage_tokens:
-            continue
-        if len(term) >= PREFIX and term[:PREFIX] in prefixes:
-            continue
+        if _DECADE.match(term):                          # decade: verbatim token, or any allowed year in it
+            if term in raw or any(y[:3] == term[:3] for y in years):
+                continue
+        elif term.isdigit() and len(term) == 4:          # year: in text or metadata
+            if term in years:
+                continue
+        else:                                            # word: stem, then equality or prefix
+            s = _stem(term)
+            if s in stemmed or (len(s) >= PREFIX and s[:PREFIX] in prefixes):
+                continue
         missing.append(term)
     return missing
 

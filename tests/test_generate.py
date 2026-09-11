@@ -18,20 +18,21 @@ from archive_debugger.retrieve.embed import StubEmbedder
 MIN = {"min_passages": 3}
 
 
-def _seed(conn, n_items=3, per_item=2, text="vaccination programme text", fts=True):
+def _seed(conn, n_items=3, per_item=2, text="vaccination programme text", fts=True, year=1985):
     hits = []
+    decade = f"{(year // 10) * 10}s"
     for i in range(n_items):
         item = f"item{i}"
         conn.execute("INSERT INTO items (item_id, title, year, dated, decade, jurisdiction_norm) VALUES (?,?,?,?,?,?)",
-                     (item, f"T{i}", 1985, 1, "1980s", "alberta"))
+                     (item, f"T{i}", year, 1, decade, "alberta"))
         for leaf in range(per_item):
             pid = f"{item}#{leaf}:0"
             conn.execute("INSERT INTO pages (page_id,item_id,leaf_index,printed_page) VALUES (?,?,?,?)",
                          (f"{item}#{leaf}", item, leaf, str(leaf + 1)))
             conn.execute("INSERT INTO passages (passage_id,item_id,page_id,leaf_index,text) VALUES (?,?,?,?,?)",
                          (pid, item, f"{item}#{leaf}", leaf, text))
-            hits.append({"passage_id": pid, "item_id": item, "title": f"T{i}", "year": 1985, "dated": 1,
-                         "decade": "1980s", "jurisdiction": "alberta", "leaf_index": leaf,
+            hits.append({"passage_id": pid, "item_id": item, "title": f"T{i}", "year": year, "dated": 1,
+                         "decade": decade, "jurisdiction": "alberta", "leaf_index": leaf,
                          "printed_page": str(leaf + 1), "text": text,
                          "page_deep_link": citation.deep_link(item, leaf),
                          "bm25_rank": (len(hits) + 1) if fts else None, "dense_rank": len(hits) + 1})
@@ -95,6 +96,31 @@ def test_single_source_answers_and_is_flagged():
     assert not a.abstained and a.text == "A programme ran."
     assert a.coverage.single_source is True and a.coverage.n_items == 1
     conn.close()
+
+
+def test_decade_term_covered_by_metadata_year():
+    conn = db.init_db(":memory:")
+    hits = _seed(conn, year=1984)                       # no year anywhere in passage text
+    assert gen.uncovered_terms("vaccination 1980s", hits) == []
+    assert gen.uncovered_terms("vaccination 1990s", hits) == ["1990s"]
+    conn.close()
+    # Verbatim decade token in the text also covers, even when metadata is outside the decade.
+    conn = db.init_db(":memory:")
+    hits = _seed(conn, year=1975, text="in the 1980s vaccination programme")
+    assert gen.uncovered_terms("vaccination 1980s", hits) == []
+    conn.close()
+
+
+def test_plural_stemming_covers_risks():
+    conn = db.init_db(":memory:")
+    hits = _seed(conn, text="occupational risk assessment")
+    assert gen.uncovered_terms("occupational risks", hits) == []
+    conn.close()
+
+
+def test_describe_is_never_salient():
+    assert gen.salient_terms("describe the programme") == ["programme"]
+    assert "describe" not in gen.salient_terms("What did authorities describe?")
 
 
 def test_well_formed_answer_passes_with_page_level_links():
@@ -207,6 +233,22 @@ def test_cli_stub_provider_is_offline_and_abstains_unverified(tmp_path):
         r.close()
     assert out["abstained"] is True and out["text"] == gen.ABSTAIN_UNVERIFIED
     assert "anthropic" not in sys.modules
+
+
+def test_cli_qid_loads_text_and_filters_from_seed(tmp_path):
+    import pytest
+    from archive_debugger.generate import cli
+    r, seed = _fixture_retriever_and_seed(tmp_path)
+    try:
+        q = cli.question_from_seed(seed, "qA")
+        assert q["text"] == "vaccination hospital" and q["filters"] == {}
+        out = cli.answer_question(Path("config/pilot.toml"), q["text"], provider="stub",
+                                  filters=q["filters"], retriever=r)
+        assert out["abstained"] is True and out["text"] == gen.ABSTAIN_UNVERIFIED
+        with pytest.raises(KeyError):
+            cli.question_from_seed(seed, "nope")
+    finally:
+        r.close()
 
 
 def test_importing_generate_does_not_import_anthropic():
