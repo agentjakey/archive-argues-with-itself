@@ -257,3 +257,6 @@ web/out/
 !tests/fixtures/
 !tests/fixtures/**
 !tests/fixtures/**/*.db
+
+reports/ 
+docs/ 

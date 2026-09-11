@@ -10,8 +10,8 @@ from pathlib import Path
 
 from archive_debugger.eval import questions, store
 from archive_debugger.generate import answer as gen
-from archive_debugger.generate.llm import TEMPERATURE, CitedSentence, Draft, StubLLM
-from archive_debugger.generate.prompt import SYSTEM
+from archive_debugger.generate.llm import AnthropicLLM, CitedSentence, Draft, StubLLM
+from archive_debugger.generate.prompt import SYSTEM, build_user_prompt
 from archive_debugger.ingest import db
 from archive_debugger.retrieve import citation, index, search
 from archive_debugger.retrieve.config import RetrieveConfig
@@ -279,12 +279,14 @@ def test_cited_but_failing_abstains_unverified():
 def test_generation_metadata_present_and_prompt_sha():
     conn = db.init_db(":memory:")
     hits = _seed(conn)
-    meta = gen.generation_meta(provider="stub", model="m", temperature=TEMPERATURE, max_tokens=2048, top_k=12)
+    meta = gen.generation_meta(provider="stub", model="m", temperature=None, max_tokens=2048, top_k=12)
     a = gen.compose("q", hits, StubLLM(Draft(sentences=[CitedSentence(text="Ran.", cited_ids=[hits[0]["passage_id"]])])),
                     functools.partial(citation.verify_citations, conn), generation=meta, **MIN)
     assert set(a.generation) == {"provider", "model", "temperature", "prompt_sha256", "max_tokens", "top_k"}
-    assert a.generation["prompt_sha256"] == hashlib.sha256(SYSTEM.encode("utf-8")).hexdigest()
-    assert a.generation["provider"] == "stub" and a.generation["temperature"] == 0.0
+    import inspect
+    expected = hashlib.sha256((SYSTEM + inspect.getsource(build_user_prompt)).encode("utf-8")).hexdigest()
+    assert a.generation["prompt_sha256"] == expected
+    assert a.generation["provider"] == "stub" and a.generation["temperature"] is None  # nothing was sent
     # abstentions carry it too
     t = gen.compose("covid", hits, StubLLM(Draft(sentences=[])), functools.partial(citation.verify_citations, conn),
                     generation=meta, **MIN)
@@ -309,6 +311,43 @@ def test_cli_model_override_reaches_make_llm(tmp_path, monkeypatch):
         r.close()
     assert seen["kind"] == "stub" and seen["model"] == "claude-sonnet-5"
     assert out["generation"]["model"] == "claude-sonnet-5" and out["generation"]["provider"] == "stub"
+
+
+class _FakeMessages:
+    def __init__(self):
+        self.kwargs = None
+
+    def parse(self, **kwargs):
+        self.kwargs = kwargs
+
+        class _Block:            # mirrors anthropic.types.parsed_message.ParsedTextBlock
+            type = "text"
+            text = '{"sentences": [{"text": "Canned.", "cited_ids": ["x#0:0"]}]}'
+            parsed_output = Draft(sentences=[CitedSentence(text="Canned.", cited_ids=["x#0:0"])])
+
+        class _Resp:             # mirrors ParsedMessage: parsed output is on the content block
+            content = [_Block()]
+            stop_reason = "end_turn"
+
+        return _Resp()
+
+
+class _FakeClient:
+    def __init__(self):
+        self.messages = _FakeMessages()
+
+
+def test_anthropic_llm_call_shape_with_fake_client():
+    fake = _FakeClient()
+    llm = AnthropicLLM("claude-haiku-4-5-20251001", 2048, client=fake)   # no real client constructed
+    d = llm.draft("SYS", "USER")
+    kw = fake.messages.kwargs
+    assert kw["model"] == "claude-haiku-4-5-20251001" and kw["max_tokens"] == 2048
+    assert kw["extra_body"] == {"temperature": 0.0}                       # temperature travels in the body
+    assert kw["output_format"] is Draft                                   # structured-output config present
+    assert kw["system"] == "SYS" and kw["messages"] == [{"role": "user", "content": "USER"}]
+    assert d.sentences[0].text == "Canned."
+    assert "anthropic" not in sys.modules                                 # injection kept it lazy
 
 
 def test_importing_generate_does_not_import_anthropic():

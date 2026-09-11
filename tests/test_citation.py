@@ -22,6 +22,12 @@ def test_deep_link_wellformed():
     assert citation.deep_link("x", 131) == "https://archive.org/details/x/page/n131"
 
 
+def test_page_url_builders():
+    assert citation.page_thumb("abc", 7) == "https://archive.org/download/abc/page/n7_thumb.jpg"
+    assert citation.page_image("abc", 7) == "https://archive.org/download/abc/page/n7_medium.jpg"
+    assert citation.embed_url("abc", 7) == "https://archive.org/embed/abc#page/n7"
+
+
 def test_citation_printed_page_null_safe():
     conn = db.init_db(":memory:")
     _seed(conn, printed=None)

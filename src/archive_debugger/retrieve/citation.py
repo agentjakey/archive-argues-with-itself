@@ -21,6 +21,21 @@ def deep_link(item_id: str, leaf_index: int) -> str:
     return f"https://archive.org/details/{item_id}/page/n{leaf_index}"
 
 
+def page_thumb(item_id: str, leaf_index: int) -> str:
+    """IA page thumbnail image for a leaf (display only; still page-level, N3)."""
+    return f"https://archive.org/download/{item_id}/page/n{leaf_index}_thumb.jpg"
+
+
+def page_image(item_id: str, leaf_index: int) -> str:
+    """IA medium-size page image for a leaf."""
+    return f"https://archive.org/download/{item_id}/page/n{leaf_index}_medium.jpg"
+
+
+def embed_url(item_id: str, leaf_index: int) -> str:
+    """IA BookReader embed opened at the leaf."""
+    return f"https://archive.org/embed/{item_id}#page/n{leaf_index}"
+
+
 @dataclass(frozen=True)
 class Citation:
     passage_id: str

@@ -29,6 +29,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest==8.3.4",
+    "httpx==0.28.1",            # starlette TestClient transport (distinct from the SDK's httpx2)
 ]
 
 [project.urls]

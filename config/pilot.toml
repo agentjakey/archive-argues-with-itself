@@ -81,6 +81,7 @@ downweight_low = 0.75
 provider = "anthropic"                 # tests/CI override to "stub"
 model = "claude-haiku-4-5-20251001"    # cheap default; step up via config, never in code
 max_tokens = 2048
+temperature = 0.0                      # sent in the request body; omit/null to leave the API default
 top_k = 12
 # Thinness (a priori, NOT tuned on eval labels): question-term coverage. Abstain when
 # any salient question term is mentioned by no retrieved passage, or when fewer than

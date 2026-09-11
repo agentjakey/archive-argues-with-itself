@@ -14,6 +14,7 @@ coverage); frozen thereafter."""
 from __future__ import annotations
 
 import hashlib
+import inspect
 import re
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -144,11 +145,16 @@ class Answer:
         return asdict(self)
 
 
+def prompt_material() -> str:
+    """Everything that shapes the prompt: the SYSTEM text plus the source of the
+    user-prompt template, so a template change alters prompt_sha256."""
+    return SYSTEM + inspect.getsource(build_user_prompt)
+
+
 def generation_meta(*, provider: str, model: str, temperature: float, max_tokens: int, top_k: int) -> dict:
-    """Run metadata attached to every Answer (abstentions included). prompt_sha256 is
-    the hash of the SYSTEM prompt actually in force."""
+    """Run metadata attached to every Answer (abstentions included)."""
     return {"provider": provider, "model": model, "temperature": temperature,
-            "prompt_sha256": hashlib.sha256(SYSTEM.encode("utf-8")).hexdigest(),
+            "prompt_sha256": hashlib.sha256(prompt_material().encode("utf-8")).hexdigest(),
             "max_tokens": max_tokens, "top_k": top_k}
 
 

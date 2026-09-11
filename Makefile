@@ -39,7 +39,7 @@ eval:
 	@echo "eval: not implemented yet -> src/archive_debugger/eval"
 
 serve:
-	@echo "serve: not implemented yet -> src/archive_debugger/api (read-only)"
+	$(PYTHON) -m uvicorn archive_debugger.api.app:app --host 127.0.0.1 --port 8000
 
 web:
 	cd web && npm run dev

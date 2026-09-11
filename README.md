@@ -18,8 +18,9 @@ carries a page-level citation, and the tool never claims to reach the present
 | Hybrid index | done | `index/vectors.db` (BM25 + 384-dim dense) |
 | Page-level citations + verifier | done | fixed IA deep links + deterministic 3-check verifier |
 | Evaluation | done | 50 human-labeled questions; `reports/phase7/eval_report.md` |
-| Synthesis (`generate/`) | planned | -- |
-| Read-only API + web UI | planned | -- |
+| Synthesis (`generate/`) | done | cited answers with code-decided abstention; deterministic citation verification |
+| Read-only API (`api/`) | done | FastAPI `/ask`, `/examples`, `/health` |
+| Web UI (`web/`) | planned | -- |
 
 ## Quickstart
 
@@ -60,6 +61,18 @@ python -m archive_debugger.eval.assist                       # writes the retrie
 python -m archive_debugger.eval.label --from-worksheet reports/phase7/label_worksheet.jsonl --apply-decisions eval/gold_decisions.json
 python -m archive_debugger.eval.report                       # -> reports/phase7/
 ```
+
+### Serve (read-only API)
+
+```powershell
+# Windows, no make needed:
+.\.venv\Scripts\python.exe -m uvicorn archive_debugger.api.app:app --host 127.0.0.1 --port 8000
+```
+
+`GET /health`, `GET /examples` (seed questions with gold verdicts), `POST /ask`
+`{question, filters?, provider?, model?}` -> `{answer, evidence}`. Set
+`ALLOWED_ORIGINS` (comma-separated) to enable CORS; unset means same-origin only.
+When `web/dist` exists it is served at `/` with an `index.html` fallback.
 
 ### Scope is config-driven
 

@@ -17,7 +17,7 @@ from typing import Optional
 from archive_debugger.eval import store
 from archive_debugger.eval.questions import load_seed
 from archive_debugger.generate.answer import compose, coverage_of, generation_meta, is_thin
-from archive_debugger.generate.llm import TEMPERATURE, make_llm
+from archive_debugger.generate.llm import make_llm
 from archive_debugger.retrieve import citation
 from archive_debugger.retrieve.filters import Filters
 from archive_debugger.retrieve.search import Retriever
@@ -26,10 +26,12 @@ from archive_debugger.retrieve.search import Retriever
 def load_generate_config(config_path: Path) -> dict:
     with Path(config_path).open("rb") as fh:
         g = tomllib.load(fh).get("generate", {})
+    temp = g.get("temperature")
     return {
         "provider": g.get("provider", "anthropic"),
         "model": g.get("model", "claude-haiku-4-5-20251001"),
         "max_tokens": int(g.get("max_tokens", 2048)),
+        "temperature": None if temp is None else float(temp),
         "top_k": int(g.get("top_k", 12)),
         "min_passages": int(g.get("min_passages", 3)),
     }
@@ -43,10 +45,17 @@ def question_from_seed(seed_path: Path, qid: str) -> dict:
     raise KeyError(f"qid {qid} not found in {seed_path}")
 
 
-def _filters(d: Optional[dict]) -> Filters:
+def build_filters(d: Optional[dict]) -> Filters:
+    """Filters from a plain dict (seed record, CLI, or API body)."""
     d = d or {}
     return Filters(period=d.get("period"), jurisdiction=d.get("jurisdiction"),
                    doc_type=d.get("doc_type"), min_ocr=float(d.get("min_ocr", 0.0) or 0.0))
+
+
+def sent_temperature(kind: str, gcfg: dict) -> Optional[float]:
+    """What is actually sent to a provider: the configured value for anthropic, None
+    for the stub (nothing is sent anywhere)."""
+    return gcfg["temperature"] if kind == "anthropic" else None
 
 
 def answer_question(config_path: Path, question: str, *, provider: Optional[str] = None,
@@ -56,13 +65,14 @@ def answer_question(config_path: Path, question: str, *, provider: Optional[str]
     kind = provider or gcfg["provider"]
     model_id = model or gcfg["model"]
     k = top_k or gcfg["top_k"]
+    temp = sent_temperature(kind, gcfg)
     own = retriever is None
     retriever = retriever or Retriever(config_path)
     try:
-        hits = retriever.search(question, filters=_filters(filters), top_k=k)
-        llm = make_llm(kind, model_id, gcfg["max_tokens"])
+        hits = retriever.search(question, filters=build_filters(filters), top_k=k)
+        llm = make_llm(kind, model_id, gcfg["max_tokens"], temperature=temp)
         verify = functools.partial(citation.verify_citations, retriever.conn)
-        gen = generation_meta(provider=kind, model=model_id, temperature=TEMPERATURE,
+        gen = generation_meta(provider=kind, model=model_id, temperature=temp,
                               max_tokens=gcfg["max_tokens"], top_k=k)
         return compose(question, hits, llm, verify, min_passages=gcfg["min_passages"], generation=gen).to_dict()
     finally:
@@ -79,7 +89,7 @@ def sweep(config_path: Path, seed_path: Path, *, top_k: Optional[int] = None,
     rows = []
     try:
         for q in load_seed(seed_path):
-            hits = retriever.search(q["text"], filters=_filters(q.get("filters")), top_k=top_k or gcfg["top_k"])
+            hits = retriever.search(q["text"], filters=build_filters(q.get("filters")), top_k=top_k or gcfg["top_k"])
             cov = coverage_of(q["text"], hits)
             gold = store.gold_verdict(retriever.conn, q["qid"])
             rows.append({
