@@ -91,3 +91,9 @@ the system; the labels are Jake's decisions, but the proposals that framed them
 were not. Batch 2 (the 35 passages left uncertain in batch 1) was proposed by an
 LLM assistant from the worksheet excerpts and reviewed and decided by Jake, the
 same as batch 1.
+
+Phase 16 sentence judgments (`eval/judgments_phase16.json`: supported / partly /
+not for every kept sentence of the audit run, against the full text of each
+cited passage) carry the same disclosure: proposed by an LLM assistant from the
+full cited passage text, reviewed and decided by Jake. The same model family
+generates the answers being judged.

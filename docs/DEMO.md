@@ -72,9 +72,17 @@ that happens only for a question that is not cached. If a visitor types a new
 question with no network, the app shows the server's error in plain words; the
 example chips and stories keep working.
 
-To keep the exhibit fully offline-safe, leave the ask box available only if you
-accept that new questions need the network; in kiosk mode the filter controls
-are hidden but the question box is not.
+To keep the exhibit fully offline-safe, add `offline=1` to the kiosk URL:
+
+```
+http://127.0.0.1:8000/?kiosk=1&offline=1
+```
+
+`offline=1` hides the ask box, so visitors can only open the example questions
+(all cached) and the stories; nothing on screen can trigger a model call. The
+flag is preserved as the visitor moves around and by the attract loop's return
+home. Without it, kiosk mode hides the filter controls but leaves the question
+box available, and a typed question needs the network.
 
 ## Reset between visitors
 

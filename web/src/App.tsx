@@ -15,7 +15,7 @@ import { useAsk } from "./hooks/useAsk";
 import { useCoverage } from "./hooks/useCoverage";
 import { useExamples } from "./hooks/useExamples";
 import { useHealth } from "./hooks/useHealth";
-import { useKiosk } from "./hooks/useKiosk";
+import { useKiosk, useOffline } from "./hooks/useKiosk";
 import { About } from "./components/pages/About";
 import { Gaps } from "./components/pages/Gaps";
 import { HowItWorks } from "./components/pages/HowItWorks";
@@ -27,6 +27,7 @@ import type { EvidenceRow, Example, Filters, Story } from "./types";
 
 export default function App() {
   const kiosk = useKiosk();
+  const offline = useOffline();   // ?offline=1: no ask box, cached questions and stories only
   const health = useHealth();
   const chips = useExamples();
   const { status, elapsed, response, error, run, completion } = useAsk();
@@ -47,10 +48,10 @@ export default function App() {
   const goView = useCallback(
     (next: View | null) => {
       setView(next);
-      applyState({ q: asked, filters: askedFilters, pins, kiosk, view: next ?? undefined }, "push");
+      applyState({ q: asked, filters: askedFilters, pins, kiosk, offline, view: next ?? undefined }, "push");
       window.scrollTo({ top: 0 });
     },
-    [asked, askedFilters, pins, kiosk],
+    [asked, askedFilters, pins, kiosk, offline],
   );
 
   // Back/forward buttons move between the ask view and the reading pages.
@@ -86,10 +87,10 @@ export default function App() {
       setStoryRows(null);
       setDrawer(null);
       setChipsCollapsed(true);
-      applyState({ q, filters: f, pins: [], kiosk }, "push");
+      applyState({ q, filters: f, pins: [], kiosk, offline }, "push");
       void run({ question: q, filters: f });
     },
-    [run, kiosk],
+    [run, kiosk, offline],
   );
 
   const onAsk = useCallback(() => ask(question.trim(), filters), [ask, question, filters]);
@@ -110,8 +111,9 @@ export default function App() {
 
   // Kiosk attract loop: idle 60 s -> cycle stories; any touch -> back to the home screen.
   const goHome = useCallback(() => {
-    window.location.assign(`${window.location.pathname}${kiosk ? "?kiosk=1" : ""}`);
-  }, [kiosk]);
+    const flags = [kiosk ? "kiosk=1" : "", offline ? "offline=1" : ""].filter(Boolean).join("&");
+    window.location.assign(`${window.location.pathname}${flags ? `?${flags}` : ""}`);
+  }, [kiosk, offline]);
   useAttractLoop({ enabled: kiosk, stories, onShow: openStory, onHome: goHome });
 
   const pick = useCallback(
@@ -127,17 +129,17 @@ export default function App() {
     (row: EvidenceRow) => {
       setPins((p) => {
         const next = p.includes(row.passage_id) ? p.filter((x) => x !== row.passage_id) : [...p, row.passage_id].slice(-2);
-        applyState({ q: asked, filters: askedFilters, pins: next, kiosk }, "replace");
+        applyState({ q: asked, filters: askedFilters, pins: next, kiosk, offline }, "replace");
         return next;
       });
     },
-    [asked, askedFilters, kiosk],
+    [asked, askedFilters, kiosk, offline],
   );
 
   const clearPins = useCallback(() => {
     setPins([]);
-    applyState({ q: asked, filters: askedFilters, pins: [], kiosk }, "replace");
-  }, [asked, askedFilters, kiosk]);
+    applyState({ q: asked, filters: askedFilters, pins: [], kiosk, offline }, "replace");
+  }, [asked, askedFilters, kiosk, offline]);
 
   const pinned = pins.map((id) => byId.get(id)).filter((r): r is EvidenceRow => Boolean(r));
   const compare: [EvidenceRow, EvidenceRow] | null =
@@ -155,6 +157,7 @@ export default function App() {
       {view === "about" && <About />}
       {view === null && (
       <>
+      {!offline && (
       <AskBar
         question={question}
         filters={filters}
@@ -164,6 +167,7 @@ export default function App() {
         onFilters={setFilters}
         onAsk={onAsk}
       />
+      )}
       <ExampleChips
         chips={chips}
         activeText={asked}

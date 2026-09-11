@@ -122,6 +122,39 @@ reviewed and decided by Jake. The same model family generates the answers. The
 labels are Jake's decisions, but the proposals that framed them were not, and
 the numbers in the Phase 13 table should be read with that in mind.
 
+## Verification checks support, not relevance
+
+Source: `reports/phase16/audit_report.md`; `reports/phase13/retrieval_report.md` (sweep).
+
+In the Phase 16 audit run (every seed question once, real provider, final
+configuration), the tool abstained on 10 of the 15 should-abstain questions and
+answered 5 (q015, q030, q036, q037, q049). Jake's judgment of those five: each
+is an all-supported answer to a different question than the one asked, on the
+wrong period or the wrong object. Every sentence cited a real passage that was
+in the evidence and resolved to a recorded page, and said what the passage said;
+the passages simply did not bear on the question's period or subject. The
+three structural checks and the fact-leak guard guarantee that a kept sentence
+is supported by its page; nothing in the pipeline guarantees that the page is
+about what was asked. The frozen thinness rule predicted 9 of these 15 would
+pass the gate (`retrieval_report.md`, final sweep); five did and answered off
+target, four passed the gate and then abstained downstream when no sentence
+survived. False abstentions on the 35 answerable questions: 0 in the run, as
+the sweep predicted.
+
+## British Columbia is not a second scope on this archive
+
+Source: `reports/bc_audit/bc_sizing.md`.
+
+Applying the Week 1 method to British Columbia: texts whose publisher or
+creator names British Columbia yield 590 public-health items, 278 of them dated
+1960-2009, against the 2,500 floor (OCR present on 25 of 25 sampled). Only 1 of
+30 sampled BC health texts sits in `collection:governmentpublications`, the
+Canadian-government portal the pilot uses; the rest sit in medical-heritage and
+medical-library collections (Wellcome, McGill/Osler, UK MHL) and microfiche.
+BC government health publishing on the Internet Archive lives in library and
+microfiche collections, not the government portal, and it is an order of
+magnitude short of the floor in the window.
+
 ## Pooled labels favour the retriever that was pooled
 
 Source: `reports/phase13/retrieval_report.md`.

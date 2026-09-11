@@ -64,6 +64,25 @@ export function Gaps() {
         <Source file="reports/phase9/generation_report.md" /> <Source file="reports/phase13/retrieval_report.md" />
       </p>
 
+      <h3>Verification checks support, not relevance</h3>
+      <p>
+        In the audit run (every question once, real model, final configuration) the tool abstained on 10 of the
+        15 questions that should be abstained and answered 5 (q015, q030, q036, q037, q049). Each of those five is
+        an all-supported answer to a different question than the one asked, on the wrong period or the wrong
+        object: every sentence cites a real page that says what the sentence says. The three checks guarantee
+        that a kept sentence is supported by its page; nothing guarantees the page is about what was asked. Read
+        the pages. False abstentions on the 35 answerable questions: 0.{" "}
+        <Source file="reports/phase16/audit_report.md" />
+      </p>
+
+      <h3>British Columbia is not a second scope here</h3>
+      <p>
+        Applying the corpus-choice method to BC: texts whose publisher or creator names British Columbia give
+        590 public-health items, 278 of them dated 1960 to 2009, against the 2,500-item floor. Only 1 of 30
+        sampled BC health texts sits in the Canadian-government portal collection this tool uses; the rest live
+        in medical-library and microfiche collections. <Source file="reports/bc_audit/bc_sizing.md" />
+      </p>
+
       <h3>The judge is not independent</h3>
       <p>
         The last 315 gold labels were proposed by an LLM assistant from the worksheet excerpts and each was
