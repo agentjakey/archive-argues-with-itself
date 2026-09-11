@@ -43,7 +43,34 @@ _REF_HEAD = re.compile(
     r"^\s*(references|bibliography|works cited|literature cited|sources consulted|selected bibliography)\s*$",
     re.IGNORECASE | re.MULTILINE)
 _NUMBERED = re.compile(r"^\s*\(?\d{1,3}[.)]\s+\S", re.MULTILINE)                       # "12. Smith J ..."
-_JOURNAL = re.compile(r"\b(1[89]\d\d|20\d\d)\b[^\n]{0,80}\b\d{1,3}\s*(\(\d+\))?\s*:\s*\d{1,4}(\s*-\s*\d{1,4})?\b")
+# Citation signature (v2). v1 accepted any "year ... digits:digits" and fired on times
+# and ratios in statistical tables and minutes (back precision ~60% in the sample).
+# v2 needs a year and, within 60 characters, a volume:page-RANGE ("1991;12(4):50-52",
+# "1946. ... 28: 262-266", "1994 : 26-31") or an explicit page range ("pp. 12-19").
+_CITE = re.compile(
+    r"\b(1[89]\d\d|20\d\d)\b[^\n]{0,60}?(?:\b\d{1,4}\s*(?:\(\d+\))?\s*:\s*\d{1,4}\s*-\s*\d{1,4}\b"
+    r"|\bpp?\.\s*\d{1,4}\s*-\s*\d{1,4}\b)")
+# Author-list evidence: a line, or a sentence after a period/semicolon, opening with a
+# Title-case surname and initials closed by a period or comma: "Kaiserman MJ," /
+# "Silverman, L.," / "Holmes, H.B.," / "Monk, M. 1991". Title-case only, because
+# ALL-CAPS OCR ("REPORT OF THE") and "Sir, I have" read as surname + initials otherwise.
+_AUTHOR = re.compile(
+    r"(?:^|\n|[.;]\s+)[A-Z][a-z'\-]{2,},?\s+(?:(?:[A-Z]\.){1,3},?|[A-Z]{1,3}[.,])(?:\s|$)", re.MULTILINE)
+_YEAR_NEAR = re.compile(r"\b(1[89]\d\d|20\d\d)\b")
+AUTHOR_YEAR_WINDOW = 160   # a reference entry states its year within a line or two of its author
+
+
+def author_entries(text: str) -> int:
+    """Author openings followed by a year within AUTHOR_YEAR_WINDOW characters. Speaker
+    lists in minutes ("Tobin, M.P.") and staff rosters ("Anderson, R. C., M.D.") open
+    the same way but carry no year; bibliography entries do."""
+    n = 0
+    for m in _AUTHOR.finditer(text):
+        if _YEAR_NEAR.search(text, m.end(), m.end() + AUTHOR_YEAR_WINDOW):
+            n += 1
+    return n
+
+
 _INDEX_LINE = re.compile(r"^[A-Za-z][^\n]{2,60},\s*\d{1,4}(,\s*\d{1,4})*\s*$", re.MULTILINE)  # "Tuberculosis, 12, 45"
 # "Findings .... 15" / "Findings 15": a line with a letter that ends in whitespace + 1-4 digits.
 # Anchored at line start so each line is scanned once (the unanchored form backtracked
@@ -67,7 +94,8 @@ def signals(text: str) -> dict:
         "index_head": bool(_INDEX_HEAD.search(text)),
         "ref_head": bool(_REF_HEAD.search(text)),
         "numbered": len(_NUMBERED.findall(text)),
-        "journal": len(_JOURNAL.findall(text)),
+        "cites": len(_CITE.findall(text)),
+        "authors": author_entries(text),
         "index_lines": len(_INDEX_LINE.findall(text)),
         "leader_share": len(_LEADER.findall(text)) / n,
         "page_only_share": len(_PAGE_ONLY.findall(text)) / n,
@@ -85,14 +113,16 @@ def classify(leaf_index: int, n_leaves: int, text: str) -> tuple[str, str]:
     can be checked rule by rule."""
     s = signals(text or "")
     front_zone, back_zone = zones(leaf_index, n_leaves)
-    # Back matter: strong reference/index evidence anywhere in the item (per-chapter
-    # reference lists included); weaker list evidence only in the back zone.
-    if s["ref_head"] and (s["numbered"] >= 3 or s["journal"] >= 2):
+    # Back matter: reference/index evidence anywhere in the item (per-chapter reference
+    # lists included); weaker list evidence only in the back zone. A reference list
+    # needs citation evidence (page ranges next to years, or author-name openings),
+    # never a bare numbered list or a year beside a colon.
+    if s["ref_head"] and (s["cites"] >= 1 or s["authors"] >= 2 or s["numbered"] >= 3):
         return "back", "references_heading"
-    if s["journal"] >= 3 or (s["numbered"] >= 6 and s["journal"] >= 1):
-        return "back", "reference_list"
     if s["index_head"] or s["index_lines"] >= 8:
         return "back", "index"
+    if s["cites"] >= 3 or (s["cites"] >= 2 and s["authors"] >= 2) or s["authors"] >= 5:
+        return "back", "reference_list"
     if back_zone and (s["numbered"] >= 5 or s["index_lines"] >= 4 or s["page_only_share"] >= 0.3):
         return "back", "back_zone_list"
     # Front matter: only in the front zone.

@@ -53,8 +53,29 @@ doc_type=commission, so the filter routes away from the actual Sick Children
 documents. The filter was left unchanged; this is consistent with the abstain
 verdict.
 
+## Changelog
+
+- 2026-09-11, Phase 13 pooled-labels extension (additive). Gold had been pooled
+  from the Phase 7 retriever's top-30; the Phase 13 candidate retriever surfaced
+  315 unjudged passages in its top-20 across 45 questions
+  (`reports/phase13/extension_worksheet.jsonl`). Jake labeled them: 280 labels
+  written (30 relevant, 250 not) and 35 marked uncertain, which received NO label
+  and stay unjudged. No Phase 7 label was changed; no verdict changed (the three
+  verdict notes in the extension concern questions whose gold was already
+  answerable). Totals now 1,780 labels, 370 relevant. Decisions:
+  `eval/gold_extension_decisions.json`; reasons: `eval/gold_extension_notes.md`;
+  applied with `python -m archive_debugger.eval.extend --apply`. Eval rows scored
+  on the extended set carry `"gold": "phase7+phase13_extension"` in
+  `eval_runs.config_json`.
+
 ## Methods
 
 Gold labels were assigned by Jake by reviewing the retrieval worksheet excerpts
 and deciding relevance per candidate and answerable/abstain per question; they are
 human-reviewed judgments, not authored from scratch.
+
+For the Phase 13 extension, candidate labels were proposed by an LLM assistant
+from the worksheet excerpts and each was reviewed and decided by Jake. The same
+model family generates the system's answers, so the judge is not independent of
+the system; the labels are Jake's decisions, but the proposals that framed them
+were not.

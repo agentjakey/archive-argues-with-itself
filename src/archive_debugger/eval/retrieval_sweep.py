@@ -29,19 +29,29 @@ from archive_debugger.retrieve.embed import make_embedder
 from archive_debugger.retrieve.search import Retriever
 
 OUT_DIR = Path("reports/phase13")
+# Every state spells out all five switches, so the table means the same thing whatever
+# config/pilot.toml currently has turned on (the candidate is on there after Phase 13).
+# Section weights and pool_size still come from config.
+_OFF = {"section_demote": False, "fts_drop_stopwords": False, "doc_type_family_filter": False,
+        "later_years_flag": False, "per_item_cap": 0}
 _ALL = {"section_demote": True, "fts_drop_stopwords": True, "doc_type_family_filter": True, "later_years_flag": True}
 STATES: list[tuple[str, dict]] = [
-    ("baseline", {}),
-    ("section_demote", {"section_demote": True}),
-    ("fts_drop_stopwords", {"fts_drop_stopwords": True}),
-    ("doc_type_family_filter", {"doc_type_family_filter": True}),
-    ("cap3", {"per_item_cap": 3}),
-    ("cap5", {"per_item_cap": 5}),
-    ("later_years", {"later_years_flag": True}),          # annotation only; ranking identical to baseline
+    ("baseline", {**_OFF}),                                          # Phase 7 retrieval
+    ("section_demote", {**_OFF, "section_demote": True}),
+    ("fts_drop_stopwords", {**_OFF, "fts_drop_stopwords": True}),
+    ("doc_type_family_filter", {**_OFF, "doc_type_family_filter": True}),
+    ("cap3", {**_OFF, "per_item_cap": 3}),
+    ("cap5", {**_OFF, "per_item_cap": 5}),
+    ("later_years", {**_OFF, "later_years_flag": True}),           # annotation only; ranking identical to baseline
     ("all_on_cap3", {**_ALL, "per_item_cap": 3}),
     ("all_on_cap5", {**_ALL, "per_item_cap": 5}),
+    # The Phase 13 candidate: every switch on, cap 5, section weights from config
+    # ([retrieve].section_weight_front/back), so the back weight follows the
+    # classifier-precision decision rather than a hard-coded value.
+    ("candidate", {**_ALL, "per_item_cap": 5}),
 ]
-SWEEP_STATES = ("baseline", "all_on_cap3", "all_on_cap5")
+CANDIDATE = dict(STATES)["candidate"]
+SWEEP_STATES = ("baseline", "all_on_cap3", "all_on_cap5", "candidate")
 
 
 def _state_file(out_dir: Path, name: str) -> Path:
@@ -88,10 +98,11 @@ class DenseMemo:
 
 def run(config_path: Path, *, seed_path: Path = Path("eval/seed_questions.jsonl"), out_dir: Path = OUT_DIR,
         embedder=None, conn=None, states: Optional[list] = None, only: Optional[list[str]] = None,
-        resume: bool = True, dense_memo: bool = True, progress=print) -> dict:
+        resume: bool = True, dense_memo: bool = True, gold: str = "phase7", progress=print) -> dict:
     """Evaluate each state, checkpointing one JSON per state under out_dir/states so an
     interrupted sweep resumes; `only` restricts this call to named states; the report is
-    assembled from every checkpoint present."""
+    assembled from every checkpoint present. `gold` names the label set scored against
+    and is recorded in every eval_runs row (N4: gold extensions are recorded)."""
     with Path(config_path).open("rb") as fh:
         cfg_all = tomllib.load(fh)
     ecfg = cfg_all.get("eval", {})
@@ -128,9 +139,9 @@ def run(config_path: Path, *, seed_path: Path = Path("eval/seed_questions.jsonl"
                 rep = report.evaluate(conn, r, recall_ks=recall_ks, ndcg_k=ndcg_k,
                                       min_relevant=int(ecfg.get("abstention_min_relevant", 1)), top_n=top_n)
                 run_id = report._persist(conn, rep, json.dumps(
-                    {"phase": 13, "state": name, "retrieve": cfg.switches(), "eval": ecfg}, ensure_ascii=False),
-                    run_id=f"p13-{name}-{ts}")
-                state = {"name": name, "ts": ts, "run_id": run_id, "switches": cfg.switches(),
+                    {"phase": 13, "state": name, "gold": gold, "retrieve": cfg.switches(), "eval": ecfg},
+                    ensure_ascii=False), run_id=f"p13-{name}-{ts}")
+                state = {"name": name, "ts": ts, "run_id": run_id, "gold": gold, "switches": cfg.switches(),
                          "aggregate": rep["aggregate"], "per_question": rep["per_question"], "labeled": rep["labeled"],
                          "sweep": None, "seconds": None}
                 if name in SWEEP_STATES and Path(seed_path).exists():
@@ -256,11 +267,13 @@ def main(argv=None) -> int:
     p.add_argument("--state", action="append", default=None, help="run only this state (repeatable); default all")
     p.add_argument("--report-only", action="store_true", help="assemble the report from existing checkpoints")
     p.add_argument("--no-resume", action="store_true", help="recompute states even when a checkpoint exists")
+    p.add_argument("--gold", default="phase7", help="name of the label set scored against, recorded in eval_runs")
     args = p.parse_args(argv)
     if args.report_only:
         out = assemble(args.out)
     else:
-        out = run(args.config, seed_path=args.seed, out_dir=args.out, only=args.state, resume=not args.no_resume)
+        out = run(args.config, seed_path=args.seed, out_dir=args.out, only=args.state, resume=not args.no_resume,
+                  gold=args.gold)
     print(json.dumps({name: st["aggregate"] for name, st in out["states"].items()}, ensure_ascii=False, indent=2))
     return 0
 

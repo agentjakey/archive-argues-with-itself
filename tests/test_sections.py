@@ -35,11 +35,43 @@ def test_front_zone_rules():
 def test_back_rules_anywhere_and_in_zone():
     assert sections.classify(50, N, REFERENCES) == ("back", "references_heading")   # per-chapter references count
     no_head = REFERENCES.split("\n", 1)[1]
-    assert sections.classify(50, N, no_head) == ("back", "reference_list")        # journal citations without heading
+    assert sections.classify(50, N, no_head) == ("back", "reference_list")        # page-range citations without heading
     assert sections.classify(98, N, INDEX) == ("back", "index")
     numbered = "\n".join(f"{i}. Appendix table {i}" for i in range(1, 7))
     assert sections.classify(98, N, numbered) == ("back", "back_zone_list")
     assert sections.classify(50, N, numbered) == ("body", "default")              # weak list mid-item is body
+
+
+TABLE = ("TABLE 15. Infant Deaths and Infant Death Rates, Canada and Provinces, Selected Years, 1931-1991\n"
+         "Date : 11-20-1988 Time: 21:52:24 to 22:01:05 Flow: 0.8\n"
+         "In 1961, with 84.38 health professionals per 10,000 persons, Ontario occupied third rank\n"
+         "1980-81 to 2000-01 0-14 15-24 25-44 45-64 65+\n"
+         "Members of the Committee present: Margaret Bridgman, Harold Culbert, Grant Hill. 30-5 1995 Sante 3079\n")
+AUTHORS = ("Kaiserman MJ, Collishaw NE. Trends in Canadian tobacco consumption, 1980-1990. Chronic Diseases in Canada.\n"
+           "Pipe A. Tobacco control in Canada: the signs of success. Chronic Diseases in Canada.\n"
+           "Silverman, L., H. Schulte and M. First. 1946. Further studies on sensory response.\n"
+           "Holmes, H.B., B.B. Hoskins, and M. Gross, eds. 1980. Birth Control and Controlling Birth.\n"
+           "Gordon, P.R., Carlson, L., et coll. 1996. A multisite collaborative for the development.\n")
+MINUTES = ("Thursday, May 26, 1988. The Chairman: The Chair sees a quorum.\n"
+           "Members present: Bridgman, M.P., Culbert, M.P., Hill, M.P., Jackson, M.P., Patry, M.P., Picard, M.P.\n"
+           "Epp, P.C., Hon. Jake, Minister of National Health and Welfare, appeared as a witness.\n"
+           "Anderson, R. C., M.D., F.R.C.S. Chief of Surgery. Bell, J. A., M.D. Director of Laboratories.\n"
+           "Carter, W. H., M.D. Chief of Medicine. Dawson, K. L., M.D. Chief of Paediatrics.\n")
+
+
+def test_tables_and_minutes_with_years_and_times_are_not_references():
+    s = sections.signals(TABLE)
+    assert s["cites"] == 0                                                        # times/ratios/age bands are not citations
+    assert sections.classify(50, N, TABLE) == ("body", "default")
+    assert sections.classify(96, N, TABLE) == ("body", "default")                 # even in the back zone
+    assert sections.signals("REPORT OF THE DIRECTOR OF THE PROVINCIAL LABORATORY. Sir, I have the honour")["authors"] == 0
+    assert sections.signals(MINUTES)["authors"] <= 2                             # speaker lists and rosters carry no years
+    assert sections.classify(50, N, MINUTES) == ("body", "default")
+
+
+def test_author_openings_count_as_reference_evidence():
+    assert sections.signals(AUTHORS)["authors"] >= 5
+    assert sections.classify(50, N, AUTHORS) == ("back", "reference_list")
 
 
 def test_title_page_outside_front_zone_is_body():

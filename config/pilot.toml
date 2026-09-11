@@ -77,16 +77,19 @@ downweight_high = 1.0
 downweight_medium = 0.9
 downweight_low = 0.75
 # Phase 13 retrieval-quality switches. Each is independently switchable and the
-# eval sweep (eval.retrieval_sweep) records baseline, each alone, and all on.
-# Defaults reproduce Phase 7 exactly.
-section_demote = false               # 1. multiply fused score for front/back-matter pages (ingest.sections must have run)
+# eval sweep (eval.retrieval_sweep) records baseline (all off = Phase 7), each
+# alone, and all on. The values below are the Phase 13 candidate, turned on after
+# the pooled-labels extension (reports/phase13/retrieval_report.md, final section;
+# eval_runs rows p13-candidate-* and config-retrieve-*). Set all five to off/0 to
+# reproduce the Phase 7 retriever.
+section_demote = true                # 1. multiply fused score for front/back-matter pages (ingest.sections must have run)
 section_weight_front = 0.5
-section_weight_back = 0.5
-fts_drop_stopwords = false           # 2. drop the frozen stoplist before the FTS OR query
-doc_type_family_filter = false       # 3. a doc_type filter matches its whole family (below)
+section_weight_back = 0.5            # back classifier v2 read 18/20 on the sample; see sections_report.md
+fts_drop_stopwords = true            # 2. drop the frozen stoplist before the FTS OR query
+doc_type_family_filter = true        # 3. a doc_type filter matches its whole family (below)
 pool_size = 30                       # 4. hits handed to the evidence trail; the model takes [generate].top_k of them
-per_item_cap = 0                     # 4. 0 = off; N = at most N passages per item in the ranking
-later_years_flag = false             # 5. annotate hits whose text mentions years later than item year + 1
+per_item_cap = 5                     # 4. 0 = off; N = at most N passages per item in the ranking
+later_years_flag = true              # 5. annotate hits whose text mentions years later than item year + 1
 
 [retrieve.doc_type_families]
 commission = ["commission", "royal_commission"]

@@ -239,7 +239,7 @@ def test_retrieval_sweep_states_and_report(tmp_path):
     assert (tmp_path / "out" / "states" / "cap3.json").exists()
     out = retrieval_sweep.run(cfg, seed_path=seed, out_dir=tmp_path / "out", embedder=StubEmbedder(dim=64), progress=quiet)
     names = [n for n, _ in retrieval_sweep.STATES]
-    assert list(out["states"]) == names and len(names) == 9
+    assert list(out["states"]) == names and len(names) == 10 and names[-1] == "candidate"
     memo = json.loads((tmp_path / "out" / "states" / "dense_memo.json").read_text(encoding="utf-8"))
     assert len(memo) >= 1                                                        # dense leg memoized across states
     nomemo = retrieval_sweep.run(cfg, seed_path=seed, out_dir=tmp_path / "nomemo", embedder=StubEmbedder(dim=64),
@@ -249,12 +249,12 @@ def test_retrieval_sweep_states_and_report(tmp_path):
     for st in out["states"].values():
         assert {"recall@5", "recall@10", "recall@20", "ndcg@10", "unjudged@10", "unjudged@20"} <= set(st["aggregate"])
     assert out["states"]["baseline"]["aggregate"]["unjudged@10"] == 0.8          # 10 retrieved, 2 judged
-    assert set(out["sweeps"]) == {"baseline", "all_on_cap3", "all_on_cap5"}
+    assert set(out["sweeps"]) == set(retrieval_sweep.SWEEP_STATES)
     conn = db.init_db(str(civ))
     rows = conn.execute("SELECT run_id, config_json FROM eval_runs WHERE run_id LIKE 'p13-%'").fetchall()
     conn.close()
     assert all(json.loads(r["config_json"])["phase"] == 13 for r in rows)
-    assert len({json.loads(r["config_json"])["state"] for r in rows}) == 9      # one row per state (+1 nomemo rerun)
+    assert len({json.loads(r["config_json"])["state"] for r in rows}) == len(names)   # one row per state (+1 nomemo rerun)
     md = (tmp_path / "out" / "retrieval_report.md").read_text(encoding="utf-8")
     assert "| all_on_cap5 |" in md and "## Thinness sweep, state baseline" in md
 

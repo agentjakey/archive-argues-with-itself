@@ -154,13 +154,16 @@ the Internet Archive.
 BM25 over an FTS5 index fused with dense cosine search via Reciprocal Rank Fusion
 (k=60), a soft OCR-quality down-weight, and composable pre-filters (period /
 jurisdiction / doc_type / min-OCR). Five independently switchable Phase 13 changes
-live under `[retrieve]` in `config/pilot.toml`, all off by default so the Phase 7
-numbers reproduce: front/back-matter demotion (`section_demote`, from the
-`ingest.sections` page classes), FTS stopword dropping, doc_type family filtering,
-a per-item cap on the ranking, and a later-years annotation on hits whose text
-mentions years after the item's date. The retriever returns a pool of
-`pool_size` hits for the evidence trail; the model sees only the first
-`[generate].top_k` of that same ranking, and the trail marks the rest. Dense vectors use
+live under `[retrieve]` in `config/pilot.toml`: front/back-matter demotion
+(`section_demote`, from the `ingest.sections` page classes), FTS stopword
+dropping, doc_type family filtering, a per-item cap on the ranking, and a
+later-years annotation on hits whose text mentions years after the item's date.
+The shipped values are the Phase 13 candidate (all on, cap 5), chosen against
+labeled numbers on an additively extended gold set
+(`reports/phase13/retrieval_report.md`); setting all five off reproduces the
+Phase 7 retriever. The retriever returns a pool of `pool_size` hits for the
+evidence trail; the model sees only the first `[generate].top_k` of that same
+ranking, and the trail marks the rest. Dense vectors use
 `paraphrase-multilingual-MiniLM-L12-v2` (384-dim, EN/FR) in a standalone
 `index/vectors.db` via sqlite-vec (flat, exact). Every result carries page-level
 provenance and the deep link

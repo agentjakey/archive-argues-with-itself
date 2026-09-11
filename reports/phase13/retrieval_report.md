@@ -1,6 +1,6 @@
 # Phase 13 retrieval report
 
-one eval_runs row per state: `p13-baseline-20260911T151906Z`, `p13-section_demote-20260911T153022Z`, `p13-fts_drop_stopwords-20260911T153943Z`, `p13-doc_type_family_filter-20260911T153943Z`, `p13-cap3-20260911T153943Z`, `p13-cap5-20260911T153943Z`, `p13-later_years-20260911T153943Z`, `p13-all_on_cap3-20260911T153943Z`, `p13-all_on_cap5-20260911T153943Z`
+one eval_runs row per state: `p13-baseline-20260911T151906Z`, `p13-section_demote-20260911T162319Z`, `p13-fts_drop_stopwords-20260911T153943Z`, `p13-doc_type_family_filter-20260911T153943Z`, `p13-cap3-20260911T153943Z`, `p13-cap5-20260911T153943Z`, `p13-later_years-20260911T153943Z`, `p13-all_on_cap3-20260911T162319Z`, `p13-all_on_cap5-20260911T162319Z`, `p13-candidate-20260911T165257Z`
 
 Pooled values: gold was labeled from the BASELINE retriever's top-30 (Phase 7), so
 recall and nDCG denominators are that judged pool, not the corpus. A state that
@@ -12,14 +12,15 @@ share of each top-k with no human label at all. Read the two columns together.
 | state | recall@5 | recall@10 | recall@20 | ndcg@10 | unjudged@10 | unjudged@20 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | baseline | 0.1928 | 0.4083 | 0.6823 | 0.4420 | 0.0000 | 0.0000 |
-| section_demote | 0.2072 | 0.4725 | 0.8032 | 0.4820 | 0.0000 | 0.0110 |
+| section_demote | 0.2072 | 0.4725 | 0.8061 | 0.4852 | 0.0000 | 0.0140 |
 | fts_drop_stopwords | 0.2000 | 0.3756 | 0.6763 | 0.4392 | 0.1480 | 0.2060 |
 | doc_type_family_filter | 0.1928 | 0.4083 | 0.6823 | 0.4420 | 0.0200 | 0.0200 |
 | cap3 | 0.1917 | 0.3858 | 0.6129 | 0.4260 | 0.0280 | 0.0630 |
 | cap5 | 0.1928 | 0.3994 | 0.6553 | 0.4360 | 0.0200 | 0.0380 |
 | later_years | 0.1928 | 0.4083 | 0.6823 | 0.4420 | 0.0000 | 0.0000 |
-| all_on_cap3 | 0.2388 | 0.4251 | 0.6547 | 0.4835 | 0.2240 | 0.3390 |
-| all_on_cap5 | 0.2537 | 0.4352 | 0.6955 | 0.4881 | 0.2100 | 0.3160 |
+| all_on_cap3 | 0.2417 | 0.4251 | 0.6547 | 0.4840 | 0.2280 | 0.3410 |
+| all_on_cap5 | 0.2565 | 0.4352 | 0.6978 | 0.4885 | 0.2140 | 0.3150 |
+| candidate | 0.2565 | 0.4352 | 0.6978 | 0.4885 | 0.2140 | 0.3150 |
 
 Switch states:
 
@@ -32,6 +33,7 @@ Switch states:
 - later_years: later_years_flag
 - all_on_cap3: section_demote, fts_drop_stopwords, doc_type_family_filter, later_years_flag, per_item_cap=3
 - all_on_cap5: section_demote, fts_drop_stopwords, doc_type_family_filter, later_years_flag, per_item_cap=5
+- candidate: section_demote, fts_drop_stopwords, doc_type_family_filter, later_years_flag, per_item_cap=5
 
 ## Per-question change, all_on_cap3 vs baseline (questions that moved)
 
@@ -47,7 +49,7 @@ Switch states:
 | q008 | answerable | 0.4615 -> 0.3846 | 0.6906 -> 0.6083 | 0.1000 |
 | q009 | answerable | 0.3333 -> 0.0833 | 0.4007 -> 0.1389 | 0.0000 |
 | q010 | answerable | 0.2000 -> 0.2500 | 0.2844 -> 0.3511 | 0.0000 |
-| q012 | answerable | 0.3000 -> 0.5000 | 0.2736 -> 0.5513 | 0.3000 |
+| q012 | answerable | 0.3000 -> 0.5000 | 0.2736 -> 0.5670 | 0.4000 |
 | q013 | answerable | 0.1818 -> 0.4545 | 0.1488 -> 0.3914 | 0.0000 |
 | q014 | answerable | 0.2857 -> 0.4286 | 0.1980 -> 0.3036 | 0.1000 |
 | q016 | answerable | 0.6364 -> 0.6364 | 0.7632 -> 0.8007 | 0.0000 |
@@ -61,7 +63,7 @@ Switch states:
 | q025 | answerable | 0.3750 -> 0.3750 | 0.4773 -> 0.4884 | 0.0000 |
 | q027 | answerable | 0.5455 -> 0.4545 | 0.6968 -> 0.6118 | 0.1000 |
 | q031 | answerable | 0.8333 -> 0.8333 | 0.5906 -> 0.6679 | 0.3000 |
-| q032 | answerable | 1.0000 -> 0.0000 | 0.3155 -> 0.0000 | 0.3000 |
+| q032 | answerable | 1.0000 -> 0.0000 | 0.3155 -> 0.0000 | 0.4000 |
 | q033 | answerable | 0.2500 -> 0.2500 | 0.1952 -> 0.1301 | 0.5000 |
 | q034 | answerable | 0.4286 -> 0.5714 | 0.4644 -> 0.3665 | 0.0000 |
 | q035 | answerable | 0.7500 -> 0.7500 | 0.7668 -> 0.6760 | 0.2000 |
@@ -83,7 +85,7 @@ Switch states:
 | q008 | answerable | 0.4615 -> 0.3846 | 0.6906 -> 0.6083 | 0.1000 |
 | q009 | answerable | 0.3333 -> 0.0833 | 0.4007 -> 0.1389 | 0.0000 |
 | q010 | answerable | 0.2000 -> 0.2500 | 0.2844 -> 0.3511 | 0.0000 |
-| q012 | answerable | 0.3000 -> 0.5000 | 0.2736 -> 0.5513 | 0.3000 |
+| q012 | answerable | 0.3000 -> 0.5000 | 0.2736 -> 0.5670 | 0.4000 |
 | q013 | answerable | 0.1818 -> 0.3636 | 0.1488 -> 0.2848 | 0.0000 |
 | q014 | answerable | 0.2857 -> 0.2857 | 0.1980 -> 0.2242 | 0.1000 |
 | q016 | answerable | 0.6364 -> 0.6364 | 0.7632 -> 0.8007 | 0.0000 |
@@ -96,7 +98,7 @@ Switch states:
 | q025 | answerable | 0.3750 -> 0.3750 | 0.4773 -> 0.4884 | 0.0000 |
 | q027 | answerable | 0.5455 -> 0.5455 | 0.6968 -> 0.6995 | 0.0000 |
 | q031 | answerable | 0.8333 -> 0.8333 | 0.5906 -> 0.6679 | 0.3000 |
-| q032 | answerable | 1.0000 -> 0.0000 | 0.3155 -> 0.0000 | 0.3000 |
+| q032 | answerable | 1.0000 -> 0.0000 | 0.3155 -> 0.0000 | 0.4000 |
 | q033 | answerable | 0.2500 -> 0.2500 | 0.1952 -> 0.1301 | 0.3000 |
 | q034 | answerable | 0.4286 -> 0.5714 | 0.4644 -> 0.3665 | 0.0000 |
 | q035 | answerable | 0.7500 -> 0.7500 | 0.7668 -> 0.6760 | 0.2000 |
@@ -206,7 +208,7 @@ q036   abstain     False         False
 q037   abstain     False         False         
 q038   answerable  False         False         
 q039   abstain     False         True          covid, 2020
-q040   abstain     False         True          guidance, 2018
+q040   abstain     False         False         
 q041   abstain     False         True          vaping
 q042   abstain     False         False         
 q043   answerable  False         False         
@@ -219,7 +221,7 @@ q049   abstain     False         False
 q050   abstain     False         True          around, 2017
 
 answerable questions that would abstain: 0
-abstain questions that would answer:     8
+abstain questions that would answer:     9
 ```
 
 ## Thinness sweep, state all_on_cap5 (retrieval + frozen rule, no model call)
@@ -265,7 +267,7 @@ q036   abstain     False         False
 q037   abstain     False         False         
 q038   answerable  False         False         
 q039   abstain     False         True          covid, 2020
-q040   abstain     False         True          2018
+q040   abstain     False         False         
 q041   abstain     False         True          vaping
 q042   abstain     False         False         
 q043   answerable  False         False         
@@ -278,152 +280,265 @@ q049   abstain     False         False
 q050   abstain     False         True          2017
 
 answerable questions that would abstain: 0
-abstain questions that would answer:     8
+abstain questions that would answer:     9
+```
+
+## Thinness sweep, state candidate (retrieval + frozen rule, no model call)
+
+```
+qid    gold        single_source would_abstain uncovered_terms
+q001   answerable  False         False         
+q002   answerable  False         False         
+q003   answerable  False         False         
+q004   answerable  False         False         
+q005   answerable  False         False         
+q006   answerable  False         False         
+q007   answerable  False         False         
+q008   answerable  False         False         
+q009   answerable  False         False         
+q010   answerable  False         False         
+q011   answerable  False         False         
+q012   answerable  False         False         
+q013   answerable  False         False         
+q014   answerable  False         False         
+q015   abstain     False         False         
+q016   answerable  False         False         
+q017   answerable  False         False         
+q018   answerable  False         False         
+q019   answerable  False         False         
+q020   answerable  False         False         
+q021   answerable  False         False         
+q022   abstain     False         True          find
+q023   answerable  False         False         
+q024   answerable  False         False         
+q025   answerable  False         False         
+q026   answerable  False         False         
+q027   answerable  False         False         
+q028   answerable  False         False         
+q029   abstain     False         False         
+q030   abstain     False         False         
+q031   answerable  False         False         
+q032   answerable  False         False         
+q033   answerable  False         False         
+q034   answerable  False         False         
+q035   answerable  False         False         
+q036   abstain     False         False         
+q037   abstain     False         False         
+q038   answerable  False         False         
+q039   abstain     False         True          covid, 2020
+q040   abstain     False         False         
+q041   abstain     False         True          vaping
+q042   abstain     False         False         
+q043   answerable  False         False         
+q044   answerable  False         False         
+q045   answerable  False         False         
+q046   abstain     False         True          1905
+q047   abstain     False         False         
+q048   abstain     False         True          2015
+q049   abstain     False         False         
+q050   abstain     False         True          2017
+
+answerable questions that would abstain: 0
+abstain questions that would answer:     9
 ```
 
 ## Section classifier (ingest.sections, one-time; copied from sections_report.md)
 
-- pages classified: 448496; NULL (no text): 19909; 2990.6 pages/s
-- front: 12680 pages, 15002 passages
-- body: 433091 pages, 724323 passages
-- back: 2725 pages, 6568 passages
+- pages classified: 448496; NULL (no text): 19909; 1176.4 pages/s
+- front: 12684 pages, 15016 passages
+- body: 431989 pages, 723510 passages
+- back: 3823 pages, 7367 passages
 
 | method | pages |
 | --- | ---: |
-| default | 433091 |
+| default | 431989 |
 | cover | 5714 |
 | title_page | 4943 |
-| reference_list | 2666 |
-| contents | 1749 |
+| reference_list | 3764 |
+| contents | 1753 |
 | transmittal | 274 |
 | back_zone_list | 49 |
 | index | 10 |
 
 ### Sample: front
 
-- `31761115565004#1` leaf 1/2 [cover] SOME SKILLS AND CONCEPTS - (FOOD FOR PRESCHOOLERS) - PAMPHLET
-  > Effect of Heat on Objects. What changes occur in form, taste, volume, etc., when different foods are heated? What substances conduct heat? Does every- thing evaporate? Sets and Numbers. Dozen eggs, pound of butter, quart of milk. Sequence, 
-- `31761115565053#0` leaf 0/2 [cover] You can prevent falls : the Falls Prevention Initiative
-  > F You can prevent falls: we Sy CA | = iy 6 74.3 The Falls Prevention Initiative e What is the Falls Prevention Initiative? Health Canada and Veterans Affairs Canada have established a community-based health promotion initiative to help iden
-- `31761115566069#7` leaf 7/184 [contents] NATIONAL HEALTH FILM LIBRARY CATALOGUE
-  > DENTAL HEALTH About: Puce s c:....Acicndsusnee ee ] Something NorGnew meee... 116 COWIE CVO esnsscacssuxecgdedevvertous cavueccuecet aimee a eee 22 Swab Your Choppers= ee 12?T Dariny s Dental Dates ccc. oan ee 27 Target: Tooth Decayamer ee.
-- `31761115568552#7` leaf 7/164 [title_page] Charting Canada's future : a report of the Demographic Review
-  > Digitized by the Internet Archive in 2022 with funding from University of Toronto https://archive.org/details/31/61115568552
-- `31761115569196#24` leaf 24/454 [title_page] 31761115569196
-  > PROVINCIAL AND TERRITORIAL HEALTH CARE INSURANCE PLANS Canada Health Act Annual Report 1998-1999
-- `31761115571309#7` leaf 7/224 [contents] Suicide in Canada : update of the Report of the Task Force on Suicide 
-  > List of Tables and Figures (For a discussion of official suicide statistics and their interpretation, see Appendix 4 and the introductory note for Appendix 6) ‘Table: Tables le able: Table 3: davies: Table 4.1: Table 4.2: Table 4.3: ‘Table:
-- `31761116496498#3` leaf 3/270 [title_page] Proceedings - Royal Commission on matters of health and safety arising
-  > MY: i chad pid Sh F vine ty Pe) * \) y a) re, " Oe
-- `31761118500032#3` leaf 3/364 [title_page] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
-  > Digitized by the Internet Archive in 2023 with funding from University of Toronto https://archive.org/details/31/761118500032
-- `31761118500693#0` leaf 0/536 [cover] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
-  > Fd ad al MM DN 3 1761 11850069 3 UTM Ontario { USO B/C ROYAL COMMISSION OF ING IRY ID ) CERTAIN DEATHS AT THE HOSPITAL FOR SICK p RELATED MATTERS. 180 Dundas Street West Toronto, Ontario P.S.A. Lamex, Q.C. £.A. Cronk Thomas Millar Transcrip
-- `31761118937606#2` leaf 2/92 [title_page] Designated substances in the workplace : a general guide to the regula
-  > Covesesnes P Ublion ten Designated Substances in the Workplace: A General Guide to the Regulations July 1995
-- `31761119709236#0` leaf 0/700 [cover] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
-  > Jatabiseoientens ite i wl heb aR 94d Wy alah <i ‘e pis Tht AA sy ie i a ity ee Ve! i Ms Ab “AR WAR IS U8 Wy bei aha ‘ His ny UE a Hd ry ue He Ata ay nian ioe a i Ui ae i wrviahe ene fot hdon a ne : Ce ay a rae prt ' h As 4) a i a Vn f a Pe 
-- `31761120610522#4` leaf 4/182 [contents] Proposed revisions to the sections of the regulations for construction
-  > TABLE OF CONTENTS PROPOSED REVISIONS TO THE SECTIONS OF THE REGULATIONS FOR CONSTRUCTION PROJECTS, INDUSTRIAL ESTABLISHMENTS, AND MINES AND MINING PLANTS, WHICH ADDRESS ELECTRICAL HAZARDS Purpose of these Notes Background EXPLANATORY NOTES 
-- `39262609040028#1` leaf 1/310 [cover] Proceedings of the Standing Senate Committee on Social Affairs, Scienc
-  > THE STANDING SENATE COMMITTEE ON SOCIAL AFFAIRS, SCIENCE AND TECHNOLOGY The Honourable Michael Kirby, Chair The Honourable Wilbert J. Keon, Deputy Chair and The Honourable Senators: * Austin, P.C. Gill (or Rompkey, P.C.) Johnson Callbeck Le
-- `ableg_33398003988283#1` leaf 1/204 [cover] Annual report of the Alberta Hospitalization Benefits Plan / 1970
-  > are SS: ae Fs a Se SSS 5
-- `annualreport2000albe_4#1` leaf 1/20 [cover] Annual report
-  > For additional copies of this report, contact the Public Health Appeal Board 24th Floor, 10025 JASPER AVENUE EDMONTON, ALBERTA T5J 2N3 (780) 427-2813 ISSN 0845 -6089
-- `healthriskassess00flemuoft#4` leaf 4/202 [title_page] Health risk assessment of mercury contamination in the vicinity of ICI
-  > HEALTH RISK ASSESSMENT OF MERCURY CONTAMINATION IN THE VICINITY OF ICI FOREST PRODUCTS CORNWALL, ONTARIO Report prepared by: S.W. Fleming, L.V. Radzius and F. Ursitti Standards Development Branch Report prepared for: Ontario Ministry of Env
-- `premierscommiss1988#1` leaf 1/2 [cover] The Premier's Commission on Future Health Care for Albertans [newslett
-  > Project Update On December 18, 1987 Premier Getty an- nounced the establishment of the seven-member Commission to recommend a course of action to ensure Alberta's health care system continues to be the best in Canada well into the next cent
-- `science2408albe#4` leaf 4/92 [title_page] Science 24
-  > We hope you'll enjoy your study of Energy in Action. To moke your learning a bit easier, a teacher will help guide you through the material. So whenever you see this icon. fT turn on your audiocassette and listen.
-- `soilinvestigatio4255ontauoft#21` leaf 21/582 [contents] Soil Investigation and Human Health Risk Assessment for the Rodney Str
-  > Soil Investigation and Human Health Risk Assessment for the Rodney Street Community; Port Colborne: March 2002 Algoma, which was located on the east side of the Welland canal bordering on the southwest comer of the Rodney Street community, 
-- `utilizationofmed00albe#7` leaf 7/236 [title_page] Utilization of medical services
-  > UTILIZATION OF MEDICAL SERVICES LEVEL 1: EXECUTIVE SUMMARY
+- `31761115566655#0` leaf 0/84 [cover] Smoking by-laws in Canada, 1991
+  > MO 31761 11556665 5 Health and Welfare Santé et Bien-étre social Canada Canada Smoking By-laws in Canada 1991
+- `31761116510587#6` leaf 6/1196 [title_page] HEARINGS OF THE CANADA ROYAL COMMISSION ON HEALTH SERVICES, 1961-1962
+  > Te | F268 ~~ ROYAL COMMISSION — ON HEALTH SERVICES HEARINGS HELD AT REGINA SASK. VOLUME NUMBER: DATE: 18 JANUARY 23 1962 Wa\e ries Veiaul § 2 se = OFFICIAL REPORTERS ANGUS, STONEHOUSE & CO. LTD. BOARD OF TRADE BLDG. 11 ADELAIDE ST. W. TORON
+- `31761118499961#0` leaf 0/552 [cover] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
+  > 1 DYNA IM IM Ontario ROYAL COMMISSION OF DEATHS AT THE HOSPITA RELATED MATTERS. 180 Dundas Street West Toronto, Ontario 4 Cnr! The Honourable Mr. Justice S.G.M. ange P.S.A. Lamek, Q.C. E.A. Cronk ' : é Associate Counsel Thomas Millar Admin 
+- `31761118500867#8` leaf 8/278 [title_page] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
+  > Xo? 24 25 ANGUS. STONEHOUSE & CO. LTD. (ii) TORONTO. ONTARIO INDEX OF EXHIBITS Description Page No. A Statement of Claim and a Statement of Defence submitted by Mr. Percival 2977
+- `31761118500909#8` leaf 8/508 [title_page] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
+  > ANGUS, STONEHOUSE & CO. LTO. 306 307 TORONTO, ONTARIO INDEX JE ie oaks Le oD Description (Cont'd) Summaries of Various Administra- tive Practices by Carol Browne. Photograph of IV System Document entitled: Care Plan". "Patient 353) Page No.
+- `31761118944321#6` leaf 6/126 [contents] COTTAGE POLLUTION STUDY. PART 1- METHODOLOGY AND STUDY OF THREE LAKES
+  > INDEX Contents oummary Part I — Introduction Part II - The Study of Jack Lake Part III -— The Study of Steenburg Lake Part IV - The Study of Six Mile Lake Part V -— Comparing the Lakes Part VI — Conclusions Notice to Cottage Owners Blank Da
+- `31761118944388#12` leaf 12/338 [contents] PROFILES HEALTH OCCUPATIONS
+  > TABLE OF CONTENTS NURSING Page Registered Nurse 1 Registered Nurse (Psychiatric) 6 Public Health Nurse 10 Registered Nursing Assistant 14 Hospital Orderly E7 Nursing Aide 19 GENERAL MEDICAL CARE Basic Physician 31 Clinical Psychologist 40 M
+- `31761119720431#0` leaf 0/736 [cover] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
+  > meat ott e ks ee — ‘ 5 > = ee wey ae vate eee
+- `39091118030083#4` leaf 4/94 [contents] [Report]
+  > Table of Contents PENAL AI LET OT Cit oe ls ill Sea Be ea Ri Re oe EE 5 ACEO. Vin ati Reale os it aire Peer vars Rad Oe eT ae ne 7 PEROOUCTION Dm rremn hmmm ee rte) DM ake Martaru rn Veta AES 9 Chapter 1 1 USS BIG Ce Qiao RS aR LLC naa aL n
+- `ableg_33398003121703#0` leaf 0/68 [cover] Preliminary Report to the Honourable Neil Crawford - Minister of Healt
+  > CAaALHS8/O | oc. | CA2 ALHS 810 1974P66 Preliminary Report to the Honourable Nei | 1 Crawford - Minister of Health So 2 GT HAM 3 4 3 3398 00312 1703 , PRELIMINARY REPORT | to 4 THE HONOURABLE NEIL CRAWFORD a MINISTER OF HEALTH AND SOCIAL DE
+- `ableg_33398004679394#0` leaf 0/240 [cover] Inventory : services for the individual and the community / 1968 Vol. 
+  > VERT HIBU oee nrvenrvertt 2 INVENIUKY INVENTORY SERVICES FOR THE INDIVIDUAL AND THE pOMMUNITY VOLUME ONE
+- `albertashealthya00albe#2` leaf 2/60 [contents] Alberta's healthy aging and seniors wellness strategic framework 2002-
+  > Alberta's Healthy Aging and Seniors Wellness Strategic Framework Contents Executive Summary 1 I Introduction 8 II Background and Methodology 9 A. Background 9 B. Methodologies and approaches 13 III Components of Healthy Aging 15 A. Some hea
+- `annualreportalbe1978albe#0` leaf 0/100 [cover] Annual Report : Alberta Hospitals & Medical Care
+  > Annual Report 1978/79 Axxta HOSPITALS & MEDICAL CARE
+- `delorovillageenv01ontauoft#1` leaf 1/206 [cover] Deloro Village Environmental Health Risk Study - Overall Technical Sum
+  > U999 - Her Majesty the Queen in Right of Ontario as Represented by the Minister of the Environment
+- `educationphysiqu00onta_0#0` leaf 0/32 [cover] Education physique et hygiène, cycle supérieur
+  > Ontario Ministère de l’Éducation OfK;d 113- Vstoa,'t'^ "x / c - P'C fr^rscW Education physique et hygiène Autorisé par Cycle supérieur le ministre de l’Éducation 1975 l’hon. Thomas L. Wells DO NOT REMOVE
+- `micro_IA40243301_0487#2` leaf 2/49 [contents] Abuse in lesbian relationships : information and resources
+  > Our mission is to help the people of Canada maintain and improve their health. Health Canada Published by the authority of the Minister of Health Abuse in Lesbian Relationships: Information and Resources was prepared by Laurie Chesley, Donn
+- `micro_IA40243301_2747#0` leaf 0/36 [cover] Rural and northern hospital networks : Network 17, Brant/Norfolk
+  > M1 © THE QUEEN’S PRINTER FOR ONTARIO 1999 REPRODUCED WITH PERMISSION L’IMPRIMEUR DE LA REINE POUR L’ONTARIO REPRODUIT AVEC PERMISSION : dq R 20 Victoria Street rr se 1a Toronto, Ontario MSC 2N8 - nse _ Tel: (416) 362-5211 a division of 1HS 
+- `occupationalinj001albe_12#0` leaf 0/26 [cover] Occupational injury and disease in Alberta
+  > >fV> ; Jbetta HUMAN RESOURCES AND EMPLOYMENT the people & workplace department September 2001 Occupational Injuries and Diseases in Alberta Tar Sands 1996 to 2000 Upstream Oil and Gas Sub-Sector #6
+- `reportofactiviti1997albe#1` leaf 1/24 [cover] Report of activities for ...
+  > Digitized by the Internet Archive in 2016 https://archive.org/details/reportofactiviti1997albe
+- `socresinvedm1983#12` leaf 12/786 [title_page] Social resources inventory. Edmonton region
+  > MAP OF EDMONTON REGION
 
 ### Sample: body
 
-- `31761095474680#123` leaf 123/216 [default] European cooperation on environmental health aspects of the control of
-  > Tetra eds i wit) ‘eo b VRltw rioqee . Sty Sa LITe3 Weeds vi cy Lore? "i Seat) a er alae Mi ie 7, a hei. dr ; mt Oak aah ' Oia AD fie Oy} ay 7 ; : One ak ae ee ; PAV ‘ ae a Ne i‘, varareey? Real fo’ Phe tr?) f Tad Mm anomyat Atleed ao eldili
-- `31761115548711#339` leaf 339/418 [default] Speech / Discours
-  > Poe Get et Cees ae be Dh nieey wl i VEPs, | - c 24 Si Ge (ey ~*~ +394 (ae ),) - i A 7 7 Ptr te Wel iste age , ma i 5 psy 0 gs ne A | ns ial) 2 91°? . =)! \ ‘ . a 7 at ce * 7 a My ’ f é iyi Ds Bilvs ) } ie if @ . ' Trane. uieae pein tt wnt t
-- `31761115549248#212` leaf 212/452 [default] 31761115549248
-  > Rosanne Laflamme, Quebec City, Quebec - Teacher Aftéralosane both legsvand an “armeasathe result ofa childhood accident, Miss Laflamme has become a paramount example to all handicapped people. In 1975 she won gold, silver and bronze medals 
-- `31761115549412#220` leaf 220/946 [default] 31761115549412
-  > TABLE A TABLE B TABLE C TABLE D TABLE E TABLE F TABLE G TABLE H TABLE J TABLE K INDEX OF TABLES Number of Insured Persons on March 3l, 1963 by Province as Reported for Purposes Rey Cee ey Tet Lee, oo aie sera Lek wie eraie ae Net Population
-- `31761116486184#19` leaf 19/164 [default] Canadian incidence study of reported child abuse and neglect : major f
-  > FIGURE 10 Age and Sex of Victims, by Primary Category of Substantiated Child Maltreatment in Canada, Excluding Quebec, in 2003 For sample size, see Table 6-3. 10,000 8,000 6,000 4,000 2,000 100% (‘0-3 Years [ 4-7 Years 80% & 8-11 Years (J 1
-- `31761116497322#261` leaf 261/288 [default] Proceedings - Royal Commission on matters of health and safety arising
-  > : tents 123 jets efquod » eved T - fata bent oo mata ofc Siode edtvp ots Yoda anida 3 -Ysb o47 jelteh feds evade « daub Socie: sav feds onc oF dned smo9 7 Sivcsd sicasons ofiuQ Sescanliisaes tgaeb ety Jeods ops elit atseri (sag sit Yo jasty
-- `31761117015610#314` leaf 314/688 [default] Proceedings of the Subcommittee on Population Health = Délibérations d
-  > APPENDIX A Woolcock, A. J., & Peat, J. K. (1997). Evidence for the increase in asthma worldwide. Ciba Found Symp, 206, 122-134; discussion 134-129, 157-129. World Health Organization. (1994). Assessment of fracture risk and its application 
-- `31761118498526#320` leaf 320/410 [default] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
-  > 24 25 ANGUS, STONEHOUSE & CO. LTD. TORONTO, ONTARIO MacLeod, dr.ex. 4182 (Lamek) something like the converse of the distribution CULVe.. »O that 1f it disappears from serum with a heliglatesof 20 minutes: then 1b probably appears in myocard
-- `31761118499870#271` leaf 271/506 [default] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
-  > ake & Be cnaatecee B, Sit no eanivevibam cr sosqeeee aad hei poe serene wi sud sess ns ay tae Bf fesse Ss lw ,sorin , to pram 2” Poe hKawarideen es 2c tone bie ' Mir at @ gual om aqothod ott Taw | wre ne Citi ‘679 MOLI! OM . at @ualds 4668 
-- `31761118500669#207` leaf 207/536 [default] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
-  > aR O noy 31 sud: ybadysave o¢ dpeosds 21 dep of opnacm Pienbgden sow xo molly [asd Gay ib 36 eee Soateslaunne>. new 2610 rd=ORTIW She a Gol, Stele Gwav oh? of Adigeinsiz9, No\20 Sree = aneiienibon «Gt esiGidienodesr sine y ‘tee Ym mi dau SA
-- `31761118500891#77` leaf 77/480 [default] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
-  > “vi naib kite epi sii \omtSont eegBbO: 33. iG (gait tn ints ae tea rico | sas tedmeitet ¥3 Fug? S335 avec TL . ar AG ¢ 5 > acl ious wre ya vey of .aiag 30 on haved eds | Ssfebwis ] 4 , ’ C) i” { } Y nilsseh 120en- Fi sor > eb, 3esbEons jot 
+- `31761095474680#69` leaf 69/216 [default] European cooperation on environmental health aspects of the control of
+  > r i "ie oe she ais | qo migta ato; Moved Sout? vil g Seiapriont 3979 > 4S med 20d «ye ilrow aod kala etdns) is). | ag ohwnns aia wile a aed shdoie’ poh pnd SAiou" ‘md teeter nkie trams ed to aay ste tt ee ee Wen ome ‘ots at tie Et neequ ok 
+- `31761115548711#355` leaf 355/418 [default] Speech / Discours
+  > : - ae —— 7 ® Aa i) Tai) see oo. na r ep 6 ~~ eo chad - nS | “Awe ar 4 a tt I : - ih’ wn | oT? ehokt ally a a etnheiuth ca - ‘7 cre OF Se agen aa, Sate wwe ‘on Te tipeade bn Bt = ian ela a Te: om ook ert Ps ae anc ie > * dupe ON tis ¥. ¢ e 
+- `31761115549123#23` leaf 23/46 [default] Progress report
+  > ACTIVITIES The years 2001 through 2003 saw a number of important activities and initiatives undertaken at the community, regional and national levels. The national office advised and offered expertise on several projects over the reporting 
+- `31761115549248#190` leaf 190/452 [default] 31761115549248
+  > MEMBERS OF THE EXPERT COMMITTEE ON SACCHARIN IN DRUGS AND COSMETICS “OTe rhnchard Bann, University of Ottawa - Dr. Mimi Belmonte, McGill University - Dr. J.S. Bennett, Canadian Medical Association - Dr. John A. Hunt, Lion's Gate Hospital, N
+- `31761115549412#180` leaf 180/946 [default] 31761115549412
+  > a Poe TABLE"E PAYMENTS BY CANADA — JULY 1, 1958 TO MARCH 31, 1962 BY PROVINCE AND BY CALENDAR YEAR 1958 1959 1960 1961 96 PROVINCE Total Total Advances on Advances on Advances on Contributions Contributions Contributions Contributions Contr
+- `31761116486184#48` leaf 48/164 [default] Canadian incidence study of reported child abuse and neglect : major f
+  > TABLE 3-3 Primary Categories of Substantiated Child Maltreatment in Canada in 2003 Primary Category of Substantiated Maltreatment Physical — Sexual Emotional Exposure to Abuse Abuse Neglect Maltreatment Domestic Violence Total Substantiated
+- `31761116497322#260` leaf 260/288 [default] Proceedings - Royal Commission on matters of health and safety arising
+  > = —— _ = ES OE a = == —— — — —— = a iff av = 10 15 20 25 7 (6/76) = 150) = Enterline DR. DUPRE: This completes the cross-examination, I gather, counsel? MR. LASKIN: At last, time for the Commission. DRewUUPRE es Pare eront. “Stl bloeedmtOun
+- `31761116510520#442` leaf 442/1416 [default] HEARINGS OF THE CANADA ROYAL COMMISSION ON HEALTH SERVICES, 1961-1962
+  > ANGUS, STONEHOUSE & CO. LTD. Donahoe 452 TORONTO, ONTARIO COMMISSIONER BALTZAN: I would like to reserve questions I wish to put, they are very interesting ones and will probably come up a little later. COMMISSIONER STRACHAN: Mr, Chairman, t
+- `31761117015610#227` leaf 227/688 [default] Proceedings of the Subcommittee on Population Health = Délibérations d
+  > APPENDIX A Aboriginal health research environment, which demonstrated how the efforts of the Canadian government to oppress the cultures, traditions, and community structures of Aboriginal populations has caused collective trauma and grief 
+- `31761118498526#360` leaf 360/410 [default] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
+  > coiy 2 24 25 4202 ANGUS, STONEHOUSE & CO. LTD. MacLeod TORONTO, ONTARIO drvex, (Lamek) AG Pech ink that iS <within’the boa lmeol possibility! (Wi tfind PEsditftadpectco assess the likelihood of that happening. CepeaLmivy ert it has happened
+- `31761118499870#321` leaf 321/506 [default] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
+  > lewionss: ae PSP Tent ya GAT. Ay foetaviae . Le VA t gens ] aS Ane r 7 aes hg Antiict onl Line Pies Hatdd I. hac hens ipa dud, Sot Sag stom 1@. bs BAO AL aw mod ais asd f if ae , iM A Lc i bisd Lio Shady fei i, rm) mary ae ois sorsonw yeoma
+- `31761118500669#221` leaf 221/536 [default] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
+  > vast, - Guta tue SHaHOTERT IMD aire . Sees ioe aay, gos ie 26 pat VP ae | wth os satan tT -neD sect a a7 i: ro | Modi. fosgnbeg & ona! 36058: lorie wwd sb ee vitae a a | Aobtond). athe oa aso tee a g4ijin LiA 0) O21°02, GD asop oro aang is,
+- `31761118500891#71` leaf 71/480 [default] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
+  > we ; 1 . i. Site eWwNe AMOE 5 eew da.“ i | | iL y ; a 7 > “— a Swicutlw Pee sot me Se a > = 2 wit Jag gt. necwse es" Ye LoyiioS > * Li ee oe otjne> yraraaedsd, BsaG4 aoe rites i> csyonas peda iaw: yas me a ee A f o. part? ae Ew vow, Deitegs
 - `31761118501584#339` leaf 339/476 [default] Hearings - Ontario Royal Commission of inquiry into certain deaths at 
   > nina een ae nee axedg pihyin thaeds por 68 OMA a) | wt sos eat oy 2 ea at eer ee | + i pay: ar Jan gay emia Laviv kes aaa So0t Bad ode: yesngt @ vos Sea at 9 eds betelqees Gad ads .i ian if min 262 Goeie ladty Weota’s cally s6¢ sostg excten
-- `31761119702942#436` leaf 436/612 [default] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
-  > 16 April, 1993 Mr. Brian Tobin John Drneman Member of Parliament 89 Windsor Street B22 Confederation Building Corer Brook, NF House of Commons A2H 685 Ottawa, Ontario KIA 0A6 ear Mr. Tobin: recently read in The Globe and Mail that the Liber
-- `31761119709343#379` leaf 379/518 [default] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
-  > HEALmn2(7658)-E Pace: Z.0n being considered. It was agreed, -- That the Chair present the First Report of the Sub-Committee on Agenda and Procedure to the main committee. At 11:52 a.m., the Committee adjourned to the call of the Chair. It w
-- `31761119709350#139` leaf 139/408 [default] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
-  > di) sreenlt planet en 2¢ ad gaitea Co ire AE satin ite — Lend a -_ Soa as a a ~) a ‘VAG 34T4O Wat aorta be, 08 cusragae Bataan 2 Ona testes! teak 0 pe Oy De | | ea Date ruler’ *yetaowrssh clad A Tervaiuys’ elec ip sonal, _ oT 3 an duvet? vr
-- `31761119720282#89` leaf 89/896 [default] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
-  > Le ‘AOU THOUVN ‘uopisoid a] ‘sIuNos JUaUIASNeN}oOdsay ‘gsodap 3sa (140ddpu aj puasdwoo inb ‘p¢ ja ‘Og ‘62 ‘82 ‘LZ ‘92 ‘CZ ‘be ‘EZ SOU Sajnoi2sv{) yues10dde, A.S saseusIoUlD} 39 XNVq19A-Sed01d Sap s1TejduWIax9 U_ [B1QU9Z INS}OI[[OS Np o19}SI
-- `39102516100111#432` leaf 432/438 [default] Report of the Task Force on the implementation of midwifery in Ontario
-  > APPENDIX 10 Biographies of the Task Force Members and Staff
-- `39262609080081#25` leaf 25/28 [default] Proceedings of the Standing Senate Committee on Social Affairs, Scienc
-  > ear RENE “ho SA ONL i AE AUS Og D a “3 j —s oe em ; fy . < } et ÿ . à 4 Ps eet «4 ete? bse Toes jz | | fa oh, F *) wy lg 11 = à ‘ 4 ' ad al fx vr re ' ’ J i ive , +; LT (M r da ‘ ‘ i! és re (] URL é vt i cé à : Faite # 4, ~ "+ try À 1 € ; à
-- `39291103070074#89` leaf 89/106 [default] REPORT OF THE ROYAL COMMISSION ON ELECTRIC POWER PLANNING: VOL.9 - A B
-  > Great Lakes Basin Commission. Great Lakes Basin Framework Study. A reference study which de- scribes each volume in the 27-volume set. Ann Arbor, Michigan, 1975. Great Lakes Basin Commission. Public Priorities for Great Lakes Research. Ann 
-- `decisionsaboutto00albe#24` leaf 24/32 [default] Decisions about tomorrow : directives for your health care
-  > YOUR VIEWS ARE IMPORTANT! These pages have been prepared to assist you in providing feedback to the Honourable Shirley McClellan. Please take a few moments of your time to fill out this survey on the issues raised in Decisions about Tomorro
+- `31761119702942#449` leaf 449/612 [default] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
+  > 26 PAoN-bHedtuutm ep eyjndaep —- ueyyeqbegq Aay HuTSsoio s,AAePTD - uoojzeyses ep eyqndep - AyAAOMXW sSTayD :°d°d 3309URA0N pTaAed suTeyund stosuelzg ‘soeiaTequoutTT—e ‘gqezAned-Tjue eTeUuoT zeU senbueq sep suueTpeueRd uoTzestTuebhjgo,T ep 
+- `31761119709343#435` leaf 435/518 [default] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
+  > Minutes of Meeting / Procés-verbal | Page 4 of 7 Réal Ménard Marcel Proulx Karen Redman Paul Szabo Judy Wasylycia-Leis — (9) NAYS: -- (0) ABSTAINED: Yvon Bernier — (1) After further debate, the question being put on Clause 7, it carried on 
+- `31761119709350#189` leaf 189/408 [default] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
+  > 608 soi” >-<al¥ wy srs tt woh ms et conch jysaderani gee sibel nei) sonst gi soma a" sat ioral 7 untaynqaW elit seaatieT shnaloy ge SO Atal sii das cereal wean? stl Ineslt ouilye® (dA so yeh pont nasi sail cpesecnnhl nese 38 Smear, WO gail 
+- `31761119720282#168` leaf 168/896 [default] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
+  > 11-5-1982 Santé, bien-étre social et affaires sociales APPENDICE "SNTE-14"' ACTUALITE SUR LA CONVERSION AU SYSTEME METRIQUE AU CANADA FONDEMENT LEGISLATIF DE LA CONVERSION AU_SYSTEME METRIQUE AU CANADA La conversion au systeme métrique est 
+- `39112721070207#180` leaf 180/298 [default] Report of Ontario Task Force on Health and Safety in Agriculture.
+  > REFERENCES Chapter One ifs Statistics Canada, 1981 Census of Canada - Agriculture. Cat. No. 96-907 and No. 96.920. Zs Earl Haslett, A Structure of Ontario Agriculture as Related to Health and Safety. Task Force on Health and Safety in Agric
+- `39262609080115#76` leaf 76/94 [default] Proceedings of the Standing Senate Committee on Social Affairs, Scienc
+  > 5-7-2005 Affaires sociales, sciences et technologie DST short-term disability programs do not cover most mental illnesses; and to how long-term disability programs do not seem to be covered. We also heard that the CPP disability program put
 
 ### Sample: back
 
-- `31761056886120#125` leaf 125/218 [reference_list] Report of proceedings of a study on animal health emergencies. 11-15 M
-  > Pao 14. i353 16. Leyes 18. 19% 20. Delve bial Animal,.disease: fA.CeTRassegnandr4s N.S.WaeSadsGN ste tb SS- > ok 6; Qld s.3 and Exotic Diseases in Animals Act 1981-1982 s.5? S.A. ss.5(1) and 8a and Foot and Mouth Disease Eradication. Fund A
-- `31761112244587#536` leaf 536/588 [reference_list] PROCEEDINGS OF CANADA PARLIAMENT SENATE STANDING COMMITTEE ON HEALTH, 
-  > INDEX 4) Manpower—Cont'd Training—Cont’d Handicapped persons, 16: 7, 20 Health sciences programs, 16: 22-3 Institutes and courses sponsored by non-profit groups, 17: 11 Federal government assistance, 15: 13, 17; 16: 25-6 Licensing procedure
-- `31761115561961#274` leaf 274/488 [reference_list] Health expenditures in Canada by age and sex, 1980-81 to 2000-01. Stat
-  > Table 67A Total Health Expenditures by Age Group and Sex Tableau 67A Dépenses totales de santé selon le groupe d'âge et le sexe New Brunswick / Nouveau-Brunswick, 1980-81 to/à 2000-2001 0 Year Age Groups / Groupes d'âge Année 0-14 15-24 25-
-- `31761119709210#701` leaf 701/716 [reference_list] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
-  > 20 HEALTH, WELFARE AND SOCIAL AFFAIRS Ogle, Mr. Bob (NDP—Saskatoon East) Canada Health Act (Bill C-3), 10:83-4 Old Age Security Payments abroad, 31:14- 5 Provincial welfare payments, reimbursing provinces, 33:20-1 Recipients, numbers receiv
-- `31761119715381#51` leaf 51/130 [reference_list] Deaths / Décès / Statistique Canada, Centre canadien d'information sur
-  > Deaths, 1991 Décés, 1991 ee ee eee TABLE 15. Infant Deaths and Infant Death Rates, Canada and Provinces, Selected Years, 1931-1991 - Concluded TABLEAU 15. Mortalité infantile et taux de mortalité infantile, Canada et provinces, années chois
-- `31761119715381#95` leaf 95/130 [reference_list] Deaths / Décès / Statistique Canada, Centre canadien d'information sur
-  > Deaths 1992 “le Décès 1992 D eo 6 Table 6. Age-Sex-Specific Death Rates, Canada, Provinces and Territories, 1991 and 1992 Tableau 6. Taux de mortalité selon l'âge et le sexe, Canada, provinces et territoires, 1991 et 1992 Nfld. P.E.I. N.S. 
-- `31761119717247#388` leaf 388/400 [reference_list] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
-  > 30-5— 1995 Santé 3079 Members of the Committee present: Margaret Bridgman, Harold Culbert, Grant Hill, Ovid L. Jackson, Bernard Patry, Pauline Picard, Roger Simmons, Paul Szabo, Rose—Marie Ur. In attendance: From the Research Branch of the 
-- `39040222040140#55` leaf 55/524 [reference_list] SELECTED ECONOMIC ASPECTS OF THE HEALTH CARE SECTOR IN ONTARIO - A STU
-  > 18 Health Care Resources for the census years 1941, 1951 and 1961. In 1961, with 84.38 health profes- sionals per 10,000 persons, Ontario occupied third rank in Canada behind British Columbia (90.83) and Saskatchewan (85.58). TABLE 2.8 Heal
-- `39040423030148#557` leaf 557/1190 [reference_list] FINAL REPORT OF THE CANADA COMMISSION OF INQUIRY INTO THE NON-MEDICAL 
-  > 118. Lo: 120. ALS 122; 123: 124. $25: 126. 1273 128. 129: 130. 131. 132. 133. 134. 135: 136. H37 138. 139. The Drugs and Their Effects — References Hughes, F. W., & Forney, R. B. Delayed audiofeedback (DAF) for induction of anxiety. Effect 
-- `39092409090067#153` leaf 153/208 [reference_list] Health status of Canadians : report of the 1991 General Social Survey
-  > Kaiserman MJ, Collishaw NE. Trends in Canadian tobacco consumption, 1980-1990. Chronic Diseases in Canada. 1991;12(4):50-52. Pipe A. Tobacco control in Canada: the signs of success. Chronic Diseases in Canada. 1991; 12(4):44- 45. National C
-- `39171007050085#332` leaf 332/436 [reference_list] New reproductive technologies : ethical aspects.
-  > Prenatal Diagnosis and Society 313 Holmes, H.B., B.B. Hoskins, and M. Gross, eds. 1980. Birth Control and Controlling Birth: Women-Centered Perspectives. Clifton: Humana Press. —. rats: 1. The Custom-Made Child? Women-Centered Perspectives.
-- `fieldmeasurement03albe_0#266` leaf 266/614 [reference_list] Field measurement program : atmospheric dispersion tracer study under 
-  > METEOROLOGY (T13B21) Date : 11-20- ■1988 Time: 21:52: : 24 to 22: 1: : 5 4 Flow: 0. 8 Fan: 2.4 C/Q: : 2996 TiMet V4 VI 0 D4 D10 SiqU SiqV StoW SiqTh SiqPh Hflux T2 Tqrad Nrad Ustar Z/L Travel Time Averages (# 3 minute observations = 2 ) 21:
-- `fieldmeasurement03albe_0#405` leaf 405/614 [reference_list] Field measurement program : atmospheric dispersion tracer study under 
-  > TRAVERSE STATISTICS (T18B03) File scans: data ( 150 to 370 ), moment ( 170 to 358 ) Date : 12-07-1988 Time : 17:46:36 to 17:50:16 Start location: P7 on 1400 m E arc. Source : E Elevated Power Law Cal. : ppt = 545.6 * (voltage) A 1.071 Metho
-- `fieldmeasurement03albe_0#411` leaf 411/614 [reference_list] Field measurement program : atmospheric dispersion tracer study under 
-  > TRAVERSE STATISTICS (T18C03) File scans: data ( 10 to 650 ) , moment ( 481 to 615 ) Date : 12 -07-1988 Time : 17:50:47 to 18: 1:27 Start location: 13 on 700 m E arc. Source : E Elevated Power Law Cal. : ppt = 854.8 * (voltage) A .944 Method
-- `micro_IA40243301_2134#218` leaf 218/306 [reference_list] Quest for quality in Canadian health care : continuous quality improve
-  > 205 Harrigan ML (Ed.). The Pacific Health Care Society: responding to customer needs in a long-term care setting. Can | Qual Health Care. June 1995; 12(2): 23-26. Harrigan ML. Quality of care: issues and challenges in the 90's: a literature
-- `micro_IA40243301_2135#265` leaf 265/337 [reference_list] En quête de qualité dans les soins de santé canadiens : amélioration c
-  > 257 Goldsmith, J.C. « The illusive logic of integration », Healthc. Forum J, septembre 1994 : 26-31. Gordon, P.R., Carlson, L., et coll. «A multisite collaborative for the development of interdisciplinary education in continuous improvement
-- `micro_IA40243301_3139#64` leaf 64/70 [reference_list] Acetaldehyde
-  > Silverman, L., H. Schulte and M. First. 1946. Further studies on sensory response to certain industrial solvent vapours. J. Ind. Hyg. Toxicol. 28: 262-266. Sim, V. and R. Pattle. 1957. Effects of possible smog irritants on human subjects. J
-- `ontla_354368#214` leaf 214/223 [reference_list] Cervical Artificial Disc Replacement Versus Fusion for Cervical Degene
-  > References February 2019 (81) (82) (83) (84) Schrot RJ, Mathew JS, Li Y, Beckett L, Bae HW, Kim KD. Headache relief after anterior cervical discectomy: post hoc analysis of a randomized investigational device exemption trial. Clinical artic
-- `ontla_354377#141` leaf 141/146 [reference_list] Recommendations for the Prevention, Detection and Management of Occupa
-  > healthcare workers in comparison with a control group: the Hands4U study. Acta Derm Venereol. 2016;96(4):499-504. Available from: https://www.medicaljournals.se/acta/content/html/10.2340/00015555-2287 149. Ontario Agency for Health Protecti
-- `soilinvestigatio00ontauoft#356` leaf 356/496 [reference_list] Soil Investigation and Human Health Risk Assessment - Report for Rodne
-  > Soil Investigation and Human Health Risk Assessment for the Rodney Street Community, Port Colborne. October 2001 Gerhardsson, L., Borjesson, J., Mattsson, S., Schiitz, A., and Skerfving, S. 1999. Chelated lead in relation to lead in bone an
+- `31761095474805#35` leaf 35/120 [reference_list] Water resources development and health : a selected bibliography.
+  > PDP/82.2 page 34 G27 Farvar, M.T. & Milton, J.F.*Cediters) : Careless Technology. Conference on ecological aspects of international development. Garden City, Natural History Press, 1972 428. Feachem, R.G. Infectious diseases related to wate
+- `31761115567364#33` leaf 33/52 [reference_list] An intervention program for women who were sexually victimized in chil
+  > a2 REFERENCES Baker, A.W., & DUNCAN, S.P. (1985). “Child sexual =saduUusc mae study of prevalence in Great Britain. Child Abuse and Neglect, 9, 457-467. Finkelhor, D. (1984). Child sexual abuse: New theory and research. New York: Free Press
+- `31761115571218#35` leaf 35/76 [reference_list] Aging and the health care system : am I in the right queue?
+  > BSasess FORUM ss REFERENCES Amoko, D.H.A., Modrow, R.E., Tan, J.K.H. (1992). Surgical waiting lists I: Definition, desired characteristics and uses. Healthcare Management FORUM, 5(2), 17-22. Anderson, G., Black, C., Dunn, E., Alonso, J., Ch
+- `31761116496704#179` leaf 179/340 [reference_list] REPORT OF THE ROYAL COMMISSION ON MATTERS OF HEALTH AND SAFETY ARISING
+  > 158 Chapter 4 asbestos-cement workers, where the trace rate is only 75% .8° (However, Dr. Hans Weill is in the course of updating this study and has achieved a much higher ascertainment rate.)*! End-Point Ascertainment — This criterion refe
+- `31761117128629#477` leaf 477/496 [reference_list] Psychiatric care in Canada: extent and results
+  > 446 ROYAL COMMISSION ON HEALTH SERVICES CuuTE, K. F., The General Practitioner, Toronto: University of Toronto Press, 1963 College of General Practice of Canada, brief submitted to the Royal Commission on Health Services, Toronto, May 1962 
+- `31761118498492#148` leaf 148/372 [reference_list] ASBESTOS IN BUILDINGS
+  > ee ae. REFERENCES Wright, S.; Schoepke, S.; and Mathias, P. Economic Impact Analysis of Proposed Identification and Notification Rule on Friable Asbestos- Containing Materials in Schools. EPA 560/12-80-004. Washington, D.C. : U.S. Governmen
+- `31761118945252#232` leaf 232/240 [reference_list] Report to the Workers' Compensation Board on cardiovascular disease an
+  > CARDIOVASCULAR DISEASE AND CANCER AMONG FIREFIGHTERS 209 17: 178. 1/9; 180. LSL. 182. 183. 184. 185. 186. 187. Silverman, D.T.; Hoover, R.N.; et al. Motor exhaust-related occupations and bladder cancer. Cancer Research. Vol. 46(1986). p.211
+- `31761119716892#708` leaf 708/996 [reference_list] Minutes of proceedings and evidence of the Sub-Committee on Health iss
+  > 11-2-1993 Questions de santé 20A : 45 43. Wainberg MA, Kendall O, Gilmore NJ: Vaccine and antiviral strategies against infections caused by human immunodeficiency virus. Can Med Assoc J 1988; 138: 797-807 44. Govig B, Jackson WB, Gilmore NJ
+- `31761119720399#39` leaf 39/1254 [reference_list] MINUTES OF PROCEEDINGS AND EVIDENCE OF CANADA PARLIAMENT HOUSE OF COMM
+  > 946 References 1. Wahi, P.N. Epidemiology of cancer: oropharyngeal tum- ours. WHO Chronicle 22: 539, 1968. 2. Orlovsky, L. V. Theory and method of health education on the prevention of cancer in the U.S.S.R. in Public Education about Cancer
+- `31761119734424#242` leaf 242/852 [reference_list] New reproductive technologies and the health care system : the case fo
+  > The Epidemiology of Randomized Controlled Trials 209 Bellinge, B.S., et al. 1986. “The Influence of Patient Insemination on the Implantation Rate in an In Vitro Fertilization and Embryo Transfer Program.” Fertility and Sterility 46: 252-56.
+- `39040218110154#41` leaf 41/76 [reference_list] REPORT OF THE ONTARIO COUNCIL OF HEALTH - SUPPLEMENT NO. - 3 HEALTH MA
+  > 18 10. LAs Section A RECOMMENDATION 6 THAT the number of full-time general practitioners or family physicians required be in the ratio of 1 family physician for each 1,500 of population: range 1/1,000 to 1/2,000. This may be modified by cha
+- `39171007050127#415` leaf 415/716 [reference_list] Overview of legal issues in new reproductive technologies.
+  > 394 Overview of Legal Issues in NRTs Baechtold, R.L., et al. “Property Rights in Living Matter: Is New Law Required?” Denver University Law Review 68 (1991): 141-72. Beier, D., and R.H. Benson. “Biotechnology Patent Protection Act.” Denver 
+- `39291103070074#29` leaf 29/106 [reference_list] REPORT OF THE ROYAL COMMISSION ON ELECTRIC POWER PLANNING: VOL.9 - A B
+  > Chilenskas, A.A., et al. Lithium Requirements for High-Energy Lithium-Aluminum/Iron Sulfide Batter- ies for Load-Levelling and Electric-Vehicle Applications. A report prepared for the U.S. Energy Re- search and Development Administration fo
+- `albertapatientcl00semr#230` leaf 230/232 [back_zone_list] Alberta patient classification system for long term care facilities : 
+  > 1
+- `micro_IA40243301_2768#43` leaf 43/47 [reference_list] Standards of evidence for evaluating foods with health claims : a prop
+  > 16. 17. 19, 20. 21. 22. 23. 24. 25. 26. 27. 28. 29. Therapeutic Products Directorate. General considerations for clinical trials. ICH Harmonized tripartite guideline. Ottawa (ON): Minister of Public Works and Government Services Canada, 199
+- `micro_IA40243301_3116#74` leaf 74/84 [reference_list] Acrylonitrile
+  > Mohamadin, A.M., M.H. El-zahaby and A.E. Ahmed. 1996. Acrylonitrile oxidation and cyanide release in cell free system catalyzed by Fenton-like reaction. Toxicologist 30 (1 part 2): 238 (Abstract No. 1220). Morita, T., N. Asano, T. Awogi, Y.
+- `occupationalheal00inte#124` leaf 124/524 [reference_list] Occupational health in the chemical industry : proceedings of the Elev
+  > 117 3. Chalabreysse, J.; Archimbaud, M. , and Bourgineau, G. 1980. Etude globale des nuisances mutagenes en Hygiene Industrielle: Proposition d'une methodologie . Rapport EUR 7549:433-442. 4. Penalva, J.M.; Chalabreysse, J.; Archimbaud, M. 
+- `ontla_354377#140` leaf 140/146 [reference_list] Recommendations for the Prevention, Detection and Management of Occupa
+  > 137. Wilke A, Gediga G, Schlesinger T, John SM, Wulfhorst B. Sustainability of interdisciplinary secondary prevention in patients with occupational hand eczema: a 5-year follow-up survey. Contact Dermatitis. 2012;67(4):208-16. 138. Wulfhors
+- `reportondesignat01unse#296` leaf 296/424 [reference_list] The report on the designation of noise in Ontario
+  > ch REFERENCES Burns, William, Noise and Man. Second Edition 1973, John Murray Co. London. Jonsson, A., and Hansson, L., "Prolonged Exposure to a Stressful Stimulus (Noise) as a Cause of Raised Blood Pressure in Man". Lancet, Pg. 86, January
+- `soilinvestcolbor00onta#276` leaf 276/321 [reference_list] Soil investigation and human health risk assessment for the Rodney str
+  > Soil Investigation and Human Health Risk Assessment for the Rodney Street Communrty: Port Colbome (2001) Dabeka, R. W and AD. McKensie 1995. Survey of lead, cadmium, fluoride, nickel and cobalt in food composites and estimation of dietary i
+
+## Final: candidate on the extended gold (Phase 13 close)
+
+Everything above was scored on the Phase 7 gold, pooled from the baseline
+retriever's top-30. The candidate (section_demote with front 0.5 / back 0.5,
+fts_drop_stopwords, doc_type_family_filter, per_item_cap 5, later_years_flag)
+surfaced 315 passages in its top-20 that no human had judged, across 45
+questions. Jake labeled them from `reports/phase13/extension_worksheet.jsonl`
+(`eval/gold_extension_decisions.json`, reasons in `eval/gold_extension_notes.md`):
+280 labels written (30 relevant, 250 not); 35 marked uncertain and left unjudged;
+no Phase 7 label or verdict changed. Gold is now 1,780 labels, 370 relevant.
+Back-matter classifier v2 (citation signature needing a page range or an
+author entry with a nearby year) read 18/20 on its sample, so the back weight
+stayed at 0.5.
+
+Both retrievers re-scored on the extended set (eval_runs rows carry
+`"gold": "phase7+phase13_extension"`):
+
+| state | gold | recall@5 | recall@10 | recall@20 | ndcg@10 | unjudged@10 | unjudged@20 | run_id |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| baseline | phase7 | 0.1928 | 0.4083 | 0.6823 | 0.4420 | 0.0000 | 0.0000 | p13-baseline-20260911T151906Z |
+| candidate | phase7 | 0.2565 | 0.4352 | 0.6978 | 0.4885 | 0.2140 | 0.3150 | p13-candidate-20260911T165257Z |
+| baseline | extended | 0.1767 | 0.3670 | 0.6163 | 0.4245 | 0.0000 | 0.0000 | p13-baseline-20260911T175100Z |
+| candidate | extended | 0.2326 | 0.4485 | 0.7271 | 0.5003 | 0.0260 | 0.0350 | p13-candidate-20260911T175100Z |
+
+Reading. The baseline's numbers fall on the extended set because 30 newly
+relevant passages exist that it does not retrieve; that is the pooled-labels
+bias made visible, not a regression. The candidate now leads on every metric
+with 2.6% of its top-10 and 3.5% of its top-20 unjudged (the 35 uncertain
+passages, kept unjudged on purpose), and 27 of 50 questions have a fully judged
+candidate top-20. On the 35 answerable questions nDCG@10 rises on 19, falls on
+10, and is flat on 6. Largest gains: q044 (0.18 -> 0.79), q024 (0.11 -> 0.68),
+q001 (0.24 -> 0.71), q007 (0.00 -> 0.44), q012 (0.27 -> 0.57). Losses to know
+about: q032 (0.32 -> 0.00; the one relevant passage, a 1975-2005 life-expectancy
+chart, leaves the top-10 under the cap), q009 (0.40 -> 0.14), q038 (0.61 ->
+0.50), q035 (0.77 -> 0.68). Recall@20 on the extended set: 0.727 vs 0.616.
+
+Frozen thinness sweep on the candidate (unchanged rule, no model call): 0
+answerable questions would abstain; 6 of 15 gold-abstain questions abstain
+(q022 `find`, q039 `covid, 2020`, q041 `vaping`, q046 `1905`, q048 `2015`,
+q050 `2017`); 9 would answer. The baseline sweep still reads 1 / 6, as in Phase
+9 sweep 2. The wider pool covers more question terms, so the gate fires less;
+the gate itself was not changed.
+
+Decision. The candidate is turned on in `config/pilot.toml` (eval_runs row
+`config-retrieve-*` records the values). Setting the five switches off
+reproduces the Phase 7 retriever. The answer cache is keyed on a retrieval
+fingerprint that includes the config, so no pre-Phase-13 answer can be served;
+there was no cache file on disk to delete.
+
+Caveats carried forward. The judge for the extension was not independent of
+the system: candidate labels were proposed by an LLM assistant and decided by
+Jake (`eval/labeling_notes.md`, Methods). The 35 uncertain passages are the
+next labeling debt. The back-matter estimate is from 20 pages, by one reader.
