@@ -76,3 +76,9 @@ rrf_k = 60
 downweight_high = 1.0
 downweight_medium = 0.9
 downweight_low = 0.75
+
+[eval]
+label_top_n = 30                 # candidates shown/judged per question (> max recall k)
+recall_ks = [5, 10, 20]
+ndcg_k = 10
+abstention_min_relevant = 1      # min human-relevant passages in top-k for "has evidence" (Phase 9)

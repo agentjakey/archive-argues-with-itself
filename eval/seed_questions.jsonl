@@ -1,0 +1,52 @@
+# Candidate eval questions -- CANDIDATE TEXT ONLY. No relevance labels, no expected answers,
+# no pre-assigned answerable/abstain verdict. Jake rewrites/approves each and hand-labels (N4).
+{"qid":"q001","topic":"tobacco","qtype":"factual","filters":{"jurisdiction":"ontario"},"text":"What did Ontario public health authorities recommend about controlling tobacco smoking?"}
+{"qid":"q002","topic":"tuberculosis","qtype":"factual","filters":{"jurisdiction":"federal"},"text":"How did federal health authorities describe tuberculosis control programs?"}
+{"qid":"q003","topic":"hiv_aids","qtype":"factual","filters":{"jurisdiction":"alberta"},"text":"What did Alberta's provincial AIDS program report about HIV prevention?"}
+{"qid":"q004","topic":"venereal_disease","qtype":"factual","filters":{"jurisdiction":"federal"},"text":"What did federal reports describe about the prevalence of venereal disease?"}
+{"qid":"q005","topic":"mental_health","qtype":"factual","filters":{"jurisdiction":"alberta"},"text":"What concerns did the Alberta Mental Health Patient Advocate raise?"}
+{"qid":"q006","topic":"sars","qtype":"factual","filters":{"jurisdiction":"ontario","doc_type":"commission"},"text":"What did the Ontario SARS Commission conclude about hospital infection control?"}
+{"qid":"q007","topic":"asbestos","qtype":"factual","filters":{"jurisdiction":"ontario","doc_type":"royal_commission"},"text":"What health and safety risks from asbestos did the Ontario royal commission identify?"}
+{"qid":"q008","topic":"occupational_health","qtype":"factual","filters":{"jurisdiction":"alberta"},"text":"What workplace health and safety hazards did Alberta occupational health reports cover?"}
+{"qid":"q009","topic":"vital_statistics","qtype":"factual","filters":{"jurisdiction":"alberta","doc_type":"statistical_report"},"text":"What did Alberta vital statistics report about mortality?"}
+{"qid":"q010","topic":"health_insurance","qtype":"factual","filters":{"jurisdiction":"alberta"},"text":"How did the Alberta Health Care Insurance Plan describe coverage?"}
+{"qid":"q011","topic":"hospitals","qtype":"factual","filters":{"jurisdiction":"ontario"},"text":"What did the Ontario Hospital Services Commission report about hospital funding?"}
+{"qid":"q012","topic":"child_care","qtype":"factual","filters":{"jurisdiction":"federal"},"text":"What did the federal National Day Care Information Centre report about child care?"}
+{"qid":"q013","topic":"family_violence","qtype":"factual","filters":{"jurisdiction":"federal"},"text":"What did the National Clearinghouse on Family Violence report?"}
+{"qid":"q014","topic":"aging","qtype":"factual","filters":{"jurisdiction":"federal"},"text":"What did federal reports say about the health of aging seniors?"}
+{"qid":"q015","topic":"reproductive_technologies","qtype":"factual","filters":{"jurisdiction":"federal","doc_type":"royal_commission"},"text":"What did the royal commission on new reproductive technologies recommend?"}
+{"qid":"q016","topic":"food_and_drug","qtype":"factual","filters":{"jurisdiction":"federal"},"text":"What did the federal Food and Drug Directorate report about drug safety?"}
+{"qid":"q017","topic":"nursing_homes","qtype":"factual","filters":{"jurisdiction":"alberta"},"text":"What standards did Alberta set for nursing home care?"}
+{"qid":"q018","topic":"immunization","qtype":"factual","filters":{"jurisdiction":"federal"},"text":"What vaccination programs did federal health authorities describe?"}
+{"qid":"q019","topic":"sanitation","qtype":"factual","filters":{},"text":"What sanitation measures did municipal public health reports describe?"}
+{"qid":"q020","topic":"communicable_disease","qtype":"factual","filters":{"jurisdiction":"ontario"},"text":"How did Ontario describe communicable disease surveillance?"}
+{"qid":"q021","topic":"environmental_health","qtype":"factual","filters":{"jurisdiction":"alberta"},"text":"What environmental health concerns did Alberta report?"}
+{"qid":"q022","topic":"sick_children_inquiry","qtype":"factual","filters":{"jurisdiction":"ontario","doc_type":"commission"},"text":"What did the inquiry into deaths at the Hospital for Sick Children find?"}
+{"qid":"q023","topic":"health_promotion","qtype":"factual","filters":{"jurisdiction":"federal","period":"1980s"},"text":"What health promotion strategies did federal reports describe in the 1980s?"}
+{"qid":"q024","topic":"occupational_cancer","qtype":"factual","filters":{"jurisdiction":"alberta"},"text":"What did Alberta report about occupational cancer risk?"}
+{"qid":"q025","topic":"mental_health","qtype":"factual","filters":{"jurisdiction":"ontario"},"text":"How did Ontario describe restructuring of mental health services?"}
+{"qid":"q026","topic":"substance_abuse","qtype":"factual","filters":{"jurisdiction":"alberta"},"text":"What did the Alberta Alcohol and Drug Abuse Commission report?"}
+{"qid":"q027","topic":"physical_fitness","qtype":"factual","filters":{"jurisdiction":"federal"},"text":"What did the federal physical fitness division promote?"}
+{"qid":"q028","topic":"womens_health","qtype":"factual","filters":{"jurisdiction":"federal"},"text":"What did federal reports say about women's health status?"}
+{"qid":"q029","topic":"tobacco","qtype":"temporal_comparison","filters":{"jurisdiction":"ontario"},"text":"How did Ontario's approach to tobacco control change between 1975 and 1990?"}
+{"qid":"q030","topic":"hospitals","qtype":"temporal_comparison","filters":{},"text":"How did hospital funding concerns differ between the 1970s and the 1990s?"}
+{"qid":"q031","topic":"mental_health","qtype":"temporal_comparison","filters":{"jurisdiction":"alberta"},"text":"How did Alberta's mental health policy change between 1980 and 2000?"}
+{"qid":"q032","topic":"vital_statistics","qtype":"temporal_comparison","filters":{},"text":"How did reported mortality patterns change between 1975 and 2005?"}
+{"qid":"q033","topic":"occupational_health","qtype":"temporal_comparison","filters":{},"text":"How did occupational health and safety priorities shift between 1980 and 2000?"}
+{"qid":"q034","topic":"health_insurance","qtype":"temporal_comparison","filters":{"jurisdiction":"alberta"},"text":"How did Alberta health insurance coverage change between the 1970s and 1990s?"}
+{"qid":"q035","topic":"communicable_disease","qtype":"temporal_comparison","filters":{"jurisdiction":"federal"},"text":"How did federal communicable disease priorities change between 1975 and 2005?"}
+{"qid":"q036","topic":"aging","qtype":"temporal_comparison","filters":{"jurisdiction":"federal"},"text":"How did federal policy on aging change between the 1980s and 2000s?"}
+{"qid":"q037","topic":"environmental_health","qtype":"temporal_comparison","filters":{"jurisdiction":"alberta"},"text":"How did Alberta environmental health concerns change between 1980 and 2005?"}
+{"qid":"q038","topic":"child_care","qtype":"temporal_comparison","filters":{"jurisdiction":"federal"},"text":"How did federal child care policy change between the 1970s and 1990s?"}
+{"qid":"q039","topic":"covid19","qtype":"abstention_probe","filters":{},"text":"What did public health authorities report about the COVID-19 pandemic in 2020?"}
+{"qid":"q040","topic":"cannabis","qtype":"abstention_probe","filters":{},"text":"What public health guidance followed cannabis legalization in 2018?"}
+{"qid":"q041","topic":"vaping","qtype":"abstention_probe","filters":{},"text":"What did health authorities report about vaping and e-cigarettes in 2019?"}
+{"qid":"q042","topic":"opioids","qtype":"abstention_probe","filters":{},"text":"What did reports say about the opioid overdose crisis around 2016?"}
+{"qid":"q043","topic":"bc_health_insurance","qtype":"abstention_probe","filters":{},"text":"How did British Columbia structure its health insurance plan?"}
+{"qid":"q044","topic":"quebec_hospitals","qtype":"abstention_probe","filters":{},"text":"What did Quebec report about hospital funding?"}
+{"qid":"q045","topic":"northern_health","qtype":"abstention_probe","filters":{},"text":"What did reports describe about health services in Nunavut?"}
+{"qid":"q046","topic":"tuberculosis","qtype":"abstention_probe","filters":{},"text":"What did authorities report about tuberculosis sanatoria in 1905?"}
+{"qid":"q047","topic":"public_health_nursing","qtype":"abstention_probe","filters":{"jurisdiction":"alberta"},"text":"What did Alberta report about public health nursing in the 1910s?"}
+{"qid":"q048","topic":"telehealth","qtype":"abstention_probe","filters":{},"text":"What did health authorities report about telehealth expansion around 2015?"}
+{"qid":"q049","topic":"ebola","qtype":"abstention_probe","filters":{},"text":"What did Canadian health authorities report about Ebola preparedness in 2014?"}
+{"qid":"q050","topic":"digital_mental_health","qtype":"abstention_probe","filters":{},"text":"What did reports say about digital mental health apps around 2017?"}

@@ -113,8 +113,10 @@ CREATE TABLE IF NOT EXISTS eval_questions (
     qid                    TEXT PRIMARY KEY,
     text                   TEXT,
     topic                  TEXT,
-    expected_periods       TEXT,   -- JSON, candidate only until Phase-4/5 validation
-    expected_jurisdictions TEXT,   -- JSON
+    qtype                  TEXT,   -- factual|temporal_comparison|abstention_probe (candidate; nullable)
+    filters_json           TEXT,   -- {period,jurisdiction,doc_type} scoping hints (candidate)
+    expected_periods       TEXT,   -- DEPRECATED, unused: never populated (N4 expected-label trap)
+    expected_jurisdictions TEXT,   -- DEPRECATED, unused: never populated (N4 expected-label trap)
     notes                  TEXT
 );
 
@@ -123,6 +125,14 @@ CREATE TABLE IF NOT EXISTS eval_labels (
     passage_id TEXT NOT NULL REFERENCES passages(passage_id),
     relevance  INTEGER,
     PRIMARY KEY (qid, passage_id)
+);
+
+-- Per-question human verdict, kept apart from the candidate row so candidate text
+-- and gold judgment never mix (N4).
+CREATE TABLE IF NOT EXISTS eval_question_gold (
+    qid        TEXT PRIMARY KEY REFERENCES eval_questions(qid),
+    answerable INTEGER,            -- human verdict: 1 answerable, 0 should-abstain
+    labeled_ts TEXT
 );
 
 CREATE TABLE IF NOT EXISTS eval_runs (
@@ -159,13 +169,26 @@ EXPECTED_TABLES = (
     "coverage_cells",
     "eval_questions",
     "eval_labels",
+    "eval_question_gold",
     "eval_runs",
     "eval_results",
     "gaps",
 )
 
 
+def _ensure_columns(conn: sqlite3.Connection, table: str, coldefs: tuple) -> None:
+    """Idempotently ADD any missing columns to an existing table. CREATE TABLE IF
+    NOT EXISTS cannot add columns to a table that already exists, so a live
+    civic.db needs this to gain qtype/filters_json."""
+    have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+    for name, ddl in coldefs:
+        if name not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
+
 def create_schema(conn: sqlite3.Connection) -> None:
-    """Create all tables, indexes, the FTS table, and its sync triggers."""
+    """Create all tables, indexes, the FTS table, and its sync triggers, then run
+    idempotent column migrations for tables that predate a column."""
     conn.executescript(SCHEMA_SQL)
+    _ensure_columns(conn, "eval_questions", (("qtype", "qtype TEXT"), ("filters_json", "filters_json TEXT")))
     conn.commit()
