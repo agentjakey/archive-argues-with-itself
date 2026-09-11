@@ -23,6 +23,7 @@ dependencies = [
     "uvicorn[standard]==0.34.0",# api: ASGI server
     "pydantic==2.13.5",         # generate: structured-output schema (explicit, was transitive)
     "anthropic==1.5.0",         # generate: the only permitted external LLM call (N1); stubbed in CI
+    "python-dotenv==1.2.3",     # generate CLI only: loads .env (never overrides real env vars)
 ]
 
 [project.optional-dependencies]

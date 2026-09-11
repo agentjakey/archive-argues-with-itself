@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import functools
+import json
 import subprocess
 import sys
+from pathlib import Path
 
+from archive_debugger.eval import questions, store
 from archive_debugger.generate import answer as gen
 from archive_debugger.generate.llm import CitedSentence, Draft, StubLLM
 from archive_debugger.ingest import db
@@ -128,6 +131,60 @@ def test_key_contract_real_retriever_to_compose(tmp_path):
         assert not a.abstained and a.verified_citations[0]["deep_link"] == hits[0]["page_deep_link"]
     finally:
         r.close()
+
+
+def _fixture_retriever_and_seed(tmp_path):
+    civ = tmp_path / "civic.db"
+    conn = db.init_db(str(civ))
+    text = "vaccination hospital programme"
+    for item, jur in (("itemA", "alberta"), ("itemB", "ontario")):
+        conn.execute("INSERT INTO items (item_id, title, dated, year, decade, jurisdiction_norm, details_url) VALUES (?,?,?,?,?,?,?)",
+                     (item, item, 1, 1985, "1980s", jur, f"https://archive.org/details/{item}"))
+        for leaf in (0, 1):
+            conn.execute("INSERT INTO pages (page_id, item_id, leaf_index, printed_page, has_text) VALUES (?,?,?,?,1)",
+                         (f"{item}#{leaf}", item, leaf, str(leaf + 1)))
+            conn.execute("INSERT INTO passages (passage_id, item_id, page_id, leaf_index, char_start, char_end, text, token_count, ocr_quality) VALUES (?,?,?,?,0,30,?,3,'0.95')",
+                         (f"{item}#{leaf}:0", item, f"{item}#{leaf}", leaf, text))
+    questions.insert_questions(conn, [
+        {"qid": "qA", "text": "vaccination hospital", "qtype": "factual", "filters": {}},
+        {"qid": "qB", "text": "vaccination hospital", "qtype": "factual", "filters": {}}])
+    store.write_gold(conn, "qA", 1)  # qB left unlabeled on purpose
+    conn.commit()
+    conn.close()
+    vectors = tmp_path / "vectors.db"
+    index.build_index(civ, vectors, StubEmbedder(dim=64), model_id="stub", batch_size=8)
+    cfg = RetrieveConfig(db_path=civ, index_path=vectors, embedder="stub", embedding_model="stub",
+                         embedding_dim=64, batch_size=8, candidates=10, rrf_k=60,
+                         downweights={"high": 1.0, "medium": 0.9, "low": 0.75})
+    r = search.Retriever(None, embedder=StubEmbedder(dim=64), cfg=cfg)
+    seed = tmp_path / "seed.jsonl"
+    seed.write_text("".join(json.dumps({"qid": q, "text": "vaccination hospital", "qtype": "factual", "filters": {}}) + "\n"
+                            for q in ("qA", "qB")), encoding="utf-8")
+    return r, seed
+
+
+def test_cli_sweep_is_model_free_and_reports_totals(tmp_path):
+    from archive_debugger.generate import cli
+    r, seed = _fixture_retriever_and_seed(tmp_path)
+    try:
+        res = cli.sweep(Path("config/pilot.toml"), seed, retriever=r)
+    finally:
+        r.close()
+    by = {row["qid"]: row for row in res["rows"]}
+    assert set(by) == {"qA", "qB"} and res["unlabeled"] == 1
+    assert by["qA"]["gold"] == "answerable" and by["qA"]["would_abstain"] is False  # 2 items / 4 FTS passages
+    assert res["answerable_would_abstain"] == 0 and res["abstain_would_answer"] == 0
+
+
+def test_cli_stub_provider_is_offline_and_abstains_unverified(tmp_path):
+    from archive_debugger.generate import cli
+    r, _ = _fixture_retriever_and_seed(tmp_path)
+    try:
+        out = cli.answer_question(Path("config/pilot.toml"), "vaccination hospital", provider="stub", retriever=r)
+    finally:
+        r.close()
+    assert out["abstained"] is True and out["text"] == gen.ABSTAIN_UNVERIFIED
+    assert "anthropic" not in sys.modules
 
 
 def test_importing_generate_does_not_import_anthropic():

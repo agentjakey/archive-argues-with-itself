@@ -31,6 +31,9 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pytest        # hermetic: no network, no model, no index
 ```
 
+For synthesis, copy `.env.example` to `.env` and put your key in `ANTHROPIC_API_KEY`,
+or set `ANTHROPIC_API_KEY` in the environment. The key is never committed.
+
 ## Reproduce
 
 Commands use the venv interpreter and default to `--config config/pilot.toml`.
