@@ -495,35 +495,48 @@ Everything above was scored on the Phase 7 gold, pooled from the baseline
 retriever's top-30. The candidate (section_demote with front 0.5 / back 0.5,
 fts_drop_stopwords, doc_type_family_filter, per_item_cap 5, later_years_flag)
 surfaced 315 passages in its top-20 that no human had judged, across 45
-questions. Jake labeled them from `reports/phase13/extension_worksheet.jsonl`
-(`eval/gold_extension_decisions.json`, reasons in `eval/gold_extension_notes.md`):
-280 labels written (30 relevant, 250 not); 35 marked uncertain and left unjudged;
-no Phase 7 label or verdict changed. Gold is now 1,780 labels, 370 relevant.
-Back-matter classifier v2 (citation signature needing a page range or an
-author entry with a nearby year) read 18/20 on its sample, so the back weight
-stayed at 0.5.
+questions. Jake labeled them in two batches from
+`reports/phase13/extension_worksheet.jsonl`: batch 1
+(`eval/gold_extension_decisions.json`) wrote 280 labels (30 relevant) and left 35
+uncertain; batch 2 (`eval/gold_extension_decisions_2.json`) decided those 35
+(6 relevant, 29 not) under the rule decisions recorded in
+`eval/gold_extension_notes.md`. No Phase 7 label or verdict changed. Gold is now
+1,815 labels, 376 relevant; every passage in the candidate's top-20 is judged.
+Back-matter classifier v2 read 18/20 on its sample, so the back weight stayed
+at 0.5.
 
-Both retrievers re-scored on the extended set (eval_runs rows carry
-`"gold": "phase7+phase13_extension"`):
+Both retrievers scored on each gold set (eval_runs rows name the set in
+`config_json.gold`):
 
 | state | gold | recall@5 | recall@10 | recall@20 | ndcg@10 | unjudged@10 | unjudged@20 | run_id |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | baseline | phase7 | 0.1928 | 0.4083 | 0.6823 | 0.4420 | 0.0000 | 0.0000 | p13-baseline-20260911T151906Z |
 | candidate | phase7 | 0.2565 | 0.4352 | 0.6978 | 0.4885 | 0.2140 | 0.3150 | p13-candidate-20260911T165257Z |
-| baseline | extended | 0.1767 | 0.3670 | 0.6163 | 0.4245 | 0.0000 | 0.0000 | p13-baseline-20260911T175100Z |
-| candidate | extended | 0.2326 | 0.4485 | 0.7271 | 0.5003 | 0.0260 | 0.0350 | p13-candidate-20260911T175100Z |
+| baseline | +batch 1 | 0.1767 | 0.3670 | 0.6163 | 0.4245 | 0.0000 | 0.0000 | p13-baseline-20260911T175100Z |
+| candidate | +batch 1 | 0.2326 | 0.4485 | 0.7271 | 0.5003 | 0.0260 | 0.0350 | p13-candidate-20260911T175100Z |
+| baseline | +batch 2 (final) | 0.1740 | 0.3470 | 0.5928 | 0.4174 | 0.0000 | 0.0000 | p13-baseline-20260911T181117Z |
+| candidate | +batch 2 (final) | 0.2438 | 0.4581 | 0.7276 | 0.5082 | 0.0000 | 0.0000 | p13-candidate-20260911T181117Z |
 
-Reading. The baseline's numbers fall on the extended set because 30 newly
-relevant passages exist that it does not retrieve; that is the pooled-labels
-bias made visible, not a regression. The candidate now leads on every metric
-with 2.6% of its top-10 and 3.5% of its top-20 unjudged (the 35 uncertain
-passages, kept unjudged on purpose), and 27 of 50 questions have a fully judged
-candidate top-20. On the 35 answerable questions nDCG@10 rises on 19, falls on
-10, and is flat on 6. Largest gains: q044 (0.18 -> 0.79), q024 (0.11 -> 0.68),
-q001 (0.24 -> 0.71), q007 (0.00 -> 0.44), q012 (0.27 -> 0.57). Losses to know
-about: q032 (0.32 -> 0.00; the one relevant passage, a 1975-2005 life-expectancy
-chart, leaves the top-10 under the cap), q009 (0.40 -> 0.14), q038 (0.61 ->
-0.50), q035 (0.77 -> 0.68). Recall@20 on the extended set: 0.727 vs 0.616.
+Reading. The baseline's numbers fall as the gold grows because relevant
+passages now exist that it does not retrieve; that is the pooled-labels bias
+made visible, not a regression. On the final gold, with nothing unjudged in
+either top-20, the candidate leads on every metric: nDCG@10 0.508 vs 0.417,
+recall@10 0.458 vs 0.347, recall@20 0.728 vs 0.593. On the 35 answerable
+questions nDCG@10 rises on 20, falls on 9, and is flat on 6. Largest gains:
+q044 (0.18 -> 0.79), q024 (0.11 -> 0.68), q001 (0.24 -> 0.71), q007 (0.00 ->
+0.44), q036 (0.00 -> 0.40), q012 (0.27 -> 0.57), q031 (0.49 -> 0.71). Losses to
+know about: q009 (0.40 -> 0.14; recall@10 0.31 -> 0.08 under the per-item cap,
+though recall@20 rises 0.54 -> 0.62), q038 (0.61 -> 0.50), q035 (0.77 -> 0.68),
+q034 (0.37 -> 0.29 at nDCG@10 while recall@20 goes 0.60 -> 1.00), q008 (0.69 ->
+0.61), q033 (0.20 -> 0.13).
+
+q032 note. After batch 1 this question read as a collapse (nDCG@10 0.32 -> 0.00)
+because its one judged-relevant passage left the candidate's top-10 and the
+passage the candidate put at rank 5, a 1975-2005 life-expectancy series, was
+unjudged. Batch 2 judged that passage relevant. Final numbers: baseline
+recall@10 0.50, recall@20 0.50, nDCG@10 0.193; candidate recall@10 0.50,
+recall@20 1.00, nDCG@10 0.237. The candidate is now slightly ahead on q032, and
+the earlier collapse was an artifact of the pooled labels.
 
 Frozen thinness sweep on the candidate (unchanged rule, no model call): 0
 answerable questions would abstain; 6 of 15 gold-abstain questions abstain
@@ -532,13 +545,15 @@ q050 `2017`); 9 would answer. The baseline sweep still reads 1 / 6, as in Phase
 9 sweep 2. The wider pool covers more question terms, so the gate fires less;
 the gate itself was not changed.
 
-Decision. The candidate is turned on in `config/pilot.toml` (eval_runs row
-`config-retrieve-*` records the values). Setting the five switches off
-reproduces the Phase 7 retriever. The answer cache is keyed on a retrieval
-fingerprint that includes the config, so no pre-Phase-13 answer can be served;
-there was no cache file on disk to delete.
+Decision. The candidate is on in `config/pilot.toml` (eval_runs row
+`config-retrieve-20260911T175817Z` records the values). Setting the five
+switches off reproduces the Phase 7 retriever. The answer cache is keyed on a
+retrieval fingerprint that includes the config, so no pre-Phase-13 answer can
+be served; there was no cache file on disk to delete.
 
-Caveats carried forward. The judge for the extension was not independent of
-the system: candidate labels were proposed by an LLM assistant and decided by
-Jake (`eval/labeling_notes.md`, Methods). The 35 uncertain passages are the
-next labeling debt. The back-matter estimate is from 20 pages, by one reader.
+Caveats carried forward. The judge for both extension batches was not
+independent of the system: candidate labels were proposed by an LLM assistant
+and decided by Jake (`eval/labeling_notes.md`, Methods). The back-matter
+estimate is from 20 pages, by one reader. The per-item cap costs a few
+questions their second and third same-item passages inside the top-10 (q009,
+q034) while lifting recall@20; that trade is now measured, not guessed.

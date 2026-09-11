@@ -242,6 +242,8 @@ data/*
 # Regenerable per-phase build reports; only the human-readable eval summary is kept.
 reports/phase*/*
 !reports/phase7/eval_report.md
+# The Phase 7 worksheet is kept: eval/gold_decisions.json cites its ranks.
+!reports/phase7/label_worksheet.jsonl
 !reports/phase8/citation_report.md
 !reports/phase9/generation_report.md
 !reports/phase13/sections_report.md

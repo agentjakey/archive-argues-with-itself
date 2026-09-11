@@ -80,11 +80,14 @@ def run(config_path: Path, *, out_path: Optional[Path] = None, top_n: int = 20, 
 
 
 def apply_extension(conn, worksheet_path: Path, decisions: dict) -> dict:
-    """decisions: {qid: {"r": [ranks], "u": [ranks] (optional), "v": "a"|"x" (optional)}}.
-    Every candidate in the worksheet for a listed qid gets a label: 1 for "r" ranks, 0
-    for the rest, EXCEPT "u" (uncertain) ranks, which receive no label and stay unjudged
-    (a judgment is never manufactured from a doubt). All-or-nothing validation; a
-    passage that already carries a label is a hard error."""
+    """decisions: {qid: {"r": [ranks], "u": [ranks] (optional), "n": [ranks] (optional),
+    "v": "a"|"x" (optional)}}. Two shapes:
+    - whole-question (no "n"): every worksheet candidate for the qid gets a label, 1 for
+      "r" ranks and 0 for the rest, EXCEPT "u" (uncertain) ranks, which receive no label
+      and stay unjudged (a judgment is never manufactured from a doubt);
+    - explicit (with "n"): only the listed "r" (1) and "n" (0) ranks are labeled, e.g. a
+      later batch deciding passages an earlier batch left uncertain.
+    All-or-nothing validation; a passage that already carries a label is a hard error."""
     order, summaries, cands = _read_worksheet(worksheet_path)
     decisions = {k: v for k, v in decisions.items() if k != "_meta"}
     plan, verdicts = [], []
@@ -93,17 +96,20 @@ def apply_extension(conn, worksheet_path: Path, decisions: dict) -> dict:
             raise ValueError(f"{qid}: not in the extension worksheet")
         by_rank = {c["rank"]: c for c in cands.get(qid, [])}
         rset, uset = set(dec.get("r", [])), set(dec.get("u", []))
-        missing = sorted(r for r in (rset | uset) if r not in by_rank)
+        explicit = "n" in dec
+        nset = set(dec.get("n", []))
+        missing = sorted(r for r in (rset | uset | nset) if r not in by_rank)
         if missing:
             raise ValueError(f"{qid}: ranks {missing} have no worksheet record")
-        if rset & uset:
-            raise ValueError(f"{qid}: ranks {sorted(rset & uset)} are both relevant and uncertain")
+        if rset & uset or rset & nset or uset & nset:
+            raise ValueError(f"{qid}: a rank appears in more than one of r/u/n")
+        targets = sorted(rset | nset) if explicit else sorted(r for r in by_rank if r not in uset)
         existing = store.get_labels(conn, qid)
-        clash = sorted(c["passage_id"] for c in by_rank.values() if c["passage_id"] in existing)
+        clash = sorted(by_rank[r]["passage_id"] for r in targets if by_rank[r]["passage_id"] in existing)
         if clash:
             raise ValueError(f"{qid}: already labeled, extension is additive only: {clash}")
-        rows = [(c["passage_id"], 1 if rank in rset else 0) for rank, c in sorted(by_rank.items()) if rank not in uset]
-        skipped = [c["passage_id"] for rank, c in sorted(by_rank.items()) if rank in uset]
+        rows = [(by_rank[r]["passage_id"], 1 if r in rset else 0) for r in targets]
+        skipped = [] if explicit else [c["passage_id"] for rank, c in sorted(by_rank.items()) if rank in uset]
         v = dec.get("v")
         if v is not None and v not in ("a", "x"):
             raise ValueError(f"{qid}: verdict must be 'a', 'x' or absent, got {v!r}")

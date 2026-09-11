@@ -67,6 +67,16 @@ verdict.
   applied with `python -m archive_debugger.eval.extend --apply`. Eval rows scored
   on the extended set carry `"gold": "phase7+phase13_extension"` in
   `eval_runs.config_json`.
+- 2026-09-11, Phase 13 extension batch 2 (additive). The 35 uncertain passages
+  decided: 6 relevant, 29 not (`eval/gold_extension_decisions_2.json`; rule
+  decisions in `eval/gold_extension_notes.md`, Batch 2). No earlier label or
+  verdict changed. Totals now 1,815 labels, 376 relevant; every passage in the
+  candidate retriever's top-20 is judged. Eval rows scored on this set carry
+  `"gold": "phase7+phase13_extension_b2"`.
+- The Phase 7 worksheet `reports/phase7/label_worksheet.jsonl` is tracked from
+  Phase 13 on, so the ranks cited in `eval/gold_decisions.json` resolve without
+  regeneration. It was produced by `python -m archive_debugger.eval.assist` with
+  the Phase 7 retriever (all five `[retrieve]` switches off, `per_item_cap = 0`).
 
 ## Methods
 
@@ -78,4 +88,6 @@ For the Phase 13 extension, candidate labels were proposed by an LLM assistant
 from the worksheet excerpts and each was reviewed and decided by Jake. The same
 model family generates the system's answers, so the judge is not independent of
 the system; the labels are Jake's decisions, but the proposals that framed them
-were not.
+were not. Batch 2 (the 35 passages left uncertain in batch 1) was proposed by an
+LLM assistant from the worksheet excerpts and reviewed and decided by Jake, the
+same as batch 1.

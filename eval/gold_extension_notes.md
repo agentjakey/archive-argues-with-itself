@@ -237,3 +237,18 @@ n: 8, 9, 10, 12, 14, 17, 19, 20
 Note on the three verdict notes (q018, q031, q043): the Phase 7 gold for all three
 is already answerable (see the x->a entries in eval/labeling_notes.md), so no
 verdict was changed by this extension; the new r marks are consistent with it.
+
+## Batch 2
+
+The 35 passages left uncertain in batch 1, decided from the same worksheet
+excerpts (`eval/gold_extension_decisions_2.json`; 6 r, 29 n; additive, no
+earlier label changed). Rule decisions:
+
+- single-period statements count as relevant for comparison questions,
+  consistent with Phase 7 (q031 9, q034 16/17/19, q036 6 r);
+- q032 5 r as a 1975-2005 life-expectancy series;
+- named-body questions require the named body (q011 18, q012 4/8/17/18, q044 4 n);
+- out-of-window probes stay n by design (q042 4, q046 11);
+- cut-off or non-answering excerpts n (q001 12/19, q002 20, q003 17, q009 20,
+  q016 14, q020 14, q021 7/8/14, q022 15, q029 14/16, q030 1/10, q031 12,
+  q033 12, q037 5, q038 4/12, q043 13).

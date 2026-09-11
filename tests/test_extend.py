@@ -63,7 +63,7 @@ def test_apply_is_additive_and_refuses_overwrite(tmp_path):
     ws.write_text("".join(json.dumps(x) + "\n" for x in records), encoding="utf-8")
     cands = sorted((x for x in records if x["kind"] == "candidate"), key=lambda c: c["rank"])
     first, last = cands[0]["rank"], cands[-1]["rank"]
-    with pytest.raises(ValueError, match="both relevant and uncertain"):
+    with pytest.raises(ValueError, match="more than one of r/u/n"):
         extend.apply_extension(conn, ws, {"q001": {"r": [first], "u": [first]}})
     out = extend.apply_extension(conn, ws, {"q001": {"r": [first], "u": [last]}})
     assert out == {"qids": 1, "labels": 3, "relevant": 1, "uncertain_unlabeled": 1, "verdict_changes": []}
@@ -73,6 +73,11 @@ def test_apply_is_additive_and_refuses_overwrite(tmp_path):
     assert cands[-1]["passage_id"] not in labels                                            # uncertain stays unjudged
     with pytest.raises(ValueError, match="additive only"):
         extend.apply_extension(conn, ws, {"q001": {"r": []}})                                 # second apply clashes
+    # Batch 2 shape: explicit r/n lists label only those ranks (the earlier uncertain one).
+    out2 = extend.apply_extension(conn, ws, {"q001": {"r": [last], "n": []}})
+    assert out2["labels"] == 1 and out2["relevant"] == 1 and store.get_labels(conn, "q001")[cands[-1]["passage_id"]] == 1
+    with pytest.raises(ValueError, match="additive only"):
+        extend.apply_extension(conn, ws, {"q001": {"r": [], "n": [last]}})                    # already decided
     with pytest.raises(ValueError, match="not in the extension worksheet"):
         extend.apply_extension(conn, ws, {"q999": {"r": []}})
     conn.close()
