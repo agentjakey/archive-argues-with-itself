@@ -157,6 +157,17 @@ def test_stub_factory_returns_stub():
     assert isinstance(make_embedder("stub", "unused", 64), StubEmbedder)
 
 
+def test_search_exposes_per_leg_ranks(tmp_path):
+    cfg = _fixture(tmp_path)
+    r = search.Retriever(None, embedder=StubEmbedder(dim=64), cfg=cfg)
+    try:
+        hits = r.search("vaccination hospital", top_k=2)
+        assert {"bm25_rank", "dense_rank"} <= set(hits[0])
+        assert any(h["bm25_rank"] is not None for h in hits)  # the FTS leg matched
+    finally:
+        r.close()
+
+
 def test_importing_retrieve_does_not_import_fastembed():
     code = ("import archive_debugger.retrieve.embed, archive_debugger.retrieve.search, sys; "
             "assert 'fastembed' not in sys.modules, 'fastembed imported at module load'")

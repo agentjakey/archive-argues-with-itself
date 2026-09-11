@@ -114,7 +114,15 @@ class Retriever:
         fused = rrf([bm, dn], k=self.cfg.rrf_k)
         if not fused:
             return []
+        bm_rank = {pid: i + 1 for i, pid in enumerate(bm)}
+        dn_rank = {pid: i + 1 for i, pid in enumerate(dn)}
         quality = self._quality_for(set(fused))
         final = apply_downweight(fused, quality, self.cfg.downweights)
         ranked = sorted(final, key=lambda p: final[p], reverse=True)[:top_k]
-        return [self._provenance(pid, final[pid]) for pid in ranked]
+        out = []
+        for pid in ranked:
+            hit = self._provenance(pid, final[pid])
+            hit["bm25_rank"] = bm_rank.get(pid)    # None if the passage came only from the dense leg
+            hit["dense_rank"] = dn_rank.get(pid)   # None if it came only from BM25
+            out.append(hit)
+        return out

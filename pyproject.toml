@@ -21,6 +21,8 @@ dependencies = [
     "fastembed==0.4.2",         # ingest/retrieve: small ONNX embedding models, no torch
     "fastapi==0.115.6",         # api: read-only serve layer
     "uvicorn[standard]==0.34.0",# api: ASGI server
+    "pydantic==2.13.5",         # generate: structured-output schema (explicit, was transitive)
+    "anthropic==1.5.0",         # generate: the only permitted external LLM call (N1); stubbed in CI
 ]
 
 [project.optional-dependencies]

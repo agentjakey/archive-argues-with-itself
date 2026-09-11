@@ -77,6 +77,16 @@ downweight_high = 1.0
 downweight_medium = 0.9
 downweight_low = 0.75
 
+[generate]
+provider = "anthropic"                 # tests/CI override to "stub"
+model = "claude-haiku-4-5-20251001"    # cheap default; step up via config, never in code
+max_tokens = 2048
+top_k = 12
+# Thinness (a priori, NOT tuned on eval labels), computed over the FTS-matched subset
+# of the retrieved set (the dense leg always fills top_k, so full-set counts cannot abstain).
+min_items = 2
+min_passages = 3
+
 [eval]
 label_top_n = 30                 # candidates shown/judged per question (> max recall k)
 recall_ks = [5, 10, 20]
