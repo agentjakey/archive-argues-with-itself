@@ -113,6 +113,11 @@ recorded page. Text overlap is never used as ground truth. Five real top-1
 citations (q001-q005) passed all three checks; three synthetic bad citations
 (unknown id, real passage outside its retrieved set, dangling leaf) failed.
 
+In the interface, each kept sentence carries a numbered mark and the Sources list
+links each cited page.
+
+![An answered question with numbered citations and the Sources list](images/answer-alberta.png)
+
 The model drafts sentences that each cite passage ids. Sentences that cite
 nothing, fail verification, or mention a year or page not present in their cited
 passages are dropped and listed as unsupported. If no sentence survives, the
@@ -143,6 +148,8 @@ matching passages is reported per decade and per jurisdiction under the active
 filters, beside the count of all passages there. These are lexical matches, not
 relevance. The fixed caption on the view states three limits: post-2009 OCR is
 effectively absent; 45% of passages carry no date; counts are lexical matches.
+
+![The coverage grid: passages matching each salient term by decade, with jurisdiction totals](images/coverage-grid.png)
 
 ## 7. Retrieval changes, measured (Phase 13)
 

@@ -11,7 +11,7 @@ The public record disagrees with itself across decades. This tool shows you the 
 
 **Live demo:** https://archive-argues-with-itself-production.up.railway.app
 
-![Answer with page-level citations and the evidence trail](docs/images/hero.png)
+![The same Alberta health-insurance plan in 1974 and in 1999, two scanned pages side by side](docs/images/compare-alberta-1974-1999.png)
 
 An official answer is not fixed: what a government said caused a problem, or how it
 described a program, changes from one decade's report to the next, and the wording of
@@ -152,12 +152,19 @@ with the three checks, drops what fails, and abstains by rule when the record is
 `eval/` scores retrieval against human labels and holds the labeling tools. `api/` is a
 read-only FastAPI layer with an answer cache; `web/` is the Vite and React interface.
 
-When the record cannot answer, the tool says so and shows the coverage grid. When it
-can, you can pin two decades and read them side by side.
+An answer names its sources. Every sentence carries a numbered mark, the Sources list
+gives each page, and the evidence trail shows what was retrieved by decade.
 
-| Abstention with the coverage grid | Two pages, decades apart |
+![An answered question with its verified page-level citations](docs/images/answer-tobacco.png)
+
+![The Sources list and the decade-by-decade evidence trail](docs/images/sources-timeline.png)
+
+When the record cannot answer, the tool refuses and shows why: the terms no retrieved
+page mentions, and the coverage grid of what the archive does hold.
+
+| The tool refusing, with the uncovered terms | The coverage behind the refusal |
 | --- | --- |
-| ![Abstention card and coverage grid](docs/images/abstention.png) | ![Compare view](docs/images/compare.png) |
+| ![Abstention card for a COVID-19 question, with uncovered-term chips](docs/images/abstention-covid.png) | ![Coverage grid and nearest evidence for the refused question](docs/images/abstention-coverage.png) |
 
 ## Methods and gaps
 

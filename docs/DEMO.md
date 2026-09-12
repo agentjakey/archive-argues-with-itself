@@ -4,6 +4,11 @@ One laptop, one process, no internet required once prepared. The app shows real
 scanned pages from the offline pack, answers every seed question from its cache,
 and cycles through the stories when nobody is touching it.
 
+Each story pairs two pages from the record, years apart, on one question; the
+attract loop opens them in turn.
+
+![The Stories index: four curated question cards, each pairing two pages years apart](images/stories.png)
+
 ## Prepare (with internet, once)
 
 From the repository root, with the venv, `.env` (key and `CIVIC_*` paths) and

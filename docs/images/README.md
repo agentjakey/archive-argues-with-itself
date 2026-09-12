@@ -1,15 +1,14 @@
 # Screenshots
 
-Three PNGs referenced by the top-level README. Take them from the built app
-served by the API (`python -m uvicorn archive_debugger.api.app:app`) with the
-answer cache warm, at a 1440 x 900 viewport, light theme, browser chrome
-cropped out, saved as PNG at 2x device pixel ratio if available.
+Captured from the running app (cache warm), used by the README and the docs pages.
 
-| file | state | URL |
+| file | shows | used in |
 | --- | --- | --- |
-| `hero.png` | Answered question: the answer with numbered citation marks and the Sources list, the decade timeline, and the first evidence cards visible. Scroll so the answer heading is at the top. | `/?q=How+did+Alberta+health+insurance+coverage+change+between+the+1970s+and+1990s%3F&jurisdiction=alberta` |
-| `abstention.png` | Abstention card with the coverage grid directly beneath it ("Why the record is thin here"), zeros visible in the grid. | `/?q=What+did+public+health+authorities+report+about+the+COVID-19+pandemic+in+2020%3F` |
-| `compare.png` | Compare view open from a story: two pages side by side, years as column headers, the story caption above. Open the first story from the home screen, then scroll so the compare heading is at the top. | `/` then click the first story |
-
-Optional fourth for the exhibit docs: `kiosk.png`, the home screen at
-`/?kiosk=1&offline=1` on a 1920 x 1080 viewport showing the stories.
+| `compare-alberta-1974-1999.png` | the compare view: the same Alberta insurance plan in 1974 and 1999, two page scans side by side | README hero |
+| `answer-tobacco.png` | header, corpus strip, and an answered Ontario tobacco question | README "How it works" |
+| `sources-timeline.png` | the Sources list and the decade-by-decade evidence trail | README "How it works" |
+| `abstention-covid.png` | the abstention card for a COVID-19 question, with uncovered-term chips | README "How it works" |
+| `abstention-coverage.png` | the coverage grid behind the refusal, and "nearest evidence, not an answer" | README "How it works" |
+| `answer-alberta.png` | the Alberta answer with numbered citations and the Sources list | docs/methods.md, section 5 |
+| `coverage-grid.png` | the coverage grid: passages matching each salient term by decade, with jurisdiction totals | docs/methods.md, section 6 |
+| `stories.png` | the Stories index: four curated question cards, each pairing two pages years apart | docs/demo.md |
