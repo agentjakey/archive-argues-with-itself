@@ -7,7 +7,7 @@ in worksheet order; "_meta" ignored), eval/judgments_phase16_notes.md (one
 judged sentences and citations), reports/phase16/holdout_run.json (optional, from
 scripts/run_holdout.py), civic.db (gold verdicts).
 
-Output: reports/phase16/audit_report.md and audit_numbers.json. Nothing here calls a
+Output: docs/evaluation/audit_report.md and reports/phase16/audit_numbers.json. Nothing here calls a
 model or the network. The headline numbers are computed, never typed in.
 
     python scripts/audit_report.py
@@ -75,7 +75,8 @@ def main(argv=None) -> int:
     p.add_argument("--worksheet", default=Path("reports/phase16/judgment_worksheet.jsonl"), type=Path)
     p.add_argument("--summary", default=Path("reports/phase16/judgment_summary.json"), type=Path)
     p.add_argument("--holdout", default=Path("reports/phase16/holdout_run.json"), type=Path)
-    p.add_argument("--out", default=Path("reports/phase16"), type=Path)
+    p.add_argument("--out", default=Path("reports/phase16"), type=Path)         # machine artifact (audit_numbers.json)
+    p.add_argument("--evidence", default=Path("docs/evaluation"), type=Path)     # human-readable report
     p.add_argument("--config", default=Path("config/pilot.toml"), type=Path)
     args = p.parse_args(argv)
 
@@ -148,6 +149,7 @@ def main(argv=None) -> int:
         "judgment_meta": meta,
     }
     args.out.mkdir(parents=True, exist_ok=True)
+    args.evidence.mkdir(parents=True, exist_ok=True)
     (args.out / "audit_numbers.json").write_text(json.dumps(numbers, ensure_ascii=False, indent=2), encoding="utf-8")
 
     pct = lambda x: "n/a" if x is None else f"{100 * x:.1f}%"  # noqa: E731
@@ -164,8 +166,8 @@ def main(argv=None) -> int:
          "| # | number | value | source |", "| --- | --- | --- | --- |",
          f"| 1 | Citation support, strict (supported only), kept sentences on the 35 gold-answerable questions | **{pct(strict)}** ({total['s']} of {n_sent}) | eval/judgments_phase16.json over reports/phase16/judgment_worksheet.jsonl |",
          f"| 2 | Citation support, lenient (supported + partly) | **{pct(lenient)}** ({total['s'] + total['p']} of {n_sent}) | same |",
-         f"| 3 | Abstention | in-sample: **{len(abstained_on_abstain)}/15** gold-abstain abstained ({len(off_target)} answered off target); false abstentions **{len(false_abstentions)}/35**. {ho_cell} | this run; reports/phase16/holdout_run.md; reports/phase13/retrieval_report.md (sweep) |",
-         f"| 4 | Retrieval recall@10 on the final gold, before -> after the retrieval changes | **{RECALL10_BEFORE:.4f} -> {RECALL10_AFTER:.4f}** (recall@20 {RECALL20_BEFORE:.4f} -> {RECALL20_AFTER:.4f}; nDCG@10 {NDCG10_BEFORE:.4f} -> {NDCG10_AFTER:.4f}) | reports/phase13/retrieval_report.md, final section |",
+         f"| 3 | Abstention | in-sample: **{len(abstained_on_abstain)}/15** gold-abstain abstained ({len(off_target)} answered off target); false abstentions **{len(false_abstentions)}/35**. {ho_cell} | this run; holdout_run.md; retrieval_report.md (sweep) |",
+         f"| 4 | Retrieval recall@10 on the final gold, before -> after the retrieval changes | **{RECALL10_BEFORE:.4f} -> {RECALL10_AFTER:.4f}** (recall@20 {RECALL20_BEFORE:.4f} -> {RECALL20_AFTER:.4f}; nDCG@10 {NDCG10_BEFORE:.4f} -> {NDCG10_AFTER:.4f}) | retrieval_report.md, final section |",
          "| 5 | Cited passages resolving to a recorded page | **119/119 = 1.00** | every kept citation in the run re-checked with retrieve.citation.verify_citation |",
          "", "In-sample means the 50 seed questions, which were used to amend the abstention rule (once) and to",
          "label the gold the retriever was chosen on. Held-out means `eval/holdout_questions.jsonl`: 15 questions",
@@ -200,7 +202,7 @@ def main(argv=None) -> int:
           "page, and says what the sentence says; the passages do not bear on the question's period or subject.",
           "The three structural checks and the fact-leak guard guarantee support by the page; nothing in the",
           "pipeline guarantees the page is about what was asked.", "",
-          "The frozen thinness sweep on this configuration (`reports/phase13/retrieval_report.md`, final section)",
+          "The frozen thinness sweep on this configuration (`retrieval_report.md`, final section)",
           "predicted 9 of the 15 gold-abstain questions would pass the gate: 5 passed and answered off target, and",
           "the rest abstained at the gate or downstream when no drafted sentence survived verification. False",
           f"abstentions on the 35 answerable questions: {len(false_abstentions)}, as the sweep predicted.", ""]
@@ -210,7 +212,7 @@ def main(argv=None) -> int:
               f"abstained" + (f", answered: {', '.join(ho['gold_abstain_answered'])}" if ho["gold_abstain_answered"] else "")
               + f"; {ho['gold_answerable']} gold-answerable questions answered"
               + (f", abstained: {', '.join(ho['gold_answerable_abstained'])}" if ho["gold_answerable_abstained"] else "") + ".",
-              "Per-question outcomes, uncovered terms and abstention texts: `reports/phase16/holdout_run.md`. These",
+              "Per-question outcomes, uncovered terms and abstention texts: `holdout_run.md`. These",
               "held-out numbers are the only abstention figures here that were not available while the rule and",
               "the retrieval configuration were being designed.", ""]
         for r in holdout["results"]:
@@ -231,7 +233,7 @@ def main(argv=None) -> int:
     L += ["## 4. Retrieval, before and after (final gold, all top-20 judged)", "",
           f"recall@10 {RECALL10_BEFORE:.4f} -> {RECALL10_AFTER:.4f}; recall@20 {RECALL20_BEFORE:.4f} -> {RECALL20_AFTER:.4f}; "
           f"nDCG@10 {NDCG10_BEFORE:.4f} -> {NDCG10_AFTER:.4f}; unjudged@10 and @20 0.0 for both "
-          "(`reports/phase13/retrieval_report.md`, final section).", "",
+          "(`retrieval_report.md`, final section).", "",
           "## 5. Citations resolving to a recorded page", "",
           "119 kept citations across the 40 answered questions; 119 exist, 119 were in the retrieved evidence,",
           "119 resolve to a recorded page: 1.00. This is 1.0 by construction: verifier check 3 (`resolves`) drops",
@@ -248,7 +250,7 @@ def main(argv=None) -> int:
           "- 34 further cited passages in the run carry a later-years mark, mostly annual reports whose item year",
           "  predates the report year in the text (for example `birthdeathstatistics1986` items dated 1984 with",
           "  1986-1989 text).", ""]
-    (args.out / "audit_report.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+    (args.evidence / "audit_report.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in numbers.items() if k not in ("judgment_meta", "off_target_marks")}, ensure_ascii=False, indent=2))
     return 0
 

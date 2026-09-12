@@ -21,8 +21,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CIVIC_DB_PATH=/data/civic.db \
     CIVIC_INDEX_PATH=/data/index/vectors.db \
     CIVIC_CACHE_PATH=/data/cache/answers.db \
-    FASTEMBED_CACHE_PATH=/opt/fastembed \
-    PORT=8080
+    FASTEMBED_CACHE_PATH=/opt/fastembed
+# PORT is NOT baked in: a hardcoded ENV PORT=8080 would shadow the port Railway
+# injects at runtime, so uvicorn would listen on 8080 while the proxy routed
+# elsewhere ("Application failed to respond"). The entrypoint binds ${PORT:-8080},
+# which uses Railway's PORT in production and 8080 locally when PORT is unset.
 
 WORKDIR /app
 

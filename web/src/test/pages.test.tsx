@@ -17,7 +17,7 @@ describe("reading pages", () => {
     expect(screen.getByRole("heading", { name: "How this works" })).toBeInTheDocument();
     expect(screen.getByText(/three structural checks/)).toBeInTheDocument();
     expect(screen.getByText(/mean the sentence is true/)).toBeInTheDocument();
-    expect(screen.getAllByText("reports/phase9/generation_report.md").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("docs/evaluation/abstention_sweeps.md").length).toBeGreaterThan(0);
   });
 
   it("Gaps carries the report numbers with their source files", () => {

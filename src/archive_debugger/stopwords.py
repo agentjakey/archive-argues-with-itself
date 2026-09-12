@@ -1,7 +1,7 @@
 """The frozen English stoplist shared by the abstention gate (generate.answer) and,
 when [retrieve].fts_drop_stopwords is on, the FTS query builder. Moved here from
 generate/answer.py in Phase 13 so retrieve/ never imports generate/; the content is
-unchanged and frozen (see reports/phase9/generation_report.md, Amendment)."""
+unchanged and frozen (see docs/evaluation/abstention_sweeps.md, Amendment)."""
 from __future__ import annotations
 
 # Fixed English stopwords: articles, conjunctions, prepositions, pronouns,

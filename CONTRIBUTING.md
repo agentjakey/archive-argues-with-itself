@@ -40,3 +40,10 @@ looks like.
 Evaluation gold and support judgments are decided by a human and recorded with
 their reasons under `eval/`. Do not change existing labels; extensions are
 additive and go in a new file with a changelog line in `eval/labeling_notes.md`.
+
+## Contributing and conduct
+
+Issues are welcome, whether a bug, a corpus gap, or a second-scope idea; a small
+example (the question URL, or a passage id) helps more than a long description.
+Please be respectful and constructive, and open an issue for anything unclear
+rather than guessing. Maintainer: Jacob Ortiz, https://github.com/agentjakey.

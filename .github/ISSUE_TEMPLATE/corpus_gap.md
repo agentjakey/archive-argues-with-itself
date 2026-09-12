@@ -21,6 +21,6 @@ question, or evidence that the topic is absent for that period.
 
 **Notes**
 
-Coverage limits already recorded in `docs/GAP_REPORT.md` (undated passages, no
+Coverage limits already recorded in `docs/gaps.md` (undated passages, no
 record after 2009, front matter, metadata dates) are known; a report is still
 useful if it adds a concrete question or page.

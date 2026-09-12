@@ -1,7 +1,9 @@
 """Phase 13 retrieval-quality sweep: the full Phase 7 eval (recall@k, nDCG@10, plus
 unjudged@10/@20) on the current retriever under each switch state, persisted as
 one eval_runs row per state, plus the no-model abstention sweep on the baseline
-and the all-on states. Writes reports/phase13/retrieval_report.md.
+and the all-on states. Writes the machine report to reports/phase13/ (retrieval_report.md
+and .json plus per-state checkpoints); the curated evidence copy that carries the
+hand-written final section lives at docs/evaluation/retrieval_report.md.
 
 States: baseline (all off), each switch alone (cap at 3 and at 5 separately;
 later_years is a recorded no-op for ranking), all on with cap 3, all on with cap 5.

@@ -20,9 +20,13 @@ export function About() {
         The documents are Canadian federal, Ontario and Alberta government publications and remain under their
         own terms. The tool adds no claims of ownership; it indexes, retrieves and cites.
       </p>
-      <h3>Source</h3>
+      <h3>Source and live site</h3>
       <p>
-        The code, the evaluation questions, the human labels and the reports are open source under the MIT
+        The live demo is at{" "}
+        <a className="linkish" href="https://archive-argues-with-itself-production.up.railway.app" target="_blank" rel="noopener noreferrer">
+          archive-argues-with-itself-production.up.railway.app
+        </a>
+        . The code, the evaluation questions, the human labels, and the reports are open source under the MIT
         licence at{" "}
         <a className="linkish" href="https://github.com/agentjakey/archive-argues-with-itself" target="_blank" rel="noopener noreferrer">
           github.com/agentjakey/archive-argues-with-itself

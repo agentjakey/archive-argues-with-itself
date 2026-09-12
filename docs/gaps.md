@@ -38,7 +38,7 @@ about which date is right.
 
 ## Front and back matter pollute retrieval
 
-Sources: `reports/phase13/sections_report.md`, `reports/phase13/retrieval_report.md`.
+Sources: `reports/phase13/sections_report.md`, `docs/evaluation/retrieval_report.md`.
 
 Title pages, tables of contents, letters of transmittal, indexes and reference
 lists match many queries lexically while answering nothing. A deterministic page
@@ -96,8 +96,8 @@ manifest, not a code change.
 
 ## The abstention rule is a heuristic, and its sweep is in-sample
 
-Source: `reports/phase9/generation_report.md`; final sweep in
-`reports/phase13/retrieval_report.md`.
+Source: `docs/evaluation/abstention_sweeps.md`; final sweep in
+`docs/evaluation/retrieval_report.md`.
 
 Sweep 1 of the frozen rule: 10 of 35 answerable questions would abstain and 4
 of 15 should-abstain would answer. After a single, criterion-based amendment the
@@ -125,7 +125,7 @@ support rates should be read with that in mind.
 
 ## What the audit measured
 
-Source: `reports/phase16/audit_report.md`, `reports/phase16/holdout_run.md`.
+Source: `docs/evaluation/audit_report.md`, `docs/evaluation/holdout_run.md`.
 
 Every seed question once, configured model, final configuration; sentence
 judgments by the author. Strict citation support (every claim in the cited
@@ -141,7 +141,7 @@ Cited passages resolving to a recorded page 119 of 119.
 
 ## Verification checks support, not relevance
 
-Source: `reports/phase16/audit_report.md`; `reports/phase13/retrieval_report.md` (sweep).
+Source: `docs/evaluation/audit_report.md`; `docs/evaluation/retrieval_report.md` (sweep).
 
 In the Phase 16 audit run (every seed question once, real provider, final
 configuration), the tool abstained on 10 of the 15 should-abstain questions and
@@ -160,7 +160,7 @@ the sweep predicted.
 
 Held out: 15 questions written after the rule and the retrieval configuration
 were frozen, never used in any sweep or design decision, verdicts assigned before
-the single run (`eval/holdout_questions.jsonl`, `reports/phase16/holdout_run.md`).
+the single run (`eval/holdout_questions.jsonl`, `docs/evaluation/holdout_run.md`).
 9 of 10 should-abstain probes abstained; 4 of 5 answerable questions answered.
 These are the only abstention figures that were not available while the rule
 was designed. The two misses, recorded after that single run with no rule
@@ -200,7 +200,7 @@ magnitude short of the floor in the window.
 
 ## Pooled labels favour the retriever that was pooled
 
-Source: `reports/phase13/retrieval_report.md`.
+Source: `docs/evaluation/retrieval_report.md`.
 
 Phase 7 gold was pooled from the baseline retriever's top-30, so it could not
 credit passages the baseline never surfaced; the Phase 13 candidate's top-20 was

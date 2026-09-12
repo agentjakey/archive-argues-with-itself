@@ -168,6 +168,13 @@ export default function App() {
         onAsk={onAsk}
       />
       )}
+      {showStories && (
+        <p className="mt-3 text-muted">
+          {offline
+            ? "Open an example question or a story below to see the pages behind the answer."
+            : "Ask a question above, or open an example or a story below, to see the pages behind the answer."}
+        </p>
+      )}
       <ExampleChips
         chips={chips}
         activeText={asked}

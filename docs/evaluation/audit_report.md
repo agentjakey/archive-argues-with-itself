@@ -7,8 +7,8 @@ configured model (claude-haiku-4-5-20251001), final retrieval configuration, 50 
 | --- | --- | --- | --- |
 | 1 | Citation support, strict (supported only), kept sentences on the 35 gold-answerable questions | **93.3%** (166 of 178) | eval/judgments_phase16.json over reports/phase16/judgment_worksheet.jsonl |
 | 2 | Citation support, lenient (supported + partly) | **99.4%** (177 of 178) | same |
-| 3 | Abstention | in-sample: **10/15** gold-abstain abstained (5 answered off target); false abstentions **0/35**. held-out: **9/10** probes abstained (answered: h009); **4/5** answerable answered (abstained: h015) | this run; reports/phase16/holdout_run.md; reports/phase13/retrieval_report.md (sweep) |
-| 4 | Retrieval recall@10 on the final gold, before -> after the retrieval changes | **0.3470 -> 0.4581** (recall@20 0.5928 -> 0.7276; nDCG@10 0.4174 -> 0.5082) | reports/phase13/retrieval_report.md, final section |
+| 3 | Abstention | in-sample: **10/15** gold-abstain abstained (5 answered off target); false abstentions **0/35**. held-out: **9/10** probes abstained (answered: h009); **4/5** answerable answered (abstained: h015) | this run; holdout_run.md; retrieval_report.md (sweep) |
+| 4 | Retrieval recall@10 on the final gold, before -> after the retrieval changes | **0.3470 -> 0.4581** (recall@20 0.5928 -> 0.7276; nDCG@10 0.4174 -> 0.5082) | retrieval_report.md, final section |
 | 5 | Cited passages resolving to a recorded page | **119/119 = 1.00** | every kept citation in the run re-checked with retrieve.citation.verify_citation |
 
 In-sample means the 50 seed questions, which were used to amend the abstention rule (once) and to
@@ -127,7 +127,7 @@ page, and says what the sentence says; the passages do not bear on the question'
 The three structural checks and the fact-leak guard guarantee support by the page; nothing in the
 pipeline guarantees the page is about what was asked.
 
-The frozen thinness sweep on this configuration (`reports/phase13/retrieval_report.md`, final section)
+The frozen thinness sweep on this configuration (`retrieval_report.md`, final section)
 predicted 9 of the 15 gold-abstain questions would pass the gate: 5 passed and answered off target, and
 the rest abstained at the gate or downstream when no drafted sentence survived verification. False
 abstentions on the 35 answerable questions: 0, as the sweep predicted.
@@ -135,7 +135,7 @@ abstentions on the 35 answerable questions: 0, as the sweep predicted.
 ### Held-out run
 
 `eval/holdout_questions.jsonl`, one run on 2026-09-11T19:45:29+00:00 (UTC): 9/10 gold-abstain probes abstained, answered: h009; 4/5 gold-answerable questions answered, abstained: h015.
-Per-question outcomes, uncovered terms and abstention texts: `reports/phase16/holdout_run.md`. These
+Per-question outcomes, uncovered terms and abstention texts: `holdout_run.md`. These
 held-out numbers are the only abstention figures here that were not available while the rule and
 the retrieval configuration were being designed.
 
@@ -167,7 +167,7 @@ from the cached answers and the frozen stoplist in `src/archive_debugger/stopwor
 
 ## 4. Retrieval, before and after (final gold, all top-20 judged)
 
-recall@10 0.3470 -> 0.4581; recall@20 0.5928 -> 0.7276; nDCG@10 0.4174 -> 0.5082; unjudged@10 and @20 0.0 for both (`reports/phase13/retrieval_report.md`, final section).
+recall@10 0.3470 -> 0.4581; recall@20 0.5928 -> 0.7276; nDCG@10 0.4174 -> 0.5082; unjudged@10 and @20 0.0 for both (`retrieval_report.md`, final section).
 
 ## 5. Citations resolving to a recorded page
 

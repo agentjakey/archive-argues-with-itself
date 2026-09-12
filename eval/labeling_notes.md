@@ -78,12 +78,12 @@ verdict.
   marked s / p / n by Jacob Ortiz in `eval/judgments_phase16.json`, reasons for
   every p and n in `eval/judgments_phase16_notes.md`. On the 35 gold-answerable
   questions: 166 supported, 11 partly, 1 not, of 178. Report:
-  `reports/phase16/audit_report.md`.
+  `docs/evaluation/audit_report.md`.
 - 2026-09-11, held-out questions. `eval/holdout_questions.jsonl` (15 questions:
   10 should-abstain probes, 5 answerable) were written after the abstention rule
   and retrieval configuration were frozen, never used in any sweep or design
   decision, and their verdicts were assigned by Jacob Ortiz before the single
-  run recorded in `reports/phase16/holdout_run.md`.
+  run recorded in `docs/evaluation/holdout_run.md`.
 - The Phase 7 worksheet `reports/phase7/label_worksheet.jsonl` is tracked from
   Phase 13 on, so the ranks cited in `eval/gold_decisions.json` resolve without
   regeneration. It was produced by `python -m archive_debugger.eval.assist` with

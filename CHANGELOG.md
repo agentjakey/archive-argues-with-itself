@@ -64,7 +64,7 @@ verifier (exists, in evidence, resolves) passed five real citations and failed
 three synthetic bad ones.
 
 ## Phase 9: synthesis and abstention
-`reports/phase9/generation_report.md`
+`docs/evaluation/abstention_sweeps.md`
 
 Cited sentences drafted by the configured model, each checked by the verifier
 and a fact-leak guard; unsupported sentences are dropped and listed. A
@@ -91,7 +91,7 @@ retrieval fingerprint. Numbered citations and a Sources list; boxes became
 rules.
 
 ## Phase 12: deploy scaffolding
-`docs/DEPLOY.md`
+`docs/deploy.md`
 
 A Docker image that builds the web app inside it and bakes the embedding model;
 data paths overridable by environment; a smoke test wired into CI over a fixture
@@ -100,7 +100,7 @@ Railway path where the container downloads and checksum-verifies the data files
 from a GitHub release on first boot.
 
 ## Phase 13: retrieval quality
-`reports/phase13/retrieval_report.md`, `reports/phase13/sections_report.md`, `eval/labeling_notes.md`
+`docs/evaluation/retrieval_report.md`, `reports/phase13/sections_report.md`, `eval/labeling_notes.md`
 
 Five switchable changes measured one at a time and together: front/back-matter
 demotion from a deterministic page classifier (back precision 18 / 20 after a
@@ -112,13 +112,13 @@ nDCG@10 0.4174 versus candidate 0.4581 / 0.5082. The candidate is on in config;
 the correlated-judge disclosure is recorded in the labeling notes.
 
 ## Phase 14: methods and gaps as product
-`docs/METHODS.md`, `docs/GAP_REPORT.md`
+`docs/methods.md`, `docs/gaps.md`
 
 Methods and gap report written from the phase reports with every number cited;
 "How this works", "Gaps" and "About" views added to the app; this changelog.
 
 ## Phase 15: exhibit
-`docs/DEMO.md`, `config/stories.json`
+`docs/demo.md`, `config/stories.json`
 
 Four stories (question, two pinned pages years apart, caption) on the home
 screen and a kiosk attract loop (60 s idle, one story every 20 s, any touch
@@ -127,7 +127,7 @@ served by the API when present, so a laptop with no internet still shows real
 pages; the model is called only for questions not in the cache.
 
 ## Phase 16: audit
-`reports/phase16/audit_report.md`, `reports/phase16/holdout_run.md`, `eval/judgments_phase16.json`
+`docs/evaluation/audit_report.md`, `docs/evaluation/holdout_run.md`, `eval/judgments_phase16.json`
 
 Every seed question answered once by the configured model on the final
 configuration: 40 answered, 10 abstained, 190 kept sentences, 3 dropped by the
@@ -140,11 +140,13 @@ frozen: 9 of 10 probes abstained, 4 of 5 answerable answered. Recall@10 0.3470 t
 0.4581; 119 of 119 cited passages resolve to a recorded page.
 
 ## Public release 1.0.0
-`README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CITATION.cff`
+`README.md`, `CONTRIBUTING.md`, `CITATION.cff`, `SECURITY.md`
 
-README rewritten around the mission and the audit numbers; contribution guide,
-code of conduct, issue and pull-request templates; disclosure wording unified;
-author named throughout; phase numbering kept to reports and this changelog.
+README rewritten around the mission and the audit numbers; contribution guide with
+a conduct note; issue and pull-request templates; security policy; disclosure
+wording unified; author named throughout; phase numbering kept to reports and this
+changelog. Reader-facing evidence moved to `docs/evaluation/`; the live demo is on
+Railway.
 
 ## BC scope audit
 `reports/bc_audit/bc_sizing.md`

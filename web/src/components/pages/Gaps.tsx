@@ -1,6 +1,6 @@
 import { Page, Source } from "./Page";
 
-/** What the archive cannot tell you. Numbers match docs/GAP_REPORT.md and the reports it cites. */
+/** What the archive cannot tell you. Numbers match docs/gaps.md and the reports it cites. */
 export function Gaps() {
   return (
     <Page title="Gaps">
@@ -34,7 +34,7 @@ export function Gaps() {
         ratios in tables; the second version, needing a page range or an author entry with a nearby year, read 18
         of 20 on a fresh sample. Demoting those pages (score halved, never excluded) moved recall@20 from 0.6823
         to 0.8061 on the original gold. The evidence cards show the class as a small tag so you can judge it.{" "}
-        <Source file="reports/phase13/sections_report.md" /> <Source file="reports/phase13/retrieval_report.md" />
+        <Source file="reports/phase13/sections_report.md" /> <Source file="docs/evaluation/retrieval_report.md" />
       </p>
 
       <h3>Metadata dates can disagree with the text</h3>
@@ -61,7 +61,7 @@ export function Gaps() {
         amendment followed a look at the first sweep on these same questions, so the second number is in-sample
         and is not an estimate of how the rule behaves on questions it has not seen. On the final retriever the
         frozen rule reads 0 and 9; six probes still abstain on years or topics the archive does not hold.{" "}
-        <Source file="reports/phase9/generation_report.md" /> <Source file="reports/phase13/retrieval_report.md" />
+        <Source file="docs/evaluation/abstention_sweeps.md" /> <Source file="docs/evaluation/retrieval_report.md" />
       </p>
 
       <h3>Verification checks support, not relevance</h3>
@@ -73,8 +73,8 @@ export function Gaps() {
         that a kept sentence is supported by its page; nothing guarantees the page is about what was asked. Read
         the pages. False abstentions on the 35 answerable questions: 0. On 15 held-out questions written after
         everything was frozen and never used in any sweep, 9 of 10 probes abstained and 4 of 5 answerable
-        questions were answered. <Source file="reports/phase16/audit_report.md" />{" "}
-        <Source file="reports/phase16/holdout_run.md" />
+        questions were answered. <Source file="docs/evaluation/audit_report.md" />{" "}
+        <Source file="docs/evaluation/holdout_run.md" />
       </p>
 
       <h3>Two held-out misses, rule unchanged</h3>
@@ -92,7 +92,7 @@ export function Gaps() {
         stoplist's actor-noun criterion holds "government", "department", "ministry" and "agency" but not
         "federal". Both results were recorded after a single held-out run and no rule was changed; "federal" is
         the first candidate for a v2 stoplist if one is ever opened.{" "}
-        <Source file="reports/phase16/holdout_run.md" /> <Source file="docs/GAP_REPORT.md" />
+        <Source file="docs/evaluation/holdout_run.md" /> <Source file="docs/gaps.md" />
       </p>
 
       <h3>What the audit measured</h3>
@@ -103,7 +103,7 @@ export function Gaps() {
         178. The 12 sentences that fell short added a date or a period, moved an attribution from a quoted body
         to the report's author, or, once, inverted a relation. Retrieval recall@10 on the fully judged gold:
         0.3470 before the retrieval changes, 0.4581 after. Cited passages resolving to a recorded page: 119 of
-        119. <Source file="reports/phase16/audit_report.md" />
+        119. <Source file="docs/evaluation/audit_report.md" />
       </p>
 
       <h3>British Columbia is not a second scope here</h3>
@@ -121,7 +121,7 @@ export function Gaps() {
         was reviewed and decided by the author; the same model family generates the tool's answers, so this
         judge is not independent of the system. <Source file="eval/labeling_notes.md" />
       </p>
-      <p className="text-sm text-muted">The full gap report with sources: docs/GAP_REPORT.md in the repository.</p>
+      <p className="text-sm text-muted">The full gap report with sources: docs/gaps.md in the repository.</p>
     </Page>
   );
 }

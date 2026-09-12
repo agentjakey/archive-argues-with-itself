@@ -1,7 +1,8 @@
 """Run the held-out questions once through a running API with its configured provider
 and record, per question, whether the tool abstained or answered, against the gold
-verdict in the file. Standard library only. Writes reports/phase16/holdout_run.json
-and holdout_run.md. Cached answers are allowed (the API reads its cache first).
+verdict in the file. Standard library only. Writes the machine summary to
+reports/phase16/holdout_run.json and the human-readable report to
+docs/evaluation/holdout_run.md. Cached answers are allowed (the API reads its cache first).
 
     python scripts/run_holdout.py http://127.0.0.1:8000 [--file eval/holdout_questions.jsonl]
 
@@ -35,7 +36,8 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser()
     p.add_argument("base_url")
     p.add_argument("--file", default=Path("eval/holdout_questions.jsonl"), type=Path)
-    p.add_argument("--out", default=Path("reports/phase16"), type=Path)
+    p.add_argument("--out", default=Path("reports/phase16"), type=Path)          # machine artifact (holdout_run.json)
+    p.add_argument("--evidence", default=Path("docs/evaluation"), type=Path)     # human-readable report
     args = p.parse_args(argv)
     base = args.base_url.rstrip("/")
     rows = [json.loads(l) for l in args.file.read_text(encoding="utf-8").splitlines() if l.strip()]
@@ -70,6 +72,7 @@ def main(argv=None) -> int:
         "results": results,
     }
     args.out.mkdir(parents=True, exist_ok=True)
+    args.evidence.mkdir(parents=True, exist_ok=True)
     (args.out / "holdout_run.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     L = ["# Held-out run", "", f"{summary['ts']} (UTC); provider {summary['provider']}, model {summary['model']}; "
          f"{summary['n']} questions from `{args.file.as_posix()}`, one run, no sweep, no tuning.", "",
@@ -84,7 +87,7 @@ def main(argv=None) -> int:
         else:
             L.append(f"| {r['qid']} | {r['gold']} | {r['outcome']} | {r['sentences']} | {r['verified_citations']} | "
                      f"{', '.join(r['uncovered_terms'] or [])} | {r['seconds']} |")
-    (args.out / "holdout_run.md").write_text("\n".join(L) + "\n", encoding="utf-8")
+    (args.evidence / "holdout_run.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in summary.items() if k != "results"}, ensure_ascii=False))
     return 1 if summary["failed"] else 0
 

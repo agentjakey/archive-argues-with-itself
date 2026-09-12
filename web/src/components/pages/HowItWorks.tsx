@@ -1,6 +1,6 @@
 import { Page, Source } from "./Page";
 
-/** Plain-English methods. Numbers match docs/METHODS.md and the reports it cites. */
+/** Plain-English methods. Numbers match docs/methods.md and the reports it cites. */
 export function HowItWorks() {
   return (
     <Page title="How this works">
@@ -55,7 +55,7 @@ export function HowItWorks() {
         That rule was specified before it was tested, amended once by criterion, then frozen. On the 50
         evaluation questions the frozen rule read: 1 answerable question would abstain and 6 of 15
         should-abstain questions would pass the gate, a number that is in-sample because the amendment followed
-        a look at those same questions. <Source file="reports/phase9/generation_report.md" />
+        a look at those same questions. <Source file="docs/evaluation/abstention_sweeps.md" />
       </p>
 
       <h3>What the model may and may not do</h3>
@@ -74,7 +74,7 @@ export function HowItWorks() {
         Retrieval is scored as pooled recall and nDCG over the judged pool, with the share of unjudged passages
         reported beside every number. On the fully judged gold the shipped retriever reads recall@10 0.4581 and
         nDCG@10 0.5082 against the original 0.3470 and 0.4174.{" "}
-        <Source file="reports/phase13/retrieval_report.md" />
+        <Source file="docs/evaluation/retrieval_report.md" />
       </p>
       <p>
         Then every question was run once and every kept sentence was judged by the author against the full text
@@ -83,7 +83,7 @@ export function HowItWorks() {
         questions the archive cannot answer; the 5 it answered were supported answers to the wrong period or
         object. On 15 held-out questions written after everything was frozen, 9 of 10 probes abstained and 4 of 5
         answerable questions were answered. All 119 cited passages resolve to a recorded page.{" "}
-        <Source file="reports/phase16/audit_report.md" />
+        <Source file="docs/evaluation/audit_report.md" />
       </p>
       <p>
         All labels and judgments were decided by the author. To speed adjudication, candidate labels for the
@@ -92,7 +92,7 @@ export function HowItWorks() {
         judge is not independent of the system. <Source file="eval/labeling_notes.md" />
       </p>
       <p className="text-sm text-muted">
-        The full account with every number and its source file: docs/METHODS.md in the repository.
+        The full account with every number and its source file: docs/methods.md in the repository.
       </p>
     </Page>
   );

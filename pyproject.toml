@@ -32,7 +32,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/agentjakey/archive-argues-with-itself"
+Homepage = "https://archive-argues-with-itself-production.up.railway.app"
+Source = "https://github.com/agentjakey/archive-argues-with-itself"
 
 [tool.setuptools.packages.find]
 where = ["src"]

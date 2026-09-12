@@ -9,7 +9,7 @@ from two reported numbers, the arithmetic is shown.
 
 Source: `reports/coverage_audit/discovery.md`, `reports/coverage_audit/finalist_sizing.md`.
 
-The proposal (`docs/PROPOSAL.md`) named housing as an illustrative topic and set
+The proposal (`docs/proposal.md`) named housing as an illustrative topic and set
 a floor of 2,500 usable items for a pilot corpus. Week 1 sized three candidate
 topics against the Internet Archive's Canadian-government collections using
 `advancedsearch.php` counts (the scrape API returned a canned baseline under
@@ -65,7 +65,7 @@ defined in one module.
 ## 3. Retrieval
 
 Sources: README "Retrieval"; `reports/phase7/eval_report.md`;
-`reports/phase13/retrieval_report.md`.
+`docs/evaluation/retrieval_report.md`.
 
 BM25 over an FTS5 index and dense cosine search (384-dim
 `paraphrase-multilingual-MiniLM-L12-v2`, sqlite-vec, flat and exact) fused by
@@ -105,7 +105,7 @@ item-metadata year 1984 but its text is H1N1 / 2009 pandemic content dated
 
 ## 5. Citations, synthesis, abstention
 
-Sources: `reports/phase8/citation_report.md`, `reports/phase9/generation_report.md`.
+Sources: `reports/phase8/citation_report.md`, `docs/evaluation/abstention_sweeps.md`.
 
 A citation is verified by three structural checks only: the cited passage id
 exists; it was in the evidence retrieved for that question; it resolves to a
@@ -146,7 +146,7 @@ effectively absent; 45% of passages carry no date; counts are lexical matches.
 
 ## 7. Retrieval changes, measured (Phase 13)
 
-Sources: `reports/phase13/retrieval_report.md`, `reports/phase13/sections_report.md`,
+Sources: `docs/evaluation/retrieval_report.md`, `reports/phase13/sections_report.md`,
 `eval/labeling_notes.md`, `eval/gold_extension_notes.md`.
 
 Page classifier (deterministic, from leaf position and text signals): 448,496
@@ -188,7 +188,7 @@ system.
 
 ## 8. Audit of the shipped system (Phase 16)
 
-Sources: `reports/phase16/audit_report.md`, `reports/phase16/holdout_run.md`,
+Sources: `docs/evaluation/audit_report.md`, `docs/evaluation/holdout_run.md`,
 `eval/judgments_phase16.json`, `eval/judgments_phase16_notes.md`.
 
 Every seed question was run once through `/ask` with the configured model on the

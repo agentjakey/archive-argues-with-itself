@@ -241,27 +241,26 @@ data/*
 !data/manifest/
 !data/manifest/**
 
-# Regenerable per-phase build reports; only the human-readable eval summary is kept.
+# Regenerable per-phase build reports. The reader-facing evidence lives in
+# docs/evaluation/ (tracked); only reproducibility artifacts are kept here, and
+# the machine JSON/worksheets below are negated so they survive the phase* ignore.
 reports/phase*/*
-# Cited by docs/METHODS.md, docs/GAP_REPORT.md and CHANGELOG.md.
+# Cited from the "Reproducing the evaluation" section of the README.
 !reports/phase4/parse_report.md
 !reports/phase5/normalize_report.json
 !reports/phase7/eval_report.md
 # The Phase 7 worksheet is kept: eval/gold_decisions.json cites its ranks.
 !reports/phase7/label_worksheet.jsonl
 !reports/phase8/citation_report.md
-!reports/phase9/generation_report.md
 !reports/phase13/sections_report.md
-!reports/phase13/retrieval_report.md
 # The extension worksheet is kept: eval/gold_extension_decisions.json cites its ranks.
 !reports/phase13/extension_worksheet.jsonl
-# Phase 16 sentence-level judgment worksheet (Jake's marks are recorded against it).
+!reports/phase13/retrieval_report.json
+# The sentence-level judgment worksheet the Phase 16 judgments are recorded against.
 !reports/phase16/judgment_worksheet.md
 !reports/phase16/judgment_worksheet.jsonl
 !reports/phase16/judgment_summary.json
-!reports/phase16/audit_report.md
 !reports/phase16/audit_numbers.json
-!reports/phase16/holdout_run.md
 !reports/phase16/holdout_run.json
 !reports/bc_audit/
 reports/unmapped/
