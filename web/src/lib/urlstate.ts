@@ -13,6 +13,7 @@ export interface UrlState {
   kiosk: boolean;
   offline?: boolean;
   view?: View;
+  story?: string;   // a curated story comparison, so its permalink reproduces it
 }
 
 const FILTER_KEYS = ["period", "jurisdiction", "doc_type"] as const;
@@ -33,6 +34,8 @@ export function readState(search: string): UrlState {
   const state: UrlState = { q: (p.get("q") ?? "").trim(), filters, pins, kiosk: p.get("kiosk") === "1" };
   if (p.get("offline") === "1") state.offline = true;
   if (view && (VIEWS as readonly string[]).includes(view)) state.view = view as View;
+  const story = (p.get("story") ?? "").trim();
+  if (story) state.story = story;
   return state;
 }
 
@@ -47,6 +50,7 @@ export function writeState(state: UrlState): string {
   if (state.kiosk) p.set("kiosk", "1");
   if (state.offline) p.set("offline", "1");
   if (state.view) p.set("view", state.view);
+  if (state.story) p.set("story", state.story);
   const s = p.toString();
   return s ? `?${s}` : "";
 }

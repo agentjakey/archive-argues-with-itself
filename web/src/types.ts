@@ -108,6 +108,7 @@ export interface EvidenceRow {
   section_class: "front" | "body" | "back" | string;
   later_years: number[] | null;     // years in the text later than the item year + 1
   offline?: boolean;                // page images come from the offline pack (API path), not archive.org
+  ocr_quality?: number | null;      // 0..1 OCR confidence for the passage; a low value means shaky text
 }
 
 export interface Story {
@@ -126,10 +127,20 @@ export interface Degraded {
   live_url: string;
 }
 
+/** Present when the served record touches a harm-adjacent historical topic. Keyed on the
+ *  retrieved evidence, so it is set for cached answers, real abstentions, and the limited-mode
+ *  state alike. The visitor-facing note is rendered client-side from topics + year. */
+export interface Flagged {
+  topics: string[];
+  year: number | null;
+  crisis_lines: { name: string; number: string }[];
+}
+
 export interface AskResponse {
   answer: Answer;
   evidence: EvidenceRow[];
   degraded?: Degraded;
+  flagged?: Flagged | null;
 }
 
 export interface Example {

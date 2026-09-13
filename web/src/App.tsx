@@ -43,6 +43,7 @@ export default function App() {
   const [chipsCollapsed, setChipsCollapsed] = useState(false);
   const [view, setView] = useState<View | null>(initial.current.view ?? null);
   const [storyRows, setStoryRows] = useState<[EvidenceRow, EvidenceRow] | null>(null);
+  const [storyCaption, setStoryCaption] = useState<string | null>(null);
   const stories = useStories();
   const coverage = useCoverage(asked, askedFilters);
 
@@ -67,6 +68,18 @@ export default function App() {
     if (initial.current.q) void run({ question: initial.current.q, filters: initial.current.filters });
   }, [run]);
 
+  // Restore a story comparison from a permalink once the stories have loaded.
+  const storyRestored = useRef(false);
+  useEffect(() => {
+    if (storyRestored.current || !initial.current.story || stories.length === 0) return;
+    const s = stories.find((x) => x.id === initial.current.story);
+    if (s) {
+      setStoryRows(s.pins);
+      setStoryCaption(s.caption);
+      storyRestored.current = true;
+    }
+  }, [stories]);
+
   const byId = useMemo(() => {
     const m = new Map<string, EvidenceRow>();
     response?.evidence.forEach((r) => m.set(r.passage_id, r));
@@ -86,6 +99,7 @@ export default function App() {
       setAskedFilters(f);
       setPins([]);
       setStoryRows(null);
+      setStoryCaption(null);
       setDrawer(null);
       setChipsCollapsed(true);
       applyState({ q, filters: f, pins: [], kiosk, offline }, "push");
@@ -105,9 +119,12 @@ export default function App() {
       setFilters(s.filters ?? {});
       ask(s.question, s.filters ?? {});
       setStoryRows(s.pins);
+      setStoryCaption(s.caption);
+      // carry the story in the URL so its permalink reproduces the comparison
+      applyState({ q: s.question, filters: s.filters ?? {}, pins: [], kiosk, offline, story: s.id }, "replace");
       window.scrollTo({ top: 0 });
     },
-    [ask],
+    [ask, kiosk, offline],
   );
 
   // Kiosk attract loop: idle 60 s -> cycle stories; any touch -> back to the home screen.
@@ -221,8 +238,10 @@ export default function App() {
               a={compare[0]}
               b={compare[1]}
               salientTerms={salient}
-              onUnpin={storyRows ? () => setStoryRows(null) : togglePin}
-              onClose={storyRows ? () => setStoryRows(null) : clearPins}
+              caption={storyRows ? storyCaption ?? undefined : undefined}
+              onOpen={setDrawer}
+              onUnpin={storyRows ? () => { setStoryRows(null); setStoryCaption(null); } : togglePin}
+              onClose={storyRows ? () => { setStoryRows(null); setStoryCaption(null); } : clearPins}
             />
           )}
 

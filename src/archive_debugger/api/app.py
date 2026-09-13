@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from archive_debugger import flags
 from archive_debugger.api.cache import AnswerCache, cache_key, retrieval_fingerprint
 from archive_debugger.api.coverage import coverage as compute_coverage
 from archive_debugger.eval import store
@@ -136,6 +137,8 @@ def evidence_rows(hits: list[dict], verified: list[dict], prompt_ids: Optional[s
             "in_prompt": True if prompt_ids is None else h["passage_id"] in prompt_ids,
             "section_class": h.get("section_class") or "body",
             "later_years": h.get("later_years"),
+            "ocr_quality": h.get("ocr_quality"),   # 0..1 from _provenance; client flags a shaky line
+
             "passage_id": h["passage_id"], "item_id": h["item_id"], "title": h.get("title"),
             "year": h.get("year"), "decade": h.get("decade"), "jurisdiction": h.get("jurisdiction"),
             "doc_type": h.get("doc_type"), "leaf_index": h["leaf_index"], "printed_page": h.get("printed_page"),
@@ -261,6 +264,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                    "evidence": evidence_rows(pool, [], {h["passage_id"] for h in hits}, pages_dir),
                    "degraded": {"reason": reason, "live_url": PUBLIC_URL}}
             out["answer"]["cached"] = None
+            out["flagged"] = flags.detect(out["evidence"])
             return out
 
         if not clean:
@@ -278,6 +282,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     if image:
                         row["page_image"] = image
                     row["offline"] = bool(thumb or image)
+                served["flagged"] = flags.detect(served["evidence"])   # on serve, from stored evidence; not cached
                 return served
 
         # Cache miss. Retrieve first, so the record can be shown even when the model cannot run.
@@ -306,8 +311,9 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
 
         result = {"answer": ans.to_dict(),
                   "evidence": evidence_rows(pool, ans.verified_citations, {h["passage_id"] for h in hits}, pages_dir)}
-        app.state.cache.put(key, result)
+        app.state.cache.put(key, result)   # flagged is computed on serve below, never stored (like cached=)
         result["answer"]["cached"] = None
+        result["flagged"] = flags.detect(result["evidence"])
         return result
 
     @app.get("/health")

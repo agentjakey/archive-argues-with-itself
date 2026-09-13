@@ -58,7 +58,18 @@ def shape_ok(resp: object) -> bool:
         if k not in a:
             return False
     cov = a["coverage"]
-    return isinstance(cov, dict) and all(k in cov for k in ("n_passages", "salient_terms", "uncovered_terms"))
+    if not (isinstance(cov, dict) and all(k in cov for k in ("n_passages", "salient_terms", "uncovered_terms"))):
+        return False
+    # R6 additive fields: allow them, and when present require the right shape.
+    fl = resp.get("flagged")
+    if fl is not None and not (isinstance(fl, dict) and isinstance(fl.get("topics"), list)
+                              and isinstance(fl.get("crisis_lines"), list) and "year" in fl):
+        return False
+    for row in resp["evidence"]:
+        q = row.get("ocr_quality")
+        if q is not None and not isinstance(q, (int, float)):
+            return False
+    return True
 
 
 def main() -> int:
@@ -99,6 +110,8 @@ def main() -> int:
 
     reds: list[str] = []
     intercepted: list[str] = []
+    golden_flagged: dict = {}
+    novel_ocr_present = False
 
     def check(ok: bool, label: str, detail: str = "") -> None:
         print(f"[{GREEN if ok else RED}] {label}" + (f"  {detail}" if detail else ""))
@@ -125,8 +138,19 @@ def main() -> int:
             ok = (r.status_code == 200 and shape_ok(j) and cached and not degraded)
             if not a.get("abstained", False):
                 ok = ok and cites > 0                                  # answerable -> real verified citations
+            golden_flagged[label] = j.get("flagged") if isinstance(j, dict) else None
             check(ok, f"GOLDEN {label}",
                   f"status={r.status_code} cached={cached} abstained={a.get('abstained')} cites={cites} degraded={degraded}")
+
+        # R6 proof: flagged is computed ON SERVE from the stored evidence, so it fires on the
+        # cached path offline, and it discriminates (unrelated cached answers are null).
+        fired = {lab: fl["topics"] for lab, fl in golden_flagged.items() if isinstance(fl, dict)}
+        nulls = [lab for lab, fl in golden_flagged.items() if fl is None]
+        check(len(fired) >= 1, "flagged fires on the cached serve path (offline)",
+              f"{len(fired)} of {len(golden)} flagged: "
+              + "; ".join(f"{lab}={tps}" for lab, tps in list(fired.items())[:6]) + (" ..." if len(fired) > 6 else ""))
+        check(len(nulls) >= 1, "flagged is null on unrelated cached answers",
+              f"{len(nulls)} of {len(golden)} not flagged, e.g. {nulls[:3]}")
 
         print("\n== ADVERSARIAL + NOVEL (must resolve to a clean 200 designed state, no raw error) ==")
         for label, text, need_ev, must_degrade in adversarial:
@@ -135,6 +159,8 @@ def main() -> int:
             a = j.get("answer", {}) if isinstance(j, dict) else {}
             deg = (j.get("degraded") or {}) if isinstance(j, dict) else {}
             ev = (j.get("evidence") or []) if isinstance(j, dict) else []
+            if label == "novel-clean":
+                novel_ocr_present = any("ocr_quality" in row for row in ev)   # fresh serve carries the field
             is_degraded = isinstance(j, dict) and "degraded" in j
             reason = deg.get("reason")
             # Clean designed state: 200, right shape, no raw error, an abstention (never a
@@ -154,9 +180,11 @@ def main() -> int:
     after = cache_row_count(cache_db)
     check(before == after, "answer cache not poisoned",
           f"rows before={before} after={after}; write attempts intercepted={len(intercepted)}")
+    check(novel_ocr_present, "ocr_quality present on fresh (degraded) evidence rows",
+          f"novel-clean rows carry ocr_quality={novel_ocr_present}")
 
     print()
-    total = len(golden) + len(adversarial) + 1
+    total = len(golden) + len(adversarial) + 4
     if reds:
         print(f"RED: {len(reds)} of {total} checks failed: {', '.join(reds[:12])}" + (" ..." if len(reds) > 12 else ""))
         return 1
