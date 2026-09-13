@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AbstentionCard } from "./components/AbstentionCard";
 import { AnswerCard } from "./components/AnswerCard";
+import { LimitedModeCard } from "./components/LimitedModeCard";
 import { AskBar } from "./components/AskBar";
 import { CompareView } from "./components/CompareView";
 import { CoveragePanel } from "./components/CoveragePanel";
@@ -114,7 +115,13 @@ export default function App() {
     const flags = [kiosk ? "kiosk=1" : "", offline ? "offline=1" : ""].filter(Boolean).join("&");
     window.location.assign(`${window.location.pathname}${flags ? `?${flags}` : ""}`);
   }, [kiosk, offline]);
-  useAttractLoop({ enabled: kiosk, stories, onShow: openStory, onHome: goHome });
+  // ?idle=<seconds> tunes the attract-loop dwell for the venue; default 60 s. goHome
+  // reloads to the bare kiosk URL, which clears any typed-but-unsent question.
+  const idleMs = useMemo(() => {
+    const v = Number(new URLSearchParams(window.location.search).get("idle"));
+    return Number.isFinite(v) && v > 0 ? v * 1000 : undefined;
+  }, []);
+  useAttractLoop({ enabled: kiosk, stories, onShow: openStory, onHome: goHome, idleMs });
 
   const pick = useCallback(
     (e: Example) => {
@@ -195,7 +202,12 @@ export default function App() {
 
       {response && (
         <main>
-          {response.answer.abstained ? (
+          {response.degraded ? (
+            <>
+              <LimitedModeCard answer={response.answer} degraded={response.degraded} />
+              <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation />
+            </>
+          ) : response.answer.abstained ? (
             <>
               <AbstentionCard answer={response.answer} />
               <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation />
@@ -218,7 +230,7 @@ export default function App() {
             rows={response.evidence}
             salientTerms={salient}
             pinned={pins}
-            heading={response.answer.abstained ? "Nearest evidence, not an answer" : "Evidence trail"}
+            heading={response.degraded ? "The record for your question" : response.answer.abstained ? "Nearest evidence, not an answer" : "Evidence trail"}
             matched={matched}
             onOpen={setDrawer}
             onPin={togglePin}

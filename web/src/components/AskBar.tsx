@@ -53,6 +53,7 @@ export function AskBar({ question, filters, busy, kiosk, onQuestion, onFilters, 
             onChange={(e) => onQuestion(e.target.value)}
             disabled={busy}
             autoComplete="off"
+            maxLength={300}
           />
           <button type="submit" className="chip bg-ink text-paper border-ink px-5" disabled={busy || !question.trim()}>
             Ask

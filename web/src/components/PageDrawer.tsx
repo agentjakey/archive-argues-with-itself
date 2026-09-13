@@ -50,15 +50,22 @@ export function PageDrawer({ row, onClose }: Props) {
           className="mt-4 w-full border border-rule bg-paper"
           loading="eager"
         />
-        <div className="mt-4">
-          <iframe
-            src={row.embed_url}
-            title="archive.org page viewer"
-            className="w-full h-[60vh] border border-rule bg-paper"
-            loading="lazy"
-          />
-          <p className="mt-2 text-sm text-muted">If the viewer above does not load, the page is available on archive.org.</p>
-        </div>
+        {row.offline ? (
+          <p className="mt-4 text-sm text-muted">
+            Showing the scanned page from the local archive. The interactive viewer and the archive.org
+            link need the network.
+          </p>
+        ) : (
+          <div className="mt-4">
+            <iframe
+              src={row.embed_url}
+              title="archive.org page viewer"
+              className="w-full h-[60vh] border border-rule bg-paper"
+              loading="lazy"
+            />
+            <p className="mt-2 text-sm text-muted">If the viewer above does not load, the page is available on archive.org.</p>
+          </div>
+        )}
         <a className="chip mt-4" href={row.deep_link} target="_blank" rel="noopener noreferrer">
           Open on archive.org
         </a>

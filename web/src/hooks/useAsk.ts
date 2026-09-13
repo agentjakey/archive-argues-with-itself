@@ -12,6 +12,7 @@ export function useAsk() {
   const [response, setResponse] = useState<AskResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
+  const inFlight = useRef(false);
 
   const stopTimer = () => {
     if (timer.current !== null) {
@@ -21,6 +22,8 @@ export function useAsk() {
   };
 
   const run = useCallback(async (req: AskRequest) => {
+    if (inFlight.current) return;   // ignore a second tap while a request is already running
+    inFlight.current = true;
     setStatus("waiting");
     setElapsed(0);
     setResponse(null);
@@ -33,11 +36,13 @@ export function useAsk() {
       setResponse(r);
       setStatus("done");
     } catch (e) {
-      // ApiError carries the server's detail verbatim; anything else is a network fault.
-      setError(e instanceof Error ? e.message : String(e));
+      // api.ts maps network faults and timeouts to friendly copy; anything else gets a
+      // neutral line. A raw exception message never reaches the screen (N6).
+      setError(e instanceof api.ApiError ? e.detail : "Something went wrong reaching the archive. The record and examples below still work.");
       setStatus("error");
     } finally {
       stopTimer();
+      inFlight.current = false;
     }
   }, []);
 

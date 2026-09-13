@@ -15,6 +15,7 @@ import json
 import os
 import re
 import threading
+import time
 import tomllib
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -22,16 +23,16 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from archive_debugger.api.cache import AnswerCache, cache_key, retrieval_fingerprint
 from archive_debugger.api.coverage import coverage as compute_coverage
 from archive_debugger.eval import store
 from archive_debugger.eval.questions import load_seed
-from archive_debugger.generate.answer import compose, generation_meta
+from archive_debugger.generate.answer import Answer, compose, coverage_of, generation_meta
 from archive_debugger.generate.cli import build_filters, load_generate_config, retrieve_pool, sent_temperature
-from archive_debugger.generate.llm import LLM, make_llm
+from archive_debugger.generate.llm import LLM, AnthropicLLM, make_llm
 from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path
 from archive_debugger.retrieve import citation
 from archive_debugger.retrieve.search import Retriever
@@ -44,8 +45,53 @@ DEFAULT_PAGES = Path("data/cache/pages")           # offline pack of page images
 DEFAULT_STORIES = Path("config/stories.json")
 ENV_PAGES_DIR = "CIVIC_PAGES_DIR"
 SNIPPET = 300
-MISSING_KEY = "ANTHROPIC_API_KEY is not set on the server"
 _PAGE_FILE = re.compile(r"^n(\d+)_(thumb|medium)\.jpg$")
+
+# Offline degradation + input hardening (R1). When the model cannot answer (no key,
+# unreachable/timeout, or rate-limited), /ask returns 200 with a designed limited-mode
+# state and the retrieved record, never a raw error (N6). The generation logic in
+# generate/ is untouched (N5): the hard timeout lives here, on the client this layer
+# builds.
+GEN_TIMEOUT_S = 20.0                 # hard cap on one generation call; the kiosk must never hang
+MAX_QUESTION_CHARS = 500             # server-side defense in depth; the web input caps lower
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://archive-argues-with-itself-production.up.railway.app")
+RATE_BURST, RATE_REFILL = 5, 0.5     # token bucket on model-calling requests (this process)
+_CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_DEGRADE_MSG = {
+    "no_key": "offline: showing the record, read the source yourself; the live version at {url} generates answers.",
+    "model_unreachable": "offline: showing the record, read the source yourself; the live version at {url} generates answers.",
+    "rate_limited": "one moment: showing the record below while the answer service catches up.",
+    "empty": "type a question to search the record.",
+}
+
+
+def clean_question(q: str) -> str:
+    """Strip control characters, collapse whitespace, and cap length. Sanitizes the text
+    handed to retrieval and the model; the cache key still uses the original text, so a
+    warmed answer keeps hitting."""
+    return " ".join(_CTRL.sub(" ", q or "").split())[:MAX_QUESTION_CHARS]
+
+
+class RateLimiter:
+    """A tiny token bucket, shared by all requests in this process. Only the
+    model-calling path consumes a token; a cached answer never does."""
+
+    def __init__(self, capacity: int, refill_per_s: float):
+        self.capacity = float(capacity)
+        self.tokens = float(capacity)
+        self.refill = refill_per_s
+        self.ts = time.monotonic()
+        self.lock = threading.Lock()
+
+    def allow(self) -> bool:
+        with self.lock:
+            now = time.monotonic()
+            self.tokens = min(self.capacity, self.tokens + (now - self.ts) * self.refill)
+            self.ts = now
+            if self.tokens >= 1.0:
+                self.tokens -= 1.0
+                return True
+            return False
 
 
 def local_page(pages_dir: Optional[Path], item_id: str, leaf: int, kind: str) -> Optional[str]:
@@ -175,6 +221,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         app.state.lock = threading.Lock()   # one sqlite connection; sync endpoints run in a threadpool
         app.state.cache = AnswerCache(cache_path)
         app.state.coverage_cache = {}
+        app.state.model_ratelimit = RateLimiter(RATE_BURST, RATE_REFILL)
         app.state.retrieval_sha256 = retrieval_fingerprint(app.state.retriever.cfg)
         with app.state.lock:
             app.state.corpus = corpus_facts(app.state.retriever.conn, pilot_window)
@@ -198,7 +245,26 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         temp = sent_temperature(kind, gcfg)
         gen = generation_meta(provider=kind, model=model_id, temperature=temp,
                               max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
+        # Key on the ORIGINAL text so every warmed answer keeps hitting; sanitize only
+        # the text handed to retrieval and the model.
         key = answer_cache_key(gcfg, kind, model_id, question, filters, app.state.retrieval_sha256)
+        clean = clean_question(question)
+
+        def degraded(reason: str, pool: list, hits: list) -> dict:
+            """A 200 limited-mode response: the record, a designed message, no model
+            paragraph, no raw error, and never cached (N6)."""
+            msg = _DEGRADE_MSG[reason].format(url=PUBLIC_URL)
+            cov = coverage_of(clean, hits)
+            ans = Answer(text=msg, sentences=[], verified_citations=[], unsupported=[],
+                         abstained=True, coverage=cov, abstention_text=msg, generation=gen)
+            out = {"answer": ans.to_dict(),
+                   "evidence": evidence_rows(pool, [], {h["passage_id"] for h in hits}, pages_dir),
+                   "degraded": {"reason": reason, "live_url": PUBLIC_URL}}
+            out["answer"]["cached"] = None
+            return out
+
+        if not clean:
+            return degraded("empty", [], [])
         if not nocache:
             hit = app.state.cache.get(key)
             if hit is not None:
@@ -213,17 +279,31 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                         row["page_image"] = image
                     row["offline"] = bool(thumb or image)
                 return served
+
+        # Cache miss. Retrieve first, so the record can be shown even when the model cannot run.
+        with app.state.lock:   # retrieval reads through r.conn
+            pool, hits = retrieve_pool(r, clean, build_filters(filters), gcfg["top_k"])
+
         if kind == "anthropic" and llm is None and not _key_available():
-            return JSONResponse(status_code=503, content={"error": MISSING_KEY})
-        model = llm or make_llm(kind, model_id, gcfg["max_tokens"], temperature=temp)
-        with app.state.lock:   # retrieval, the LLM call, and verification all read through r.conn
-            # One ranking: the pool is the trail, its top_k prefix is what the model sees.
-            pool, hits = retrieve_pool(r, question, build_filters(filters), gcfg["top_k"])
+            return degraded("no_key", pool, hits)
+        if kind == "anthropic" and llm is None and not app.state.model_ratelimit.allow():
+            return degraded("rate_limited", pool, hits)
+
+        try:
+            if llm is not None:
+                model = llm
+            elif kind == "stub":
+                model = make_llm("stub", model_id, gcfg["max_tokens"])
+            else:                                        # real provider: hard timeout, no retries (kiosk must never hang; N5: llm.py untouched)
+                import anthropic
+                client = anthropic.Anthropic(timeout=GEN_TIMEOUT_S, max_retries=0)
+                model = AnthropicLLM(model_id, gcfg["max_tokens"], client=client, temperature=temp)
             verify = functools.partial(citation.verify_citations, r.conn)
-            try:
-                ans = compose(question, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
-            except Exception as exc:  # noqa: BLE001 - surfaced verbatim, never swallowed
-                return JSONResponse(status_code=502, content={"error": f"{type(exc).__name__}: {exc}"})
+            with app.state.lock:   # the LLM call and verification read through r.conn
+                ans = compose(clean, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
+        except Exception:  # noqa: BLE001 - offline / timeout / provider error -> show the record, not a raw error (N6)
+            return degraded("model_unreachable", pool, hits)
+
         result = {"answer": ans.to_dict(),
                   "evidence": evidence_rows(pool, ans.verified_citations, {h["passage_id"] for h in hits}, pages_dir)}
         app.state.cache.put(key, result)

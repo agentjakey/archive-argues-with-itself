@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from archive_debugger.api.app import MISSING_KEY, create_app
+from archive_debugger.api.app import create_app
 from archive_debugger.eval import questions, store
 from archive_debugger.generate.llm import CitedSentence, Draft, StubLLM
 from archive_debugger.ingest import db
@@ -109,7 +109,10 @@ def test_get_ask_provider_stub_needs_no_key(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
     r, _ = _retriever(tmp_path, [("a", 1985, "alberta")])
     with TestClient(_app(tmp_path, r, provider=None)) as c:            # config provider: anthropic
-        assert c.get("/ask", params={"q": "vaccination hospital"}).status_code == 503
+        res = c.get("/ask", params={"q": "vaccination hospital"})     # no key -> limited mode, not an error (N6)
+        assert res.status_code == 200
+        j = res.json()
+        assert j["degraded"]["reason"] == "no_key" and j["answer"]["abstained"] is True and j["evidence"]
         body = c.get("/ask", params={"q": "vaccination hospital", "provider": "stub", "nocache": 1})
         assert body.status_code == 200 and {"answer", "evidence"} <= set(body.json())
         assert c.get("/ask", params={"q": "x", "provider": "bogus"}).status_code == 422
@@ -213,16 +216,22 @@ def test_ask_abstention_shape(tmp_path):
     assert body["evidence"] and not any(e["cited"] for e in body["evidence"])
 
 
-def test_ask_503_when_no_key_for_anthropic(tmp_path, monkeypatch):
+def test_ask_degrades_to_limited_mode_when_no_key(tmp_path, monkeypatch):
     r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
     with TestClient(_app(tmp_path, r, provider="anthropic")) as c:
         res = c.post("/ask", json={"question": "vaccination hospital"})
-    assert res.status_code == 503 and res.json() == {"error": MISSING_KEY}
+    assert res.status_code == 200                                       # never a raw error offline (N6)
+    j = res.json()
+    assert j["degraded"]["reason"] == "no_key"
+    assert j["answer"]["abstained"] is True and j["answer"]["sentences"] == []
+    assert "the live version" in j["answer"]["abstention_text"]
+    assert j["evidence"] and not any(e["cited"] for e in j["evidence"])   # the record, nothing cited
+    assert j["answer"]["cached"] is None                                # limited mode is never cached
 
 
-def test_ask_502_on_llm_failure(tmp_path):
+def test_ask_degrades_to_limited_mode_on_llm_failure(tmp_path):
     class Boom:
         def draft(self, system, user):
             raise RuntimeError("boom")
@@ -230,7 +239,21 @@ def test_ask_502_on_llm_failure(tmp_path):
     r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
     with TestClient(_app(tmp_path, r, llm=Boom())) as c:
         res = c.post("/ask", json={"question": "vaccination hospital"})
-    assert res.status_code == 502 and res.json() == {"error": "RuntimeError: boom"}
+    assert res.status_code == 200                                       # generation error -> the record, not a raw error (N6)
+    j = res.json()
+    assert j["degraded"]["reason"] == "model_unreachable"
+    assert j["answer"]["abstained"] is True and j["evidence"]
+    assert j["answer"]["cached"] is None
+
+
+def test_ask_input_hardening_degrades_cleanly(tmp_path):
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
+    with TestClient(_app(tmp_path, r)) as c:                            # provider stub
+        empty = c.post("/ask", json={"question": "   "})
+        assert empty.status_code == 200 and empty.json()["degraded"]["reason"] == "empty"
+        # control chars stripped and length capped; still a clean 200, never an error
+        oversized = c.post("/ask", json={"question": "vaccination hospital\x00\x07 " + "x" * 5000})
+        assert oversized.status_code == 200 and "answer" in oversized.json()
 
 
 def test_examples_with_gold(tmp_path):

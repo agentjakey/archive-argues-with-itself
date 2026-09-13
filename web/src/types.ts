@@ -118,9 +118,18 @@ export interface Story {
   pins: [EvidenceRow, EvidenceRow];
 }
 
+/** Present only when the server could not generate an answer (offline, model
+ *  unreachable/timeout, rate-limited, or empty input) and returned the record in a
+ *  designed limited-mode state instead of a written answer. */
+export interface Degraded {
+  reason: "no_key" | "model_unreachable" | "rate_limited" | "empty" | string;
+  live_url: string;
+}
+
 export interface AskResponse {
   answer: Answer;
   evidence: EvidenceRow[];
+  degraded?: Degraded;
 }
 
 export interface Example {
