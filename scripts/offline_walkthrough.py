@@ -177,6 +177,19 @@ def main() -> int:
             mode = f"degraded:{reason}" if is_degraded else "gate-abstain" if a.get("abstained") else "answered"
             check(ok, f"ADVERSARIAL {label}", f"status={r.status_code} mode={mode} evidence={len(ev)}")
 
+        # flagged must still fire on the offline no-generation path (not only cached): a novel
+        # HIV/AIDS question is not cached and, with the model unreachable, degrades (or gate-
+        # abstains); either way it still carries flagged, computed from its shown top_k record.
+        r = c.post("/ask", json={"question": "What did reports say about HIV testing and AIDS prevention policy?", "nocache": True})
+        j = r.json() if r.status_code == 200 else {}
+        a = j.get("answer", {}) if isinstance(j, dict) else {}
+        fl = j.get("flagged") if isinstance(j, dict) else None
+        non_generated = ("degraded" in j) or bool(a.get("abstained")) if isinstance(j, dict) else False
+        check(r.status_code == 200 and non_generated and isinstance(fl, dict) and "early-hiv-aids" in (fl.get("topics") or []),
+              "flagged fires on the offline degraded/abstention path",
+              f"status={r.status_code} degraded={'degraded' in j if isinstance(j, dict) else False} "
+              f"flagged={(fl or {}).get('topics') if isinstance(fl, dict) else None}")
+
     after = cache_row_count(cache_db)
     check(before == after, "answer cache not poisoned",
           f"rows before={before} after={after}; write attempts intercepted={len(intercepted)}")
@@ -184,7 +197,7 @@ def main() -> int:
           f"novel-clean rows carry ocr_quality={novel_ocr_present}")
 
     print()
-    total = len(golden) + len(adversarial) + 4
+    total = len(golden) + len(adversarial) + 5
     if reds:
         print(f"RED: {len(reds)} of {total} checks failed: {', '.join(reds[:12])}" + (" ..." if len(reds) > 12 else ""))
         return 1

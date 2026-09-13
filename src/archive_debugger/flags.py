@@ -1,36 +1,48 @@
 """Harm-adjacent topic flagging (additive, N5-safe).
 
 Reads only the served-evidence fields already on each /ask evidence row (title, snippet,
-year) plus nothing else; it touches neither retrieval nor the abstention gate. It is
-computed ON SERVE and never stored in the answer cache, so it fires identically for a
-cached answer, a real abstention, and the offline limited-mode state, keyed on the
-retrieved record rather than on whether generation ran.
+year, and the in_prompt / cited markers); it touches neither retrieval nor the abstention
+gate. It is computed ON SERVE and never stored in the answer cache, so it fires identically
+for a cached answer, a real abstention, and the offline limited-mode state.
 
-Matching is deliberately conservative on ambiguous terms (a public-health corpus is full
-of "blood pressure" and "hearing aids"), because over-flagging a benign result is its own
-harm; but the bias on specific terms is toward recall, because missing a flagged result is
-worse than a terse note. Tune by editing TOPIC_SIGNALS: each value is a list of regex
-patterns matched case-insensitively against a row's title + snippet.
+Two design rules keep it proportionate:
+
+- Answer-basis, not the whole pool. A topic counts only when it appears in a row the
+  visitor actually reads as the answer basis: a row sent to the model (in_prompt) or cited.
+  A tangential retrieved-pool row the model never used does not trigger a flag. For an
+  abstention or the offline limited-mode state no generation ran, but in_prompt still marks
+  the top_k shown as the record, so the flag still fires on that path.
+
+- Precision over recall on the care-critical topics, because a false positive here is worse
+  than a miss. In particular, "sterilization" in this corpus is overwhelmingly the benign
+  equipment/water/food/milk sense (700+ passages), so bare "sterilization" is NOT matched:
+  only unambiguous coercion/eugenics phrasing counts. Recall is therefore best-effort; see
+  the per-topic notes.
+
+Tune by editing TOPIC_SIGNALS (topic key -> regex patterns, matched case-insensitively
+against a row's title + snippet) and CRISIS_LINES_BY_TOPIC.
 """
 from __future__ import annotations
 
 import re
 from typing import Optional
 
-# Editable topic config: topic key -> signal patterns (regex, case-insensitive), matched
-# against each served evidence row's title + snippet. Prefer specific multi-word phrases
-# over bare ambiguous words. Seeded for Jacob to tune and finalize.
 TOPIC_SIGNALS: dict[str, list[str]] = {
+    # The 1997 Krever inquiry into the contaminated blood system. Kept to the scandal's own
+    # vocabulary; routine "blood supply"/"blood-borne" phrasings are intentionally excluded
+    # so a blood-donation or infection-control line does not flag.
     "tainted-blood-krever": [
         r"\bkrever\b",
         r"\btainted blood\b",
         r"\bcontaminated blood\b",
         r"\bblood system\b",
-        r"\bblood supply\b",
-        r"\bblood-borne\b",
     ],
+    # Coerced human sterilization / the eugenics era. ONLY unambiguous phrasing: bare
+    # "sterilization" is not matched (it is almost always milk/food/water/instrument
+    # sterilization in this corpus). A document about coerced sterilization that never uses
+    # coercion/eugenics language will be missed; that is the deliberate precision-first bias.
     "coerced-sterilization-indigenous": [
-        r"\bsexual sterilization\b",
+        r"\bsexual steriliz\w*",
         r"\bsterilization act\b",
         r"\b(?:forced|coerced|involuntary|compulsory)\s+steriliz\w*",
         r"\beugenic\w*",
@@ -39,29 +51,30 @@ TOPIC_SIGNALS: dict[str, list[str]] = {
         r"\bresidential school\w*",
         r"\bindian residential\b",
     ],
+    # Keyed on "hiv" and the spelled-out forms, which appear in essentially every genuine
+    # HIV/AIDS document in this corpus. Bare "aids" is intentionally NOT matched: it collides
+    # with hearing/visual/teaching/mobility/band aids in a health corpus. A document naming
+    # only "AIDS" with no "HIV" would be missed (rare here).
     "early-hiv-aids": [
         r"\bhiv\b",
         r"\bhiv/aids\b",
         r"\bacquired immune deficiency\b",
         r"\bacquired immunodeficiency\b",
         r"\bhuman immunodeficiency\b",
-        # "aids" in the epidemic sense, excluding the common benign compounds a health
-        # corpus is full of (hearing/teaching/visual/first/study/learning aids).
-        r"(?<!hearing )(?<!teaching )(?<!visual )(?<!first )(?<!study )(?<!learning )\baids\b",
     ],
 }
 
-# Exactly the verified lines Jacob supplied (both 24/7); he re-verifies the week of the event.
-CRISIS_LINES: list[dict] = [
-    {"name": "National Indian Residential School Crisis Line", "number": "1-866-925-4419"},
-    {"name": "Hope for Wellness Help Line", "number": "1-855-242-3310"},
-]
-
-# The whole retrieved record is shown in the evidence trail, so by default any shown row
-# counts (recall-biased: missing a flagged result is worse than a terse note). Set True to
-# narrow to the rows the model actually saw (in_prompt), if full-pool matching flags too
-# many tangential results for the venue.
-MATCH_IN_PROMPT_ONLY = False
+# Per-topic crisis lines (Indigenous-specific lines attach only to Indigenous topics).
+# Exactly Jacob's verified names/numbers; he re-verifies the week of the event. Editable.
+_IRS = {"name": "National Indian Residential School Crisis Line", "number": "1-866-925-4419"}
+_HOPE = {"name": "Hope for Wellness Help Line", "number": "1-855-242-3310"}
+_988 = {"name": "9-8-8 Suicide Crisis Helpline", "number": "9-8-8 (call or text)"}
+CRISIS_LINES_BY_TOPIC: dict[str, list[dict]] = {
+    "residential-school-health": [_IRS, _HOPE],
+    "coerced-sterilization-indigenous": [_HOPE],
+    "early-hiv-aids": [_988],
+    "tainted-blood-krever": [_988],
+}
 
 _COMPILED = {t: [re.compile(p, re.IGNORECASE) for p in pats] for t, pats in TOPIC_SIGNALS.items()}
 
@@ -75,28 +88,38 @@ def _row_topics(row: dict) -> list[str]:
     return [t for t, pats in _COMPILED.items() if any(p.search(hay) for p in pats)]
 
 
-def _rows(evidence: list[dict]):
-    for row in evidence:
-        if MATCH_IN_PROMPT_ONLY and not row.get("in_prompt", True):
-            continue
-        yield row
+def _answer_basis(evidence: list[dict]) -> list[dict]:
+    """The rows that are the basis of what the visitor reads: sent to the model (in_prompt)
+    or cited. Excludes tangential retrieved-pool rows. Still non-empty on the abstention and
+    offline limited-mode paths, where in_prompt marks the top_k shown record."""
+    return [r for r in evidence if r.get("in_prompt") or r.get("cited")]
+
+
+def _crisis_lines(topics: list[str]) -> list[dict]:
+    out: list[dict] = []
+    for t in topics:
+        for line in CRISIS_LINES_BY_TOPIC.get(t, []):
+            if line not in out:
+                out.append(line)
+    return out
 
 
 def flagged_topics(evidence: list[dict]) -> list[str]:
-    """Topic keys whose signal appears in any served evidence row's title or snippet."""
+    """Topic keys whose signal appears in an answer-basis row's title or snippet."""
     found: set[str] = set()
-    for row in _rows(evidence):
+    for row in _answer_basis(evidence):
         found.update(_row_topics(row))
     return sorted(found)
 
 
 def detect(evidence: list[dict]) -> Optional[dict]:
-    """The `flagged` field for the /ask response, or None. `year` is the earliest year
-    among the rows that matched a topic, for the client's year-aware contextual note. The
+    """The `flagged` field for the /ask response, or None. `year` is the earliest year among
+    the answer-basis rows that matched a topic, for the client's year-aware contextual note.
+    `crisis_lines` is the de-duplicated union of the matched topics' mapped lines. The
     visitor-facing note text is rendered client-side from topics + year (not baked here)."""
     topics: set[str] = set()
     years: list[int] = []
-    for row in _rows(evidence):
+    for row in _answer_basis(evidence):
         matched = _row_topics(row)
         if matched:
             topics.update(matched)
@@ -104,4 +127,5 @@ def detect(evidence: list[dict]) -> Optional[dict]:
                 years.append(int(row["year"]))
     if not topics:
         return None
-    return {"topics": sorted(topics), "year": min(years) if years else None, "crisis_lines": CRISIS_LINES}
+    ordered = sorted(topics)
+    return {"topics": ordered, "year": min(years) if years else None, "crisis_lines": _crisis_lines(ordered)}
