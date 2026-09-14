@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useEscape } from "../hooks/useKeyboard";
 import { chipLabel, shortTitle } from "../lib/format";
+import { ocrUncertain } from "../lib/sensitivity";
+import { OcrBadge } from "./OcrBadge";
 import type { EvidenceRow } from "../types";
 
 interface Props {
@@ -39,6 +41,11 @@ export function PageDrawer({ row, onClose }: Props) {
             <p className="font-mono text-xs text-muted">
               {row.item_id} leaf {row.leaf_index}
             </p>
+            {ocrUncertain(row.ocr_quality) && (
+              <p className="mt-1">
+                <OcrBadge />
+              </p>
+            )}
           </div>
           <button ref={closeRef} type="button" className="chip" onClick={onClose} aria-label="Close page drawer">
             Close

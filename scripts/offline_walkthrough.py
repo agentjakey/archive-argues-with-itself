@@ -190,6 +190,39 @@ def main() -> int:
               f"status={r.status_code} degraded={'degraded' in j if isinstance(j, dict) else False} "
               f"flagged={(fl or {}).get('topics') if isinstance(fl, dict) else None}")
 
+        # /stories carries an additive flagged field, computed on serve over each story's pins,
+        # so a flagged story compare (including a directly-loaded permalink) renders its note offline.
+        st = c.get("/stories").json()
+        stories_ok = isinstance(st, list) and all(isinstance(s, dict) and "flagged" in s for s in st)
+        for s in st if isinstance(st, list) else []:
+            fst = s.get("flagged")
+            if fst is not None:
+                stories_ok = stories_ok and isinstance(fst.get("topics"), list) \
+                    and isinstance(fst.get("crisis_lines"), list) and "year" in fst
+        n_flagged_stories = sum(1 for s in st if s.get("flagged")) if isinstance(st, list) else 0
+        check(stories_ok, "/stories carries the additive flagged field",
+              f"{len(st) if isinstance(st, list) else 0} stories; flagged present on all; {n_flagged_stories} currently flag")
+
+        # /flag: a free user-pinned pair gets the same flag over exactly those two passages.
+        import sqlite3 as _sqlite
+        from archive_debugger.ingest.db import resolve_db_path
+        _conn = _sqlite.connect(f"file:{resolve_db_path('config/pilot.toml')}?mode=ro", uri=True)
+        _hiv = _conn.execute("SELECT p.passage_id FROM passages p JOIN items i ON i.item_id = p.item_id "
+                             "WHERE i.title LIKE '%HIV/AIDS%' LIMIT 1").fetchone()
+        _conn.close()
+        clean_ids = [p["passage_id"] for p in st[0]["pins"]][:2] if isinstance(st, list) and st else []
+        if _hiv and len(clean_ids) == 2:
+            fp = c.get("/flag", params={"pins": f"{_hiv[0]},{clean_ids[0]}"}).json().get("flagged")
+            cp = c.get("/flag", params={"pins": ",".join(clean_ids)}).json().get("flagged")
+            bad = c.get("/flag", params={"pins": "no-such-passage-id"}).json().get("flagged")
+            check(isinstance(fp, dict) and "early-hiv-aids" in (fp.get("topics") or [])
+                  and isinstance(fp.get("crisis_lines"), list) and "year" in fp,
+                  "/flag flags a user-pinned flagged pair", f"topics={(fp or {}).get('topics') if isinstance(fp, dict) else None}")
+            check(cp is None, "/flag is null on a clean pinned pair", f"flagged={cp}")
+            check(bad is None, "/flag returns a safe empty on a bad id", f"flagged={bad}")
+        else:
+            check(False, "/flag test setup", "no HIV-titled passage or story pins found")
+
     after = cache_row_count(cache_db)
     check(before == after, "answer cache not poisoned",
           f"rows before={before} after={after}; write attempts intercepted={len(intercepted)}")
@@ -197,7 +230,7 @@ def main() -> int:
           f"novel-clean rows carry ocr_quality={novel_ocr_present}")
 
     print()
-    total = len(golden) + len(adversarial) + 5
+    total = len(golden) + len(adversarial) + 9
     if reds:
         print(f"RED: {len(reds)} of {total} checks failed: {', '.join(reds[:12])}" + (" ..." if len(reds) > 12 else ""))
         return 1

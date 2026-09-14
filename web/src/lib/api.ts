@@ -1,4 +1,4 @@
-import type { AskRequest, AskResponse, CoverageResponse, Example, Filters, Health, Story } from "../types";
+import type { AskRequest, AskResponse, CoverageResponse, Example, Filters, Flagged, Health, Story } from "../types";
 
 // Empty VITE_API_BASE means same-origin (the FastAPI app serves web/dist).
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -85,6 +85,14 @@ export function health(): Promise<Health> {
 
 export function stories(): Promise<Story[]> {
   return request<Story[]>("/stories");
+}
+
+/** Harm-adjacent flag over exactly the pinned passages (a free user comparison), in the same
+ *  shape as /ask and /stories. The local API computes it via flags.detect; on any failure the
+ *  caller degrades to no note. */
+export function flag(pins: string[]): Promise<{ flagged: Flagged | null }> {
+  const p = new URLSearchParams({ pins: pins.join(",") });
+  return request<{ flagged: Flagged | null }>(`/flag?${p.toString()}`);
 }
 
 export function coverage(q: string, filters: Filters): Promise<CoverageResponse> {

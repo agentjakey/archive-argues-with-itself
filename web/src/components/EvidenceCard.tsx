@@ -1,6 +1,8 @@
 import { cardId } from "../lib/citations";
 import { highlight } from "../lib/highlight";
 import { shortTitle, yearLabel } from "../lib/format";
+import { ocrUncertain } from "../lib/sensitivity";
+import { OcrBadge } from "./OcrBadge";
 import type { EvidenceRow } from "../types";
 
 interface Props {
@@ -40,6 +42,7 @@ export function EvidenceCard({ row, salientTerms, pinned, onOpen, onPin }: Props
           {row.section_class === "front" && <span className="tag">front matter</span>}
           {row.section_class === "back" && <span className="tag">back matter</span>}
           {!row.in_prompt && <span className="tag">not sent to the model</span>}
+          {ocrUncertain(row.ocr_quality) && <OcrBadge />}
           {row.cited && <span className="cited">Cited</span>}
         </div>
         <h4 className="mt-1 font-serif text-lg leading-snug">{shortTitle(row.title, 96)}</h4>

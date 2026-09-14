@@ -5,8 +5,11 @@ import { LimitedModeCard } from "./components/LimitedModeCard";
 import { AskBar } from "./components/AskBar";
 import { CompareView } from "./components/CompareView";
 import { CoveragePanel } from "./components/CoveragePanel";
+import { ContextualNote } from "./components/ContextualNote";
+import { EntryAdvisory } from "./components/EntryAdvisory";
 import { ErrorCard } from "./components/ErrorCard";
 import { EvidenceTrail } from "./components/EvidenceTrail";
+import { Interstitial } from "./components/Interstitial";
 import { ExampleChips } from "./components/ExampleChips";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
@@ -23,8 +26,10 @@ import { HowItWorks } from "./components/pages/HowItWorks";
 import { Stories } from "./components/Stories";
 import { useAttractLoop } from "./hooks/useAttractLoop";
 import { useStories } from "./hooks/useStories";
+import { flag as apiFlag } from "./lib/api";
 import { applyState, readState, type View } from "./lib/urlstate";
-import type { EvidenceRow, Example, Filters, Story } from "./types";
+import { mergeFlagged, needsInterstitial } from "./lib/sensitivity";
+import type { EvidenceRow, Example, Filters, Flagged, Story } from "./types";
 
 export default function App() {
   const kiosk = useKiosk();
@@ -44,6 +49,9 @@ export default function App() {
   const [view, setView] = useState<View | null>(initial.current.view ?? null);
   const [storyRows, setStoryRows] = useState<[EvidenceRow, EvidenceRow] | null>(null);
   const [storyCaption, setStoryCaption] = useState<string | null>(null);
+  const [storyFlagged, setStoryFlagged] = useState<Flagged | null>(null);   // over the story's pins
+  const [pinFlagged, setPinFlagged] = useState<Flagged | null>(null);       // over a free user-pinned pair
+  const [flaggedAck, setFlaggedAck] = useState(false);   // interstitial acknowledged for the current result
   const stories = useStories();
   const coverage = useCoverage(asked, askedFilters);
 
@@ -76,9 +84,31 @@ export default function App() {
     if (s) {
       setStoryRows(s.pins);
       setStoryCaption(s.caption);
+      setStoryFlagged(s.flagged ?? null);
       storyRestored.current = true;
     }
   }, [stories]);
+
+  // A free user-pinned pair (not a story) is flagged over exactly those two passages, so a
+  // pinned comparison carries the same note as every other flagged surface. Offline-safe:
+  // the call hits the local API; on any failure we degrade to no note and never block.
+  useEffect(() => {
+    if (storyRows || pins.length !== 2) {
+      setPinFlagged(null);
+      return;
+    }
+    let cancelled = false;
+    apiFlag(pins)
+      .then((r) => {
+        if (!cancelled) setPinFlagged(r.flagged ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setPinFlagged(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pins, storyRows]);
 
   const byId = useMemo(() => {
     const m = new Map<string, EvidenceRow>();
@@ -100,6 +130,9 @@ export default function App() {
       setPins([]);
       setStoryRows(null);
       setStoryCaption(null);
+      setStoryFlagged(null);
+      setPinFlagged(null);
+      setFlaggedAck(false);   // each new result must re-acknowledge its interstitial
       setDrawer(null);
       setChipsCollapsed(true);
       applyState({ q, filters: f, pins: [], kiosk, offline }, "push");
@@ -120,6 +153,7 @@ export default function App() {
       ask(s.question, s.filters ?? {});
       setStoryRows(s.pins);
       setStoryCaption(s.caption);
+      setStoryFlagged(s.flagged ?? null);
       // carry the story in the URL so its permalink reproduces the comparison
       applyState({ q: s.question, filters: s.filters ?? {}, pins: [], kiosk, offline, story: s.id }, "replace");
       window.scrollTo({ top: 0 });
@@ -170,12 +204,18 @@ export default function App() {
     storyRows ?? (pinned.length === 2 ? [pinned[0], pinned[1]] : null);
   const showStories = view === null && response === null && status !== "waiting" && status !== "error";
   const salient = response?.answer.coverage.salient_terms ?? [];
+  // resultFlagged gates the initial-result interstitial (question + story). The note also
+  // folds in a free user-pinned pair's flag, so a pinned comparison shows the same note; a
+  // post-hoc pin adds the note without re-gating the result the visitor is already reading.
+  const resultFlagged = mergeFlagged(response?.flagged ?? null, storyFlagged);
+  const flagged = mergeFlagged(resultFlagged, pinFlagged);
   const busy = status === "waiting";
   const undatedShare = health?.corpus.undated_share ?? null;
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6">
       <Header corpus={health?.corpus ?? null} kiosk={kiosk} view={view} onView={goView} />
+      <EntryAdvisory />
       {view === "how" && <HowItWorks />}
       {view === "gaps" && <Gaps />}
       {view === "about" && <About />}
@@ -218,7 +258,11 @@ export default function App() {
       )}
 
       {response && (
+        needsInterstitial(resultFlagged) && !flaggedAck ? (
+          <Interstitial flagged={resultFlagged!} onContinue={() => setFlaggedAck(true)} onBack={goHome} />
+        ) : (
         <main>
+          {flagged && <ContextualNote flagged={flagged} />}
           {response.degraded ? (
             <>
               <LimitedModeCard answer={response.answer} degraded={response.degraded} />
@@ -256,6 +300,7 @@ export default function App() {
           />
           {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} />}
         </main>
+        )
       )}
       </>
       )}

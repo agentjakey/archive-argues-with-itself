@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useEscape } from "../hooks/useKeyboard";
 import { highlight } from "../lib/highlight";
 import { shortTitle, yearLabel } from "../lib/format";
+import { ocrUncertain } from "../lib/sensitivity";
+import { OcrBadge } from "./OcrBadge";
 import type { EvidenceRow } from "../types";
 
 interface Props {
@@ -94,7 +96,10 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-sm text-muted">{shortTitle(row.title, 96)}</p>
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
+                {shortTitle(row.title, 96)}
+                {ocrUncertain(row.ocr_quality) && <OcrBadge />}
+              </p>
               <blockquote className="excerpt mt-3 border-l-2 border-rule pl-3">
                 {highlight(excerpt(row.snippet), salientTerms).map((s, j) =>
                   s.hit ? <mark key={j}>{s.text}</mark> : <span key={j}>{s.text}</span>,

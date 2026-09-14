@@ -117,6 +117,7 @@ export interface Story {
   filters: Filters;
   caption: string;
   pins: [EvidenceRow, EvidenceRow];
+  flagged?: Flagged | null;   // computed on serve over the two pins (the shown basis)
 }
 
 /** Present only when the server could not generate an answer (offline, model

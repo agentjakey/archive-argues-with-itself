@@ -347,9 +347,31 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 except LookupError as exc:
                     raise HTTPException(status_code=500, detail=f"story {s['id']}: {exc}") from exc
                 by_id = {row["passage_id"]: row for row in rows}
+                # The two pins are the shown record for this story, so they are the flagging
+                # basis; mark copies in_prompt for detection only, leaving the returned rows
+                # unchanged. Computed on serve, never stored, exactly like the /ask flagged.
+                flagged = flags.detect([{**row, "in_prompt": True} for row in rows])
                 out.append({"id": s["id"], "question": s["question"], "filters": s.get("filters") or {},
-                            "caption": s.get("caption", ""), "pins": [by_id[p] for p in s["pins"]]})
+                            "caption": s.get("caption", ""), "pins": [by_id[p] for p in s["pins"]],
+                            "flagged": flagged})
         return out
+
+    @app.get("/flag")
+    def flag_view(pins: str = Query("")):
+        """Harm-adjacent flag for a user-pinned comparison: flags.detect over exactly the
+        pinned passages, treated as the shown basis, returned in the same shape /ask and
+        /stories use. Read-only, computed on serve, never stored; detection and the
+        crisis-line mapping stay in flags.py. A malformed or unknown id yields a safe empty
+        result, never a raw error (N6)."""
+        ids = [p.strip() for p in pins.split(",") if p.strip()][:2]   # the compared pair
+        if not ids:
+            return {"flagged": None}
+        try:
+            with app.state.lock:
+                rows = evidence_rows(app.state.retriever.lookup(ids), [], set(), pages_dir)
+        except LookupError:
+            return {"flagged": None}   # unknown id -> safe empty, never a raw error
+        return {"flagged": flags.detect([{**row, "in_prompt": True} for row in rows])}
 
     @app.get("/pages/{item_id}/{name}")
     def page_image(item_id: str, name: str):
