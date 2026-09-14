@@ -188,7 +188,7 @@ changed:
 
 Source: `reports/bc_audit/bc_sizing.md`.
 
-Applying the Week 1 method to British Columbia: texts whose publisher or
+Applying the initial audit's method to British Columbia: texts whose publisher or
 creator names British Columbia yield 590 public-health items, 278 of them dated
 1960-2009, against the 2,500 floor (OCR present on 25 of 25 sampled). Only 1 of
 30 sampled BC health texts sits in `collection:governmentpublications`, the
