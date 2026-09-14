@@ -209,6 +209,7 @@ def write_report(out: dict, out_dir: Path) -> None:
     metrics = list(next(iter(states.values()))["aggregate"].keys()) if states else []
     runs = ", ".join(f"`{st['run_id']}`" for st in states.values() if st.get("run_id"))
     lines = ["# Phase 13 retrieval report", "",
+             f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC.", "",
              f"one eval_runs row per state: {runs}", "",
              "Pooled values: gold was labeled from the BASELINE retriever's top-30 (Phase 7), so",
              "recall and nDCG denominators are that judged pool, not the corpus. A state that",

@@ -30,7 +30,7 @@ coverage grid, and the answer notes how many retrieved passages were undated.
 Source: `eval/labeling_notes.md` (Thin verdicts).
 
 q018 rank 25 carries item-metadata year 1984 while its text is H1N1 / 2009
-pandemic content dated 2010-10-22. The record was left as labeled. Phase 13
+pandemic content dated 2010-10-22. The record was left as labeled. The retrieval pass
 added a "later years" annotation: when a passage's text mentions years more than
 one year after its item's metadata year, the evidence card says so
 ("mentions 2010 (item dated 1984)"). It changes no ranking and asserts nothing
@@ -48,7 +48,7 @@ first version was about 60% precise on back matter because a citation pattern
 fired on years beside times and ratios in statistical tables; the second
 requires a page range or an author entry with a nearby year and read 18 of 20 on
 a fresh sample. Demoting front and back pages (score x 0.5, never excluded), on
-its own and against the original Phase 7 gold, moved recall@20 from 0.6823 to
+its own and against the original gold, moved recall@20 from 0.6823 to
 0.8061 and nDCG@10 from 0.4420 to 0.4852 with 1.4% of the top-20 unjudged. The
 two misses in the sample were a commission chapter with footnote citations and a
 recommendations page; the classifier is a heuristic and the evidence cards show
@@ -79,7 +79,7 @@ Source: `eval/labeling_notes.md` (q022 doc_type filter finding).
 The Hospital for Sick Children inquiry items are classified
 `doc_type_norm=royal_commission` (165 items, 68,849 passages), while q022's
 filter is `doc_type=commission`, so the filter routed away from the documents.
-Phase 13 added a configurable doc_type family (commission includes
+The retrieval pass added a configurable doc_type family (commission includes
 royal_commission) for filtering; stored values were not rewritten. q022 remains
 a should-abstain question by Jacob Ortiz's verdict.
 
@@ -104,7 +104,7 @@ of 15 should-abstain would answer. After a single, criterion-based amendment the
 rule was frozen; sweep 2: 1 answerable would abstain (q007, on "risks") and 6
 of 15 should-abstain would answer. The amendment was made after reading sweep 1
 on these same 50 questions, so sweep 2 is in-sample and not an estimate of how
-the rule behaves on new questions. On the final Phase 13 retriever the same
+the rule behaves on new questions. On the final retriever the same
 frozen rule reads 0 answerable would abstain and 9 of 15 should-abstain would
 answer: the wider evidence pool covers more question terms, so the gate fires
 less. Six probes still abstain on their out-of-window years or absent topics
@@ -120,8 +120,8 @@ All labels and judgments were decided by the author. To speed adjudication,
 candidate labels for the Phase 13 extension and the Phase 16 support judgments
 were first proposed by an assistant model and each was reviewed and decided by
 the author; the same model family generates the tool's answers, so this judge is
-not independent of the system. The Phase 13 retrieval table and the Phase 16
-support rates should be read with that in mind.
+not independent of the system. The retrieval table and the support rates
+should be read with that in mind.
 
 ## What the audit measured
 
@@ -143,7 +143,7 @@ Cited passages resolving to a recorded page 119 of 119.
 
 Source: `docs/evaluation/audit_report.md`; `docs/evaluation/retrieval_report.md` (sweep).
 
-In the Phase 16 audit run (every seed question once, real provider, final
+In the audit run (every seed question once, real provider, final
 configuration), the tool abstained on 10 of the 15 should-abstain questions and
 answered 5 (q015, q030, q036, q037, q049). Jacob Ortiz's judgment of those five: each
 is an all-supported answer to a different question than the one asked, on the
@@ -202,8 +202,8 @@ magnitude short of the floor in the window.
 
 Source: `docs/evaluation/retrieval_report.md`.
 
-Phase 7 gold was pooled from the baseline retriever's top-30, so it could not
-credit passages the baseline never surfaced; the Phase 13 candidate's top-20 was
+The initial gold was pooled from the baseline retriever's top-30, so it could not
+credit passages the baseline never surfaced; the candidate's top-20 was
 then labeled in full. On the final gold the baseline's recall@20 reads 0.5928
 against its original 0.6823, not because it got worse but because relevant
 passages now exist that it does not retrieve. A third retriever would surface

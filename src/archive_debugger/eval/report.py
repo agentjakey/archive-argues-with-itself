@@ -116,6 +116,8 @@ def run(config_path) -> dict:
     lines = [
         "# Phase 7 eval report",
         "",
+        f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC.",
+        "",
         f"labeled questions: {report['labeled']} / {report['total']}",
         "",
         "Pooled values: recall/nDCG denominators are the judged top-N pool, not the corpus, "

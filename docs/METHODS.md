@@ -5,12 +5,12 @@ Every number below is copied from a report in this repository and names the
 file it came from; nothing is restated from memory. Where a figure is derived
 from two reported numbers, the arithmetic is shown.
 
-## 1. Choosing the corpus (Week 1 audit)
+## 1. Choosing the corpus (the initial audit)
 
 Source: `reports/coverage_audit/discovery.md`, `reports/coverage_audit/finalist_sizing.md`.
 
 The proposal (`docs/proposal.md`) named housing as an illustrative topic and set
-a floor of 2,500 usable items for a pilot corpus. Week 1 sized three candidate
+a floor of 2,500 usable items for a pilot corpus. The initial audit sized three candidate
 topics against the Internet Archive's Canadian-government collections using
 `advancedsearch.php` counts (the scrape API returned a canned baseline under
 repeated use and was not trusted):
@@ -70,7 +70,7 @@ Sources: README "Retrieval"; `reports/phase7/eval_report.md`;
 BM25 over an FTS5 index and dense cosine search (384-dim
 `paraphrase-multilingual-MiniLM-L12-v2`, sqlite-vec, flat and exact) fused by
 Reciprocal Rank Fusion (k = 60), a soft OCR-quality down-weight, and
-pre-filters on period, jurisdiction and document type. Phase 13 added five
+pre-filters on period, jurisdiction and document type. The retrieval pass added five
 independently switchable changes, all off by default until measured: front and
 back matter demotion, stopword dropping in the FTS query, a doc_type family
 filter, a per-item cap on the ranking, and a "later years" annotation. Section 6
@@ -84,7 +84,7 @@ Sources: `eval/labeling_notes.md`, `reports/phase7/eval_report.md`.
 labeled every candidate (r only if the passage text itself answers the
 question) and gave each question a verdict: 35 answerable, 15 should-abstain;
 1,500 candidate labels, 340 relevant. Metrics are pooled recall@k and nDCG@10
-over the judged pool, not the corpus, plus an abstention-leakage view. Phase 7
+over the judged pool, not the corpus, plus an abstention-leakage view. The initial
 aggregate over the 50 labeled questions:
 
 | metric | value |
@@ -151,7 +151,7 @@ effectively absent; 45% of passages carry no date; counts are lexical matches.
 
 ![The coverage grid: passages matching each salient term by decade, with jurisdiction totals](images/coverage-grid.png)
 
-## 7. Retrieval changes, measured (Phase 13)
+## 7. Retrieval changes, measured
 
 Sources: `docs/evaluation/retrieval_report.md`, `reports/phase13/sections_report.md`,
 `eval/labeling_notes.md`, `eval/gold_extension_notes.md`.
@@ -193,7 +193,7 @@ assistant model and each was reviewed and decided by the author; the same model
 family generates the tool's answers, so this judge is not independent of the
 system.
 
-## 8. Audit of the shipped system (Phase 16)
+## 8. Audit of the shipped system
 
 Sources: `docs/evaluation/audit_report.md`, `docs/evaluation/holdout_run.md`,
 `eval/judgments_phase16.json`, `eval/judgments_phase16_notes.md`.
@@ -212,7 +212,7 @@ added or shifted; n = the sentence misstates the passage).
 | Abstention, in-sample (15 should-abstain questions) | 10 of 15 abstained; 5 answered off target |
 | False abstentions, in-sample (35 answerable) | 0 of 35 |
 | Abstention, held-out (`eval/holdout_questions.jsonl`, one run) | 9 of 10 probes abstained (h009 answered); 4 of 5 answerable answered (h015 abstained at the gate on the word "federal") |
-| Retrieval recall@10 on the final gold, before -> after Phase 13 | 0.3470 -> 0.4581 |
+| Retrieval recall@10 on the final gold, before -> after the retrieval changes | 0.3470 -> 0.4581 |
 | Cited passages resolving to a recorded page | 119 of 119 (verifier check 3 guarantees it) |
 
 The five off-target answers (q015, q030, q036, q037, q049) are all-supported

@@ -69,7 +69,7 @@ comes from, under [`docs/evaluation/`](docs/evaluation/).
 | Cited passages that resolve to a recorded page | 119/119 | [audit report](docs/evaluation/audit_report.md) |
 | Abstention on questions the archive cannot answer | 10/15 in-sample, 9/10 held out | [audit report](docs/evaluation/audit_report.md), [held-out run](docs/evaluation/holdout_run.md) |
 | False abstention on answerable questions | 0/35 in-sample, 1/5 held out | [held-out run](docs/evaluation/holdout_run.md) |
-| Retrieval recall@10 on the fully judged gold, before and after the retrieval changes | 0.347 to 0.458 | [retrieval report](docs/evaluation/retrieval_report.md) |
+| Retrieval recall@10 on the fully judged gold, before and after the retrieval changes | 0.347 to 0.4581 | [retrieval report](docs/evaluation/retrieval_report.md) |
 
 Two caveats, stated in the reports: the abstention rule was amended once against the
 same 50 questions (the held-out set is the exception), and the candidate labels behind

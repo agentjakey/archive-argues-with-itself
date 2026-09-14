@@ -20,6 +20,7 @@ import re
 import sqlite3
 import sys
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 VALID = {"s": "supported", "p": "partly", "n": "not"}
@@ -160,6 +161,7 @@ def main(argv=None) -> int:
                + f"; **{ho['gold_answerable']}** answerable answered"
                + (f" (abstained: {', '.join(ho['gold_answerable_abstained'])})" if ho["gold_answerable_abstained"] else ""))
     L = ["# Audit report", "",
+         f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC.", "",
          "Five headline numbers, measured on the audit run: every seed question once through /ask with the",
          f"configured model ({summary['model']}), final retrieval configuration, {summary['questions']} questions: "
          f"{summary['answered']} answered, {summary['abstained']} abstained; sentence judgments by the author.", "",
