@@ -3,6 +3,8 @@ import { AbstentionCard } from "./components/AbstentionCard";
 import { AnswerCard } from "./components/AnswerCard";
 import { LimitedModeCard } from "./components/LimitedModeCard";
 import { AskBar } from "./components/AskBar";
+import { AttractHero } from "./components/AttractHero";
+import { QuestionTiles } from "./components/QuestionTiles";
 import { CompareView } from "./components/CompareView";
 import { CoveragePanel } from "./components/CoveragePanel";
 import { ContextualNote } from "./components/ContextualNote";
@@ -27,6 +29,7 @@ import { Stories } from "./components/Stories";
 import { useAttractLoop } from "./hooks/useAttractLoop";
 import { useStories } from "./hooks/useStories";
 import { flag as apiFlag } from "./lib/api";
+import { TILE_QIDS } from "./lib/attract";
 import { applyState, readState, type View } from "./lib/urlstate";
 import { mergeFlagged, needsInterstitial } from "./lib/sensitivity";
 import type { EvidenceRow, Example, Filters, Flagged, Story } from "./types";
@@ -211,6 +214,9 @@ export default function App() {
   const flagged = mergeFlagged(resultFlagged, pinFlagged);
   const busy = status === "waiting";
   const undatedShare = health?.corpus.undated_share ?? null;
+  // Attract tiles: the curated non-flagged cached questions, in config order, pulled from
+  // /examples so their text and filters match the cache exactly (offline-instant on tap).
+  const tiles = TILE_QIDS.map((id) => chips.find((c) => c.qid === id)).filter((e): e is Example => Boolean(e));
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6">
@@ -221,33 +227,36 @@ export default function App() {
       {view === "about" && <About />}
       {view === null && (
       <>
+      {showStories && <AttractHero />}
+      {showStories && <QuestionTiles tiles={tiles} onPick={pick} disabled={busy} />}
       {!offline && (
-      <AskBar
-        question={question}
-        filters={filters}
-        busy={busy}
-        kiosk={kiosk}
-        onQuestion={setQuestion}
-        onFilters={setFilters}
-        onAsk={onAsk}
-      />
+        <div className={showStories ? "mt-6" : undefined}>
+          {showStories && <p className="mb-2 text-sm text-muted">Or ask your own question:</p>}
+          <AskBar
+            question={question}
+            filters={filters}
+            busy={busy}
+            kiosk={kiosk}
+            onQuestion={setQuestion}
+            onFilters={setFilters}
+            onAsk={onAsk}
+          />
+        </div>
       )}
       {showStories && (
-        <p className="mt-3 text-muted">
-          {offline
-            ? "Open an example question or a story below to see the pages behind the answer."
-            : "Ask a question above, or open an example or a story below, to see the pages behind the answer."}
-        </p>
+        <p className="mt-3 text-muted">Open a story below to see two pages from the record, years apart.</p>
       )}
-      <ExampleChips
-        chips={chips}
-        activeText={asked}
-        onPick={pick}
-        disabled={busy}
-        collapsed={chipsCollapsed && response !== null}
-        onToggle={() => setChipsCollapsed((c) => !c)}
-        kiosk={kiosk}
-      />
+      {!showStories && (
+        <ExampleChips
+          chips={chips}
+          activeText={asked}
+          onPick={pick}
+          disabled={busy}
+          collapsed={chipsCollapsed && response !== null}
+          onToggle={() => setChipsCollapsed((c) => !c)}
+          kiosk={kiosk}
+        />
+      )}
       <WaitingLabel status={status} elapsed={elapsed} completion={completion} passages={health?.corpus.passages ?? null} />
       {showStories && <Stories stories={stories} onOpen={openStory} />}
 
