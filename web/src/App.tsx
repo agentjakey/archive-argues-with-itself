@@ -164,15 +164,24 @@ export default function App() {
     [ask, kiosk, offline],
   );
 
-  // Kiosk attract loop: idle 60 s -> cycle stories; any touch -> back to the home screen.
+  // ?idle=<seconds> tunes the attract-loop dwell for the venue; default 60 s. Captured once
+  // from the launch URL so it is the single source of truth for both the dwell and the
+  // return-home URL: SPA navigation drops idle from window.location.search, so goHome cannot
+  // re-read it live.
+  const idleParam = useRef(new URLSearchParams(window.location.search).get("idle"));
+  // Kiosk attract loop: idle -> cycle stories; any touch -> back to the home screen. goHome
+  // reloads to the bare kiosk URL (clearing any typed-but-unsent question), carrying the kiosk
+  // launch params so the dwell stays at the launched ?idle= value across every return-home.
   const goHome = useCallback(() => {
-    const flags = [kiosk ? "kiosk=1" : "", offline ? "offline=1" : ""].filter(Boolean).join("&");
+    const flags = [
+      kiosk ? "kiosk=1" : "",
+      offline ? "offline=1" : "",
+      idleParam.current ? `idle=${encodeURIComponent(idleParam.current)}` : "",
+    ].filter(Boolean).join("&");
     window.location.assign(`${window.location.pathname}${flags ? `?${flags}` : ""}`);
   }, [kiosk, offline]);
-  // ?idle=<seconds> tunes the attract-loop dwell for the venue; default 60 s. goHome
-  // reloads to the bare kiosk URL, which clears any typed-but-unsent question.
   const idleMs = useMemo(() => {
-    const v = Number(new URLSearchParams(window.location.search).get("idle"));
+    const v = Number(idleParam.current);
     return Number.isFinite(v) && v > 0 ? v * 1000 : undefined;
   }, []);
   useAttractLoop({ enabled: kiosk, stories, onShow: openStory, onHome: goHome, idleMs });
