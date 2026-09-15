@@ -1,0 +1,106 @@
+# Microlog public-health scope configuration (additive, post-festival data release).
+#
+# A THIRD, fully separate scope, modeled on config/pilot.toml and config/education.toml.
+# It builds the pooled national microlog public-health corpus that the pilot deliberately
+# excluded (microlog was reserve-only: microfiche-sourced, OCR unverified in Week 1). This
+# scope is the microlog OCR spot-check made real, as its own release. It never shares a
+# database, index, or cache path with the pilot: all paths below point under
+# data/exploration/microlog/ (gitignored). The pilot's civic.db / vectors.db are never
+# referenced.
+#
+# Per the pilot's own pattern, a new scope is a new config + a new manifest, not a code
+# change (README "Extending the corpus").
+#
+# ISOLATION, READ BEFORE RUNNING ANY STAGE:
+#   .env sets CIVIC_DB_PATH and CIVIC_INDEX_PATH to the pilot's deployed store
+#   (C:\civic-data\...), and env_path() makes an already-set env var win over the config
+#   value. Some stages (ingest.sections, eval.retrieval_sweep) call load_dotenv(), which
+#   does NOT override a variable already set in the environment. So for EVERY stage of this
+#   scope, export the scope paths first, or a stage that loads .env would write into the
+#   pilot store:
+#     export CIVIC_DB_PATH="data/exploration/microlog/civic_microlog.db"
+#     export CIVIC_INDEX_PATH="data/exploration/microlog/index/vectors_microlog.db"
+#   With those set, resolve_db_path / load_retrieve_config return the microlog paths
+#   regardless of .env. (PowerShell: $env:CIVIC_DB_PATH = "...".)
+
+[corpus]
+topic = "public_health"
+jurisdiction_scope = "Canada: microlog (federal + provincial + municipal government/institutional issuers), microfiche-sourced"
+
+# The public_health synonym term-set, copied verbatim from config/pilot.toml. This exact
+# string, against collection:microlog, produced the audited counts below. Do not re-derive it.
+query = 'health OR "public health" OR healthcare OR hospital OR disease OR epidemic OR "medical care" OR sanitation OR "communicable disease" OR vaccination OR "health insurance"'
+mediatype = "texts"
+
+[corpus.window]
+# Same binning window and convention as the pilot: undated and out-of-window items are
+# KEPT and bucketed, never filtered out at harvest. Reported both ways downstream:
+#   full-harvest count (all matching texts) and in-window count (dated 1960-2009).
+start_year = 1960
+end_year = 2009
+comparison_years = [1975, 1990, 2005]  # in-window; there is no 2025 in this archive
+
+[corpus.collections]
+# This scope IS microlog: the single reserve collection the pilot excluded, now built as
+# its own release. The harvest query uses this clause. No clean-gov collections here; that
+# is the pilot's scope, kept entirely separate.
+clean = ["microlog"]
+reserve = []
+
+[corpus.limits]
+usable_floor = 2500  # same viability bar as the pilot; the in-window count clears it comfortably
+
+[harvest]
+# Internet Archive automated-access etiquette. SET user_agent_contact to a real contact
+# (email or URL) before the full harvest, or pass --contact; the harvest layer refuses to
+# hit the network without one.
+user_agent_contact = ""
+request_delay_seconds = 0.5
+max_retries = 5
+fields = "identifier,title,creator,publisher,date,year,collection,language,mediatype"
+# The scoped query numFound (~13.5k, audited) exceeds the advancedsearch 10k deep-paging
+# cap, so harvest_manifest takes the Scraping API path (cursor pagination) and the scrape
+# completeness guard governs the crawl: >= 95% of the authoritative numFound or the build
+# fails. A throttled or truncated crawl does not ship.
+manifest_rows = 100
+cache_dir = "data/exploration/microlog/raw"     # isolated OCR cache, never the pilot's raw/
+
+[index]
+db_path = "data/exploration/microlog/civic_microlog.db"   # isolated store, never civic.db
+embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+embedding_dim = 384
+
+[retrieve]
+index_path = "data/exploration/microlog/index/vectors_microlog.db"   # isolated index, never vectors.db
+embedder = "fastembed"
+batch_size = 256
+candidates = 200
+rrf_k = 60
+downweight_high = 1.0
+downweight_medium = 0.9
+downweight_low = 0.75
+section_demote = true
+section_weight_front = 0.5
+section_weight_back = 0.5
+fts_drop_stopwords = true
+doc_type_family_filter = true
+pool_size = 30
+per_item_cap = 5
+later_years_flag = true
+
+[retrieve.doc_type_families]
+commission = ["commission", "royal_commission"]
+
+[generate]
+provider = "anthropic"
+model = "claude-haiku-4-5-20251001"
+max_tokens = 2048
+temperature = 0.0
+top_k = 12
+min_passages = 3
+
+[eval]
+label_top_n = 30
+recall_ks = [5, 10, 20]
+ndcg_k = 10
+abstention_min_relevant = 1

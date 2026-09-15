@@ -1,0 +1,28 @@
+{
+  "topic": "public_health",
+  "scope_id": "microlog_public_health",
+  "query": "health OR \"public health\" OR healthcare OR hospital OR disease OR epidemic OR \"medical care\" OR sanitation OR \"communicable disease\" OR vaccination OR \"health insurance\"",
+  "mediatype": "texts",
+  "collections": [
+    "microlog"
+  ],
+  "window": {
+    "start_year": 1960,
+    "end_year": 2009,
+    "convention": "binning only; undated and out-of-window items are kept and bucketed, not filtered at harvest"
+  },
+  "count": null,
+  "authoritative_numfound_expected": 13544,
+  "in_window_expected": 8726,
+  "microlog_collection_texts_total": 207863,
+  "completeness_guard": {
+    "path": "scrape API (numFound > advancedsearch 10k cap)",
+    "min_fraction": 0.95,
+    "min_items_expected": 12867,
+    "rule": "harvested item count must be >= 0.95 * live advancedsearch numFound or the build fails"
+  },
+  "counts_provenance": "reports/bc_audit/bc_sizing.md, Week-1 audit: collection:microlog texts=207863; mediatype:texts AND collection:microlog AND (public_health term-set)=13544; dated 1960-2009=8726 (1990-2009=6598, 2010+=4379, pre-1960=0). Cross-check reports/coverage_audit/finalist_sizing.md: base gov + microlog public_health=16857. All are real advancedsearch.php numFound; re-verify live before the harvest, the guard uses the live count.",
+  "manifest_date": null,
+  "status": "scope defined; harvest pending. microlog_public_health.identifiers.txt is produced by the harvest (archive_debugger.harvest.fetch via the Scraping API path) and committed alongside this file, exactly like public_health.identifiers.txt. count and manifest_date are filled in from the completed harvest.",
+  "note": "Additive, fully isolated microlog public-health data release. The pilot excluded microlog (reserve-only: microfiche-sourced, OCR unverified in Week 1); this scope builds it as its own release under data/exploration/microlog/, never touching the pilot's civic.db / vectors.db. Config: config/microlog.toml."
+}
