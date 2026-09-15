@@ -1,0 +1,94 @@
+# Education scope configuration (post-festival expansion candidate).
+#
+# A SECOND, fully separate scope, modeled on config/pilot.toml. It never shares a
+# database, index, or cache path with the pilot: all paths below point under
+# data/exploration/education/ (gitignored). The pilot's civic.db / vectors.db are
+# never referenced. Per the pilot's own pattern, a new scope is a new config + a new
+# manifest, not a code change (README "Extending the corpus").
+#
+# IMPORTANT when running any stage: also export CIVIC_DB_PATH and CIVIC_INDEX_PATH to
+# the education paths below, because .env sets them to the pilot paths and load_dotenv
+# does not override an already-set variable. With the env vars set, resolve_db_path
+# returns the education paths regardless of .env.
+
+[corpus]
+topic = "education"
+jurisdiction_scope = "Canada: federal + provincial + municipal (government issuers)"
+
+# Education term-set, analogous to how pilot.toml defines public_health. This exact
+# string produced ~9,120 items (governmentpublications), ~6,495 in-window, in the
+# availability survey (data/exploration/survey.json).
+query = 'education OR school OR schools OR curriculum OR "school board" OR teacher OR literacy OR college'
+mediatype = "texts"
+
+[corpus.window]
+start_year = 1960
+end_year = 2009
+comparison_years = [1975, 1990, 2005]
+
+[corpus.collections]
+# The same clean Canadian-government clause the pilot uses. microlog stays a reserve
+# lever (see the separate microlog viability audit), not part of this scope.
+clean = [
+    "governmentpublications",
+    "albertagovernmentpublications",
+    "uoftgovpubs",
+    "ministryoffinance_ontario",
+    "ocul_govinfocommunity",
+    "hpl-govdocs",
+    "canadianmunicipal",
+    "ontarioeconomiccouncil",
+    "taskforce_reports",
+]
+reserve = ["microlog"]
+
+[corpus.limits]
+usable_floor = 2500
+
+[harvest]
+user_agent_contact = ""              # set to a contact (email or URL) before a larger harvest
+request_delay_seconds = 0.5
+max_retries = 5
+fields = "identifier,title,creator,publisher,date,year,collection,language,mediatype"
+manifest_rows = 100
+cache_dir = "data/exploration/education/raw"     # isolated OCR cache, never the pilot's raw/
+
+[index]
+db_path = "data/exploration/education/civic_edu.db"   # isolated store, never civic.db
+embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+embedding_dim = 384
+
+[retrieve]
+index_path = "data/exploration/education/index/vectors_edu.db"   # isolated index, never vectors.db
+embedder = "fastembed"
+batch_size = 256
+candidates = 200
+rrf_k = 60
+downweight_high = 1.0
+downweight_medium = 0.9
+downweight_low = 0.75
+section_demote = true
+section_weight_front = 0.5
+section_weight_back = 0.5
+fts_drop_stopwords = true
+doc_type_family_filter = true
+pool_size = 30
+per_item_cap = 5
+later_years_flag = true
+
+[retrieve.doc_type_families]
+commission = ["commission", "royal_commission"]
+
+[generate]
+provider = "anthropic"
+model = "claude-haiku-4-5-20251001"
+max_tokens = 2048
+temperature = 0.0
+top_k = 12
+min_passages = 3
+
+[eval]
+label_top_n = 30
+recall_ks = [5, 10, 20]
+ndcg_k = 10
+abstention_min_relevant = 1

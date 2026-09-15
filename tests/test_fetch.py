@@ -113,6 +113,70 @@ def test_record_undated_is_kept():
     assert rec["year"] is None
 
 
+# --------------------------------------------------------------------------- #
+# Segmentation reconciliation. select_source makes the initial pick (DjVuTXT
+# preferred, above); assign_segmentation then reconciles once djvu.txt is cached,
+# reassigning a no-form-feed item to the per-page djvu.xml so passages map to real
+# leaves. This is the behavior that built the pilot (every item segmentation_source
+# djvuxml); run() calls it after the djvu.txt download.
+# --------------------------------------------------------------------------- #
+
+
+def _cache_ocr(cache: Path, md5: str, name: str, body: bytes) -> None:
+    path = fetch.content_path(cache, md5, name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(body)
+
+
+def test_assign_segmentation_reconciles_no_formfeed_to_djvuxml(tmp_path, monkeypatch):
+    cache = tmp_path / "raw"
+    _cache_ocr(cache, "txtmd5", "x_djvu.txt", b"one long page with no form feeds " * 40)
+    rec = {"identifier": "x", "ocr_format": "DjVuTXT",
+           "ocr_file": {"name": "x_djvu.txt", "md5": "txtmd5", "size": 1},
+           "ocr_file_ref": fetch.content_ref("txtmd5", "x_djvu.txt"),
+           "page_numbers_file": None}
+    meta = {"metadata": {"imagecount": "10"}, "files": [
+        {"format": "DjVuTXT", "name": "x_djvu.txt", "md5": "txtmd5"},
+        {"format": "Djvu XML", "name": "x_djvu.xml", "md5": "xmlmd5"}]}
+    monkeypatch.setattr(fetch.discover, "fetch_metadata", lambda ident, ctx: meta)
+    updated, counts = fetch.assign_segmentation([rec], cache, ctx={})
+    assert updated[0]["ocr_format"] == "DjVuXML"
+    assert updated[0]["segmentation_source"] == "djvuxml"
+    assert updated[0]["ocr_file"]["md5"] == "xmlmd5"
+    assert counts.get("djvuxml") == 1
+
+
+def test_assign_segmentation_keeps_djvutxt_when_formfeeds(tmp_path, monkeypatch):
+    cache = tmp_path / "raw"
+    _cache_ocr(cache, "ffmd5", "y_djvu.txt", b"page1\x0cpage2\x0cpage3")
+    rec = {"identifier": "y", "ocr_format": "DjVuTXT",
+           "ocr_file": {"name": "y_djvu.txt", "md5": "ffmd5", "size": 1},
+           "ocr_file_ref": fetch.content_ref("ffmd5", "y_djvu.txt"),
+           "page_numbers_file": None}
+    meta = {"metadata": {"imagecount": "3"}, "files": [
+        {"format": "DjVuTXT", "name": "y_djvu.txt", "md5": "ffmd5"},
+        {"format": "Djvu XML", "name": "y_djvu.xml", "md5": "xmlmd5"}]}
+    monkeypatch.setattr(fetch.discover, "fetch_metadata", lambda ident, ctx: meta)
+    updated, _ = fetch.assign_segmentation([rec], cache, ctx={})
+    assert updated[0]["ocr_format"] == "DjVuTXT"          # valid form-feeds: keep text
+    assert updated[0]["segmentation_source"] == "djvutxt"
+    assert updated[0]["ocr_file"]["md5"] == "ffmd5"       # source unchanged
+
+
+def test_assign_segmentation_leaves_uncached_source_unchanged(tmp_path, monkeypatch):
+    # Partial harvest: djvu.txt not cached this pass -> do not reassign on a guess.
+    cache = tmp_path / "raw"
+    rec = {"identifier": "z", "ocr_format": "DjVuTXT",
+           "ocr_file": {"name": "z_djvu.txt", "md5": "nocache", "size": 1},
+           "ocr_file_ref": fetch.content_ref("nocache", "z_djvu.txt"),
+           "segmentation_source": None, "page_numbers_file": None}
+    meta = {"metadata": {}, "files": [
+        {"format": "Djvu XML", "name": "z_djvu.xml", "md5": "xmlmd5"}]}
+    monkeypatch.setattr(fetch.discover, "fetch_metadata", lambda ident, ctx: meta)
+    updated, _ = fetch.assign_segmentation([rec], cache, ctx={})
+    assert updated[0]["ocr_format"] == "DjVuTXT"          # unchanged; reconcile on a later pass
+
+
 def test_record_none_when_no_ocr():
     doc = {"identifier": "n", "title": "t", "year": 1980}
     meta = {"metadata": {}, "files": [{"format": "JPEG"}]}

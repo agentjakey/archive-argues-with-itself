@@ -433,6 +433,16 @@ def load_records(items_path: Path) -> list[dict]:
     return records
 
 
+def write_records(records: list[dict], items_path: Path) -> None:
+    """Overwrite items.jsonl with `records`, atomically via a temp file. Used after
+    segmentation reconciliation rewrites ocr_format / ocr_file for fallback items."""
+    tmp = items_path.with_name(items_path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        for r in records:
+            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+    tmp.replace(items_path)
+
+
 def _iter_item_files(record: dict, keys: tuple = DOWNLOAD_KEYS):
     for key in keys:
         entry = record.get(key)
@@ -643,6 +653,12 @@ def assign_segmentation(records: list[dict], cache_dir: Path, *, ctx: dict) -> t
             )
             rec["ocr_format"] = "DjVuTXT"
             # ocr_file already points at djvu.txt
+        elif ff_pages is None:
+            # djvu.txt not cached this pass: leave the selected source unchanged rather
+            # than reassigning on a guess. A full download caches every djvu.txt before
+            # this runs, so this branch only affects bounded/partial harvests.
+            rec["segmentation_source"] = record.get("segmentation_source")
+            rec["segmentation_reason"] = "djvu.txt not cached this pass; source left as selected"
         elif xml is not None:
             rec["segmentation_source"] = "djvuxml"
             reason = "no valid form-feed" if ff_pages is not None else "djvu.txt not cached / no form-feed"
@@ -865,6 +881,19 @@ def run(
             checkpoint_path=out_dir / "download_checkpoint.json",
         )
         summary["download"] = dl
+        # Reconcile the parsed source now that djvu.txt is cached, restoring the pilot's
+        # segmentation waterfall (the pilot was built DjVuXML for every item). An item
+        # whose djvu.txt has valid form-feeds keeps DjVuTXT; otherwise it falls back to
+        # the per-page djvu.xml (then hOCR) so passages map to real leaves instead of
+        # collapsing to a single page. Rewrite items.jsonl with the reconciled records
+        # and download the reassigned sources.
+        records, seg_counts = assign_segmentation(records, cfg.cache_dir, ctx=ctx)
+        summary["segmentation"] = seg_counts
+        write_records(records, items_path)
+        summary["download_fallback"] = download_corpus(
+            records, cfg.cache_dir, delay=cfg.request_delay, new_limit=new_limit,
+            checkpoint_path=out_dir / "download_checkpoint.json",
+        )
         write_summary(out_dir, summary)
     return summary
 
