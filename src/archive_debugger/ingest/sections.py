@@ -28,6 +28,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Callable, Optional
 
+from archive_debugger import scopes
 from archive_debugger.ingest import db
 
 FRONT_SHARE, FRONT_MIN = 0.06, 3      # front zone: the first max(3, ceil(6% of leaves)) leaves
@@ -309,13 +310,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     load_dotenv()
     p = argparse.ArgumentParser(description="Classify pages as front/body/back matter into civic.db (one-time ingest step).")
     p.add_argument("--config", default="config/pilot.toml", type=Path)
-    p.add_argument("--out", default="reports/phase13", type=Path)
+    p.add_argument("--out", default=None, type=Path, help="reports dir (default: reports/phase13, or the scope's reports dir)")
     p.add_argument("--sample", default=20, type=int)
     p.add_argument("--limit", default=None, type=int, help="classify only the first N pages (timing run)")
+    scopes.add_scope_argument(p)
     args = p.parse_args(argv)
+    scope = scopes.resolve_scope(args.scope) if args.scope else None
     try:
-        result = run(args.config, out_dir=args.out, sample=args.sample, limit=args.limit)
-    except (DatabaseBusy, FileNotFoundError) as exc:
+        with scopes.activate(scope):
+            config = scope.config_path if scope else args.config
+            out = args.out or (scope.reports_dir / "phase13" if scope and not scope.inherit else Path("reports/phase13"))
+            result = run(config, out_dir=out, sample=args.sample, limit=args.limit)
+    except (DatabaseBusy, FileNotFoundError, scopes.ScopeError) as exc:
         print(f"aborted: {exc}")
         return 2
     print(json.dumps({"pages_walked": result["pages_walked"], "counts": result["counts"],

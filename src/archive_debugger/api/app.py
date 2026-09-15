@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from archive_debugger import flags
+from archive_debugger import flags, scopes
 from archive_debugger.api.cache import AnswerCache, cache_key, retrieval_fingerprint
 from archive_debugger.api.coverage import coverage as compute_coverage
 from archive_debugger.eval import store
@@ -207,10 +207,19 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                provider: Optional[str] = None, llm: Optional[LLM] = None,
                seed_path: Path = DEFAULT_SEED, web_dist: Path = WEB_DIST, load_env: bool = True,
                cache_path: Optional[Path] = None, pages_dir: Optional[Path] = None,
-               stories_path: Path = DEFAULT_STORIES) -> FastAPI:
+               stories_path: Path = DEFAULT_STORIES, scope: Optional[str] = None) -> FastAPI:
     if load_env:
         from dotenv import load_dotenv
         load_dotenv()
+    # Scope layer (additive): with no scope this serves the pilot exactly as before. A
+    # named scope serves that scope's config + registry databases; a non-inherit scope is
+    # pinned for the process so the one connection opened at startup is fenced to its own
+    # databases and can never open the pilot's.
+    if scope is not None:
+        resolved = scopes.resolve_scope(scope)
+        config_path = resolved.config_path
+        if not resolved.inherit:
+            scopes.set_active(resolved)
     cache_path = cache_path or env_path(ENV_CACHE_PATH, DEFAULT_CACHE)
     pages_dir = pages_dir or env_path(ENV_PAGES_DIR, DEFAULT_PAGES)
     stories = load_stories(stories_path)
@@ -430,4 +439,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
     return app
 
 
-app = create_app()
+# The uvicorn entrypoint. With no CIVIC_SCOPE this is byte-identical to the pilot deploy;
+# set CIVIC_SCOPE=<name> to serve a registered scope (serving multiple scopes in one UI
+# is a later step).
+app = create_app(scope=os.environ.get("CIVIC_SCOPE") or None)

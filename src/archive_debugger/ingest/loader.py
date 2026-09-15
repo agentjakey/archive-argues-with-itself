@@ -20,7 +20,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from archive_debugger import scopes
 from archive_debugger.ingest import db
+
+DEFAULT_ITEMS = Path("data/harvest/items.jsonl")
 
 # The raw/harvest columns this loader is allowed to populate. Everything else on
 # the items table (the normalized *_norm / *_method columns, plus year, decade,
@@ -112,18 +115,23 @@ def load_raw_items(conn: sqlite3.Connection, items_path: Path) -> int:
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Load harvested items into civic.db (raw columns only).")
     p.add_argument("--config", default="config/pilot.toml", type=Path)
-    p.add_argument("--items", default="data/harvest/items.jsonl", type=Path)
+    p.add_argument("--items", default=None, type=Path, help=f"items.jsonl (default: {DEFAULT_ITEMS}, or the scope's harvest dir)")
+    scopes.add_scope_argument(p)
     return p
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    db_path = db.resolve_db_path(args.config)
-    conn = db.init_db(db_path)
-    try:
-        count = load_raw_items(conn, args.items)
-    finally:
-        conn.close()
+    scope = scopes.resolve_scope(args.scope) if args.scope else None
+    with scopes.activate(scope):
+        config = scope.config_path if scope else args.config
+        items = args.items or (scope.items_path if scope and not scope.inherit else DEFAULT_ITEMS)
+        db_path = db.resolve_db_path(config)
+        conn = db.init_db(db_path)
+        try:
+            count = load_raw_items(conn, items)
+        finally:
+            conn.close()
     print(f"Loaded {count} items into {db_path} (raw columns only; normalized columns NULL)")
     return 0
 

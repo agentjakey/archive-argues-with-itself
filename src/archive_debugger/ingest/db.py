@@ -11,6 +11,7 @@ import sqlite3
 import tomllib
 from pathlib import Path
 
+from archive_debugger import scopes
 from archive_debugger.ingest import schema
 
 # Deployments mount the data files outside the repo; these env vars override the
@@ -27,13 +28,21 @@ def env_path(var: str, default) -> Path:
 
 
 def resolve_db_path(config_path: Path) -> Path:
-    """[index].db_path from the pilot config, unless CIVIC_DB_PATH is set."""
+    """[index].db_path from the pilot config, unless CIVIC_DB_PATH is set.
+
+    Scope layer (additive): when a non-inherit scope is active, its registry db_path is
+    used and the CIVIC_* env is ignored. With no active scope this is byte-identical to
+    the original behavior."""
+    scope = scopes.active_scope()
+    if scope is not None and not scope.inherit:
+        return scope.db_path
     with Path(config_path).open("rb") as fh:
         raw = tomllib.load(fh)
     return env_path(ENV_DB_PATH, raw["index"]["db_path"])
 
 
 def connect(db_path: Path | str) -> sqlite3.Connection:
+    scopes.guard_path(db_path)   # fence: a fenced scope can only open its own databases (no-op otherwise)
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")

@@ -1,0 +1,36 @@
+# Scope registry.
+#
+# A scope selects a topic/dataset by NAME and binds it to its own config file and its
+# own civic.db / vectors.db paths. This replaces the CIVIC_DB_PATH / CIVIC_INDEX_PATH
+# env juggling: a build or a stage run is pointed at a scope with --scope <name>, and
+# the scope's registry paths are used. Adding a corpus is a new config + a new registry
+# entry, not a code change (see README, "Extending the corpus").
+#
+# The DEFAULT scope is the frozen public_health pilot. It is marked inherit, so it
+# resolves its data paths through the existing config + CIVIC_* env loading, exactly as
+# the no-scope default and the festival deploy do (the deploy's .env points civic.db and
+# vectors.db at C:\civic-data). A run with no --scope, and a run with --scope pilot,
+# resolve identically. The pilot's config, databases, and audited numbers are untouched.
+#
+# Every non-inherit scope declares explicit db_path and index_path here. Those paths are
+# authoritative, the CIVIC_* env is ignored for that scope, and while such a scope is
+# active the process physically cannot open any database outside these paths. The
+# declared paths must match the scope config's [index].db_path / [retrieve].index_path,
+# or resolution fails (drift guard).
+
+default = "pilot"
+
+[scopes.pilot]
+# The frozen public_health pilot = the DEFAULT scope. inherit means: resolve data paths
+# via config/pilot.toml + the CIVIC_* env, unchanged. No explicit paths here on purpose,
+# so this entry never contradicts the deploy's mounted store.
+config = "config/pilot.toml"
+inherit = true
+
+[scopes.microlog]
+# The pooled national microlog public-health corpus the pilot excluded (reserve-only,
+# microfiche-sourced). Built as its own release, fully isolated under
+# data/exploration/microlog/. These paths mirror config/microlog.toml exactly.
+config = "config/microlog.toml"
+db_path = "data/exploration/microlog/civic_microlog.db"
+index_path = "data/exploration/microlog/index/vectors_microlog.db"

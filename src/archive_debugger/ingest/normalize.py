@@ -20,6 +20,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Optional
 
+from archive_debugger import scopes
 from archive_debugger.ingest import db
 
 YEAR_MIN, YEAR_MAX = 1850, 2025
@@ -435,13 +436,18 @@ def run(config_path: Path, out_dir: Path) -> dict:
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Phase 5 normalization + coverage into civic.db.")
     p.add_argument("--config", default="config/pilot.toml", type=Path)
-    p.add_argument("--out", default="reports/phase5", type=Path)
+    p.add_argument("--out", default=None, type=Path, help="reports dir (default: reports/phase5, or the scope's reports dir)")
+    scopes.add_scope_argument(p)
     return p
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    result = run(args.config, args.out)
+    scope = scopes.resolve_scope(args.scope) if args.scope else None
+    with scopes.activate(scope):
+        config = scope.config_path if scope else args.config
+        out = args.out or (scope.reports_dir / "phase5" if scope and not scope.inherit else Path("reports/phase5"))
+        result = run(config, out)
     print(json.dumps(result, ensure_ascii=False))
     return 0
 

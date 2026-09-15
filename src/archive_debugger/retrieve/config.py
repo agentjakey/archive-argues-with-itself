@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from archive_debugger import scopes
 from archive_debugger.ingest.db import ENV_DB_PATH, ENV_INDEX_PATH, env_path
 
 ENV_EMBEDDER = "CIVIC_EMBEDDER"
@@ -64,9 +65,16 @@ def load_retrieve_config(config_path: Path, *, embedder_override: Optional[str] 
         raw = tomllib.load(fh)
     idx = raw["index"]
     ret = raw.get("retrieve", {})
+    # Scope layer (additive): a non-inherit scope pins both data paths to its registry
+    # entry and ignores the CIVIC_* env. With no active scope, resolution is the original
+    # env-honoring behavior, byte-identical.
+    scope = scopes.active_scope()
+    scoped = scope is not None and not scope.inherit
+    db_path = scope.db_path if scoped else env_path(ENV_DB_PATH, idx["db_path"])
+    index_path = scope.index_path if scoped else env_path(ENV_INDEX_PATH, ret.get("index_path", "index/vectors.db"))
     return RetrieveConfig(
-        db_path=env_path(ENV_DB_PATH, idx["db_path"]),
-        index_path=env_path(ENV_INDEX_PATH, ret.get("index_path", "index/vectors.db")),
+        db_path=db_path,
+        index_path=index_path,
         embedder=embedder_override or os.environ.get(ENV_EMBEDDER) or ret.get("embedder", "fastembed"),
         embedding_model=idx.get("embedding_model", ""),
         embedding_dim=int(idx.get("embedding_dim", 384)),

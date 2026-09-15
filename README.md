@@ -195,9 +195,22 @@ the reports comes from one of these; none is typed in by hand.
 
 Issues are welcome, especially corpus gaps: a question the archive should answer and
 does not, a page that resolves to the wrong scan, or a date the metadata gets wrong.
-To add a second scope (another topic or jurisdiction), write a new `config/pilot.toml`
-(query, collections, window) and a new `data/manifest/`; the code does not change. Run
-the sizing audit first. The British Columbia sizing in
+To add a second scope (another topic or jurisdiction), write a new config (query,
+collections, window, and its own `[index].db_path` / `[retrieve].index_path` under an
+isolated data root), register it in [`config/scopes.toml`](config/scopes.toml) with its
+name and paths, and build it with one resumable command; the code does not change. The
+frozen public_health pilot is the default scope and stays byte-identical.
+
+```powershell
+python -m archive_debugger.build_scope --scope microlog --contact you@example.com
+```
+
+The builder runs harvest -> loader -> build -> normalize -> sections -> embed for the
+named scope, prints structured status only, and resumes on rerun. A scoped run uses only
+that scope's registry paths and cannot open another scope's databases; the `CIVIC_DB_PATH`
+/ `CIVIC_INDEX_PATH` env overrides apply to the default scope only. Every pipeline stage
+also takes `--scope <name>` on its own, and the server reads `CIVIC_SCOPE`. Run the sizing
+audit first. The British Columbia sizing in
 [`reports/bc_audit/bc_sizing.md`](reports/bc_audit/bc_sizing.md) shows what a scope
 that does not clear the item floor looks like. See [`CONTRIBUTING.md`](CONTRIBUTING.md)
 and [`SECURITY.md`](SECURITY.md).

@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional
 from urllib.parse import urlencode
 
+from archive_debugger import scopes
 from archive_debugger.harvest import discover, explore
 from archive_debugger.harvest.discover import ThrottleError
 
@@ -991,8 +992,9 @@ def run_integrity_pass(config_path: Path, out_dir: Path, *, contact: str) -> dic
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Phase 2 harvest for the public_health pilot.")
     p.add_argument("--config", default="config/pilot.toml", type=Path)
-    p.add_argument("--out", default="data/harvest", type=Path)
+    p.add_argument("--out", default=None, type=Path, help="harvest output dir (default: data/harvest, or the scope's harvest dir)")
     p.add_argument("--contact", default="")
+    scopes.add_scope_argument(p)
     p.add_argument("--download", action="store_true", help="download all chosen derivatives")
     p.add_argument("--download-sample", type=int, default=None, help="download only the first N")
     p.add_argument("--download-all", action="store_true", help="standalone: download all sources for items.jsonl")
@@ -1011,6 +1013,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         level=logging.INFO if args.verbose else logging.WARNING,
         format="%(levelname)s %(name)s: %(message)s",
     )
+    scope = scopes.resolve_scope(args.scope) if args.scope else None
+    with scopes.activate(scope):
+        return _run_main(args, scope)
+
+
+def _run_main(args, scope) -> int:
+    if scope is not None:
+        args.config = scope.config_path
+    if args.out is None:
+        args.out = scope.harvest_dir if scope is not None and not scope.inherit else Path("data/harvest")
     contact = args.contact or load_pilot(args.config).contact
     needs_network = not args.offline and (
         args.download or args.download_sample or args.download_all or args.integrity or True

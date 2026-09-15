@@ -11,6 +11,7 @@ from typing import Optional
 
 import sqlite_vec
 
+from archive_debugger import scopes
 from archive_debugger.retrieve.config import load_retrieve_config
 from archive_debugger.retrieve.embed import Embedder, make_embedder
 
@@ -56,6 +57,10 @@ def _flush(vec: sqlite3.Connection, embedder: Embedder, ids: list[str], txt: lis
 
 def build_index(civic_path: Path, vectors_path: Path, embedder: Embedder, *,
                 model_id: str = "", batch_size: int = 256, limit: Optional[int] = None) -> int:
+    # Fence: this stage opens both databases directly (not through db.connect), so guard
+    # both here. A no-op unless a fenced scope is active.
+    scopes.guard_path(civic_path)
+    scopes.guard_path(vectors_path)
     civ = sqlite3.connect(f"file:{civic_path}?mode=ro", uri=True)
     Path(vectors_path).parent.mkdir(parents=True, exist_ok=True)
     vec = open_vectors(str(vectors_path))
@@ -90,14 +95,18 @@ def main(argv: Optional[list[str]] = None) -> int:
     p = argparse.ArgumentParser(description="Build the dense vector index (laptop job).")
     p.add_argument("--config", default="config/pilot.toml", type=Path)
     p.add_argument("--limit", type=int, default=None, help="cap NEW vectors this run (batches)")
+    scopes.add_scope_argument(p)
     args = p.parse_args(argv)
-    cfg = load_retrieve_config(args.config)
-    embedder = make_embedder(cfg.embedder, cfg.embedding_model, cfg.embedding_dim)
-    wrote = build_index(cfg.db_path, cfg.index_path, embedder,
-                        model_id=cfg.embedding_model, batch_size=cfg.batch_size, limit=args.limit)
-    conn = sqlite3.connect(str(cfg.index_path))
-    total = conn.execute("SELECT COUNT(*) FROM passages_vec").fetchone()[0]
-    conn.close()
+    scope = scopes.resolve_scope(args.scope) if args.scope else None
+    with scopes.activate(scope):
+        config = scope.config_path if scope else args.config
+        cfg = load_retrieve_config(config)
+        embedder = make_embedder(cfg.embedder, cfg.embedding_model, cfg.embedding_dim)
+        wrote = build_index(cfg.db_path, cfg.index_path, embedder,
+                            model_id=cfg.embedding_model, batch_size=cfg.batch_size, limit=args.limit)
+        conn = sqlite3.connect(str(cfg.index_path))
+        total = conn.execute("SELECT COUNT(*) FROM passages_vec").fetchone()[0]
+        conn.close()
     print(f"indexed {wrote} new; {total} total vectors -> {cfg.index_path}")
     return 0
 

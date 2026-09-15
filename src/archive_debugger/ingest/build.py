@@ -20,6 +20,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+from archive_debugger import scopes
 from archive_debugger.ingest import db, ocr
 
 
@@ -187,11 +188,12 @@ def build_corpus(
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Parse cached OCR into pages/passages in civic.db.")
     p.add_argument("--config", default="config/pilot.toml", type=Path)
-    p.add_argument("--items", default="data/harvest/items.jsonl", type=Path)
-    p.add_argument("--cache-dir", default="raw", type=Path)
+    p.add_argument("--items", default=None, type=Path, help="items.jsonl (default: data/harvest/items.jsonl, or the scope's harvest dir)")
+    p.add_argument("--cache-dir", default=None, type=Path, help="OCR cache dir (default: raw, or the scope's cache_dir)")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--resume", action="store_true", help="skip items already parsed into pages")
     p.add_argument("--fresh", action="store_true", help="clear prior parse output before running")
+    scopes.add_scope_argument(p)
     return p
 
 
@@ -207,12 +209,17 @@ def _read_records(path: Path) -> list[dict]:
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
-    conn = db.init_db(db.resolve_db_path(args.config))
-    try:
-        records = _read_records(args.items)
-        stats = build_corpus(conn, records, args.cache_dir, limit=args.limit, resume=args.resume, fresh=args.fresh)
-    finally:
-        conn.close()
+    scope = scopes.resolve_scope(args.scope) if args.scope else None
+    with scopes.activate(scope):
+        config = scope.config_path if scope else args.config
+        items = args.items or (scope.items_path if scope and not scope.inherit else Path("data/harvest/items.jsonl"))
+        cache_dir = args.cache_dir or (scope.cache_dir if scope and not scope.inherit else Path("raw"))
+        conn = db.init_db(db.resolve_db_path(config))
+        try:
+            records = _read_records(items)
+            stats = build_corpus(conn, records, cache_dir, limit=args.limit, resume=args.resume, fresh=args.fresh)
+        finally:
+            conn.close()
     print(json.dumps(stats, ensure_ascii=False))
     return 0
 
