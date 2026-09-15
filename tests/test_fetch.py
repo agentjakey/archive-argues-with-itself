@@ -11,11 +11,12 @@ from __future__ import annotations
 import json
 import random
 import time
+import urllib.parse
 from pathlib import Path
 
 import pytest
 
-from archive_debugger.harvest import discover, fetch
+from archive_debugger.harvest import discover, explore, fetch
 
 META_FIXTURE = Path(__file__).parent / "fixtures" / "metadata_01ambientairsurvey00onta.json"
 
@@ -262,6 +263,56 @@ def test_harvest_manifest_dedupes_repeated_pages(tmp_path):
     )
     docs = fetch.harvest_manifest(cfg, tmp_path / "m.jsonl", ctx=ctx)
     assert len(docs) == 100  # unique only, not 3500
+
+
+def _scrape_responder(all_items, num_found, returned):
+    """Responder that answers the canary, the assert_healthy baseline, the page-1 size
+    probe (reports num_found), and the scrape cursor pages (yielding `returned` items)."""
+    def responder(url):
+        if discover.CANARY_TERM in url:
+            return {"response": {"numFound": 0, "docs": []}}
+        if "/services/search/v1/scrape" in url:
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+            cursor = int(q.get("cursor", ["0"])[0])
+            count = int(q["count"][0])
+            page = all_items[cursor:min(cursor + count, returned)]
+            out = {"items": page, "total": num_found}
+            if cursor + count < returned:
+                out["cursor"] = str(cursor + count)   # no cursor past `returned` -> crawl stops
+            return out
+        if "rows=0" in url:
+            return {"response": {"numFound": 200000, "docs": []}}  # assert_healthy baseline (in-range)
+        return {"response": {"numFound": num_found, "docs": all_items[:100]}}  # page-1 size probe
+    return responder
+
+
+def _scrape_cfg(tmp_path):
+    return fetch.PilotConfig(
+        topic="microlog_ph", query="health", mediatype="texts", collections=["microlog"],
+        fields="identifier,title,year", manifest_rows=1000, request_delay=0.0,
+        cache_dir=tmp_path, contact="x@example.com", usable_floor=2500,
+    )
+
+
+def test_harvest_manifest_uses_scrape_when_large(tmp_path):
+    total = 12000  # > ADVANCEDSEARCH_MAX: must divert to the scrape path, no 10k truncation
+    all_items = [{"identifier": f"id{i}", "title": f"t{i}", "year": 1990} for i in range(total)]
+    ctx, _ = make_ctx(tmp_path, _scrape_responder(all_items, num_found=total, returned=total))
+    docs = fetch.harvest_manifest(_scrape_cfg(tmp_path), tmp_path / "m.jsonl", ctx=ctx)
+    assert len(docs) == total
+    assert docs[0]["identifier"] == "id0"
+    assert docs[-1]["identifier"] == f"id{total - 1}"
+
+
+def test_scrape_completeness_guard_fires_on_truncation(tmp_path):
+    # numFound says 12000 but the scrape yields only 8000 (< 95% floor): the guard must
+    # fail the build rather than write a partial corpus.
+    num_found = 12000
+    returned = 8000
+    all_items = [{"identifier": f"id{i}", "title": "t", "year": 1990} for i in range(num_found)]
+    ctx, _ = make_ctx(tmp_path, _scrape_responder(all_items, num_found=num_found, returned=returned))
+    with pytest.raises(explore.ScrapeError, match="incomplete"):
+        fetch.harvest_manifest(_scrape_cfg(tmp_path), tmp_path / "m.jsonl", ctx=ctx)
 
 
 def test_harvest_manifest_aborts_on_throttle(tmp_path):
