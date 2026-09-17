@@ -315,6 +315,56 @@ def test_scrape_completeness_guard_fires_on_truncation(tmp_path):
         fetch.harvest_manifest(_scrape_cfg(tmp_path), tmp_path / "m.jsonl", ctx=ctx)
 
 
+def test_dry_run_bounds_scrape_manifest_and_skips_guard(tmp_path):
+    # numFound 12000 (> 10k, scrape path). A dry run of 25 must fetch ~25, NOT page the
+    # whole scope, and must NOT fire the completeness guard (25 is far below the 95% floor).
+    total = 12000
+    all_items = [{"identifier": f"id{i}", "title": f"t{i}", "year": 1990} for i in range(total)]
+    ctx, calls = make_ctx(tmp_path, _scrape_responder(all_items, num_found=total, returned=total))
+    docs = fetch.harvest_manifest(_scrape_cfg(tmp_path), tmp_path / "m.jsonl", ctx=ctx, manifest_limit=25)
+    assert len(docs) == 25
+    assert docs[0]["identifier"] == "id0"
+    # canary + page-1 size probe + exactly one scrape page (count=25) = 3 requests; the full
+    # crawl would take 12 scrape pages. Proves it did not page the full manifest.
+    assert calls["n"] <= 4
+
+
+def test_dry_run_bounds_advancedsearch_manifest(tmp_path):
+    # Small scope (advancedsearch path). A dry run of 25 fetches only the first page's N.
+    num_found = 250
+    all_docs = [{"identifier": f"id{i}", "title": f"t{i}", "year": 1970 + (i % 40)} for i in range(num_found)]
+
+    def responder(url):
+        if discover.CANARY_TERM in url:
+            return {"response": {"numFound": 0, "docs": []}}
+        if "rows=0" in url:
+            return {"response": {"numFound": 105289, "docs": []}}
+        rows = int(url.split("rows=")[1].split("&")[0])
+        page = int(url.split("page=")[1].split("&")[0])
+        start = (page - 1) * rows
+        return {"response": {"numFound": num_found, "docs": all_docs[start:start + rows]}}
+
+    ctx, _ = make_ctx(tmp_path, responder)
+    cfg = fetch.PilotConfig(
+        topic="t", query="health", mediatype="texts", collections=["governmentpublications"],
+        fields="identifier,title,year", manifest_rows=100, request_delay=0.0, cache_dir=tmp_path,
+        contact="x@example.com", usable_floor=2500,
+    )
+    docs = fetch.harvest_manifest(cfg, tmp_path / "m.jsonl", ctx=ctx, manifest_limit=25)
+    assert len(docs) == 25
+    assert docs[0]["identifier"] == "id0"
+
+
+def test_full_scrape_path_unchanged_by_dry_run_param(tmp_path):
+    # manifest_limit=None (the default / full build) still pages the whole scope and keeps
+    # the completeness guard: a truncated crawl fails.
+    num_found, returned = 12000, 8000
+    all_items = [{"identifier": f"id{i}", "title": "t", "year": 1990} for i in range(num_found)]
+    ctx, _ = make_ctx(tmp_path, _scrape_responder(all_items, num_found=num_found, returned=returned))
+    with pytest.raises(explore.ScrapeError, match="incomplete"):
+        fetch.harvest_manifest(_scrape_cfg(tmp_path), tmp_path / "m.jsonl", ctx=ctx)  # no manifest_limit
+
+
 def test_harvest_manifest_aborts_on_throttle(tmp_path):
     def responder(url):
         # Canary returns a huge count => throttled/canned.

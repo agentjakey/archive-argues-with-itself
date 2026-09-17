@@ -26,6 +26,7 @@ and embed skips passages already vectorized.
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import time
 from pathlib import Path
@@ -62,7 +63,9 @@ def _selected_stages(args) -> list[str]:
 
 
 def run_harvest(scope: scopes.Scope, *, contact: str, dry: Optional[int], offline: bool) -> None:
-    _log("harvest", "START", f"out={scope.harvest_dir} cache={scope.cache_dir} offline={offline}")
+    _log("harvest", "START",
+         f"out={scope.harvest_dir} cache={scope.cache_dir} offline={offline}"
+         + (f" manifest_cap={dry}" if dry is not None else ""))
     summary = fetch.run(
         scope.config_path,
         scope.harvest_dir,
@@ -70,6 +73,7 @@ def run_harvest(scope: scopes.Scope, *, contact: str, dry: Optional[int], offlin
         do_download=(dry is None and not offline),
         download_sample=(dry if (dry is not None and not offline) else None),
         offline=offline,
+        manifest_limit=dry,   # dry-run: bound the manifest to N; None = full manifest + completeness guard
     )
     _log("harvest", "OK",
          f"manifest={summary.get('manifest_count')} usable={summary.get('usable_count')} "
@@ -199,8 +203,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _enable_harvest_progress() -> None:
+    """Surface the harvest/manifest per-page progress logs on the CLI so a crawl is never
+    silent. Structured status only; no document content is logged. Idempotent."""
+    hlog = logging.getLogger("harvest")
+    if any(getattr(h, "_build_scope", False) for h in hlog.handlers):
+        return
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("[harvest] %(message)s"))
+    handler._build_scope = True   # type: ignore[attr-defined]
+    hlog.addHandler(handler)
+    hlog.setLevel(logging.INFO)
+    hlog.propagate = False
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    _enable_harvest_progress()
     try:
         return build(args.scope, contact=args.contact, dry=args.dry, offline=args.offline,
                      from_stage=args.from_stage, only=args.only, skip_embed=args.skip_embed,

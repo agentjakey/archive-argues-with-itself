@@ -163,6 +163,18 @@ def test_fetch_retries_on_503_then_succeeds():
     assert slept and slept[0] >= 1.0  # honored Retry-After
 
 
+def test_fetch_hung_request_raises_clear_message():
+    # A single hung request (transport raises, e.g. requests Timeout) must fail loudly
+    # with a clear message, not block forever or surface a raw traceback.
+    def transport(url, headers, timeout):
+        raise TimeoutError("read timed out")
+
+    with pytest.raises(explore.ScrapeError, match="throttling or unreachable"):
+        explore.fetch_with_retries(
+            "http://x", {}, transport=transport, sleeper=lambda s: None, rng=random.Random(0),
+        )
+
+
 def test_fetch_raises_on_persistent_503():
     def transport(url, headers, timeout):
         return explore.HttpResponse(503, {}, "busy")

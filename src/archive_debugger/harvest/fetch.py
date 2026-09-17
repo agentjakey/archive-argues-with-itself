@@ -113,6 +113,7 @@ MANIFEST_SORT = "identifier asc"
 # API (cursor pagination, no page/sort), which has no such cap.
 ADVANCEDSEARCH_MAX = 10_000
 SCRAPE_COUNT = 1000   # scrape page size; larger than advancedsearch rows -> fewer round trips
+SCRAPE_MIN_COUNT = 100   # IA scrape API rejects count < 100 (RangeException)
 # A scrape harvest must reach this fraction of the authoritative advancedsearch numFound.
 # A lower yield is a throttled or truncated crawl (e.g. a silent 10k cut) and must fail the
 # build, not ship a partial corpus. The 5% slack covers items that legitimately vanish
@@ -127,16 +128,18 @@ def manifest_page_url(query: str, *, rows: int, page: int, fields: str, sort: st
     return f"{discover.ADVANCEDSEARCH_URL}?{urlencode(params)}"
 
 
-def _advancedsearch_manifest(query: str, cfg: PilotConfig, *, ctx: dict) -> list[dict]:
+def _advancedsearch_manifest(query: str, cfg: PilotConfig, *, ctx: dict, limit: Optional[int] = None) -> list[dict]:
     """Page a scope of at most ADVANCEDSEARCH_MAX results via advancedsearch.php. This
     self-terminates at numFound, so it needs no completeness guard. Page 1 is re-read
-    from cache (no extra network)."""
+    from cache (no extra network). A dry-run `limit` fetches only the first N records
+    (page-1 rows capped to N) and stops, so a smoke test never pages the whole scope."""
     docs: list[dict] = []
     seen: set = set()
     page = 1
     num_found = None
+    rows = min(cfg.manifest_rows, limit) if limit else cfg.manifest_rows
     while True:
-        url = manifest_page_url(query, rows=cfg.manifest_rows, page=page, fields=cfg.fields)
+        url = manifest_page_url(query, rows=rows, page=page, fields=cfg.fields)
         data = discover.cached_get_json(url, **ctx)
         response = data.get("response", {})
         if num_found is None:
@@ -152,20 +155,26 @@ def _advancedsearch_manifest(query: str, cfg: PilotConfig, *, ctx: dict) -> list
         for d in new_docs:
             seen.add(d.get("identifier"))
         docs.extend(new_docs)
+        log.info("advancedsearch page %s: %s items so far (numFound %s)", page, len(docs), num_found)
         page += 1
+        if limit is not None and len(docs) >= limit:
+            docs = docs[:limit]
+            break
         if len(docs) >= num_found:
             break
     return docs
 
 
-def _scrape_manifest(query: str, cfg: PilotConfig, *, ctx: dict, max_items: int = 0) -> tuple[list[dict], dict]:
+def _scrape_manifest(query: str, cfg: PilotConfig, *, ctx: dict, max_items: int = 0,
+                     count: int = SCRAPE_COUNT) -> tuple[list[dict], dict]:
     """Page a scope of any size via the IA Scraping API (cursor pagination, no page/
     sort, so no 10k deep-paging cap). Reuses explore.scrape_all: same on-disk cache,
     backoff/jitter, Retry-After and 429/503 handling, and contact User-Agent. Returns
     (docs, meta) where meta carries the scrape-reported total and page count. max_items
-    bounds the crawl so a canned/throttled baseline cannot be paged unbounded."""
+    bounds the crawl so a canned/throttled baseline cannot be paged unbounded; count is
+    the scrape page size (a dry run sets both to N so a single page returns ~N and stops)."""
     items, meta = explore.scrape_all(
-        query, fields=cfg.fields, count=SCRAPE_COUNT,
+        query, fields=cfg.fields, count=count,
         cache_dir=ctx["cache_dir"], transport=ctx["transport"], sleeper=ctx["sleeper"],
         rng=ctx["rng"], headers=ctx["headers"], max_items=max_items,
         page_delay=ctx["page_delay"], offline=ctx["offline"],
@@ -183,10 +192,16 @@ def _scrape_manifest(query: str, cfg: PilotConfig, *, ctx: dict, max_items: int 
     return docs, meta
 
 
-def harvest_manifest(cfg: PilotConfig, out_path: Path, *, ctx: dict) -> list[dict]:
+def harvest_manifest(cfg: PilotConfig, out_path: Path, *, ctx: dict,
+                     manifest_limit: Optional[int] = None) -> list[dict]:
     """Page the full corpus into manifest.jsonl. Small scopes (<= ADVANCEDSEARCH_MAX)
     use advancedsearch.php; larger scopes use the scrape API, which has no 10k
-    deep-paging cap. A fully cached rerun makes zero network calls."""
+    deep-paging cap. A fully cached rerun makes zero network calls.
+
+    Dry run (`manifest_limit` set): the manifest is bounded to the first N records and
+    the scrape completeness guard is SKIPPED. A dry run is a chaining smoke test, not a
+    completeness check, so it must not page the full scope (e.g. microlog's ~13.5k). The
+    full path (manifest_limit is None) is unchanged: full manifest + completeness guard."""
     query = corpus_query(cfg)
     # Guard: confirm the search surface is honoring the query before trusting it.
     discover.assert_healthy(collection_clause(cfg.collections), ctx=ctx)
@@ -194,22 +209,31 @@ def harvest_manifest(cfg: PilotConfig, out_path: Path, *, ctx: dict) -> list[dic
     # pick the path.
     first_url = manifest_page_url(query, rows=cfg.manifest_rows, page=1, fields=cfg.fields)
     num_found = discover.cached_get_json(first_url, **ctx).get("response", {}).get("numFound", 0)
+    dry = manifest_limit is not None
     if num_found > ADVANCEDSEARCH_MAX:
         log.info("scope numFound %s > advancedsearch cap %s; using scrape API",
                  num_found, ADVANCEDSEARCH_MAX)
-        docs, meta = _scrape_manifest(query, cfg, ctx=ctx, max_items=num_found + SCRAPE_COUNT)
-        # Completeness guard: a throttled or truncated scrape crawl must never pass
-        # silently as a full corpus. numFound is the authoritative advancedsearch total.
-        floor = int(num_found * SCRAPE_COMPLETENESS_MIN)
-        if len(docs) < floor:
-            raise explore.ScrapeError(
-                f"scrape harvest incomplete: {len(docs)} items of {num_found} numFound "
-                f"(scrape total {meta.get('total')}); below the {SCRAPE_COMPLETENESS_MIN:.0%} "
-                f"completeness floor of {floor}. Likely a throttled or truncated crawl; "
-                "refusing a partial corpus."
-            )
+        if dry:
+            log.info("dry-run: bounding manifest to first %s records; completeness guard SKIPPED", manifest_limit)
+            # The scrape API rejects count < 100, so fetch one min-size page and cap to N.
+            docs, meta = _scrape_manifest(query, cfg, ctx=ctx, max_items=manifest_limit,
+                                          count=max(manifest_limit, SCRAPE_MIN_COUNT))
+        else:
+            docs, meta = _scrape_manifest(query, cfg, ctx=ctx, max_items=num_found + SCRAPE_COUNT)
+            # Completeness guard: a throttled or truncated scrape crawl must never pass
+            # silently as a full corpus. numFound is the authoritative advancedsearch total.
+            floor = int(num_found * SCRAPE_COMPLETENESS_MIN)
+            if len(docs) < floor:
+                raise explore.ScrapeError(
+                    f"scrape harvest incomplete: {len(docs)} items of {num_found} numFound "
+                    f"(scrape total {meta.get('total')}); below the {SCRAPE_COMPLETENESS_MIN:.0%} "
+                    f"completeness floor of {floor}. Likely a throttled or truncated crawl; "
+                    "refusing a partial corpus."
+                )
     else:
-        docs = _advancedsearch_manifest(query, cfg, ctx=ctx)
+        if dry:
+            log.info("dry-run: bounding manifest to first %s records (advancedsearch page 1)", manifest_limit)
+        docs = _advancedsearch_manifest(query, cfg, ctx=ctx, limit=manifest_limit)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as fh:
         for doc in docs:
@@ -922,6 +946,7 @@ def run(
     download_sample: Optional[int] = None,
     enrich_limit: Optional[int] = None,
     offline: bool = False,
+    manifest_limit: Optional[int] = None,
 ) -> dict:
     cfg = load_pilot(config_path)
     if contact:
@@ -932,7 +957,7 @@ def run(
     manifest_path = out_dir / "manifest.jsonl"
     items_path = out_dir / "items.jsonl"
 
-    docs = harvest_manifest(cfg, manifest_path, ctx=ctx)
+    docs = harvest_manifest(cfg, manifest_path, ctx=ctx, manifest_limit=manifest_limit)
     records, skipped = enrich(docs, items_path, ctx=ctx, limit=enrich_limit)
     summary = summarize(records, skipped, len(docs), cfg.usable_floor)
     write_summary(out_dir, summary)

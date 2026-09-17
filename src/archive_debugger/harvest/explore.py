@@ -230,7 +230,16 @@ def fetch_with_retries(
     Retry-After when present. Returns parsed JSON. Raises ScrapeError otherwise."""
     attempt = 0
     while True:
-        resp = transport(url, headers, timeout)
+        try:
+            resp = transport(url, headers, timeout)
+        except ScrapeError:
+            raise
+        except Exception as exc:  # timeout, connection reset, DNS: cap a single hung request, fail loud
+            raise ScrapeError(
+                f"network request to {url} failed after {timeout:.0f}s "
+                f"({type(exc).__name__}: {exc}); the archive may be throttling or unreachable. "
+                "Retry later; the manifest is resumable from the on-disk cache."
+            ) from exc
         if resp.status == 200:
             data = json.loads(resp.text)
             if isinstance(data, dict) and data.get("error"):
@@ -291,6 +300,8 @@ def scrape_all(
             total = data.get("total")
         items.extend(page_items)
         pages += 1
+        log.info("scrape page %s: +%s items (%s total%s)", pages, len(page_items), len(items),
+                 f" of {total}" if total else "")
         cursor = data.get("cursor")
         if not cursor or not page_items:
             break
