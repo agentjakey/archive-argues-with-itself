@@ -25,6 +25,8 @@ import { useKiosk, useOffline } from "./hooks/useKiosk";
 import { About } from "./components/pages/About";
 import { Gaps } from "./components/pages/Gaps";
 import { HowItWorks } from "./components/pages/HowItWorks";
+import { SourcesPage } from "./components/pages/Sources";
+import { SourceLine } from "./components/SourceLine";
 import { Stories } from "./components/Stories";
 import { useAttractLoop } from "./hooks/useAttractLoop";
 import { useScopes } from "./hooks/useScopes";
@@ -58,6 +60,8 @@ export default function App() {
   const [flaggedAck, setFlaggedAck] = useState(false);   // interstitial acknowledged for the current result
   const stories = useStories();
   const scopesInfo = useScopes();
+  const activeScopeInfo =
+    scopesInfo?.scopes.find((s) => s.name === (initial.current.scope ?? scopesInfo.default)) ?? null;
   const coverage = useCoverage(asked, askedFilters);
 
   const goView = useCallback(
@@ -261,6 +265,7 @@ export default function App() {
       <EntryAdvisory />
       {view === "how" && <HowItWorks />}
       {view === "gaps" && <Gaps />}
+      {view === "sources" && <SourcesPage scopes={scopesInfo?.scopes ?? null} />}
       {view === "about" && <About />}
       {view === null && (
       <>
@@ -309,6 +314,7 @@ export default function App() {
         ) : (
         <main>
           {flagged && <ContextualNote flagged={flagged} />}
+          {activeScopeInfo && <SourceLine scope={activeScopeInfo} />}
           {response.degraded ? (
             <>
               <LimitedModeCard answer={response.answer} degraded={response.degraded} />
@@ -343,6 +349,7 @@ export default function App() {
             matched={matched}
             onOpen={setDrawer}
             onPin={togglePin}
+            source={activeScopeInfo}
           />
           {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} />}
         </main>
@@ -352,7 +359,7 @@ export default function App() {
       )}
 
       <Footer onAbout={() => goView("about")} />
-      <PageDrawer row={drawer} onClose={() => setDrawer(null)} />
+      <PageDrawer row={drawer} onClose={() => setDrawer(null)} source={activeScopeInfo} />
     </div>
   );
 }

@@ -109,6 +109,7 @@ export interface EvidenceRow {
   later_years: number[] | null;     // years in the text later than the item year + 1
   offline?: boolean;                // page images come from the offline pack (API path), not archive.org
   ocr_quality?: number | null;      // 0..1 OCR confidence for the passage; a low value means shaky text
+  date_method?: string | null;      // how the item's date was resolved: exact | title_extracted | unknown
 }
 
 export interface Story {
@@ -193,6 +194,31 @@ export interface CoverageResponse {
   by_jurisdiction: JurisdictionCoverage[];
 }
 
+// Real per-scope composition for the sources view, computed live from the scope's own DBs.
+export interface OcrDistribution {
+  high: number;
+  medium: number;
+  low: number;
+}
+
+export interface JurisdictionShare {
+  name: string;
+  items: number;
+  share: number;   // 0..1 of items
+}
+
+export interface Composition {
+  passages: number;
+  dated_span: YearWindow;   // true MIN/MAX year of dated items
+  window: YearWindow;       // config binning window
+  undated: { items: number; item_share: number; passages: number; passage_share: number };
+  ocr: OcrDistribution;     // passage-weighted bucket counts
+  jurisdictions: JurisdictionShare[];
+  jurisdiction_unknown_share: number;
+  jurisdiction_is_floor: boolean;   // issuer-derived proxy; not full provincial coverage
+  date_method: Record<string, number>;   // exact | title_extracted | unknown -> item count
+}
+
 // One served corpus for the scope switcher, from GET /scopes. Mirrors api/app.py scope_facts.
 export interface ScopeInfo {
   name: string;
@@ -203,6 +229,7 @@ export interface ScopeInfo {
   collections: string[];
   item_count: number;
   window: YearWindow;
+  composition?: Composition;
 }
 
 export interface ScopesResponse {

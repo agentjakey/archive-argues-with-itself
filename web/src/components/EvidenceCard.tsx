@@ -1,9 +1,9 @@
 import { cardId } from "../lib/citations";
 import { highlight } from "../lib/highlight";
-import { shortTitle, yearLabel } from "../lib/format";
+import { dateMethodDetail, dateMethodLabel, shortTitle, yearLabel } from "../lib/format";
 import { ocrUncertain } from "../lib/sensitivity";
 import { OcrBadge } from "./OcrBadge";
-import type { EvidenceRow } from "../types";
+import type { EvidenceRow, ScopeInfo } from "../types";
 
 interface Props {
   row: EvidenceRow;
@@ -11,11 +11,12 @@ interface Props {
   pinned: boolean;
   onOpen: (row: EvidenceRow) => void;
   onPin: (row: EvidenceRow) => void;
+  source?: ScopeInfo | null;   // the active corpus, for the per-citation source collection
 }
 
 /** Rules, not boxes: a bottom hairline, a 120px scan with a soft shadow, small-caps
  *  tags, Cited as accent text with a short underline, actions as text links. */
-export function EvidenceCard({ row, salientTerms, pinned, onOpen, onPin }: Props) {
+export function EvidenceCard({ row, salientTerms, pinned, onOpen, onPin, source }: Props) {
   const segments = highlight(row.snippet, salientTerms);
   return (
     <article id={cardId(row.passage_id)} className="evidence">
@@ -35,6 +36,11 @@ export function EvidenceCard({ row, salientTerms, pinned, onOpen, onPin }: Props
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
           <span className="font-semibold">{yearLabel(row.year)}</span>
+          {row.year != null && (
+            <span className="tag" title={dateMethodDetail(row)}>
+              {dateMethodLabel(row)}
+            </span>
+          )}
           <span className="tag">{row.jurisdiction ?? "unknown"}</span>
           <span className="tag">{(row.doc_type ?? "unknown").replace(/_/g, " ")}</span>
           {row.bm25_rank != null && <span className="tag">lexical</span>}
@@ -47,6 +53,7 @@ export function EvidenceCard({ row, salientTerms, pinned, onOpen, onPin }: Props
         </div>
         <h4 className="mt-1 font-serif text-lg leading-snug">{shortTitle(row.title, 96)}</h4>
         <p className="font-mono text-xs text-muted">
+          {source?.collection ? `${source.collection} / ` : ""}
           {row.item_id} leaf {row.leaf_index}
           {row.printed_page ? `, p. ${row.printed_page}` : ""}
         </p>

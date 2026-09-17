@@ -1,18 +1,19 @@
 import { useEffect, useRef } from "react";
 import { useEscape } from "../hooks/useKeyboard";
-import { chipLabel, shortTitle } from "../lib/format";
+import { chipLabel, dateMethodDetail, shortTitle } from "../lib/format";
 import { ocrUncertain } from "../lib/sensitivity";
 import { OcrBadge } from "./OcrBadge";
-import type { EvidenceRow } from "../types";
+import type { EvidenceRow, ScopeInfo } from "../types";
 
 interface Props {
   row: EvidenceRow | null;
   onClose: () => void;
+  source?: ScopeInfo | null;   // the active corpus, for the per-citation source collection
 }
 
 /** Right-side overlay drawer: the page image, the archive.org viewer with a plain
  *  fallback, and an outbound link. Escape or the backdrop closes; focus returns. */
-export function PageDrawer({ row, onClose }: Props) {
+export function PageDrawer({ row, onClose, source }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const opener = useRef<Element | null>(null);
   useEscape(row !== null, onClose);
@@ -41,6 +42,20 @@ export function PageDrawer({ row, onClose }: Props) {
             <p className="font-mono text-xs text-muted">
               {row.item_id} leaf {row.leaf_index}
             </p>
+            <p className="mt-1 text-sm text-muted">{dateMethodDetail(row)}</p>
+            {source?.collection && (
+              <p className="text-sm text-muted">
+                From the{" "}
+                {source.collection_url ? (
+                  <a className="linkish" href={source.collection_url} target="_blank" rel="noopener noreferrer">
+                    {source.collection}
+                  </a>
+                ) : (
+                  source.collection
+                )}{" "}
+                collection on archive.org.
+              </p>
+            )}
             {ocrUncertain(row.ocr_quality) && (
               <p className="mt-1">
                 <OcrBadge />

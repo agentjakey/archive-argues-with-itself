@@ -263,6 +263,78 @@ def scope_facts(name: str, config_path, corpus: dict) -> dict:
     }
 
 
+_OCR_BUCKET = ("CASE WHEN CAST(p.ocr_quality AS REAL) >= 0.66 THEN 'high' "
+               "WHEN CAST(p.ocr_quality AS REAL) >= 0.33 THEN 'medium' ELSE 'low' END")
+
+
+def _ocr_distribution(conn) -> dict:
+    """Passage-weighted OCR-quality buckets (high >= 0.66 / medium >= 0.33 / low), the same
+    proxy the retriever down-weights by. Read-only aggregate over the scope's own passages."""
+    out = {"high": 0, "medium": 0, "low": 0}
+    for bucket, n in conn.execute(f"SELECT {_OCR_BUCKET} b, COUNT(*) FROM passages p GROUP BY b"):
+        out[bucket] = n
+    return out
+
+
+def _jurisdiction_distribution(conn, items_total: int) -> tuple[list, float]:
+    """Items per normalized jurisdiction, and the unknown share. The jurisdiction is an
+    issuer-derived PROXY (a floor), not full provincial coverage; the caller flags it so."""
+    rows, unknown = [], 0
+    for j, n in conn.execute(
+        "SELECT COALESCE(jurisdiction_norm, 'unknown') j, COUNT(*) c FROM items GROUP BY j ORDER BY c DESC"):
+        rows.append({"name": j, "items": n, "share": round(n / items_total, 4) if items_total else 0.0})
+        if j == "unknown":
+            unknown = n
+    return rows, (round(unknown / items_total, 4) if items_total else 0.0)
+
+
+def _date_method_distribution(conn) -> dict:
+    """Item counts by date_method: exact (catalog metadata), title_extracted (from the
+    document's own title), unknown (undated). Nothing here is inferred/estimated."""
+    return {m: n for m, n in conn.execute(
+        "SELECT COALESCE(date_method, 'unknown') m, COUNT(*) c FROM items GROUP BY m")}
+
+
+def scope_composition(conn, corpus: dict) -> dict:
+    """Real per-scope composition for the sources view, computed live from the scope's own
+    databases (never hardcoded): passage count, true dated span, undated share, OCR-quality
+    distribution, the jurisdiction proxy (a floor), and how dates were resolved."""
+    items = corpus["items"]
+    undated_items = conn.execute("SELECT COUNT(*) FROM items WHERE dated = 0 OR dated IS NULL").fetchone()[0]
+    juris, unknown_share = _jurisdiction_distribution(conn, items)
+    return {
+        "passages": corpus["passages"],
+        "dated_span": corpus["window"],       # true MIN/MAX year of dated items
+        "window": corpus["pilot_window"],     # config binning window
+        "undated": {
+            "items": undated_items,
+            "item_share": round(undated_items / items, 4) if items else 0.0,
+            "passages": corpus["passages_undated"],
+            "passage_share": corpus["undated_share"],
+        },
+        "ocr": _ocr_distribution(conn),
+        "jurisdictions": juris,
+        "jurisdiction_unknown_share": unknown_share,
+        "jurisdiction_is_floor": unknown_share >= 0.20,
+        "date_method": _date_method_distribution(conn),
+    }
+
+
+def _attach_date_method(conn, rows) -> None:
+    """Serve-time provenance: label each evidence row's date source from items.date_method
+    (exact = catalog metadata, title_extracted = the document's own title, unknown = undated).
+    Computed on serve and never stored, so it covers cached answers too, exactly like the
+    offline-pack image paths and the flag. Retrieval (search.py) is untouched."""
+    ids = {r["item_id"] for r in rows if r.get("item_id")}
+    if not ids:
+        return
+    marks = ",".join("?" * len(ids))
+    dm = {i: m for i, m in conn.execute(
+        f"SELECT item_id, date_method FROM items WHERE item_id IN ({marks})", list(ids))}
+    for r in rows:
+        r["date_method"] = dm.get(r.get("item_id"))
+
+
 class Bundle:
     """Everything one served scope needs, isolated per scope: its own Retriever (read-only
     connections to only its own databases), lock, answer cache, coverage cache, generation
@@ -339,9 +411,11 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             pilot_window = _pilot_window(cfg_path)
             sha = retrieval_fingerprint(r.cfg)
             corpus = corpus_facts(r.conn, pilot_window)
+            facts = scope_facts(name, cfg_path, corpus)
+            facts["composition"] = scope_composition(r.conn, corpus)   # real numbers for the sources view
         return Bundle(name=name, retriever=r, gcfg=gcfg, pilot_window=pilot_window,
                       cache=AnswerCache(cache_p), retrieval_sha256=sha, corpus=corpus,
-                      facts=scope_facts(name, cfg_path, corpus), stories=stories_list,
+                      facts=facts, stories=stories_list,
                       seed_path=seed_p, pages_dir=pages_dir, provider=provider, llm=llm_obj,
                       own_retriever=retr is None)
 
@@ -430,6 +504,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                    "evidence": evidence_rows(pool, [], {h["passage_id"] for h in hits}, b.pages_dir),
                    "degraded": {"reason": reason, "live_url": PUBLIC_URL}}
             out["answer"]["cached"] = None
+            with b.lock:
+                _attach_date_method(r.conn, out["evidence"])
             out["flagged"] = flags.detect(out["evidence"])
             return out
 
@@ -448,6 +524,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     if image:
                         row["page_image"] = image
                     row["offline"] = bool(thumb or image)
+                with b.lock:
+                    _attach_date_method(r.conn, served["evidence"])
                 served["flagged"] = flags.detect(served["evidence"])   # on serve, from stored evidence; not cached
                 return served
 
@@ -477,8 +555,10 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
 
         result = {"answer": ans.to_dict(),
                   "evidence": evidence_rows(pool, ans.verified_citations, {h["passage_id"] for h in hits}, b.pages_dir)}
-        b.cache.put(key, result)   # flagged is computed on serve below, never stored (like cached=)
+        b.cache.put(key, result)   # flagged + date_method are computed on serve below, never stored (like cached=)
         result["answer"]["cached"] = None
+        with b.lock:
+            _attach_date_method(r.conn, result["evidence"])
         result["flagged"] = flags.detect(result["evidence"])
         return result
 
@@ -524,6 +604,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     rows = evidence_rows(r.lookup(s["pins"]), [], set(), b.pages_dir)
                 except LookupError as exc:
                     raise HTTPException(status_code=500, detail=f"story {s['id']}: {exc}") from exc
+                _attach_date_method(r.conn, rows)
                 by_id = {row["passage_id"]: row for row in rows}
                 # The two pins are the shown record for this story, so they are the flagging
                 # basis; mark copies in_prompt for detection only, leaving the returned rows
@@ -548,6 +629,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         try:
             with b.lock:
                 rows = evidence_rows(b.retriever.lookup(ids), [], set(), b.pages_dir)
+                _attach_date_method(b.retriever.conn, rows)
         except LookupError:
             return {"flagged": None}   # unknown id -> safe empty, never a raw error
         return {"flagged": flags.detect([{**row, "in_prompt": True} for row in rows])}

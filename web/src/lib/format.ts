@@ -59,3 +59,36 @@ export function windowLabel(c: Pick<CorpusFacts, "window">): string {
   if (min_year == null || max_year == null) return "undated only";
   return `${min_year} to ${max_year}`;
 }
+
+/** Honest short label for how an item's date was resolved. exact = catalogue metadata,
+ *  title_extracted = the document's own title (both recorded, not inferred); undated when there
+ *  is no date. "estimated" is supported for completeness but no scope contains estimated dates. */
+export function dateMethodLabel(row: Pick<EvidenceRow, "year" | "date_method">): string {
+  if (row.year == null || row.date_method === "unknown") return "undated";
+  switch (row.date_method) {
+    case "exact":
+      return "date from metadata";
+    case "title_extracted":
+      return "date from the title";
+    case "estimated":
+      return "estimated date";
+    default:
+      return "dated";
+  }
+}
+
+/** The one-line explanation shown on hover and in the page drawer. */
+export function dateMethodDetail(row: Pick<EvidenceRow, "year" | "date_method">): string {
+  if (row.year == null || row.date_method === "unknown")
+    return "This item carries no date in the record; it is shown as undated.";
+  switch (row.date_method) {
+    case "exact":
+      return `Dated ${row.year}, from the catalogue metadata (recorded).`;
+    case "title_extracted":
+      return `Dated ${row.year}, read from the document's own title (recorded, not inferred).`;
+    case "estimated":
+      return `Estimated ${row.year} (inferred, not recorded).`;
+    default:
+      return `Dated ${row.year}.`;
+  }
+}

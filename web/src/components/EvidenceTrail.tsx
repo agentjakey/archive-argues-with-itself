@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { groupByDecade } from "../lib/format";
-import type { EvidenceRow } from "../types";
+import type { EvidenceRow, ScopeInfo } from "../types";
 import { DecadeTimeline } from "./DecadeTimeline";
 import { EvidenceCard } from "./EvidenceCard";
 
@@ -12,13 +12,14 @@ interface Props {
   matched: Record<string, number> | null;   // corpus passages matching the question's terms, by decade
   onOpen: (row: EvidenceRow) => void;
   onPin: (row: EvidenceRow) => void;
+  source?: ScopeInfo | null;   // the active corpus, for per-citation source collection
 }
 
 const laneId = (key: string) => `lane-${key.replace(/[^a-z0-9]/gi, "-")}`;
 
 /** Vertical timeline grouped by decade; fixed lanes always render (empty ones as
  *  one muted line) so absence is visible; the undated lane is always last. */
-export function EvidenceTrail({ rows, salientTerms, pinned, heading, matched, onOpen, onPin }: Props) {
+export function EvidenceTrail({ rows, salientTerms, pinned, heading, matched, onOpen, onPin, source }: Props) {
   const lanes = groupByDecade(rows);
   const [active, setActive] = useState<string | null>(null);
   const jump = useCallback((key: string) => {
@@ -60,6 +61,7 @@ export function EvidenceTrail({ rows, salientTerms, pinned, heading, matched, on
                       pinned={pinned.includes(row.passage_id)}
                       onOpen={onOpen}
                       onPin={onPin}
+                      source={source}
                     />
                   ))}
                 </div>
