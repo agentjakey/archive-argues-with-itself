@@ -1,13 +1,17 @@
 import type { View } from "../lib/urlstate";
-import type { CorpusFacts } from "../types";
+import type { CorpusFacts, ScopeInfo } from "../types";
 import { CorpusStrip } from "./CorpusStrip";
 import { KioskQr } from "./KioskQr";
+import { ScopeSwitcher } from "./ScopeSwitcher";
 
 interface Props {
   corpus: CorpusFacts | null;
   kiosk: boolean;
   view: View | null;
   onView: (view: View | null) => void;
+  scopes?: ScopeInfo[] | null;      // more than one -> the switcher renders; null/one -> hidden
+  activeScope?: string;
+  onSwitchScope?: (name: string) => void;
 }
 
 const LINKS: { view: View; label: string }[] = [
@@ -16,7 +20,7 @@ const LINKS: { view: View; label: string }[] = [
   { view: "about", label: "About" },
 ];
 
-export function Header({ corpus, kiosk, view, onView }: Props) {
+export function Header({ corpus, kiosk, view, onView, scopes, activeScope, onSwitchScope }: Props) {
   return (
     <header className="mb-6">
       <div className="flex items-start justify-between gap-6">
@@ -49,6 +53,9 @@ export function Header({ corpus, kiosk, view, onView }: Props) {
           </button>
         ))}
       </nav>
+      {view === null && scopes && onSwitchScope && (
+        <ScopeSwitcher scopes={scopes} active={activeScope ?? ""} onSwitch={onSwitchScope} />
+      )}
       {view === null && <CorpusStrip corpus={corpus} />}
     </header>
   );

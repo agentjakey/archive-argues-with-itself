@@ -27,6 +27,7 @@ import { Gaps } from "./components/pages/Gaps";
 import { HowItWorks } from "./components/pages/HowItWorks";
 import { Stories } from "./components/Stories";
 import { useAttractLoop } from "./hooks/useAttractLoop";
+import { useScopes } from "./hooks/useScopes";
 import { useStories } from "./hooks/useStories";
 import { flag as apiFlag } from "./lib/api";
 import { TILE_QIDS } from "./lib/attract";
@@ -56,6 +57,7 @@ export default function App() {
   const [pinFlagged, setPinFlagged] = useState<Flagged | null>(null);       // over a free user-pinned pair
   const [flaggedAck, setFlaggedAck] = useState(false);   // interstitial acknowledged for the current result
   const stories = useStories();
+  const scopesInfo = useScopes();
   const coverage = useCoverage(asked, askedFilters);
 
   const goView = useCallback(
@@ -186,6 +188,24 @@ export default function App() {
   }, []);
   useAttractLoop({ enabled: kiosk, stories, onShow: openStory, onHome: goHome, idleMs });
 
+  // Switch corpora with a full reload into a clean home for the chosen scope: no q/filters/
+  // pins/view/story carried over, so no result from the other corpus can linger. Only the
+  // venue launch flags (kiosk/offline/idle) are preserved. The pilot is the default and
+  // carries no ?scope, so its URL stays exactly as before.
+  const switchScope = useCallback(
+    (name: string) => {
+      const def = scopesInfo?.default ?? "";
+      const params = new URLSearchParams();
+      if (name && name !== def) params.set("scope", name);
+      if (kiosk) params.set("kiosk", "1");
+      if (offline) params.set("offline", "1");
+      if (idleParam.current) params.set("idle", idleParam.current);
+      const qs = params.toString();
+      window.location.assign(`${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    },
+    [scopesInfo, kiosk, offline],
+  );
+
   const pick = useCallback(
     (e: Example) => {
       setQuestion(e.text);
@@ -229,7 +249,15 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6">
-      <Header corpus={health?.corpus ?? null} kiosk={kiosk} view={view} onView={goView} />
+      <Header
+        corpus={health?.corpus ?? null}
+        kiosk={kiosk}
+        view={view}
+        onView={goView}
+        scopes={scopesInfo?.scopes ?? null}
+        activeScope={initial.current.scope ?? scopesInfo?.default ?? ""}
+        onSwitchScope={switchScope}
+      />
       <EntryAdvisory />
       {view === "how" && <HowItWorks />}
       {view === "gaps" && <Gaps />}

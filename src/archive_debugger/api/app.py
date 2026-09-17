@@ -14,6 +14,7 @@ import functools
 import json
 import os
 import re
+import sqlite3
 import threading
 import time
 import tomllib
@@ -45,8 +46,12 @@ DEFAULT_CACHE = Path("data/cache/answers.db")
 DEFAULT_PAGES = Path("data/cache/pages")           # offline pack of page images (scripts/offline_pack.py)
 DEFAULT_STORIES = Path("config/stories.json")
 ENV_PAGES_DIR = "CIVIC_PAGES_DIR"
+ENV_SERVE_SCOPES = "CIVIC_SERVE_SCOPES"   # local multi-scope opt-in: "pilot,microlog". Unset = single base scope.
 SNIPPET = 300
 _PAGE_FILE = re.compile(r"^n(\d+)_(thumb|medium)\.jpg$")
+# Memory-map extra scopes' large databases. SQLite clamps to its own compiled max, so an
+# oversized target is safe. The pilot connection is left exactly as before (no PRAGMA).
+MMAP_BYTES = 1 << 33   # 8 GiB target
 
 # Offline degradation + input hardening (R1). When the model cannot answer (no key,
 # unreachable/timeout, or rate-limited), /ask returns 200 with a designed limited-mode
@@ -203,63 +208,215 @@ def _clean_filters(period: Optional[str], jurisdiction: Optional[str], doc_type:
     return {k: v for k, v in (("period", period), ("jurisdiction", jurisdiction), ("doc_type", doc_type)) if v}
 
 
+def parse_serve_scopes(raw: Optional[str]) -> Optional[list[str]]:
+    """CIVIC_SERVE_SCOPES -> the list of scopes to serve from one process, or None (the
+    single-scope default, byte-identical to the deploy)."""
+    if not raw:
+        return None
+    names = [s.strip() for s in raw.split(",") if s.strip()]
+    return names or None
+
+
+def _enable_mmap(conn: sqlite3.Connection) -> None:
+    """Memory-map the connection's main and attached (vec) databases. Read-only I/O tuning
+    only; query results are unchanged. Applied to extra scopes, never the pilot."""
+    for target in (f"PRAGMA mmap_size = {MMAP_BYTES}", f"PRAGMA vec.mmap_size = {MMAP_BYTES}"):
+        try:
+            conn.execute(target)
+        except sqlite3.Error:
+            pass
+
+
+def _registry_entry(name: str) -> dict:
+    try:
+        return scopes.load_registry().get("scopes", {}).get(name, {}) or {}
+    except scopes.ScopeError:
+        return {}
+
+
+def _config_collections(config_path) -> list[str]:
+    try:
+        with Path(config_path).open("rb") as fh:
+            raw = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError):
+        return []
+    cols = raw.get("corpus", {}).get("collections", {}).get("clean", []) or []
+    return [str(c) for c in cols]
+
+
+def scope_facts(name: str, config_path, corpus: dict) -> dict:
+    """The active scope's identity for the switcher: label, source collection with its
+    archive.org link, and item count. Labels come from the registry (config/scopes.toml);
+    the collection falls back to the scope config; the count comes from the built corpus."""
+    entry = _registry_entry(name)
+    cols = _config_collections(config_path)
+    collection = entry.get("collection") or (cols[0] if cols else None)
+    return {
+        "name": name,
+        "label": entry.get("label") or name,
+        "blurb": entry.get("blurb") or "",
+        "collection": collection,
+        "collection_url": f"https://archive.org/details/{collection}" if collection else None,
+        "collections": cols,
+        "item_count": corpus["items"],
+        "window": corpus["pilot_window"],
+    }
+
+
+class Bundle:
+    """Everything one served scope needs, isolated per scope: its own Retriever (read-only
+    connections to only its own databases), lock, answer cache, coverage cache, generation
+    config, corpus facts, and display facts. Built with that scope active, so the connection
+    is fenced to its corpus at open time; at request time no scope is active and a bundle can
+    only ever read its own DBs. The base (default) scope's fields are aliased onto app.state
+    so the pilot request path and offline_walkthrough see it exactly as before."""
+
+    def __init__(self, *, name, retriever, gcfg, pilot_window, cache, retrieval_sha256,
+                 corpus, facts, stories, seed_path, pages_dir, provider, llm, own_retriever):
+        self.name = name
+        self.retriever = retriever
+        self.gcfg = gcfg
+        self.pilot_window = pilot_window
+        self.cache = cache
+        self.coverage_cache: dict = {}
+        self.retrieval_sha256 = retrieval_sha256
+        self.corpus = corpus
+        self.facts = facts
+        self.stories = stories
+        self.seed_path = seed_path
+        self.pages_dir = pages_dir
+        self.provider = provider
+        self.llm = llm
+        self.own_retriever = own_retriever
+        self.lock = threading.Lock()   # one sqlite connection per bundle; sync endpoints run in a threadpool
+
+
 def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Optional[Retriever] = None,
                provider: Optional[str] = None, llm: Optional[LLM] = None,
                seed_path: Path = DEFAULT_SEED, web_dist: Path = WEB_DIST, load_env: bool = True,
                cache_path: Optional[Path] = None, pages_dir: Optional[Path] = None,
-               stories_path: Path = DEFAULT_STORIES, scope: Optional[str] = None) -> FastAPI:
+               stories_path: Path = DEFAULT_STORIES, scope: Optional[str] = None,
+               serve_scopes: Optional[list[str]] = None) -> FastAPI:
     if load_env:
         from dotenv import load_dotenv
         load_dotenv()
-    # Scope layer (additive): with no scope this serves the pilot exactly as before. A
-    # named scope serves that scope's config + registry databases; a non-inherit scope is
-    # pinned for the process so the one connection opened at startup is fenced to its own
-    # databases and can never open the pilot's.
+    # Scope layer (additive): with no scope and no serve_scopes this serves the pilot exactly
+    # as before. A named scope serves that scope's config + registry databases. serve_scopes
+    # serves several scopes from one process, routed per request by a `scope` parameter, with
+    # the pilot the default; it NEVER pins the process (that would break the pilot and the
+    # fence). Each scope's retriever is opened with only that scope active, so every
+    # connection is fenced to its own databases at open time; at request time no scope is
+    # active and a bundle can read only its own corpus.
+    base_config = config_path
     if scope is not None:
         resolved = scopes.resolve_scope(scope)
-        config_path = resolved.config_path
-        if not resolved.inherit:
+        base_config = resolved.config_path
+        base_name = resolved.name
+        # Single-scope legacy path only: pin the process so the CIVIC_SCOPE=<name> deploy is
+        # byte-identical to before. In multi-scope we never pin.
+        if not resolved.inherit and not serve_scopes:
             scopes.set_active(resolved)
-    cache_path = cache_path or env_path(ENV_CACHE_PATH, DEFAULT_CACHE)
+    else:
+        try:
+            base_name = scopes.load_registry().get("default", "pilot")
+        except scopes.ScopeError:
+            base_name = "pilot"
+    base_cache_path = cache_path or env_path(ENV_CACHE_PATH, DEFAULT_CACHE)
     pages_dir = pages_dir or env_path(ENV_PAGES_DIR, DEFAULT_PAGES)
-    stories = load_stories(stories_path)
-    gcfg = load_generate_config(config_path)
-    pilot_window = _pilot_window(config_path)
-    own_retriever = retriever is None
+    base_stories = load_stories(stories_path)
+
+    def _build_bundle(name, *, cfg_path, retr, cache_p, seed_p, stories_list, llm_obj, mmap) -> Bundle:
+        """Open one scope's databases and generation config with only that scope active, so
+        the connection is fenced to its own corpus. The base scope may pass an injected
+        retriever (tests) and is never memory-mapped (the pilot stays exactly as before)."""
+        resolved_b = scopes.resolve_scope(name)
+        active = None if resolved_b.inherit else resolved_b
+        with scopes.activate(active):
+            r = retr or Retriever(cfg_path)
+            if mmap and retr is None:
+                _enable_mmap(r.conn)
+            gcfg = load_generate_config(cfg_path)
+            pilot_window = _pilot_window(cfg_path)
+            sha = retrieval_fingerprint(r.cfg)
+            corpus = corpus_facts(r.conn, pilot_window)
+        return Bundle(name=name, retriever=r, gcfg=gcfg, pilot_window=pilot_window,
+                      cache=AnswerCache(cache_p), retrieval_sha256=sha, corpus=corpus,
+                      facts=scope_facts(name, cfg_path, corpus), stories=stories_list,
+                      seed_path=seed_p, pages_dir=pages_dir, provider=provider, llm=llm_obj,
+                      own_retriever=retr is None)
+
+    def _extra_bundle(name) -> Optional[Bundle]:
+        """Build one additional scope, or None if it cannot be served here because its
+        databases are not present (e.g. the festival volume holds only the pilot). A missing
+        or broken extra scope never breaks serving the base, so the deploy is unaffected."""
+        try:
+            rs = scopes.resolve_scope(name)
+            if not (Path(rs.db_path).exists() and Path(rs.index_path).exists()):
+                return None
+            cache_p = Path(rs.db_path).parent / "cache" / "answers.db"     # isolated, never the pilot's cache
+            story_file = Path(rs.db_path).parent / "stories.json"          # optional; absent -> no stories
+            return _build_bundle(name, cfg_path=rs.config_path, retr=None, cache_p=cache_p,
+                                 seed_p=None, stories_list=load_stories(story_file), llm_obj=None, mmap=True)
+        except Exception:  # noqa: BLE001 - a bad extra scope is skipped, never fatal to the base serve
+            return None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.retriever = retriever or Retriever(config_path)
-        app.state.lock = threading.Lock()   # one sqlite connection; sync endpoints run in a threadpool
-        app.state.cache = AnswerCache(cache_path)
-        app.state.coverage_cache = {}
-        app.state.model_ratelimit = RateLimiter(RATE_BURST, RATE_REFILL)
-        app.state.retrieval_sha256 = retrieval_fingerprint(app.state.retriever.cfg)
-        with app.state.lock:
-            app.state.corpus = corpus_facts(app.state.retriever.conn, pilot_window)
+        base = _build_bundle(base_name, cfg_path=base_config, retr=retriever, cache_p=base_cache_path,
+                             seed_p=seed_path, stories_list=base_stories, llm_obj=llm, mmap=False)
+        bundles = {base.name: base}
+        for name in (serve_scopes or []):
+            if name in bundles:
+                continue
+            extra = _extra_bundle(name)
+            if extra is not None:
+                bundles[extra.name] = extra
+        app.state.bundles = bundles
+        app.state.default_scope = base.name
+        app.state.model_ratelimit = RateLimiter(RATE_BURST, RATE_REFILL)   # one process-wide model budget
+        # Back-compat aliases: the pilot request path and offline_walkthrough (which patches
+        # app.state.cache.put) see the default bundle exactly as the single-scope app did.
+        app.state.retriever = base.retriever
+        app.state.lock = base.lock
+        app.state.cache = base.cache
+        app.state.coverage_cache = base.coverage_cache
+        app.state.retrieval_sha256 = base.retrieval_sha256
+        app.state.corpus = base.corpus
         try:
             yield
         finally:
-            app.state.cache.close()
-            if own_retriever:
-                app.state.retriever.close()
+            for b in bundles.values():
+                b.cache.close()
+                if b.own_retriever:
+                    b.retriever.close()
 
     app = FastAPI(title="archive-argues-with-itself", lifespan=lifespan)
     origins = _allowed_origins()
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["*"])
 
-    def answer(question: str, filters: Optional[dict], req_provider: Optional[str], req_model: Optional[str],
-               nocache: bool):
-        r = app.state.retriever
-        kind = req_provider or provider or gcfg["provider"]
+    def _bundle(scope_param: Optional[str]) -> Bundle:
+        """The bundle for a request. No scope (or the default name) returns the base bundle,
+        so the no-scope path is byte-identical to the single-scope app. An unserved scope 404s."""
+        name = scope_param or app.state.default_scope
+        b = app.state.bundles.get(name)
+        if b is None:
+            raise HTTPException(status_code=404, detail=f"scope {name!r} is not served here")
+        return b
+
+    def answer(b: Bundle, question: str, filters: Optional[dict], req_provider: Optional[str],
+               req_model: Optional[str], nocache: bool):
+        r = b.retriever
+        gcfg = b.gcfg
+        kind = req_provider or b.provider or gcfg["provider"]
         model_id = req_model or gcfg["model"]
         temp = sent_temperature(kind, gcfg)
         gen = generation_meta(provider=kind, model=model_id, temperature=temp,
                               max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
         # Key on the ORIGINAL text so every warmed answer keeps hitting; sanitize only
-        # the text handed to retrieval and the model.
-        key = answer_cache_key(gcfg, kind, model_id, question, filters, app.state.retrieval_sha256)
+        # the text handed to retrieval and the model. The retrieval fingerprint is the
+        # scope's own (its db/index paths + size/mtime), so no answer crosses scopes.
+        key = answer_cache_key(gcfg, kind, model_id, question, filters, b.retrieval_sha256)
         clean = clean_question(question)
 
         def degraded(reason: str, pool: list, hits: list) -> dict:
@@ -270,7 +427,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             ans = Answer(text=msg, sentences=[], verified_citations=[], unsupported=[],
                          abstained=True, coverage=cov, abstention_text=msg, generation=gen)
             out = {"answer": ans.to_dict(),
-                   "evidence": evidence_rows(pool, [], {h["passage_id"] for h in hits}, pages_dir),
+                   "evidence": evidence_rows(pool, [], {h["passage_id"] for h in hits}, b.pages_dir),
                    "degraded": {"reason": reason, "live_url": PUBLIC_URL}}
             out["answer"]["cached"] = None
             out["flagged"] = flags.detect(out["evidence"])
@@ -279,13 +436,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         if not clean:
             return degraded("empty", [], [])
         if not nocache:
-            hit = app.state.cache.get(key)
+            hit = b.cache.get(key)
             if hit is not None:
                 served = copy.deepcopy(hit["response"])
                 served["answer"]["cached"] = {"created_at": hit["created_at"]}
                 for row in served["evidence"]:   # the offline pack may have grown since the answer was cached
-                    thumb = local_page(pages_dir, row["item_id"], row["leaf_index"], "thumb")
-                    image = local_page(pages_dir, row["item_id"], row["leaf_index"], "medium")
+                    thumb = local_page(b.pages_dir, row["item_id"], row["leaf_index"], "thumb")
+                    image = local_page(b.pages_dir, row["item_id"], row["leaf_index"], "medium")
                     if thumb:
                         row["page_thumb"] = thumb
                     if image:
@@ -295,17 +452,17 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 return served
 
         # Cache miss. Retrieve first, so the record can be shown even when the model cannot run.
-        with app.state.lock:   # retrieval reads through r.conn
+        with b.lock:   # retrieval reads through r.conn
             pool, hits = retrieve_pool(r, clean, build_filters(filters), gcfg["top_k"])
 
-        if kind == "anthropic" and llm is None and not _key_available():
+        if kind == "anthropic" and b.llm is None and not _key_available():
             return degraded("no_key", pool, hits)
-        if kind == "anthropic" and llm is None and not app.state.model_ratelimit.allow():
+        if kind == "anthropic" and b.llm is None and not app.state.model_ratelimit.allow():
             return degraded("rate_limited", pool, hits)
 
         try:
-            if llm is not None:
-                model = llm
+            if b.llm is not None:
+                model = b.llm
             elif kind == "stub":
                 model = make_llm("stub", model_id, gcfg["max_tokens"])
             else:                                        # real provider: hard timeout, no retries (kiosk must never hang; N5: llm.py untouched)
@@ -313,46 +470,58 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 client = anthropic.Anthropic(timeout=GEN_TIMEOUT_S, max_retries=0)
                 model = AnthropicLLM(model_id, gcfg["max_tokens"], client=client, temperature=temp)
             verify = functools.partial(citation.verify_citations, r.conn)
-            with app.state.lock:   # the LLM call and verification read through r.conn
+            with b.lock:   # the LLM call and verification read through r.conn
                 ans = compose(clean, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
         except Exception:  # noqa: BLE001 - offline / timeout / provider error -> show the record, not a raw error (N6)
             return degraded("model_unreachable", pool, hits)
 
         result = {"answer": ans.to_dict(),
-                  "evidence": evidence_rows(pool, ans.verified_citations, {h["passage_id"] for h in hits}, pages_dir)}
-        app.state.cache.put(key, result)   # flagged is computed on serve below, never stored (like cached=)
+                  "evidence": evidence_rows(pool, ans.verified_citations, {h["passage_id"] for h in hits}, b.pages_dir)}
+        b.cache.put(key, result)   # flagged is computed on serve below, never stored (like cached=)
         result["answer"]["cached"] = None
         result["flagged"] = flags.detect(result["evidence"])
         return result
 
     @app.get("/health")
-    def health() -> dict:
-        return {"status": "ok", "provider": provider or gcfg["provider"], "model": gcfg["model"],
-                "corpus": app.state.corpus}
+    def health(scope: Optional[str] = None) -> dict:
+        b = _bundle(scope)
+        return {"status": "ok", "provider": b.provider or b.gcfg["provider"], "model": b.gcfg["model"],
+                "corpus": b.corpus}
+
+    @app.get("/scopes")
+    def scopes_view() -> dict:
+        """The scopes this process serves, each with its identity for the switcher: label,
+        source collection with an archive.org link, and item count. The pilot is the default."""
+        default = app.state.default_scope
+        order = [default] + [n for n in app.state.bundles if n != default]
+        return {"default": default, "scopes": [app.state.bundles[n].facts for n in order]}
 
     @app.get("/examples")
-    def examples() -> list[dict]:
-        if not Path(seed_path).exists():
+    def examples(scope: Optional[str] = None) -> list[dict]:
+        b = _bundle(scope)
+        if not b.seed_path or not Path(b.seed_path).exists():
             return []
         out = []
-        with app.state.lock:
-            conn = app.state.retriever.conn
-            for q in load_seed(seed_path):
+        with b.lock:
+            conn = b.retriever.conn
+            for q in load_seed(b.seed_path):
                 gold = store.gold_verdict(conn, q["qid"])
                 out.append({"qid": q["qid"], "text": q["text"], "filters": q.get("filters") or {},
                             "gold": None if gold is None else ("answerable" if gold["answerable"] else "abstain")})
         return out
 
     @app.get("/stories")
-    def stories_view() -> list[dict]:
+    def stories_view(scope: Optional[str] = None) -> list[dict]:
         """Curated question + two pinned passages + caption, pins expanded to evidence rows
-        (in pin order) so the compare view can render them without a retrieval pool."""
+        (in pin order) so the compare view can render them without a retrieval pool. A scope
+        with no stories file returns an empty list."""
+        b = _bundle(scope)
         out = []
-        with app.state.lock:
-            r = app.state.retriever
-            for s in stories:
+        with b.lock:
+            r = b.retriever
+            for s in b.stories:
                 try:
-                    rows = evidence_rows(r.lookup(s["pins"]), [], set(), pages_dir)
+                    rows = evidence_rows(r.lookup(s["pins"]), [], set(), b.pages_dir)
                 except LookupError as exc:
                     raise HTTPException(status_code=500, detail=f"story {s['id']}: {exc}") from exc
                 by_id = {row["passage_id"]: row for row in rows}
@@ -366,18 +535,19 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         return out
 
     @app.get("/flag")
-    def flag_view(pins: str = Query("")):
+    def flag_view(pins: str = Query(""), scope: Optional[str] = None):
         """Harm-adjacent flag for a user-pinned comparison: flags.detect over exactly the
         pinned passages, treated as the shown basis, returned in the same shape /ask and
         /stories use. Read-only, computed on serve, never stored; detection and the
         crisis-line mapping stay in flags.py. A malformed or unknown id yields a safe empty
         result, never a raw error (N6)."""
+        b = _bundle(scope)
         ids = [p.strip() for p in pins.split(",") if p.strip()][:2]   # the compared pair
         if not ids:
             return {"flagged": None}
         try:
-            with app.state.lock:
-                rows = evidence_rows(app.state.retriever.lookup(ids), [], set(), pages_dir)
+            with b.lock:
+                rows = evidence_rows(b.retriever.lookup(ids), [], set(), b.pages_dir)
         except LookupError:
             return {"flagged": None}   # unknown id -> safe empty, never a raw error
         return {"flagged": flags.detect([{**row, "in_prompt": True} for row in rows])}
@@ -395,31 +565,33 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
 
     @app.get("/coverage")
     def coverage_view(q: str = Query(..., min_length=1), period: Optional[str] = None,
-                      jurisdiction: Optional[str] = None, doc_type: Optional[str] = None) -> dict:
+                      jurisdiction: Optional[str] = None, doc_type: Optional[str] = None,
+                      scope: Optional[str] = None) -> dict:
+        b = _bundle(scope)
         filters = _clean_filters(period, jurisdiction, doc_type)
         ck = (q, tuple(sorted(filters.items())))
-        cached = app.state.coverage_cache.get(ck)
+        cached = b.coverage_cache.get(ck)
         if cached is not None:
             return cached
-        with app.state.lock:
-            r = app.state.retriever
+        with b.lock:
+            r = b.retriever
             result = compute_coverage(r.conn, q, build_filters(filters), doc_type_families=r.cfg.active_families())
-        app.state.coverage_cache[ck] = result
+        b.coverage_cache[ck] = result
         return result
 
     @app.post("/ask")
-    def ask_post(req: AskRequest):
-        return answer(req.question, req.filters, req.provider, req.model, req.nocache)
+    def ask_post(req: AskRequest, scope: Optional[str] = None):
+        return answer(_bundle(scope), req.question, req.filters, req.provider, req.model, req.nocache)
 
     @app.get("/ask")
     def ask_get(q: str = Query(..., min_length=1), period: Optional[str] = None,
                 jurisdiction: Optional[str] = None, doc_type: Optional[str] = None, nocache: int = 0,
-                provider: Optional[str] = None):
+                provider: Optional[str] = None, scope: Optional[str] = None):
         """Permalink form: same handler as POST, filters from query params. `provider=stub`
         exercises retrieval and the response shape without a model call (smoke tests)."""
         if provider is not None and provider not in ("stub", "anthropic"):
             raise HTTPException(status_code=422, detail="provider must be 'stub' or 'anthropic'")
-        return answer(q, _clean_filters(period, jurisdiction, doc_type), provider, None, bool(nocache))
+        return answer(_bundle(scope), q, _clean_filters(period, jurisdiction, doc_type), provider, None, bool(nocache))
 
     if Path(web_dist).is_dir():
         dist = Path(web_dist)
@@ -439,7 +611,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
     return app
 
 
-# The uvicorn entrypoint. With no CIVIC_SCOPE this is byte-identical to the pilot deploy;
-# set CIVIC_SCOPE=<name> to serve a registered scope (serving multiple scopes in one UI
-# is a later step).
-app = create_app(scope=os.environ.get("CIVIC_SCOPE") or None)
+# The uvicorn entrypoint. With no CIVIC_SCOPE and no CIVIC_SERVE_SCOPES this is byte-identical
+# to the pilot deploy; CIVIC_SCOPE=<name> serves one registered scope; CIVIC_SERVE_SCOPES=
+# pilot,microlog serves several from one process, routed per request, the pilot default.
+app = create_app(scope=os.environ.get("CIVIC_SCOPE") or None,
+                 serve_scopes=parse_serve_scopes(os.environ.get(ENV_SERVE_SCOPES)))

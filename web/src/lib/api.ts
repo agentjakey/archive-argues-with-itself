@@ -1,4 +1,14 @@
-import type { AskRequest, AskResponse, CoverageResponse, Example, Filters, Flagged, Health, Story } from "../types";
+import type {
+  AskRequest,
+  AskResponse,
+  CoverageResponse,
+  Example,
+  Filters,
+  Flagged,
+  Health,
+  ScopesResponse,
+  Story,
+} from "../types";
 
 // Empty VITE_API_BASE means same-origin (the FastAPI app serves web/dist).
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -22,6 +32,28 @@ export class ApiError extends Error {
     this.status = status;
     this.detail = detail;
   }
+}
+
+/** The active scope from the URL, set only by the scope switcher (via a full reload).
+ *  Appended to every data request so each corpus hits only its own DBs. Absent for the
+ *  pilot default, so the pilot request path is byte-identical to before. */
+export function activeScope(): string | null {
+  try {
+    return new URLSearchParams(window.location.search).get("scope");
+  } catch {
+    return null;
+  }
+}
+
+function scoped(params: URLSearchParams): URLSearchParams {
+  const s = activeScope();
+  if (s) params.set("scope", s);
+  return params;
+}
+
+function withQuery(path: string, params: URLSearchParams): string {
+  const qs = params.toString();
+  return qs ? `${path}?${qs}` : path;
 }
 
 /** The server's own words, verbatim: our {"error"} shape, FastAPI's {"detail"}
@@ -72,27 +104,35 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function ask(body: AskRequest): Promise<AskResponse> {
-  return request<AskResponse>("/ask", { method: "POST", body: JSON.stringify(body) });
+  return request<AskResponse>(withQuery("/ask", scoped(new URLSearchParams())), {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export function examples(): Promise<Example[]> {
-  return request<Example[]>("/examples");
+  return request<Example[]>(withQuery("/examples", scoped(new URLSearchParams())));
 }
 
 export function health(): Promise<Health> {
-  return request<Health>("/health");
+  return request<Health>(withQuery("/health", scoped(new URLSearchParams())));
+}
+
+/** The corpora this server exposes, for the switcher. Never scoped (it lists all of them). */
+export function scopes(): Promise<ScopesResponse> {
+  return request<ScopesResponse>("/scopes");
 }
 
 export function stories(): Promise<Story[]> {
-  return request<Story[]>("/stories");
+  return request<Story[]>(withQuery("/stories", scoped(new URLSearchParams())));
 }
 
 /** Harm-adjacent flag over exactly the pinned passages (a free user comparison), in the same
  *  shape as /ask and /stories. The local API computes it via flags.detect; on any failure the
  *  caller degrades to no note. */
 export function flag(pins: string[]): Promise<{ flagged: Flagged | null }> {
-  const p = new URLSearchParams({ pins: pins.join(",") });
-  return request<{ flagged: Flagged | null }>(`/flag?${p.toString()}`);
+  const p = scoped(new URLSearchParams({ pins: pins.join(",") }));
+  return request<{ flagged: Flagged | null }>(withQuery("/flag", p));
 }
 
 export function coverage(q: string, filters: Filters): Promise<CoverageResponse> {
@@ -101,5 +141,5 @@ export function coverage(q: string, filters: Filters): Promise<CoverageResponse>
     const v = filters[k];
     if (v) p.set(k, v);
   }
-  return request<CoverageResponse>(`/coverage?${p.toString()}`);
+  return request<CoverageResponse>(withQuery("/coverage", scoped(p)));
 }

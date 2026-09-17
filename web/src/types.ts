@@ -192,3 +192,20 @@ export interface CoverageResponse {
   by_decade: DecadeCoverage[];
   by_jurisdiction: JurisdictionCoverage[];
 }
+
+// One served corpus for the scope switcher, from GET /scopes. Mirrors api/app.py scope_facts.
+export interface ScopeInfo {
+  name: string;
+  label: string;
+  blurb: string;
+  collection: string | null;
+  collection_url: string | null;
+  collections: string[];
+  item_count: number;
+  window: YearWindow;
+}
+
+export interface ScopesResponse {
+  default: string;
+  scopes: ScopeInfo[];
+}

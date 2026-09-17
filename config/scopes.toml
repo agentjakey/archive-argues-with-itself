@@ -26,6 +26,11 @@ default = "pilot"
 # so this entry never contradicts the deploy's mounted store.
 config = "config/pilot.toml"
 inherit = true
+# Display facts for the scope switcher (read by the API /scopes endpoint; ignored by
+# resolve_scope). Additive: no data path or behavior depends on these.
+label = "Federal public health, 1960-2009"
+blurb = "Clean Government of Canada publications"
+collection = "governmentpublications"
 
 [scopes.microlog]
 # The pooled national microlog public-health corpus the pilot excluded (reserve-only,
@@ -34,3 +39,7 @@ inherit = true
 config = "config/microlog.toml"
 db_path = "data/exploration/microlog/civic_microlog.db"
 index_path = "data/exploration/microlog/index/vectors_microlog.db"
+# Display facts for the scope switcher (see the pilot entry).
+label = "National public health, all provinces"
+blurb = "Microlog microfiche: federal, provincial, and municipal issuers"
+collection = "microlog"
