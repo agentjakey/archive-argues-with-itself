@@ -79,7 +79,7 @@ function ScopeComposition({ scope }: { scope: ScopeInfo }) {
         Jurisdiction is derived from the issuer, so it is a floor, not full coverage:{" "}
         {Math.round(c.jurisdiction_unknown_share * 100)}% of items are unknown.
         {c.jurisdiction_is_floor
-          ? " Only Ontario, Alberta, and federal resolve; other provinces and territories fall into unknown. This is not full provincial coverage."
+          ? " These per-province counts are a floor: an item is attributed only when its issuer metadata names the jurisdiction, so a body that does not name its province stays unknown rather than being guessed. Not verified per-province coverage."
           : ""}
       </p>
 

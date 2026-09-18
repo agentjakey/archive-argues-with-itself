@@ -17,6 +17,7 @@ interface Props {
 const LINKS: { view: View; label: string }[] = [
   { view: "how", label: "How this works" },
   { view: "gaps", label: "Gaps" },
+  { view: "map", label: "Coverage map" },
   { view: "sources", label: "Sources" },
   { view: "about", label: "About" },
 ];

@@ -27,6 +27,7 @@ import { Gaps } from "./components/pages/Gaps";
 import { HowItWorks } from "./components/pages/HowItWorks";
 import { SourcesPage } from "./components/pages/Sources";
 import { SourceLine } from "./components/SourceLine";
+import { CoverageMap } from "./components/CoverageMap";
 import { Stories } from "./components/Stories";
 import { useAttractLoop } from "./hooks/useAttractLoop";
 import { useScopes } from "./hooks/useScopes";
@@ -35,6 +36,7 @@ import { flag as apiFlag } from "./lib/api";
 import { TILE_QIDS } from "./lib/attract";
 import { applyState, readState, type View } from "./lib/urlstate";
 import { mergeFlagged, needsInterstitial } from "./lib/sensitivity";
+import { PROVINCE_SLUGS } from "./lib/coverage";
 import type { EvidenceRow, Example, Filters, Flagged, Story } from "./types";
 
 export default function App() {
@@ -219,6 +221,26 @@ export default function App() {
     [ask],
   );
 
+  // Clicking a resolved province on the coverage map explores that province's cited record through
+  // the EXISTING jurisdiction filter (no change to the frozen retriever). If a question is already
+  // asked, re-run it scoped to the province; otherwise land on the ask view with the filter set so
+  // the next question is province-scoped. The floor caveat is shown in the filtered view below.
+  const exploreProvince = useCallback(
+    (slug: string) => {
+      const f: Filters = { ...askedFilters, jurisdiction: slug as Filters["jurisdiction"] };
+      setView(null);
+      setFilters(f);
+      if (asked) {
+        ask(asked, f);
+      } else {
+        setAskedFilters(f);
+        applyState({ q: "", filters: f, pins: [], kiosk, offline }, "push");
+      }
+      window.scrollTo({ top: 0 });
+    },
+    [asked, askedFilters, kiosk, offline, ask],
+  );
+
   const togglePin = useCallback(
     (row: EvidenceRow) => {
       setPins((p) => {
@@ -266,6 +288,7 @@ export default function App() {
       {view === "how" && <HowItWorks />}
       {view === "gaps" && <Gaps />}
       {view === "sources" && <SourcesPage scopes={scopesInfo?.scopes ?? null} />}
+      {view === "map" && <CoverageMap scope={activeScopeInfo} onExplore={exploreProvince} onNav={goView} />}
       {view === "about" && <About />}
       {view === null && (
       <>
@@ -315,6 +338,14 @@ export default function App() {
         <main>
           {flagged && <ContextualNote flagged={flagged} />}
           {activeScopeInfo && <SourceLine scope={activeScopeInfo} />}
+          {askedFilters.jurisdiction &&
+            PROVINCE_SLUGS.has(askedFilters.jurisdiction) &&
+            activeScopeInfo?.composition?.jurisdiction_is_floor && (
+              <p className="text-sm text-muted">
+                Filtered to {askedFilters.jurisdiction.replace(/_/g, " ")}: these are proxy-derived
+                counts, a floor, not precise per-province coverage.
+              </p>
+            )}
           {response.degraded ? (
             <>
               <LimitedModeCard answer={response.answer} degraded={response.degraded} />

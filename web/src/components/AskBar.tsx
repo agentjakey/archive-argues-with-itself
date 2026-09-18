@@ -2,7 +2,24 @@ import type { FormEvent } from "react";
 import type { DocType, Filters, Jurisdiction, Period } from "../types";
 
 const PERIODS: Period[] = ["pre-1960", "1960s", "1970s", "1980s", "1990s", "2000s", "post-2009", "undated"];
-const JURISDICTIONS: Jurisdiction[] = ["federal", "ontario", "alberta", "international", "unknown"];
+const JURISDICTIONS: Jurisdiction[] = [
+  "federal",
+  "ontario",
+  "quebec",
+  "british_columbia",
+  "alberta",
+  "manitoba",
+  "saskatchewan",
+  "nova_scotia",
+  "new_brunswick",
+  "newfoundland",
+  "prince_edward_island",
+  "yukon",
+  "northwest_territories",
+  "nunavut",
+  "international",
+  "unknown",
+];
 const DOC_TYPES: DocType[] = [
   "royal_commission",
   "commission",

@@ -302,6 +302,12 @@ def scope_composition(conn, corpus: dict) -> dict:
     items = corpus["items"]
     undated_items = conn.execute("SELECT COUNT(*) FROM items WHERE dated = 0 OR dated IS NULL").fetchone()[0]
     juris, unknown_share = _jurisdiction_distribution(conn, items)
+    # A scope whose jurisdiction was resolved by the scope-local proxy map (microlog) stays a
+    # floor: per-province counts are not verified per item, so the flag holds even after the
+    # unknown share drops below the numeric threshold. The pilot has no such rows, so its
+    # is_floor is unchanged.
+    proxy_resolved = conn.execute(
+        "SELECT COUNT(*) FROM items WHERE jurisdiction_method LIKE 'microlog_map:%'").fetchone()[0] > 0
     return {
         "passages": corpus["passages"],
         "dated_span": corpus["window"],       # true MIN/MAX year of dated items
@@ -315,7 +321,7 @@ def scope_composition(conn, corpus: dict) -> dict:
         "ocr": _ocr_distribution(conn),
         "jurisdictions": juris,
         "jurisdiction_unknown_share": unknown_share,
-        "jurisdiction_is_floor": unknown_share >= 0.20,
+        "jurisdiction_is_floor": bool(unknown_share >= 0.20 or proxy_resolved),
         "date_method": _date_method_distribution(conn),
     }
 

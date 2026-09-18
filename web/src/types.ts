@@ -9,7 +9,25 @@ export type Period =
   | "2000s"
   | "post-2009"
   | "undated";
-export type Jurisdiction = "federal" | "ontario" | "alberta" | "international" | "unknown";
+// Additive: the microlog jurisdiction remap now produces every province and territory, so the
+// filter enum covers them all (previously only federal/ontario/alberta/international/unknown).
+export type Jurisdiction =
+  | "federal"
+  | "ontario"
+  | "alberta"
+  | "british_columbia"
+  | "manitoba"
+  | "saskatchewan"
+  | "quebec"
+  | "nova_scotia"
+  | "new_brunswick"
+  | "newfoundland"
+  | "prince_edward_island"
+  | "yukon"
+  | "northwest_territories"
+  | "nunavut"
+  | "international"
+  | "unknown";
 export type DocType =
   | "royal_commission"
   | "commission"

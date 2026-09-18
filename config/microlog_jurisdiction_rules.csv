@@ -1,0 +1,82 @@
+kind,pattern,jurisdiction,specificity
+# Scope-local jurisdiction rules for the microlog corpus ONLY (config/microlog.toml).
+# ADDITIVE: these are merged with config/jurisdiction_rules.csv and applied by
+# archive_debugger.ingest.microlog_jurisdiction to microlog items currently resolved to
+# 'unknown'. The shared rules file and the pilot are never touched. Jurisdiction stays a
+# proxy derived from issuer/publisher/collection metadata; a newly resolved item is marked
+# jurisdiction_method=microlog_map:* so it is clearly proxy-derived, never recorded metadata.
+# Precision-first: patterns name the issuing government (province/territory) or a named
+# federal body. Ambiguous issuers (e.g. a bare "Ministry of Health") are intentionally NOT
+# listed, so they stay unknown rather than being guessed. Specificity 2 (a named jurisdiction
+# or named federal agency) outranks specificity 1 (a city, or the bare "canada" catch-all),
+# so "British Columbia, Canada" resolves to british_columbia, not federal. The resolver
+# de-accents before matching, so ASCII patterns match accented issuers (e.g. Quebec).
+#
+# --- named federal bodies (specificity 2): these carry "canadian ..." (which the bare
+# "canada" catch-all cannot match) or no country token at all ---
+text,canadian institutes of health research,federal,2
+text,canadian international development agency,federal,2
+text,canadian northern economic development agency,federal,2
+text,agence canadienne,federal,2
+text,canadian forest service,federal,2
+text,canadian forestry service,federal,2
+text,canadian nuclear safety commission,federal,2
+text,canadian food inspection agency,federal,2
+text,canadian centre for occupational health,federal,2
+text,pest management regulatory agency,federal,2
+text,patented medicine prices review board,federal,2
+text,marketed health products directorate,federal,2
+text,canada mortgage and housing,federal,2
+text,cmhc,federal,2
+text,correctional service of canada,federal,2
+text,natural resources canada,federal,2
+text,fisheries and oceans canada,federal,2
+text,transport canada,federal,2
+text,veterans affairs canada,federal,2
+text,human resources development canada,federal,2
+text,public works and government services canada,federal,2
+text,indian and northern affairs,federal,2
+text,national research council of canada,federal,2
+# --- provinces and territories: the issuing government named, or its catalog abbreviation
+# tag "(prov.)" (specificity 2) ---
+text,british columbia,british_columbia,2
+text,worksafebc,british_columbia,2
+text,bc stats,british_columbia,2
+text,bc centre for disease control,british_columbia,2
+text,(b.c.),british_columbia,2
+text,manitoba,manitoba,2
+text,(man.),manitoba,2
+text,saskatchewan,saskatchewan,2
+text,(sask.),saskatchewan,2
+text,nova scotia,nova_scotia,2
+text,(n.s.),nova_scotia,2
+text,new brunswick,new_brunswick,2
+text,nouveau-brunswick,new_brunswick,2
+text,(n.b.),new_brunswick,2
+text,quebec,quebec,2
+text,(que.),quebec,2
+text,(qc),quebec,2
+text,newfoundland,newfoundland,2
+text,labrador,newfoundland,2
+text,(n.l.),newfoundland,2
+text,(nfld.),newfoundland,2
+text,prince edward island,prince_edward_island,2
+text,(p.e.i.),prince_edward_island,2
+text,yukon,yukon,2
+text,(y.t.),yukon,2
+text,northwest territories,northwest_territories,2
+text,(n.w.t.),northwest_territories,2
+text,nunavut,nunavut,2
+text,(nun.),nunavut,2
+text,(ont.),ontario,2
+# NOTE: publication-city rules (winnipeg->manitoba, halifax->nova_scotia, etc.) were tried
+# and DROPPED for precision. A city names where a document was PUBLISHED, not who issued it,
+# so it mislabels federal and national bodies located in provincial cities (e.g. "Moncton,
+# N.B. : Dept. of Fisheries and Oceans" is federal, not New Brunswick; Montreal-published
+# academic works are not the Quebec government). Precision over recall: those items stay
+# unknown rather than be guessed from their city.
+# --- federal catch-all (specificity 1): a bare "canada" token, which in an issuer field of
+# a government-publications corpus marks an "X Canada" federal department. A province named
+# in the same field wins (specificity 2); a province in the OTHER field is a conflict and
+# stays unknown. This rule is the broadest, so it is logged and spot-checked separately ---
+text,canada,federal,1
