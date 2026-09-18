@@ -113,4 +113,15 @@ describe("TimelinePage", () => {
     );
     expect(screen.getByText("Loading the timeline.")).toBeInTheDocument();
   });
+
+  it("shows the honest window note with the out-of-window count from by_period", () => {
+    const s: ScopeInfo = {
+      ...SCOPE,
+      composition: { ...COMPOSITION, by_period: { "pre-1960": 12, "1980s": 100, "post-2009": 8, undated: 30 } },
+    };
+    render(<TimelinePage scope={s} initialQuestion="" onDrillDecade={vi.fn()} onCompareDecades={vi.fn()} />);
+    // 12 pre-1960 + 8 post-2009 = 20 out of window; nominal window stated, catalog-metadata caveat
+    expect(screen.getByText(/nominal collection window is 1960 to 2009/)).toBeInTheDocument();
+    expect(screen.getByText(/20 items carry metadata dates outside it/)).toBeInTheDocument();
+  });
 });

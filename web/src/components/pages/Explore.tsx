@@ -1,4 +1,5 @@
-import { formatInt, shortTitle } from "../../lib/format";
+import { formatInt, shortTitle, windowNote } from "../../lib/format";
+import { outOfWindowCount } from "../../lib/timeline";
 import type { Example, Filters, ScopeInfo, YearWindow } from "../../types";
 import { Page } from "./Page";
 
@@ -53,6 +54,8 @@ function ExploreBody({ scopes, examplesByScope, onExploreScope, onEnterQuestion 
   const maxs = scopes.map((s) => s.composition?.dated_span.max_year).filter((x): x is number => x != null);
   const span = mins.length && maxs.length ? `${Math.min(...mins)} to ${Math.max(...maxs)}` : "undated only";
   const collections = Array.from(new Set(scopes.flatMap((s) => s.collections)));
+  const outOfWindow = scopes.reduce((n, s) => n + (s.composition ? outOfWindowCount(s.composition.by_period) : 0), 0);
+  const nominal = scopes.find((s) => s.composition)?.composition?.window ?? { min_year: null, max_year: null };
 
   return (
     <>
@@ -69,6 +72,7 @@ function ExploreBody({ scopes, examplesByScope, onExploreScope, onEnterQuestion 
           non-overlapping Internet Archive collection, so the totals are the sums of the per-corpus
           figures below. With one corpus served this equals that corpus.
         </p>
+        <p className="mt-1 text-sm text-muted">{windowNote(nominal, outOfWindow)}</p>
       </section>
 
       {scopes.map((s) => (
@@ -131,8 +135,9 @@ function ScopeCard({
             <Figure value={formatInt(scope.item_count)} label="items" />
             <Figure value={formatInt(c.passages)} label="passages" />
             <Figure value={spanLabel(c.dated_span)} label="dated span" />
-            <Figure value={pct(c.undated.passages, c.passages)} label="of passages undated" />
+            <Figure value={pct(c.undated.items, scope.item_count)} label="of items undated" />
           </dl>
+          <p className="mt-2 text-sm text-muted">{windowNote(c.window, outOfWindowCount(c.by_period))}</p>
           <p className="mt-2 text-sm">
             <span className="tag">OCR</span> high {pct(c.ocr.high, ocrTotal)} &middot; medium{" "}
             {pct(c.ocr.medium, ocrTotal)} &middot; low {pct(c.ocr.low, ocrTotal)}

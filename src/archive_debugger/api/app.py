@@ -176,12 +176,23 @@ def corpus_facts(conn, pilot_window: dict) -> dict:
     undated = conn.execute(
         "SELECT COUNT(*) FROM passages p JOIN items i ON i.item_id = p.item_id "
         "WHERE i.dated = 0 OR i.dated IS NULL").fetchone()[0]
+    undated_items = conn.execute(
+        "SELECT COUNT(*) FROM items WHERE dated = 0 OR dated IS NULL").fetchone()[0]
+    # Dated items whose metadata year falls outside the nominal window. The literal 1960/2009 match
+    # ingest.normalize.period_of and _PERIOD_CASE, so this equals by_period['pre-1960'] +
+    # by_period['post-2009'] on the same items table: the header's span note and the timeline's
+    # out-of-window bars carry one count.
+    out_of_window = conn.execute(
+        "SELECT COUNT(*) FROM items WHERE dated = 1 AND (year < 1960 OR year > 2009)").fetchone()[0]
     mn, mx = conn.execute("SELECT MIN(year), MAX(year) FROM items WHERE dated = 1").fetchone()
     return {
         "items": items,
         "passages": passages,
         "passages_undated": undated,
-        "undated_share": round(undated / passages, 4) if passages else 0.0,
+        "undated_share": round(undated / passages, 4) if passages else 0.0,   # passage-weighted (% of passages)
+        "items_undated": undated_items,
+        "undated_item_share": round(undated_items / items, 4) if items else 0.0,   # headline undated basis
+        "items_out_of_window": out_of_window,
         "window": {"min_year": mn, "max_year": mx},          # true dated span
         "pilot_window": pilot_window,                         # config binning window
     }

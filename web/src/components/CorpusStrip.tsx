@@ -1,4 +1,4 @@
-import { formatInt, formatShare, windowLabel } from "../lib/format";
+import { formatInt, formatShare, windowLabel, windowNote } from "../lib/format";
 import type { CorpusFacts } from "../types";
 
 interface Props {
@@ -17,12 +17,15 @@ export function CorpusStrip({ corpus }: Props) {
             value={`${windowLabel({ window: corpus.pilot_window })} pilot window`}
             label={`dated items span ${windowLabel({ window: corpus.window })}`}
           />
-          <Figure value={formatShare(corpus.undated_share)} label="of passages undated" />
+          <Figure value={formatShare(corpus.undated_item_share)} label="of items undated" />
         </dl>
       ) : (
         <p className="text-sm text-muted" aria-live="polite">
           Loading corpus facts.
         </p>
+      )}
+      {corpus && (
+        <p className="mt-2 text-sm text-muted">{windowNote(corpus.pilot_window, corpus.items_out_of_window)}</p>
       )}
       <p className="mt-2 text-sm text-muted">
         <span className="cited mr-2">Cited</span>= the passage exists, was retrieved for this question, and resolves

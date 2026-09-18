@@ -67,3 +67,10 @@ export function periodOfRow(row: { year: number | null }): Period {
 export function periodLabel(key: Period): string {
   return key;
 }
+
+/** Dated items outside the nominal 1960-2009 window, from real per-period counts: the pre-1960 and
+ *  post-2009 buckets. Feeds the shared span note so composition, explorer, and timeline show one
+ *  out-of-window count that also matches corpus_facts.items_out_of_window. */
+export function outOfWindowCount(byPeriod: Record<string, number>): number {
+  return (byPeriod["pre-1960"] ?? 0) + (byPeriod["post-2009"] ?? 0);
+}

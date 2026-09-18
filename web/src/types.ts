@@ -179,7 +179,10 @@ export interface CorpusFacts {
   items: number;
   passages: number;
   passages_undated: number;
-  undated_share: number;
+  undated_share: number;         // passage-weighted; label as "% of passages", never the headline
+  items_undated: number;
+  undated_item_share: number;    // headline undated basis (item-weighted), consistent everywhere
+  items_out_of_window: number;   // dated items with a metadata year outside the nominal window
   window: YearWindow;        // true dated span
   pilot_window: YearWindow;  // config binning window
 }

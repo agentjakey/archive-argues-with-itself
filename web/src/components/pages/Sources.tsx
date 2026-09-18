@@ -1,4 +1,5 @@
-import { formatInt } from "../../lib/format";
+import { formatInt, windowNote } from "../../lib/format";
+import { outOfWindowCount } from "../../lib/timeline";
 import type { ScopeInfo, YearWindow } from "../../types";
 import { Page } from "./Page";
 
@@ -49,8 +50,15 @@ function ScopeComposition({ scope }: { scope: ScopeInfo }) {
         <Figure value={formatInt(scope.item_count)} label="items" />
         <Figure value={formatInt(c.passages)} label="passages" />
         <Figure value={spanLabel(c.dated_span)} label="dated items span" />
-        <Figure value={pct(c.undated.passages, c.passages)} label="of passages undated" />
+        <Figure value={pct(c.undated.items, scope.item_count)} label="of items undated" />
       </dl>
+      <p className="mt-2 text-sm text-muted">{windowNote(c.window, outOfWindowCount(c.by_period))}</p>
+      <p className="mt-1 text-sm text-muted">
+        Undated: {formatInt(c.undated.items)} of {formatInt(scope.item_count)} items (
+        {pct(c.undated.items, scope.item_count)}); the same documents are{" "}
+        {pct(c.undated.passages, c.passages)} of passages. The headline undated share is item-weighted; the
+        passage figure is labelled as such and is never the headline.
+      </p>
 
       <h4 className="mt-4 tag">OCR quality, passage-weighted</h4>
       <p className="text-sm">

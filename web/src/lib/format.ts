@@ -1,4 +1,4 @@
-import type { CorpusFacts, EvidenceRow } from "../types";
+import type { CorpusFacts, EvidenceRow, YearWindow } from "../types";
 
 export function shortTitle(title: string | null, max = 48): string {
   const s = (title ?? "untitled").replace(/\s+/g, " ").trim();
@@ -58,6 +58,21 @@ export function windowLabel(c: Pick<CorpusFacts, "window">): string {
   const { min_year, max_year } = c.window;
   if (min_year == null || max_year == null) return "undated only";
   return `${min_year} to ${max_year}`;
+}
+
+/** The one honest span story, shown wherever a date range or an out-of-window period appears: the
+ *  nominal collection window, how many dated items carry metadata dates outside it, and that these
+ *  are catalog-metadata dates that may not equal the publication year. The real count is passed in
+ *  (from by_period on composition surfaces, or corpus_facts.items_out_of_window on the header), so
+ *  the same number reads across surfaces. Nothing here is inferred; the true dated span is shown
+ *  unclamped elsewhere. */
+export function windowNote(pilotWindow: YearWindow, outOfWindow: number): string {
+  const w = windowLabel({ window: pilotWindow });
+  const base = "Early and late dates are catalog metadata and may not equal the publication year.";
+  if (!outOfWindow) return `The nominal collection window is ${w}. ${base}`;
+  const items =
+    outOfWindow === 1 ? "1 item carries a metadata date" : `${formatInt(outOfWindow)} items carry metadata dates`;
+  return `The nominal collection window is ${w}; ${items} outside it. ${base}`;
 }
 
 /** Honest short label for how an item's date was resolved. exact = catalogue metadata,

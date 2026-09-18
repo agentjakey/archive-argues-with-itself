@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { formatInt } from "../../lib/format";
-import { timelineBars, type PeriodBar } from "../../lib/timeline";
+import { formatInt, windowNote } from "../../lib/format";
+import { outOfWindowCount, timelineBars, type PeriodBar } from "../../lib/timeline";
 import type { Period, ScopeInfo } from "../../types";
 import { Page } from "./Page";
 
@@ -144,6 +144,9 @@ function TimelineBody({
           their own hatched bar, never spread across the decades; see Sources for the undated share of passages. A
           decade with no documents is drawn as a zero bar, so thin periods stay visibly thin. The axis ends where the
           record does; there is no recent tail this corpus does not hold.
+        </figcaption>
+        <figcaption className="mt-2 max-w-prose text-sm text-muted">
+          {windowNote(scope.composition?.window ?? { min_year: null, max_year: null }, outOfWindowCount(byPeriod))}
         </figcaption>
       </figure>
 
