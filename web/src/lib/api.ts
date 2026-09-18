@@ -114,6 +114,14 @@ export function examples(): Promise<Example[]> {
   return request<Example[]>(withQuery("/examples", scoped(new URLSearchParams())));
 }
 
+/** Seed questions for a named scope (the explorer lists several scopes at once, so it asks for
+ *  each scope's own examples explicitly rather than the active-scope default). */
+export function examplesForScope(scope: string): Promise<Example[]> {
+  const p = new URLSearchParams();
+  if (scope) p.set("scope", scope);
+  return request<Example[]>(withQuery("/examples", p));
+}
+
 export function health(): Promise<Health> {
   return request<Health>(withQuery("/health", scoped(new URLSearchParams())));
 }

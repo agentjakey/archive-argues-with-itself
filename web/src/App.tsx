@@ -26,11 +26,13 @@ import { About } from "./components/pages/About";
 import { Gaps } from "./components/pages/Gaps";
 import { HowItWorks } from "./components/pages/HowItWorks";
 import { SourcesPage } from "./components/pages/Sources";
+import { ExplorePage } from "./components/pages/Explore";
 import { SourceLine } from "./components/SourceLine";
 import { CoverageMap } from "./components/CoverageMap";
 import { Stories } from "./components/Stories";
 import { useAttractLoop } from "./hooks/useAttractLoop";
 import { useScopes } from "./hooks/useScopes";
+import { useScopeExamples } from "./hooks/useScopeExamples";
 import { useStories } from "./hooks/useStories";
 import { flag as apiFlag } from "./lib/api";
 import { TILE_QIDS } from "./lib/attract";
@@ -64,6 +66,7 @@ export default function App() {
   const scopesInfo = useScopes();
   const activeScopeInfo =
     scopesInfo?.scopes.find((s) => s.name === (initial.current.scope ?? scopesInfo.default)) ?? null;
+  const scopeExamples = useScopeExamples((scopesInfo?.scopes ?? []).map((s) => s.name));
   const coverage = useCoverage(asked, askedFilters);
 
   const goView = useCallback(
@@ -212,6 +215,29 @@ export default function App() {
     [scopesInfo, kiosk, offline],
   );
 
+  // Enter a corpus on a specific question from the explorer: reload into that scope with the
+  // question (and its filters) in the URL, so the app runs it there and lands on the cited answer
+  // (a warmed seed question returns instantly from cache). The full reload keeps the same clean
+  // cross-scope reset the switcher guarantees.
+  const enterScopeWithQuestion = useCallback(
+    (name: string, text: string, f: Filters) => {
+      const def = scopesInfo?.default ?? "";
+      const params = new URLSearchParams();
+      if (name && name !== def) params.set("scope", name);
+      if (text) params.set("q", text);
+      for (const k of ["period", "jurisdiction", "doc_type"] as const) {
+        const v = (f as Record<string, string | undefined>)[k];
+        if (v) params.set(k, v);
+      }
+      if (kiosk) params.set("kiosk", "1");
+      if (offline) params.set("offline", "1");
+      if (idleParam.current) params.set("idle", idleParam.current);
+      const qs = params.toString();
+      window.location.assign(`${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    },
+    [scopesInfo, kiosk, offline],
+  );
+
   const pick = useCallback(
     (e: Example) => {
       setQuestion(e.text);
@@ -285,6 +311,14 @@ export default function App() {
         onSwitchScope={switchScope}
       />
       <EntryAdvisory />
+      {view === "explore" && (
+        <ExplorePage
+          scopes={scopesInfo?.scopes ?? null}
+          examplesByScope={scopeExamples}
+          onExploreScope={switchScope}
+          onEnterQuestion={enterScopeWithQuestion}
+        />
+      )}
       {view === "how" && <HowItWorks />}
       {view === "gaps" && <Gaps />}
       {view === "sources" && <SourcesPage scopes={scopesInfo?.scopes ?? null} />}

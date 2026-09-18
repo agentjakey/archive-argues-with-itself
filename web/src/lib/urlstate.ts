@@ -3,8 +3,8 @@ import type { Filters } from "../types";
 // The URL is the app's state: q + filters on ask, pins=a,b on pin, kiosk preserved,
 // view=how|gaps|about for the reading pages.
 
-export type View = "how" | "gaps" | "sources" | "map" | "about";
-export const VIEWS: readonly View[] = ["how", "gaps", "sources", "map", "about"];
+export type View = "explore" | "how" | "gaps" | "sources" | "map" | "about";
+export const VIEWS: readonly View[] = ["explore", "how", "gaps", "sources", "map", "about"];
 
 export interface UrlState {
   q: string;
