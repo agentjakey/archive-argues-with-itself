@@ -27,6 +27,7 @@ import { Gaps } from "./components/pages/Gaps";
 import { HowItWorks } from "./components/pages/HowItWorks";
 import { SourcesPage } from "./components/pages/Sources";
 import { ExplorePage } from "./components/pages/Explore";
+import { TimelinePage } from "./components/pages/Timeline";
 import { SourceLine } from "./components/SourceLine";
 import { CoverageMap } from "./components/CoverageMap";
 import { Stories } from "./components/Stories";
@@ -39,7 +40,8 @@ import { TILE_QIDS } from "./lib/attract";
 import { applyState, readState, type View } from "./lib/urlstate";
 import { mergeFlagged, needsInterstitial } from "./lib/sensitivity";
 import { PROVINCE_SLUGS } from "./lib/coverage";
-import type { EvidenceRow, Example, Filters, Flagged, Story } from "./types";
+import { periodOfRow } from "./lib/timeline";
+import type { EvidenceRow, Example, Filters, Flagged, Period, Story } from "./types";
 
 export default function App() {
   const kiosk = useKiosk();
@@ -62,6 +64,13 @@ export default function App() {
   const [storyFlagged, setStoryFlagged] = useState<Flagged | null>(null);   // over the story's pins
   const [pinFlagged, setPinFlagged] = useState<Flagged | null>(null);       // over a free user-pinned pair
   const [flaggedAck, setFlaggedAck] = useState(false);   // interstitial acknowledged for the current result
+  // Thematic-timeline two-decade comparison. It reuses the EXISTING CompareView: the question is
+  // asked once (unfiltered, so the pool spans decades), then one pool passage per chosen decade is
+  // picked client-side (no extra retrieval, no extra cache write). pending holds the two periods
+  // until that response arrives.
+  const [pendingDecadeCompare, setPendingDecadeCompare] = useState<{ a: Period; b: Period } | null>(null);
+  const [decadeCompare, setDecadeCompare] = useState<{ a: EvidenceRow; b: EvidenceRow; terms: string[] } | null>(null);
+  const [decadeCompareNote, setDecadeCompareNote] = useState<string | null>(null);
   const stories = useStories();
   const scopesInfo = useScopes();
   const activeScopeInfo =
@@ -146,6 +155,9 @@ export default function App() {
       setStoryCaption(null);
       setStoryFlagged(null);
       setPinFlagged(null);
+      setDecadeCompare(null);       // a fresh ask clears any decade comparison...
+      setDecadeCompareNote(null);
+      setPendingDecadeCompare(null);   // ...but onCompareDecades sets pendingDecadeCompare after this
       setFlaggedAck(false);   // each new result must re-acknowledge its interstitial
       setDrawer(null);
       setChipsCollapsed(true);
@@ -267,6 +279,77 @@ export default function App() {
     [asked, askedFilters, kiosk, offline, ask],
   );
 
+  // Drill from the timeline into one decade: run the question scoped to that period through the
+  // EXISTING period filter (the frozen retriever already applies it), so the answer and evidence
+  // trail are that decade's passages. Same shape as exploreProvince, one filter instead of the
+  // other. With no question yet, land on the ask view with the period set so the next question is
+  // decade-scoped.
+  const onDrillDecade = useCallback(
+    (period: Period, q: string) => {
+      const text = q.trim();
+      const f: Filters = { period };
+      setView(null);
+      setQuestion(text);
+      setFilters(f);
+      if (text) {
+        ask(text, f);
+      } else {
+        setAskedFilters(f);
+        applyState({ q: "", filters: f, pins: [], kiosk, offline }, "push");
+      }
+      window.scrollTo({ top: 0 });
+    },
+    [ask, kiosk, offline],
+  );
+
+  // Compare two decades in the EXISTING compare view. Ask the question once, unfiltered, so the
+  // retrieval pool spans decades; pendingDecadeCompare then picks one pool passage per chosen
+  // period once the response arrives (see the effect below). No period-filtered retrieval and no
+  // extra cache write beyond the single ask; it works offline, where the degraded response still
+  // carries the full pool.
+  const onCompareDecades = useCallback(
+    (q: string, a: Period, b: Period) => {
+      const text = q.trim();
+      if (!text || a === b) return;
+      setView(null);
+      setQuestion(text);
+      setFilters({});
+      ask(text, {});
+      setPendingDecadeCompare({ a, b });
+      window.scrollTo({ top: 0 });
+    },
+    [ask],
+  );
+
+  // Resolve a pending two-decade comparison once its answer's pool is in. Picks the top-ranked pool
+  // passage in each period (period_of matches the histogram's buckets). If either period has no
+  // retrieved passage for the question, say so honestly rather than inventing one.
+  useEffect(() => {
+    if (!pendingDecadeCompare || !response) return;
+    const { a, b } = pendingDecadeCompare;
+    const pool = response.evidence;
+    const rowA = pool.find((r) => periodOfRow(r) === a) ?? null;
+    const rowB = pool.find((r) => periodOfRow(r) === b) ?? null;
+    if (rowA && rowB) {
+      setDecadeCompare({ a: rowA, b: rowB, terms: response.answer.coverage.salient_terms ?? [] });
+      setDecadeCompareNote(null);
+    } else {
+      setDecadeCompare(null);
+      const missing = [!rowA ? a : null, !rowB ? b : null].filter(Boolean).join(" and ");
+      setDecadeCompareNote(
+        `The record surfaced no passage in ${missing} for this question, so there is nothing to compare there. ` +
+          `That period may be sparse for this question; try another decade or a different question.`,
+      );
+    }
+    setPendingDecadeCompare(null);
+  }, [response, pendingDecadeCompare]);
+
+  const clearDecadeCompare = useCallback(() => {
+    setDecadeCompare(null);
+    setDecadeCompareNote(null);
+    setPendingDecadeCompare(null);
+  }, []);
+
   const togglePin = useCallback(
     (row: EvidenceRow) => {
       setPins((p) => {
@@ -284,8 +367,13 @@ export default function App() {
   }, [asked, askedFilters, kiosk, offline]);
 
   const pinned = pins.map((id) => byId.get(id)).filter((r): r is EvidenceRow => Boolean(r));
-  const compare: [EvidenceRow, EvidenceRow] | null =
-    storyRows ?? (pinned.length === 2 ? [pinned[0], pinned[1]] : null);
+  // A two-decade comparison from the timeline takes over the compare slot, ahead of a story or a
+  // free pinned pair. decadeResult also covers the honest "no passage in that period" note, which
+  // stands in place of the answer for a comparison that could not be formed.
+  const decadeResult = decadeCompare !== null || decadeCompareNote !== null;
+  const compare: [EvidenceRow, EvidenceRow] | null = decadeCompare
+    ? [decadeCompare.a, decadeCompare.b]
+    : storyRows ?? (pinned.length === 2 ? [pinned[0], pinned[1]] : null);
   const showStories = view === null && response === null && status !== "waiting" && status !== "error";
   const salient = response?.answer.coverage.salient_terms ?? [];
   // resultFlagged gates the initial-result interstitial (question + story). The note also
@@ -323,6 +411,14 @@ export default function App() {
       {view === "gaps" && <Gaps />}
       {view === "sources" && <SourcesPage scopes={scopesInfo?.scopes ?? null} />}
       {view === "map" && <CoverageMap scope={activeScopeInfo} onExplore={exploreProvince} onNav={goView} />}
+      {view === "timeline" && (
+        <TimelinePage
+          scope={activeScopeInfo}
+          initialQuestion={asked}
+          onDrillDecade={onDrillDecade}
+          onCompareDecades={onCompareDecades}
+        />
+      )}
       {view === "about" && <About />}
       {view === null && (
       <>
@@ -380,43 +476,73 @@ export default function App() {
                 counts, a floor, not precise per-province coverage.
               </p>
             )}
-          {response.degraded ? (
+          {decadeResult ? (
+            // A two-decade comparison from the timeline: the compare view is the result, so the
+            // answer, trail, and coverage step aside. compare is set when both periods yielded a
+            // passage; the note stands in when one did not.
             <>
-              <LimitedModeCard answer={response.answer} degraded={response.degraded} />
-              <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation />
-            </>
-          ) : response.answer.abstained ? (
-            <>
-              <AbstentionCard answer={response.answer} />
-              <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation />
+              <p className="mt-2 font-sans text-xs uppercase tracking-wide text-muted">
+                Two decades of the record, side by side
+              </p>
+              {compare ? (
+                <CompareView
+                  a={compare[0]}
+                  b={compare[1]}
+                  salientTerms={decadeCompare?.terms ?? salient}
+                  onOpen={setDrawer}
+                  onUnpin={clearDecadeCompare}
+                  onClose={clearDecadeCompare}
+                />
+              ) : (
+                <div className="card mt-4">
+                  <p className="leading-relaxed">{decadeCompareNote}</p>
+                  <button type="button" className="chip mt-3" onClick={clearDecadeCompare}>
+                    Back to the answer
+                  </button>
+                </div>
+              )}
             </>
           ) : (
-            <AnswerCard answer={response.answer} byId={byId} onOpen={setDrawer} />
-          )}
+            <>
+              {response.degraded ? (
+                <>
+                  <LimitedModeCard answer={response.answer} degraded={response.degraded} />
+                  <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation />
+                </>
+              ) : response.answer.abstained ? (
+                <>
+                  <AbstentionCard answer={response.answer} />
+                  <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation />
+                </>
+              ) : (
+                <AnswerCard answer={response.answer} byId={byId} onOpen={setDrawer} />
+              )}
 
-          {compare && (
-            <CompareView
-              a={compare[0]}
-              b={compare[1]}
-              salientTerms={salient}
-              caption={storyRows ? storyCaption ?? undefined : undefined}
-              onOpen={setDrawer}
-              onUnpin={storyRows ? () => { setStoryRows(null); setStoryCaption(null); } : togglePin}
-              onClose={storyRows ? () => { setStoryRows(null); setStoryCaption(null); } : clearPins}
-            />
-          )}
+              {compare && (
+                <CompareView
+                  a={compare[0]}
+                  b={compare[1]}
+                  salientTerms={salient}
+                  caption={storyRows ? storyCaption ?? undefined : undefined}
+                  onOpen={setDrawer}
+                  onUnpin={storyRows ? () => { setStoryRows(null); setStoryCaption(null); } : togglePin}
+                  onClose={storyRows ? () => { setStoryRows(null); setStoryCaption(null); } : clearPins}
+                />
+              )}
 
-          <EvidenceTrail
-            rows={response.evidence}
-            salientTerms={salient}
-            pinned={pins}
-            heading={response.degraded ? "The record for your question" : response.answer.abstained ? "Nearest evidence, not an answer" : "Evidence trail"}
-            matched={matched}
-            onOpen={setDrawer}
-            onPin={togglePin}
-            source={activeScopeInfo}
-          />
-          {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} />}
+              <EvidenceTrail
+                rows={response.evidence}
+                salientTerms={salient}
+                pinned={pins}
+                heading={response.degraded ? "The record for your question" : response.answer.abstained ? "Nearest evidence, not an answer" : "Evidence trail"}
+                matched={matched}
+                onOpen={setDrawer}
+                onPin={togglePin}
+                source={activeScopeInfo}
+              />
+              {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} />}
+            </>
+          )}
         </main>
         )
       )}

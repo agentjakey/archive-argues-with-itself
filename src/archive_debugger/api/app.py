@@ -295,6 +295,25 @@ def _date_method_distribution(conn) -> dict:
         "SELECT COALESCE(date_method, 'unknown') m, COUNT(*) c FROM items GROUP BY m")}
 
 
+# Same period buckets as ingest.normalize.period_of: undated, pre-1960, each decade, post-2009.
+# 'undated' here is exactly the undated-items set the sources view reports (dated != 1), so the
+# timeline's undated bucket and the sources view's undated share share one basis.
+_PERIOD_CASE = (
+    "CASE WHEN i.dated = 1 AND i.year IS NOT NULL AND i.year < 1960 THEN 'pre-1960' "
+    "WHEN i.dated = 1 AND i.year IS NOT NULL AND i.year > 2009 THEN 'post-2009' "
+    "WHEN i.dated = 1 AND i.year IS NOT NULL THEN CAST((i.year / 10) * 10 AS TEXT) || 's' "
+    "ELSE 'undated' END"
+)
+
+
+def _period_distribution(conn) -> dict:
+    """Item counts per period for the thematic timeline. Real per-decade document counts;
+    undated is its own bucket, never distributed onto a decade; out-of-window periods
+    (pre-1960, post-2009) appear only when items actually fall there (honest window)."""
+    return {p: n for p, n in conn.execute(
+        f"SELECT {_PERIOD_CASE} AS period, COUNT(*) FROM items i GROUP BY period")}
+
+
 def scope_composition(conn, corpus: dict) -> dict:
     """Real per-scope composition for the sources view, computed live from the scope's own
     databases (never hardcoded): passage count, true dated span, undated share, OCR-quality
@@ -323,6 +342,10 @@ def scope_composition(conn, corpus: dict) -> dict:
         "jurisdiction_unknown_share": unknown_share,
         "jurisdiction_is_floor": bool(unknown_share >= 0.20 or proxy_resolved),
         "date_method": _date_method_distribution(conn),
+        # Real per-period document counts for the thematic timeline. normalize sets dated=1 only
+        # with a year, so by_period['undated'] equals undated['items'] above for any real corpus:
+        # the timeline's undated bar and this view's undated count come from one basis.
+        "by_period": _period_distribution(conn),
     }
 
 

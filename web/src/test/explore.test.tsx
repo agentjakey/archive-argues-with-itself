@@ -33,6 +33,7 @@ function scope(
       jurisdiction_unknown_share: 0.149,
       jurisdiction_is_floor: isFloor,
       date_method: {},
+      by_period: {},
     },
   };
 }

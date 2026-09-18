@@ -235,6 +235,7 @@ export interface Composition {
   jurisdiction_unknown_share: number;
   jurisdiction_is_floor: boolean;   // issuer-derived proxy; not full provincial coverage
   date_method: Record<string, number>;   // exact | title_extracted | unknown -> item count
+  by_period: Record<string, number>;      // real document counts per period (pre-1960 | decade | post-2009 | undated)
 }
 
 // One served corpus for the scope switcher, from GET /scopes. Mirrors api/app.py scope_facts.
