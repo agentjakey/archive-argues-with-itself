@@ -1,0 +1,57 @@
+{
+  "scope": "microlog_public_health",
+  "status": "INCOMPLETE",
+  "status_detail": "Deterministic composition, jurisdiction, out-of-window, and sensitivity numbers are complete. Strict/lenient sentence support, citation-resolution rate, and abstention/false-abstention rates are PENDING the author's own gold set and sentence-support judgments (N2 support comes from a manual claim-level audit; N4 gold labels are author-decided). Do NOT read this as a passing audit.",
+  "author": "Jacob Ortiz",
+  "isolation": "Read-only over the built microlog scope. Pilot gold, reports/phase16/audit_numbers.json, config/pilot.toml, the frozen gate, and the pilot DBs are untouched. These numbers are microlog's own; they are not merged into the pilot audit.",
+  "corpus_facts": {
+    "items": 13539,
+    "passages": 1136827,
+    "dated_items": 13112,
+    "undated_items": 427,
+    "undated_item_share": 0.0315,
+    "undated_passages": 46435,
+    "undated_passage_share": 0.0408,
+    "undated_basis_note": "Headline undated share is item-weighted (0.0315). The passage-weighted figure (0.0408) is labeled '% of passages' only, never the headline.",
+    "dated_span": {"min_year": 1963, "max_year": 2018},
+    "nominal_window": {"start_year": 1960, "end_year": 2009},
+    "items_out_of_window": 4379,
+    "out_of_window_note": "All 4379 out-of-window dated items are post-2009 (2010-2018); microlog has no pre-1960 dated items. Real dates are shown unclamped. Unlike the pilot, this scope does reach into the 2010s, so it must not inherit the pilot's 'record stops around 2009' framing. Characterized read-only in reports/microlog_out_of_window_dated_items.csv.",
+    "date_method": {"exact": 13101, "title_extracted": 11, "unknown": 427}
+  },
+  "jurisdiction": {
+    "unknown_items": 2018,
+    "unknown_share": 0.1491,
+    "proxy_resolved_items": 3777,
+    "is_floor": true,
+    "note": "Issuer-derived proxy resolved by the scope-local microlog map. is_floor is set because proxy-map resolutions are present; per-province counts are a floor, not verified coverage. Unknown dropped from 42.8% to 14.9% (see MICROLOG_JURISDICTION_MEMO.md)."
+  },
+  "sensitivity": {
+    "flags_module": "src/archive_debugger/flags.py (reused unchanged; global topics already cover this scope; pilot behavior unmodified)",
+    "precision_benign_controls_checked": 11,
+    "precision_false_positives": 0,
+    "recall_passage_coverage": {
+      "residential-school-health": {"passages": 589, "items": 222},
+      "coerced-sterilization-indigenous": {"passages": 106, "items": 36},
+      "tainted-blood-krever": {"passages": 501, "items": 210},
+      "early-hiv-aids": {"passages": 19282, "items": 1704}
+    },
+    "crisis_lines_confirmed": true,
+    "detail": "reports/microlog/sensitivity_review.md"
+  },
+  "gate2": {
+    "decision": "Ship searchable with the sensitivity layer ON; Indigenous-identifying health content is NOT featured (golden questions, attract tiles, stories, retrieval highlights) pending community consultation (CARE/OCAP). Coverage/existence in the map is permitted.",
+    "recorded_in": "web/src/components/pages/Gaps.tsx"
+  },
+  "pending_author_gold_and_judgments": {
+    "gold_set": "PENDING: author-validated, span-verified microlog gold; candidate questions in reports/microlog/candidate_gold_questions.md are candidate TEXT ONLY (N4), unlabeled.",
+    "strict_support_rate": null,
+    "lenient_support_rate": null,
+    "sentence_counts": null,
+    "citations_resolving": "PENDING: deterministic once answers are generated over the decided gold (N2 three structural checks).",
+    "abstention_rate_on_controls": null,
+    "false_abstention_rate": null,
+    "coverage_grid": "PENDING: computed over the decided gold's salient terms.",
+    "note": "These are the honesty-critical numbers. They require the author's decided gold and sentence-support judgments and are not produced or estimated here (N2, N4)."
+  }
+}

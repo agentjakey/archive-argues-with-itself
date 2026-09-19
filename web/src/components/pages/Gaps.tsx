@@ -9,6 +9,28 @@ export function Gaps() {
         with the numbers that measure them.
       </p>
 
+      <h3>The national scope does not feature Indigenous-identifying health content</h3>
+      <p>
+        The national scope is a second, wider corpus: about 13,500 microlog items, their dated span running
+        1963 to 2018, a broader and more recent net than the pilot. A national public-health record of that
+        reach inevitably holds Indigenous-identifying health content, including residential-school health,
+        coerced sterilization, the tainted-blood years, and the early HIV and AIDS response. That content
+        cannot be responsibly consulted on under CARE and OCAP in the time before this is shown, so the
+        decision is deliberate and narrow. The national scope ships searchable with the sensitivity layer on,
+        and its harm-adjacent pages carry the contextual note and the crisis lines; but Indigenous-identifying
+        health content is not featured. It is used in no golden question, no attract tile, no story, and no
+        retrieval highlight. The coverage map still shows that the provinces and territories exist in the
+        record, because showing that the record reaches a place is not the same as putting its most sensitive
+        pages forward.
+      </p>
+      <p>
+        The line is featuring, not existence. The pages stay searchable, and when a visitor's own question
+        reaches them they are shown with the contextual note and the crisis lines, never sanitized and never
+        hidden. Featuring waits until the communities whose record this is can be consulted. The crisis lines
+        carried on this content are the National Indian Residential School Crisis Line (1-866-925-4419), the
+        Hope for Wellness Help Line (1-855-242-3310), and 9-8-8.
+      </p>
+
       <h3>Almost half of the passages carry no date</h3>
       <p>
         338,338 of 745,893 passages (45.4%) belong to items with no usable date, after 36 items were dated from

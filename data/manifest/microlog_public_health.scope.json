@@ -24,5 +24,14 @@
   "counts_provenance": "reports/bc_audit/bc_sizing.md, Week-1 audit: collection:microlog texts=207863; mediatype:texts AND collection:microlog AND (public_health term-set)=13544; dated 1960-2009=8726 (1990-2009=6598, 2010+=4379, pre-1960=0). Cross-check reports/coverage_audit/finalist_sizing.md: base gov + microlog public_health=16857. All are real advancedsearch.php numFound; re-verify live before the harvest, the guard uses the live count.",
   "manifest_date": null,
   "status": "scope defined; harvest pending. microlog_public_health.identifiers.txt is produced by the harvest (archive_debugger.harvest.fetch via the Scraping API path) and committed alongside this file, exactly like public_health.identifiers.txt. count and manifest_date are filled in from the completed harvest.",
-  "note": "Additive, fully isolated microlog public-health data release. The pilot excluded microlog (reserve-only: microfiche-sourced, OCR unverified in Week 1); this scope builds it as its own release under data/exploration/microlog/, never touching the pilot's civic.db / vectors.db. Config: config/microlog.toml."
+  "note": "Additive, fully isolated microlog public-health data release. The pilot excluded microlog (reserve-only: microfiche-sourced, OCR unverified in Week 1); this scope builds it as its own release under data/exploration/microlog/, never touching the pilot's civic.db / vectors.db. Config: config/microlog.toml.",
+  "audit": {
+    "status": "INCOMPLETE: composition, jurisdiction, out-of-window, and sensitivity numbers complete; strict/lenient sentence support, citation-resolution rate, and abstention/false-abstention rates PENDING the author's decided gold and sentence-support judgments (N2 support is a manual claim-level audit; N4 gold is author-decided).",
+    "artifact": "reports/microlog/audit_numbers.json",
+    "sensitivity_review": "reports/microlog/sensitivity_review.md",
+    "out_of_window_items": "reports/microlog_out_of_window_dated_items.csv",
+    "candidate_gold_questions": "reports/microlog/candidate_gold_questions.md",
+    "gate2": "Ships searchable with the sensitivity layer on; Indigenous-identifying health content is not featured pending CARE/OCAP consultation; decision recorded in web/src/components/pages/Gaps.tsx.",
+    "isolation": "Read-only over the built scope; pilot audited files and DBs untouched; numbers are microlog's own and are not merged into reports/phase16/audit_numbers.json."
+  }
 }
