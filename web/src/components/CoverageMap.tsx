@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { formatInt } from "../lib/format";
 import { BUCKETS, PROVINCE_TILES, bucketOf, countsByJurisdiction } from "../lib/coverage";
 import type { View } from "../lib/urlstate";
@@ -16,10 +17,23 @@ interface Props {
   onNav: (view: View) => void;
 }
 
-/** Coverage map: a tile-grid choropleth of the active scope's per-province/territory item
- *  density, from the live /scopes composition (never hardcoded). No-data is a hatch, distinct
- *  from the low end; the unknown and federal counts sit off the map; a resolved tile is
- *  clickable and carries the floor caveat downstream. */
+interface Active {
+  slug: string;
+  name: string;
+  count: number;
+  rank: number | null;   // null = no data in this corpus
+  total: number;         // number of province/territory tiles with data
+  col: number;
+  row: number;
+}
+
+/** Coverage map: an interactive equal-tile cartogram of the active scope's per-province/territory
+ *  item density, from the live /scopes composition (never hardcoded). Equal-area tiles arranged so
+ *  the grid reads as Canada (territories across the top, provinces west-to-east, Atlantic clustered
+ *  at the northeast); colour encodes real item count, NOT land area. No-data is hatched, distinct
+ *  from the lowest count bucket. Hover or keyboard focus on any tile reveals its jurisdiction, exact
+ *  count, and rank within the scope (or a "no data in this corpus" note); every tile is
+ *  keyboard-reachable and screen-reader labeled. Same component serves every scope. */
 export function CoverageMap({ scope, onExplore, onNav }: Props) {
   const comp = scope?.composition;
   return (
@@ -27,9 +41,10 @@ export function CoverageMap({ scope, onExplore, onNav }: Props) {
       <p>
         Where the record is thick and thin across Canada for the corpus you are exploring
         {scope ? <> (<span className="text-ink">{scope.label}</span>)</> : null}. Each tile is a
-        province or territory, shaded by how many items name it as their jurisdiction. Colour is
-        real item count, not land area, and no-data is hatched, not a pale colour, so an empty
-        jurisdiction never reads as a little coverage.
+        province or territory, equal in size and arranged roughly as Canada; the shade is how many
+        items name it as their jurisdiction. Colour is real item count, not land area, and no-data is
+        hatched, not a pale colour, so an empty jurisdiction never reads as a little coverage. Hover or
+        tab to a tile for its exact count and rank.
       </p>
       {!comp ? (
         <p className="text-muted" aria-live="polite">
@@ -50,65 +65,109 @@ function CoverageBody({ scope, onExplore, onNav }: { scope: ScopeInfo; onExplore
   const unknown = counts["unknown"] ?? 0;
   const international = counts["international"] ?? 0;
   const unknownPct = Math.round(comp.jurisdiction_unknown_share * 100);
+  const [active, setActive] = useState<Active | null>(null);
+
+  // Rank each province/territory tile that has data, by item count (descending). Ties share the
+  // ranking order they sort into; the point is a quick "how does this tile stand in the scope".
+  const { rankOf, total } = useMemo(() => {
+    const withData = PROVINCE_TILES.map((t) => ({ slug: t.slug, count: counts[t.slug] ?? 0 }))
+      .filter((t) => t.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const r: Record<string, number> = {};
+    withData.forEach((t, i) => (r[t.slug] = i + 1));
+    return { rankOf: r, total: withData.length };
+  }, [counts]);
+
+  const tileLabel = (slug: string, name: string, count: number, resolved: boolean): string =>
+    resolved
+      ? `${name}: ${formatInt(count)} items, rank ${rankOf[slug] ?? "-"} of ${total} with data${isFloor ? ", proxy floor" : ""}`
+      : `${name}: no data in this corpus`;
+
+  const leftPct = active ? ((active.col + 0.5) / COLS) * 100 : 0;
+  const below = active ? active.row === 0 : false;
+  const topPct = active ? (below ? ((active.row + 1) / ROWS) * 100 : (active.row / ROWS) * 100) : 0;
 
   return (
     <>
       <figure className="mt-4 m-0">
-        <svg
-          viewBox={`0 0 ${COLS * CELL} ${ROWS * CELL}`}
-          className="w-full max-w-[620px] h-auto"
-          role="group"
-          aria-label={`Coverage of ${scope.label} by province and territory`}
-        >
-          <defs>
-            <pattern id="cov-nodata" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <rect width="7" height="7" fill="#fcfaf4" />
-              <line x1="0" y1="0" x2="0" y2="7" stroke="#d9d2c3" strokeWidth="2.5" />
-            </pattern>
-            <style>{".cov-clickable{cursor:pointer}.cov-clickable:hover rect,.cov-clickable:focus rect{stroke:#8b2e1f;stroke-width:3}"}</style>
-          </defs>
-          {PROVINCE_TILES.map((t) => {
-            const count = counts[t.slug] ?? 0;
-            const bucket = bucketOf(count);
-            const x = t.col * CELL + PAD;
-            const y = t.row * CELL + PAD;
-            const resolved = count > 0;
-            const fill = bucket ? bucket.fill : "url(#cov-nodata)";
-            const textColor = bucket ? bucket.text : "#6b655c";
-            const label = resolved
-              ? `${t.name}: ${formatInt(count)} items${isFloor ? " (proxy floor)" : ""}`
-              : `${t.name}: no data`;
-            return (
-              <g
-                key={t.slug}
-                aria-label={label}
-                role={resolved ? "button" : undefined}
-                tabIndex={resolved ? 0 : undefined}
-                className={resolved ? "cov-clickable" : undefined}
-                onClick={resolved ? () => onExplore(t.slug) : undefined}
-                onKeyDown={
-                  resolved
-                    ? (e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onExplore(t.slug);
+        <div className="relative w-full max-w-[640px]">
+          <svg
+            viewBox={`0 0 ${COLS * CELL} ${ROWS * CELL}`}
+            className="w-full h-auto"
+            role="group"
+            aria-label={`Coverage of ${scope.label} by province and territory`}
+          >
+            <defs>
+              <pattern id="cov-nodata" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width="7" height="7" fill="#fcfaf4" />
+                <line x1="0" y1="0" x2="0" y2="7" stroke="#b8ad97" strokeWidth="2.5" />
+              </pattern>
+              <style>{".cov-tile:hover rect,.cov-tile:focus rect{stroke:#8b2e1f;stroke-width:3}.cov-tile:focus{outline:none}.cov-clickable{cursor:pointer}"}</style>
+            </defs>
+            {PROVINCE_TILES.map((t) => {
+              const count = counts[t.slug] ?? 0;
+              const bucket = bucketOf(count);
+              const x = t.col * CELL + PAD;
+              const y = t.row * CELL + PAD;
+              const resolved = count > 0;
+              const fill = bucket ? bucket.fill : "url(#cov-nodata)";
+              const textColor = bucket ? bucket.text : "#6b655c";
+              const label = tileLabel(t.slug, t.name, count, resolved);
+              const enter = () =>
+                setActive({ slug: t.slug, name: t.name, count, rank: resolved ? rankOf[t.slug] : null, total, col: t.col, row: t.row });
+              const activate = resolved ? () => onExplore(t.slug) : undefined;
+              return (
+                <g
+                  key={t.slug}
+                  aria-label={label}
+                  role={resolved ? "button" : "img"}
+                  tabIndex={0}
+                  className={`cov-tile ${resolved ? "cov-clickable" : ""}`}
+                  onMouseEnter={enter}
+                  onMouseLeave={() => setActive(null)}
+                  onFocus={enter}
+                  onBlur={() => setActive(null)}
+                  onClick={activate}
+                  onKeyDown={
+                    resolved
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onExplore(t.slug);
+                          }
                         }
-                      }
-                    : undefined
-                }
-              >
-                <title>{label}</title>
-                <rect x={x} y={y} width={SIZE} height={SIZE} fill={fill} stroke="#d9d2c3" strokeWidth="1.5" rx="3" />
-                <text x={x + SIZE / 2} y={y + SIZE / 2 - 6} textAnchor="middle" fontSize="20" fontWeight="600" fill={textColor} fontFamily="ui-sans-serif, system-ui">
-                  {t.abbr}
-                </text>
-                <text x={x + SIZE / 2} y={y + SIZE / 2 + 18} textAnchor="middle" fontSize="14" fill={textColor} fontFamily="ui-monospace, monospace">
-                  {resolved ? formatInt(count) : "no data"}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+                      : undefined
+                  }
+                >
+                  <title>{label}</title>
+                  <rect x={x} y={y} width={SIZE} height={SIZE} fill={fill} stroke="#d9d2c3" strokeWidth="1.5" rx="3" />
+                  <text x={x + SIZE / 2} y={y + SIZE / 2 - 6} textAnchor="middle" fontSize="20" fontWeight="600" fill={textColor} fontFamily="ui-sans-serif, system-ui">
+                    {t.abbr}
+                  </text>
+                  <text x={x + SIZE / 2} y={y + SIZE / 2 + 18} textAnchor="middle" fontSize="14" fill={textColor} fontFamily="ui-monospace, monospace">
+                    {resolved ? formatInt(count) : "no data"}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+          {active && (
+            <div
+              className="pointer-events-none absolute z-10 max-w-[15rem] whitespace-nowrap border border-ink bg-sheet px-2 py-1 text-sm shadow-sm"
+              style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: below ? "translate(-50%, 8px)" : "translate(-50%, calc(-100% - 8px))" }}
+              aria-hidden="true"
+            >
+              <span className="font-medium text-ink">{active.name}</span>
+              {active.rank != null ? (
+                <span className="text-muted">
+                  : {formatInt(active.count)} items (rank {active.rank} of {active.total})
+                </span>
+              ) : (
+                <span className="text-muted"> - no data in this corpus</span>
+              )}
+            </div>
+          )}
+        </div>
         <figcaption className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
           {[...BUCKETS].reverse().map((b) => (
             <span key={b.label} className="inline-flex items-center gap-2">
@@ -117,7 +176,7 @@ function CoverageBody({ scope, onExplore, onNav }: { scope: ScopeInfo; onExplore
             </span>
           ))}
           <span className="inline-flex items-center gap-2">
-            <span aria-hidden="true" style={{ backgroundImage: "repeating-linear-gradient(45deg,#fcfaf4,#fcfaf4 2px,#d9d2c3 2px,#d9d2c3 4px)" }} className="inline-block h-4 w-4 border border-rule" />
+            <span aria-hidden="true" style={{ backgroundImage: "repeating-linear-gradient(45deg,#fcfaf4,#fcfaf4 2px,#b8ad97 2px,#b8ad97 4px)" }} className="inline-block h-4 w-4 border border-rule" />
             no data
           </span>
         </figcaption>
