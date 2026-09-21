@@ -1,0 +1,754 @@
+{
+ "scope": "microlog",
+ "source": "author decisions adjudicated in reports/microlog/candidate_gold_labels.json",
+ "disclosure": "Candidate relevance labels and abstention statuses were proposed by an assistant model from real retrieval output and gate behavior; each is reviewed and decided by Jacob Ortiz. The same model family generates the tool's answers, so this judge is not independent of the system.",
+ "limitations": [
+  "relevance labeled over the top-10 of a 30-pool; microlog recall@k is computed over the labeled top-10 and is not directly comparable to the pilot's recall denominator",
+  "gate-conflicts mq28 (false-abstain on 'reports'), mq43 and mq44 (false-answer, out-of-scope) are noted, not fixed (gate frozen; tuning is P-EXP-10)",
+  "flags.py sensitivity note covers only the four harm-adjacent topics; general Indigenous-identifying content is screened out of the gold by hand and is not featured (Gate 2)"
+ ],
+ "counts": {
+  "questions": 47,
+  "answerable": 40,
+  "should_abstain": 7
+ },
+ "questions": {
+  "mq01": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243316_0965#2:1",
+    "micro_IA40243315_2432#4:0",
+    "micro_IA40243315_2408#4:0",
+    "micro_IA40242405_2170#5:0",
+    "micro_IA40242405_2175#7:0",
+    "micro_IA40243315_2357#3:1",
+    "micro_IA40242405_2174#7:0",
+    "micro_IA40242405_2180#8:0",
+    "micro_IA40242405_2171#5:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq02": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40244215_3225#23:0",
+    "micro_IA40243213_0884#13:0",
+    "micro_IA40244215_3271#11:1"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq03": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243316_2035#71:1",
+    "micro_IA40242404_2779#30:0",
+    "micro_IA40244215_3271#10:0",
+    "micro_IA40244204_2374#12:0",
+    "micro_IA40244204_2381#6:0",
+    "micro_IA40243305_0169#3:0",
+    "micro_IA40243316_2040#27:1",
+    "micro_IA40244204_2376#17:0"
+   ],
+   "excluded_ids": {
+    "micro_IA40243315_0323#22:1": "flagged early-hiv-aids",
+    "micro_IA40244215_3171#6:1": "flagged early-hiv-aids (Manitoba HIV/AIDS statistical update)"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq04": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243513_0439#4:0",
+    "micro_IA40242402_2655#13:0",
+    "micro_IA40242405_0796#18:1",
+    "micro_IA40243316_0959#3:0",
+    "micro_IA40243315_2502#2:0",
+    "micro_IA40242402_2647#17:0",
+    "micro_IA40243306_2473#73:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq05": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40242402_2647#5:1",
+    "micro_IA40242402_2647#5:0",
+    "micro_IA40244216_2194#21:0",
+    "micro_IA40243306_2473#78:1"
+   ],
+   "excluded_ids": {
+    "micro_IA40244215_3167#18:0": "Indigenous-identifying: Manitoba First Nations community childhood immunization coverage"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq06": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243302_0142#206:1",
+    "micro_IA40244215_0966#22:0",
+    "micro_IA40244215_0965#17:0",
+    "micro_IA40244215_0963#11:0",
+    "micro_IA40242405_0584#4:0",
+    "micro_IA40243302_0142#206:0",
+    "micro_IA40242405_0548#4:0",
+    "micro_IA40242405_0617#6:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq07": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40244215_0966#22:0",
+    "micro_IA40244215_0965#17:0",
+    "micro_IA40243306_1507#74:0",
+    "micro_IA40244211_0898#6:0",
+    "micro_IA40244211_0898#4:1",
+    "micro_IA40244211_0898#2:0",
+    "micro_IA40242403_1750#9:1",
+    "micro_IA40244215_0966#10:1",
+    "micro_IA40242403_1761#4:1"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq08": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40244205_1719#8:0",
+    "micro_IA40244207_2483#8:0",
+    "micro_IA40244205_2426#23:0",
+    "micro_IA40243514_1608#36:0",
+    "micro_IA40242806_2129#23:0",
+    "micro_IA40244213_1776#11:0",
+    "micro_IA40244205_1717#24:0",
+    "micro_IA40243511_2347#134:0",
+    "micro_IA40243222_0374#138:2"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq09": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40244204_1021#21:0",
+    "micro_IA40244204_2590#2:1",
+    "micro_IA40244206_2109#18:0",
+    "micro_IA40244204_2590#17:0",
+    "micro_IA40243304_2304#15:0",
+    "micro_IA40244204_1021#7:0",
+    "micro_IA40244202_1418#475:0",
+    "micro_IA40244202_1597#39:1"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq10": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243305_2838#122:0",
+    "micro_IA40243316_0931#5:1",
+    "micro_IA40243305_2838#122:1",
+    "micro_IA40242803_0016#44:2",
+    "micro_IA40243308_3620#148:0",
+    "micro_IA40243512_0687#300:0",
+    "micro_IA24402414_0343#53:0",
+    "micro_IA40243308_0263#9:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq11": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243303_2181#6:0",
+    "micro_IA40243307_1279#52:0",
+    "micro_IA40243315_1385#37:0",
+    "micro_IA40243306_0039#46:2"
+   ],
+   "excluded_ids": {
+    "micro_IA40243511_1728#3:0": "Indigenous-adjacent: Baffin Region (Inuit) community water/sanitation",
+    "micro_IA40243511_1728#4:0": "Indigenous-adjacent: Baffin Region (Inuit) community water/sanitation",
+    "micro_IA40243307_0987#49:0": "flagged early-hiv-aids (CIDA action plan)"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq12": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243310_2721#33:0",
+    "micro_IA40244201_0515#32:0",
+    "micro_IA40244213_3183#23:1",
+    "micro_IA40244211_2774#7:0",
+    "micro_IA40243313_3390#50:0",
+    "micro_IA40243313_3390#169:0",
+    "micro_IA40244204_3181#163:0"
+   ],
+   "excluded_ids": {
+    "micro_IA40242401_0609#35:1": "Indigenous-identifying: Aboriginal-groups chronic-disease prevalence",
+    "micro_IA40244215_3064#35:1": "Indigenous-identifying: Aboriginal-groups chronic-disease prevalence (dup)"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq13": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243316_1325#12:0",
+    "micro_IA40244216_0409#41:0",
+    "micro_IA40242801_1553#66:0",
+    "micro_IA40243304_3168#7:0",
+    "micro_IA40242803_0845#48:0",
+    "micro_IA40242808_0716#50:0",
+    "micro_IA40243316_0548#40:0",
+    "micro_IA40243314_1726#32:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq14": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40242401_0607#11:3",
+    "micro_IA40244208_0136#24:1",
+    "micro_IA40244208_0138#22:2",
+    "micro_IA40243302_2545#147:1",
+    "micro_IA40243315_1386#73:0",
+    "micro_IA40244208_1663#35:0",
+    "micro_IA40243310_1232#11:1",
+    "micro_IA40244210_0057#3:1"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq15": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243512_0127#34:0",
+    "micro_IA40242801_1101#819:0",
+    "micro_IA40242801_1101#67:0",
+    "micro_IA40244204_0077#32:1",
+    "micro_IA40242801_1101#820:0",
+    "micro_IA40244204_0077#37:1",
+    "micro_IA40242801_1101#87:1",
+    "micro_IA40243302_2382#178:0"
+   ],
+   "excluded_ids": {
+    "micro_IA40243305_1227#38:0": "flagged early-hiv-aids + Indigenous-identifying (NIHB, registered Indians/Inuit/Innu)"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq16": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243314_1023#33:0",
+    "micro_IA40243314_1023#32:0",
+    "micro_IA40242801_1101#820:0",
+    "micro_IA40243314_1023#73:0",
+    "micro_IA40243311_1345#73:1",
+    "micro_IA40242808_1859#24:0",
+    "micro_IA40243314_1023#16:0",
+    "micro_IA40243221_1410#21:0",
+    "micro_IA40244206_1648#58:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq17": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40244206_0068#6:0",
+    "micro_IA40244210_2135#5:0",
+    "micro_IA40244210_2136#5:0",
+    "micro_IA40242403_0974#65:0",
+    "micro_IA40244210_2135#6:0",
+    "micro_IA40244210_2137#6:0",
+    "micro_IA40244206_3032#217:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq18": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40244205_0089#62:0",
+    "micro_IA40243223_0344#12:0",
+    "micro_IA40243312_0317#162:0",
+    "micro_IA40244214_1685#77:0",
+    "micro_IA40244210_0016#183:0",
+    "micro_IA40243308_0451#75:0",
+    "micro_IA40243509_2378#49:0",
+    "micro_IA40244206_3244#13:0"
+   ],
+   "excluded_ids": {
+    "micro_IA40242805_1353#4:1": "Indigenous-identifying: Native-populations priority group",
+    "micro_IA40244211_0652#27:0": "flagged early-hiv-aids"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq19": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40242808_1657#24:0",
+    "micro_IA40243302_0186#134:0",
+    "micro_IA40243313_2126#76:0",
+    "micro_IA40243307_0467#73:1",
+    "micro_IA40244214_1685#77:0",
+    "micro_IA40243219_1161#8:0",
+    "micro_IA40243312_3235#190:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq20": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40242803_1400#41:0",
+    "micro_IA40242803_1400#40:0",
+    "micro_IA40243301_0169#18:0",
+    "micro_IA40242803_1400#39:0",
+    "micro_IA40243314_1727#63:1",
+    "micro_IA40243312_2777#45:1"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq21": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40244207_1979#33:2",
+    "micro_IA40243304_1129#37:1",
+    "micro_IA40244211_1710#29:0",
+    "micro_IA40244207_1977#6:1",
+    "micro_IA40244207_1977#27:0",
+    "micro_IA40243312_2683#39:0",
+    "micro_IA40243312_2682#84:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq22": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243308_1213#20:0",
+    "micro_IA40243217_1390#5:0",
+    "micro_IA40244205_0170#202:0",
+    "micro_IA40244205_0170#66:0",
+    "micro_IA40243312_1807#48:0",
+    "micro_IA40244216_3432#19:1",
+    "micro_IA40243308_1035#15:0",
+    "micro_IA40243315_1762#4:0",
+    "micro_IA40242806_1299#15:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq23": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243313_0041#65:0",
+    "micro_IA40243313_0041#68:0",
+    "micro_IA40244206_2613#114:0",
+    "micro_IA40243310_1342#43:0",
+    "micro_IA40244206_2613#113:0"
+   ],
+   "excluded_ids": {
+    "micro_IA40243513_0390#64:0": "author Gate 2 exclusion: NWT territorial maternal-health (Indigenous-adjacent)",
+    "micro_IA40243215_1676#73:0": "author Gate 2 exclusion: NWT territorial maternal-health (Indigenous-adjacent)"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq25": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40244214_1723#3:0",
+    "micro_IA40244214_1724#3:0",
+    "micro_IA40244215_2892#5:2",
+    "micro_IA40244214_1602#49:1",
+    "micro_IA40244208_2990#135:0",
+    "micro_IA40244212_0315#10:0",
+    "micro_IA40244212_0330#8:0",
+    "micro_IA40244212_0308#8:0",
+    "micro_IA40242402_1675#47:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq26": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243310_2700#10:1",
+    "micro_IA40244215_0015#21:0",
+    "micro_IA40242405_0121#38:0",
+    "micro_IA40242401_0551#52:0",
+    "micro_IA40244213_0210#22:0",
+    "micro_IA40244213_0231#17:0",
+    "micro_IA44420209_2953#25:1",
+    "micro_IA40242403_0297#48:0",
+    "micro_IA40244212_3181#298:0"
+   ],
+   "excluded_ids": {
+    "micro_IA40242805_1353#4:1": "Indigenous-identifying: Native-populations priority group (dup)"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq27": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243305_0633#28:0",
+    "micro_IA40242401_0551#52:0",
+    "micro_IA40242403_0297#48:0",
+    "micro_IA40243306_2345#118:0",
+    "micro_IA40242405_0121#38:0",
+    "micro_IA40243302_0055#29:1",
+    "micro_IA40243313_2302#22:0",
+    "micro_IA40243301_2964#29:1",
+    "micro_IA40243315_0456#183:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq28": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243221_1213#3:1",
+    "micro_IA40243306_3426#50:0",
+    "micro_IA40243306_3426#49:1",
+    "micro_IA40242807_0528#80:1",
+    "micro_IA40242807_1283#55:0",
+    "micro_IA40243221_1213#36:0",
+    "micro_IA40242807_1283#47:1",
+    "micro_IA40243215_0266#195:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": true,
+   "gate_conflict": true
+  },
+  "mq29": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40244206_3360#208:1",
+    "micro_IA40244206_3362#210:1",
+    "micro_IA40244214_3053#62:0"
+   ],
+   "excluded_ids": {
+    "micro_IA40244206_3360#220:0": "Indigenous-adjacent: Nunavut nutrition framework / traditional foods",
+    "micro_IA40243312_0821#229:1": "Indigenous-adjacent: traditional foods / FASD / pre-natal nutrition"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq30": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA04243301_2053#52:0",
+    "micro_IA40243309_1637#25:0",
+    "micro_IA40244205_1012#50:0",
+    "micro_IA04243301_2053#58:0",
+    "micro_IA40243301_2107#16:0",
+    "micro_IA04243301_2053#60:1",
+    "micro_IA40242405_3449#18:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq31": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243302_3338#4:0",
+    "micro_IA40243209_1069#128:0",
+    "micro_IA40243302_1376#6:0",
+    "micro_IA40243209_1157#190:0",
+    "micro_IA40243222_1316#346:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq32": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243213_0141#360:0",
+    "micro_IA40243221_1588#15:1",
+    "micro_IA40243217_0228#14:0",
+    "micro_IA40243213_0141#153:1",
+    "micro_IA40242806_2171#36:0",
+    "micro_IA40243213_0141#152:1",
+    "micro_IA40243213_0141#225:1",
+    "micro_IA40242403_0516#98:0"
+   ],
+   "excluded_ids": {
+    "micro_IA40243306_3414#27:0": "Indigenous-identifying: Healthy children healthy nations (First Nations) framework"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq33": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40242406_0339#53:0",
+    "micro_IA40243303_0600#43:0",
+    "micro_IA40243310_2369#58:1",
+    "micro_IA40243307_0887#190:0",
+    "micro_IA40243315_1929#34:2",
+    "micro_IA40242406_0339#32:0"
+   ],
+   "excluded_ids": {
+    "micro_IA40242406_2505#8:1": "Indigenous-adjacent: country foods (Indigenous harvested foods) in environmental assessment"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq34": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243311_2678#4:0",
+    "micro_IA40243222_1411#25:0",
+    "micro_IA40243310_0630#26:1",
+    "micro_IA40243308_0381#31:1",
+    "micro_IA40243306_3426#256:0",
+    "micro_IA40243310_0630#26:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq35": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40244208_1667#17:1",
+    "micro_IA40243313_3110#20:0",
+    "micro_IA40424201_0676#45:1",
+    "micro_IA40243315_0383#24:0",
+    "micro_IA40244204_1886#22:0",
+    "micro_IA40244208_0142#34:0",
+    "micro_IA40243315_0373#16:1",
+    "micro_IA40244203_0442#167:0",
+    "micro_IA40244208_1663#54:1"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq36": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40242402_2648#6:1",
+    "micro_IA40244215_3283#6:0",
+    "micro_IA40244215_3283#41:0",
+    "micro_IA40242402_2648#2:0",
+    "micro_IA40244215_3283#43:0",
+    "micro_IA40244215_3283#42:0",
+    "micro_IA40242402_2648#22:0",
+    "micro_IA40244203_0224#22:1",
+    "micro_IA40243303_1290#13:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq37": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40242405_2113#7:0",
+    "micro_IA40242405_2113#8:0",
+    "micro_IA40243315_1441#24:0",
+    "micro_IA40242405_0794#8:2",
+    "micro_IA40242405_2113#11:0",
+    "micro_IA40244206_0014#21:1",
+    "micro_IA40244214_1887#29:0",
+    "micro_IA40243305_0421#4:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq38": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243306_2473#195:1",
+    "micro_IA40244215_3275#22:0",
+    "micro_IA40242402_2632#11:2",
+    "micro_IA40244215_3275#9:1",
+    "micro_IA40244214_2620#11:1",
+    "micro_IA40243306_2473#196:1",
+    "micro_IA40244215_3275#9:0",
+    "micro_IA40243513_0439#13:1",
+    "micro_IA40244215_3275#46:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq39": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243305_0612#67:0",
+    "micro_IA40242401_0633#8:0",
+    "micro_IA40242402_2623#26:0",
+    "micro_IA40243316_2036#14:0"
+   ],
+   "excluded_ids": {
+    "micro_IA40244207_1249#60:1": "flagged early-hiv-aids (HIV/AIDS epi updates)"
+   },
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq40": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40243310_1720#38:1",
+    "micro_IA40243315_1149#143:0",
+    "micro_IA40243315_1149#330:0",
+    "micro_IA40243309_0344#43:2",
+    "micro_IA40243310_1720#32:0",
+    "micro_IA40243315_1149#854:1",
+    "micro_IA40243315_1149#475:1",
+    "micro_IA40243310_1141#4:1",
+    "micro_IA40243310_1139#161:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq41": {
+   "v": "x",
+   "status": "should-abstain",
+   "gold_relevant_ids": [],
+   "excluded_ids": {},
+   "gate_would_abstain": true,
+   "gate_conflict": false
+  },
+  "mq42": {
+   "v": "x",
+   "status": "should-abstain",
+   "gold_relevant_ids": [],
+   "excluded_ids": {},
+   "gate_would_abstain": true,
+   "gate_conflict": false
+  },
+  "mq43": {
+   "v": "x",
+   "status": "should-abstain",
+   "gold_relevant_ids": [],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": true
+  },
+  "mq44": {
+   "v": "x",
+   "status": "should-abstain",
+   "gold_relevant_ids": [],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": true
+  },
+  "mq45": {
+   "v": "x",
+   "status": "should-abstain",
+   "gold_relevant_ids": [],
+   "excluded_ids": {},
+   "gate_would_abstain": true,
+   "gate_conflict": false
+  },
+  "mq46": {
+   "v": "x",
+   "status": "should-abstain",
+   "gold_relevant_ids": [],
+   "excluded_ids": {},
+   "gate_would_abstain": true,
+   "gate_conflict": true
+  },
+  "mq47": {
+   "v": "a",
+   "status": "answerable",
+   "gold_relevant_ids": [
+    "micro_IA40242402_3429#15:1",
+    "micro_IA40242406_0337#4:0",
+    "micro_IA40242406_0337#7:1",
+    "micro_IA40242406_0337#6:0",
+    "micro_IA40242406_0337#13:0",
+    "micro_IA40242406_0337#2:0"
+   ],
+   "excluded_ids": {},
+   "gate_would_abstain": false,
+   "gate_conflict": false
+  },
+  "mq48": {
+   "v": "x",
+   "status": "should-abstain",
+   "gold_relevant_ids": [],
+   "excluded_ids": {},
+   "gate_would_abstain": true,
+   "gate_conflict": false
+  }
+ }
+}
