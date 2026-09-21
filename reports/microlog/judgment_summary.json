@@ -1,0 +1,10 @@
+{
+ "questions": 47,
+ "answered": 41,
+ "abstained": 6,
+ "sentences": 304,
+ "unsupported_sentences": 0,
+ "model": "claude-haiku-4-5-20251001",
+ "provider": "anthropic",
+ "temperature": 0.0
+}

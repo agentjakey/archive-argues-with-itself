@@ -1,7 +1,7 @@
 {
   "scope": "microlog_public_health",
-  "status": "INCOMPLETE",
-  "status_detail": "Deterministic composition, jurisdiction, out-of-window, and sensitivity numbers are complete. Strict/lenient sentence support, citation-resolution rate, and abstention/false-abstention rates are PENDING the author's own gold set and sentence-support judgments (N2 support comes from a manual claim-level audit; N4 gold labels are author-decided). Do NOT read this as a passing audit.",
+  "status": "AUDIT RUN COMPLETE; SUPPORT AUTHOR-PENDING",
+  "status_detail": "Gold recorded (47). Deterministic audit run complete (temperature 0, frozen pipeline, real provider): citation-resolution, full abstention/false-abstention, top-10 recall (not pilot-comparable), and the coverage grid are computed. The three recorded gate-conflicts land exactly (mq28 false-abstention; mq43, mq44 false-answer). Strict/lenient sentence support is the author's manual claim-level judgment (N2): 304 kept sentences are laid beside their cited page text in reports/microlog/judgment_worksheet.(jsonl|md). The audit is not passing until those judgments are recorded and meet the author's bar.",
   "author": "Jacob Ortiz",
   "isolation": "Read-only over the built microlog scope. Pilot gold, reports/phase16/audit_numbers.json, config/pilot.toml, the frozen gate, and the pilot DBs are untouched. These numbers are microlog's own; they are not merged into the pilot audit.",
   "corpus_facts": {
@@ -13,11 +13,21 @@
     "undated_passages": 46435,
     "undated_passage_share": 0.0408,
     "undated_basis_note": "Headline undated share is item-weighted (0.0315). The passage-weighted figure (0.0408) is labeled '% of passages' only, never the headline.",
-    "dated_span": {"min_year": 1963, "max_year": 2018},
-    "nominal_window": {"start_year": 1960, "end_year": 2009},
+    "dated_span": {
+      "min_year": 1963,
+      "max_year": 2018
+    },
+    "nominal_window": {
+      "start_year": 1960,
+      "end_year": 2009
+    },
     "items_out_of_window": 4379,
     "out_of_window_note": "All 4379 out-of-window dated items are post-2009 (2010-2018); microlog has no pre-1960 dated items. Real dates are shown unclamped. Unlike the pilot, this scope does reach into the 2010s, so it must not inherit the pilot's 'record stops around 2009' framing. Characterized read-only in reports/microlog_out_of_window_dated_items.csv.",
-    "date_method": {"exact": 13101, "title_extracted": 11, "unknown": 427}
+    "date_method": {
+      "exact": 13101,
+      "title_extracted": 11,
+      "unknown": 427
+    }
   },
   "jurisdiction": {
     "unknown_items": 2018,
@@ -31,10 +41,22 @@
     "precision_benign_controls_checked": 11,
     "precision_false_positives": 0,
     "recall_passage_coverage": {
-      "residential-school-health": {"passages": 589, "items": 222},
-      "coerced-sterilization-indigenous": {"passages": 106, "items": 36},
-      "tainted-blood-krever": {"passages": 501, "items": 210},
-      "early-hiv-aids": {"passages": 19282, "items": 1704}
+      "residential-school-health": {
+        "passages": 589,
+        "items": 222
+      },
+      "coerced-sterilization-indigenous": {
+        "passages": 106,
+        "items": 36
+      },
+      "tainted-blood-krever": {
+        "passages": 501,
+        "items": 210
+      },
+      "early-hiv-aids": {
+        "passages": 19282,
+        "items": 1704
+      }
     },
     "crisis_lines_confirmed": true,
     "detail": "reports/microlog/sensitivity_review.md"
@@ -44,14 +66,175 @@
     "recorded_in": "web/src/components/pages/Gaps.tsx"
   },
   "pending_author_gold_and_judgments": {
-    "gold_set": "PENDING: author-validated, span-verified microlog gold; candidate questions in reports/microlog/candidate_gold_questions.md are candidate TEXT ONLY (N4), unlabeled.",
+    "gold_set": "RECORDED.",
     "strict_support_rate": null,
     "lenient_support_rate": null,
-    "sentence_counts": null,
-    "citations_resolving": "PENDING: deterministic once answers are generated over the decided gold (N2 three structural checks).",
-    "abstention_rate_on_controls": null,
-    "false_abstention_rate": null,
-    "coverage_grid": "PENDING: computed over the decided gold's salient terms.",
-    "note": "These are the honesty-critical numbers. They require the author's decided gold and sentence-support judgments and are not produced or estimated here (N2, N4)."
+    "citations_resolving": "200/200 = 1.0 (verifier check 3)",
+    "abstention": {
+      "answerable": 40,
+      "should_abstain": 7,
+      "abstained_on_should_abstain": "5/7",
+      "false_abstentions_answerable": "1/40",
+      "false_abstention_qids": [
+        "mq28"
+      ],
+      "false_answers_should_abstain": "2/7",
+      "false_answer_qids": [
+        "mq43",
+        "mq44"
+      ]
+    },
+    "coverage_grid": "COMPUTED (audit_run.coverage_grid_period_x_jurisdiction_items).",
+    "support_status": "AUTHOR-PENDING: kept sentences laid beside cited page text in reports/microlog/judgment_worksheet.(jsonl|md); strict/lenient support is the author's manual claim-level judgment (N2), not computed here."
+  },
+  "gold_recorded": {
+    "store": "data/exploration/microlog/civic_microlog.db eval_*",
+    "questions": 47,
+    "answerable": 40,
+    "should_abstain": 7,
+    "sidecar": "reports/microlog/gold_decisions.json"
+  },
+  "audit_run": {
+    "run": {
+      "questions": 47,
+      "answered": 41,
+      "abstained": 6,
+      "model": "claude-haiku-4-5-20251001",
+      "provider": "anthropic",
+      "temperature": 0.0,
+      "kept_sentences": 304,
+      "unsupported_dropped": 0
+    },
+    "citations_resolving": "200/200 = 1.0 (verifier check 3)",
+    "abstention": {
+      "answerable": 40,
+      "should_abstain": 7,
+      "abstained_on_should_abstain": "5/7",
+      "false_abstentions_answerable": "1/40",
+      "false_abstention_qids": [
+        "mq28"
+      ],
+      "false_answers_should_abstain": "2/7",
+      "false_answer_qids": [
+        "mq43",
+        "mq44"
+      ]
+    },
+    "gate_conflicts_confirmed": {
+      "mq28": {
+        "expected": "false-abstention (answerable; gate abstains on 'reports')",
+        "observed_answered": false,
+        "observed_abstained": true
+      },
+      "mq43": {
+        "expected": "false-answer (should-abstain; gate answers, US comparative content)",
+        "observed_answered": true,
+        "observed_abstained": false
+      },
+      "mq44": {
+        "expected": "false-answer (should-abstain; gate answers via 1950s text mentions)",
+        "observed_answered": true,
+        "observed_abstained": false
+      }
+    },
+    "recall_labeled_top10_only_NOT_pilot_comparable": {
+      "note": "recall over the decided gold's labeled top-10 (denominator = top-10 labels of a 30-pool); NOT directly comparable to the pilot's recall denominator (top-30 pool). recall@10 is ~1.0 by construction because gold-relevant labels lie within the labeled top-10.",
+      "mean_recall_at_5": 0.544,
+      "mean_recall_at_10": 1.0,
+      "n_answerable_with_gold": 40
+    },
+    "coverage_grid_period_x_jurisdiction_items": {
+      "undated": {
+        "alberta": 29,
+        "federal": 24,
+        "manitoba": 3,
+        "nova_scotia": 3,
+        "ontario": 20,
+        "quebec": 1,
+        "unknown": 347
+      },
+      "1960s": {
+        "unknown": 6
+      },
+      "1970s": {
+        "unknown": 17,
+        "nova_scotia": 1,
+        "federal": 9,
+        "new_brunswick": 5,
+        "newfoundland": 7,
+        "alberta": 3,
+        "british_columbia": 1,
+        "saskatchewan": 1
+      },
+      "1980s": {
+        "alberta": 289,
+        "federal": 489,
+        "new_brunswick": 21,
+        "newfoundland": 12,
+        "nova_scotia": 37,
+        "ontario": 455,
+        "saskatchewan": 126,
+        "unknown": 308,
+        "british_columbia": 46,
+        "northwest_territories": 12,
+        "manitoba": 242,
+        "prince_edward_island": 20,
+        "quebec": 22,
+        "yukon": 6
+      },
+      "1990s": {
+        "alberta": 203,
+        "british_columbia": 52,
+        "federal": 530,
+        "manitoba": 70,
+        "new_brunswick": 20,
+        "newfoundland": 4,
+        "nova_scotia": 20,
+        "ontario": 216,
+        "prince_edward_island": 14,
+        "quebec": 7,
+        "saskatchewan": 87,
+        "unknown": 329,
+        "yukon": 7,
+        "northwest_territories": 5
+      },
+      "2000s": {
+        "alberta": 424,
+        "british_columbia": 261,
+        "federal": 1526,
+        "manitoba": 332,
+        "new_brunswick": 126,
+        "newfoundland": 43,
+        "northwest_territories": 47,
+        "nova_scotia": 140,
+        "ontario": 759,
+        "prince_edward_island": 63,
+        "quebec": 48,
+        "saskatchewan": 346,
+        "unknown": 802,
+        "yukon": 113,
+        "nunavut": 3,
+        "international": 1
+      },
+      "post-2009": {
+        "alberta": 255,
+        "british_columbia": 219,
+        "federal": 2525,
+        "manitoba": 164,
+        "new_brunswick": 35,
+        "newfoundland": 8,
+        "northwest_territories": 79,
+        "nova_scotia": 48,
+        "ontario": 378,
+        "prince_edward_island": 37,
+        "quebec": 46,
+        "saskatchewan": 318,
+        "unknown": 209,
+        "yukon": 58
+      }
+    },
+    "strict_support_rate": null,
+    "lenient_support_rate": null,
+    "support_status": "AUTHOR-PENDING: kept sentences laid beside cited page text in reports/microlog/judgment_worksheet.(jsonl|md); strict/lenient support is the author's manual claim-level judgment (N2), not computed here."
   }
 }
