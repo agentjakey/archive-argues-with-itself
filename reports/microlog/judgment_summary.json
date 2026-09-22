@@ -6,5 +6,14 @@
  "unsupported_sentences": 0,
  "model": "claude-haiku-4-5-20251001",
  "provider": "anthropic",
- "temperature": 0.0
+ "temperature": 0.0,
+ "support_judgment": {
+  "note": "Manual claim-level support (N2): each kept sentence read against its cited page text. 'unsupported_sentences' above is the verifier/guard drop count at generation time (0); the fields here are the post-hoc support audit.",
+  "supported": 298,
+  "partly": 6,
+  "not": 0,
+  "strict_support_rate": 0.98,
+  "lenient_support_rate": 1.0,
+  "detail": "reports/microlog/judgment_decided.json"
+ }
 }

@@ -1,0 +1,135 @@
+{
+  "scope": "microlog_public_health",
+  "author": "Jacob Ortiz",
+  "method": "Claim-level citation-support audit (N2). Each of the 304 kept sentences was read against the full OCR text of its cited passage(s) as stored in judgment_worksheet.jsonl. Labels: supported = claim present verbatim, as a faithful paraphrase, or as a matching table/number; partly = core claim present but with overstatement, fusion, or source-type misattribution; not = claim not supported by the cited page. No lexical/embedding overlap heuristic was used to decide support (N2). Verification ran against the frozen retrieval output; no DB, gate, config, or frozen source file was modified, and no passage was re-fetched from the Internet Archive (N1).",
+  "counts": {
+    "total_sentences": 304,
+    "supported": 298,
+    "partly": 6,
+    "not": 0
+  },
+  "definitions": {
+    "strict_support_rate": "supported / total (fully-supported sentences only)",
+    "lenient_support_rate": "(supported + partly) / total (excludes only 'not')"
+  },
+  "strict_support_rate": 0.98,
+  "lenient_support_rate": 1.0,
+  "target": ">= 0.90 (N2)",
+  "meets_target": {
+    "strict": true,
+    "lenient": true
+  },
+  "partly_sentences": [
+    {
+      "qid": "mq03",
+      "sentence_no": 2,
+      "basis": "Measure is listed in the 2006-07 Saskatchewan budget performance plan, but its data column reads 'Under development'; 'was tracked as a performance measure' overstates a measure not yet producing data."
+    },
+    {
+      "qid": "mq04",
+      "sentence_no": 1,
+      "basis": "The Guide foreword attaches licensure-accounting to the Guide revision and 'modified its recommendations' to the usage of certain OTHER agents; the sentence fuses these into a single 'modified schedule recommendations to take into account licensure' claim the page does not state directly. (Schedule changes are separately real, captured in s2.)"
+    },
+    {
+      "qid": "mq10",
+      "sentence_no": 3,
+      "basis": "The contaminant/parameter list is verbatim, but the cited source is an ecosystem-indicator selection sheet (Selection of indicators for Great Lakes basin ecosystem health), not a drinking-water guideline; 'Guidelines recommended measuring' misattributes the indicator's Measure field to guidelines."
+    },
+    {
+      "qid": "mq10",
+      "sentence_no": 4,
+      "basis": "Same source as s3 (ecosystem-indicator sheet). The Endpoint line is reproduced verbatim, but 'the endpoint for drinking water quality guidelines' misattributes that indicator's Endpoint field to guidelines. DIVERGENCE from first-pass 'supported', made for consistency with s3's same source-type caveat."
+    },
+    {
+      "qid": "mq14",
+      "sentence_no": 1,
+      "basis": "Cited page is a badly OCR-garbled two-column layout. 'Existing administrative data sets were used for surveillance' is present, but the sentence fuses it with the survey-collected 'information and physical measures on cardiovascular risk factors', implying administrative data collect physical measures (surveys do, not administrative data). Borderline 'not'; cannot be fully resolved without the page image, which N1 forbids re-fetching."
+    },
+    {
+      "qid": "mq44",
+      "sentence_no": 1,
+      "basis": "Verbatim through 'did not respond well to permanent nerve blocks or neurosurgery, but required a'; the cited passage ends there (printed page number follows). The completion 'a multidisciplinary approach' is not verifiable from the cited excerpt. Strict-partly / lenient-supported. DIVERGENCE from first-pass 'supported'."
+    }
+  ],
+  "not_sentences": [],
+  "divergences_from_first_pass": [
+    {
+      "qid": "mq10",
+      "sentence_no": 4,
+      "from": "supported",
+      "to": "partly",
+      "reason": "Same ecosystem-indicator source-type misattribution as mq10 s3; conservative and consistent."
+    },
+    {
+      "qid": "mq44",
+      "sentence_no": 1,
+      "from": "supported",
+      "to": "partly",
+      "reason": "Completion 'a multidisciplinary approach' is beyond the cited excerpt, which cuts off at 'but required a'."
+    }
+  ],
+  "first_pass_confirmed_partly": [
+    {
+      "qid": "mq03",
+      "sentence_no": 2
+    },
+    {
+      "qid": "mq04",
+      "sentence_no": 1
+    },
+    {
+      "qid": "mq10",
+      "sentence_no": 3
+    },
+    {
+      "qid": "mq14",
+      "sentence_no": 1
+    }
+  ],
+  "thin_or_inference_supported": [
+    {
+      "qid": "mq31",
+      "sentence_no": 1,
+      "note": "Thin: the cited page is a program-reorganization list, but the exact phrase 'environmental hazards - water, air and soil components' is present."
+    },
+    {
+      "qid": "mq37",
+      "sentence_no": 1,
+      "note": "'issued weekly' is inferred from the report's own label 'Report week 42 (Oct 18 to Oct 24, 2015)' -- a 7-day, week-numbered window. Well-grounded inference, not stated as 'weekly' in words."
+    },
+    {
+      "qid": "mq22",
+      "sentence_no": 6,
+      "note": "OCR-heavy youth-guidelines list; the itemized guidelines nonetheless match the cited page."
+    }
+  ],
+  "scope_flags_not_support_failures": {
+    "mq43": "SCOPE (not a support failure): all 5 sentences are verbatim-supported by the cited Canadian Senate comparative report (health care systems in other countries), but a US Medicaid question was answered from a Canadian public-record document. This is the recorded gate false-answer (see audit_numbers false_answer_qids).",
+    "mq44": "SCOPE (not a support failure): sentences are on-topic-supported (except the s1 completion gap), but retrieval is topically loose across chronic-pain, psychiatric, medicare-history and Salk-vaccine sources. This is the recorded gate false-answer."
+  },
+  "robustness": {
+    "if_mq14s1_counted_not": {
+      "strict": 0.98,
+      "lenient": 0.997,
+      "note": "strict unchanged (mq14 s1 is not 'supported' either way); lenient drops by one sentence."
+    },
+    "if_both_divergences_reverted_to_supported": {
+      "strict": 0.987,
+      "lenient": 1.0,
+      "note": "author keeps mq10 s4 and mq44 s1 as supported."
+    },
+    "reading": "The strict rate lands between 0.980 (this audit) and 0.987 (first-pass); lenient between 0.997 and 1.000. Both bounds clear the 0.90 target (N2)."
+  },
+  "abstentions_no_sentences_to_judge": [
+    "mq28",
+    "mq41",
+    "mq42",
+    "mq45",
+    "mq46",
+    "mq48"
+  ],
+  "recorded_in": [
+    "reports/microlog/judgment_worksheet.jsonl (judgment field)",
+    "reports/microlog/judgment_worksheet.md ([judgment: ...] markers)"
+  ]
+}
