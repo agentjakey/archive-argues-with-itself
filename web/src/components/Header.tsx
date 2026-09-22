@@ -11,6 +11,7 @@ interface Props {
   onView: (view: View | null) => void;
   scopes?: ScopeInfo[] | null;      // more than one -> the switcher renders; null/one -> hidden
   activeScope?: string;
+  activeScopeInfo?: ScopeInfo | null;   // the active scope's facts, for the per-scope subtitle
   onSwitchScope?: (name: string) => void;
 }
 
@@ -24,7 +25,8 @@ const LINKS: { view: View; label: string }[] = [
   { view: "about", label: "About" },
 ];
 
-export function Header({ corpus, kiosk, view, onView, scopes, activeScope, onSwitchScope }: Props) {
+export function Header({ corpus, kiosk, view, onView, scopes, activeScope, activeScopeInfo, onSwitchScope }: Props) {
+  const cw = activeScopeInfo?.coverage_window;
   return (
     <header className="mb-6">
       <div className="flex items-start justify-between gap-6">
@@ -36,8 +38,13 @@ export function Header({ corpus, kiosk, view, onView, scopes, activeScope, onSwi
           </h1>
           <p className="mt-2 max-w-prose text-muted">
             An evidence trail with page-level provenance over Canadian government public-health
-            publications, 1960 to 2009. Not a chatbot.
+            publications. Not a chatbot.
           </p>
+          {activeScopeInfo && cw && cw.min_year != null && cw.max_year != null && (
+            <p className="mt-1 max-w-prose text-sm text-muted">
+              {activeScopeInfo.label}, {cw.min_year} to {cw.max_year}
+            </p>
+          )}
         </div>
         {kiosk && <KioskQr />}
       </div>

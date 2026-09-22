@@ -150,10 +150,21 @@ export interface Degraded {
 /** Present when the served record touches a harm-adjacent historical topic. Keyed on the
  *  retrieved evidence, so it is set for cached answers, real abstentions, and the limited-mode
  *  state alike. The visitor-facing note is rendered client-side from topics + year. */
+/** One crisis-support resource, from the single source of truth (src/archive_debugger/crisis.py),
+ *  served by the API. No crisis number is ever hardcoded in the frontend. */
+export interface CrisisResource {
+  key: string;
+  label: string;
+  contact: string;   // the actionable instruction: call / text / chat
+  hours: string;     // may be a marked slot (e.g. the MMIWG line) pending author confirmation
+  for: string;       // who the line is for
+  link?: string;     // present only when the resource has a web link
+}
+
 export interface Flagged {
   topics: string[];
   year: number | null;
-  crisis_lines: { name: string; number: string }[];
+  crisis_lines: CrisisResource[];   // pre-mapped and resolved by the backend from crisis.py
 }
 
 export interface AskResponse {
@@ -250,11 +261,22 @@ export interface ScopeInfo {
   collection_url: string | null;
   collections: string[];
   item_count: number;
-  window: YearWindow;
+  window: YearWindow;                 // config binning window
+  coverage_window?: YearWindow;       // per-scope displayed coverage window (from data + config)
+  harvested_count?: number | null;    // items harvested; live = item_count; dropped = harvested - live
   composition?: Composition;
+}
+
+// The crisis-support resources and topic map served by GET /scopes (from src/archive_debugger/crisis.py),
+// so static surfaces (e.g. the Gaps care note) render the right resources without an /ask.
+export interface Crisis {
+  resources: Record<string, CrisisResource>;
+  topic_resources: Record<string, string[]>;
+  defaults: { indigenous_sensitive: CrisisResource[]; other_sensitive: CrisisResource[] };
 }
 
 export interface ScopesResponse {
   default: string;
   scopes: ScopeInfo[];
+  crisis?: Crisis;
 }

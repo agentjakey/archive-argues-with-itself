@@ -396,6 +396,7 @@ export default function App() {
         onView={goView}
         scopes={scopesInfo?.scopes ?? null}
         activeScope={initial.current.scope ?? scopesInfo?.default ?? ""}
+        activeScopeInfo={activeScopeInfo}
         onSwitchScope={switchScope}
       />
       <EntryAdvisory />
@@ -408,7 +409,7 @@ export default function App() {
         />
       )}
       {view === "how" && <HowItWorks />}
-      {view === "gaps" && <Gaps />}
+      {view === "gaps" && <Gaps scope={activeScopeInfo} crisis={scopesInfo?.crisis ?? null} />}
       {view === "sources" && <SourcesPage scopes={scopesInfo?.scopes ?? null} />}
       {view === "map" && <CoverageMap scope={activeScopeInfo} onExplore={exploreProvince} onNav={goView} />}
       {view === "timeline" && (

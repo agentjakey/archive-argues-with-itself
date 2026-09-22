@@ -3,7 +3,7 @@ mapping, and answer-basis narrowing. Precision on the care-critical topics is th
 this suite: an equipment/food sterilization line or a "hearing aid" must never be mislabeled."""
 from __future__ import annotations
 
-from archive_debugger import flags
+from archive_debugger import crisis, flags
 
 
 def row(text, title="", year=None, in_prompt=True, cited=False):
@@ -88,20 +88,35 @@ def test_general_school_health_not_residential():
 
 # --- per-topic crisis-line mapping, with de-duplication on multi-topic ---
 
+def _keys(ev):
+    return [r["key"] for r in flags.detect(ev)["crisis_lines"]]
+
+
 def test_crisis_lines_map_per_topic():
-    assert flags.detect([row("HIV/AIDS report", year=1990)])["crisis_lines"] == [flags._988]
-    assert flags.detect([row("Krever tainted blood", year=1997)])["crisis_lines"] == [flags._988]
-    assert flags.detect([row("Sexual Sterilization Act", year=1972)])["crisis_lines"] == [flags._HOPE]
-    assert flags.detect([row("Indian residential schools", year=2004)])["crisis_lines"] == [flags._IRS, flags._HOPE]
+    # topic -> resource keys, in display order, from the single source of truth (archive_debugger.crisis)
+    assert _keys([row("HIV/AIDS report", year=1990)]) == ["helpline_988"]
+    assert _keys([row("Krever tainted blood", year=1997)]) == ["helpline_988"]
+    assert _keys([row("Sexual Sterilization Act", year=1972)]) == ["hope_for_wellness", "mmiwg_crisis_line", "helpline_988"]
+    assert _keys([row("Indian residential schools", year=2004)]) == ["irs_crisis_line", "hope_for_wellness", "helpline_988"]
+    # the served objects are the full resources from the single source of truth, not bare numbers
+    line = flags.detect([row("HIV/AIDS report", year=1990)])["crisis_lines"][0]
+    assert line == crisis.resource("helpline_988")
+    assert set(line) >= {"key", "label", "contact", "hours", "for"}
+
+
+def test_default_resources_for_gaps_care_note():
+    # the Gaps care note is filled with default_indigenous_sensitive (helpline_988 then hope_for_wellness)
+    assert [r["key"] for r in crisis.default_resources("indigenous_sensitive")] == ["helpline_988", "hope_for_wellness"]
+    assert [r["key"] for r in crisis.default_resources("other_sensitive")] == ["helpline_988"]
 
 
 def test_multi_topic_dedupes_crisis_lines():
     ev = [row("Indian residential school health"), row("coerced sterilization of Indigenous women")]
     d = flags.detect(ev)
     assert set(d["topics"]) == {"residential-school-health", "coerced-sterilization-indigenous"}
-    lines = d["crisis_lines"]
-    assert lines.count(flags._HOPE) == 1               # HOPE maps to both topics, deduped
-    assert flags._IRS in lines
+    keys = [r["key"] for r in d["crisis_lines"]]
+    assert keys.count("hope_for_wellness") == 1        # maps to both topics, deduped
+    assert "irs_crisis_line" in keys and "mmiwg_crisis_line" in keys
 
 
 # --- answer-basis narrowing (FIX 2) ---

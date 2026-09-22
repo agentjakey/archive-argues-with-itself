@@ -100,6 +100,8 @@ function ScopeCard({
   onEnter: (name: string, text: string, filters: Filters) => void;
 }) {
   const c = scope.composition;
+  const harvested = scope.harvested_count ?? null;
+  const dropped = harvested != null ? harvested - scope.item_count : null;
   const ocrTotal = c ? c.ocr.high + c.ocr.medium + c.ocr.low : 0;
   const topJur = c
     ? [...c.jurisdictions].filter((j) => j.name !== "unknown").sort((a, b) => b.items - a.items).slice(0, 4)
@@ -137,6 +139,14 @@ function ScopeCard({
             <Figure value={spanLabel(c.dated_span)} label="dated span" />
             <Figure value={pct(c.undated.items, scope.item_count)} label="of items undated" />
           </dl>
+          {harvested != null && dropped != null && dropped > 0 && (
+            <p className="mt-2 text-sm text-muted">
+              This collection harvested {formatInt(harvested)} items. {formatInt(scope.item_count)} are
+              live and searchable here. The {formatInt(dropped)} that are missing were dropped because
+              they could not be read well enough to cite. The gap is small, but it is real, so it is
+              shown rather than rounded away.
+            </p>
+          )}
           <p className="mt-2 text-sm text-muted">{windowNote(c.window, outOfWindowCount(c.by_period))}</p>
           <p className="mt-2 text-sm">
             <span className="tag">OCR</span> high {pct(c.ocr.high, ocrTotal)} &middot; medium{" "}

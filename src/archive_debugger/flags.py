@@ -19,13 +19,16 @@ Two design rules keep it proportionate:
   only unambiguous coercion/eugenics phrasing counts. Recall is therefore best-effort; see
   the per-topic notes.
 
-Tune by editing TOPIC_SIGNALS (topic key -> regex patterns, matched case-insensitively
-against a row's title + snippet) and CRISIS_LINES_BY_TOPIC.
+Tune the detection by editing TOPIC_SIGNALS (topic key -> regex patterns, matched
+case-insensitively against a row's title + snippet). The topic-to-resource mapping and the crisis
+numbers live in archive_debugger.crisis, the single source of truth; nothing here holds a number.
 """
 from __future__ import annotations
 
 import re
 from typing import Optional
+
+from archive_debugger import crisis
 
 TOPIC_SIGNALS: dict[str, list[str]] = {
     # The 1997 Krever inquiry into the contaminated blood system. Kept to the scandal's own
@@ -64,18 +67,6 @@ TOPIC_SIGNALS: dict[str, list[str]] = {
     ],
 }
 
-# Per-topic crisis lines (Indigenous-specific lines attach only to Indigenous topics).
-# Exactly Jacob's verified names/numbers; he re-verifies the week of the event. Editable.
-_IRS = {"name": "National Indian Residential School Crisis Line", "number": "1-866-925-4419"}
-_HOPE = {"name": "Hope for Wellness Help Line", "number": "1-855-242-3310"}
-_988 = {"name": "9-8-8 Suicide Crisis Helpline", "number": "9-8-8 (call or text)"}
-CRISIS_LINES_BY_TOPIC: dict[str, list[dict]] = {
-    "residential-school-health": [_IRS, _HOPE],
-    "coerced-sterilization-indigenous": [_HOPE],
-    "early-hiv-aids": [_988],
-    "tainted-blood-krever": [_988],
-}
-
 _COMPILED = {t: [re.compile(p, re.IGNORECASE) for p in pats] for t, pats in TOPIC_SIGNALS.items()}
 
 
@@ -96,12 +87,9 @@ def _answer_basis(evidence: list[dict]) -> list[dict]:
 
 
 def _crisis_lines(topics: list[str]) -> list[dict]:
-    out: list[dict] = []
-    for t in topics:
-        for line in CRISIS_LINES_BY_TOPIC.get(t, []):
-            if line not in out:
-                out.append(line)
-    return out
+    """Resolve the matched topics to their crisis resources from the single source of truth
+    (archive_debugger.crisis): ordered by topic, then each topic's display order, de-duplicated."""
+    return crisis.resources_for_topics(topics)
 
 
 def flagged_topics(evidence: list[dict]) -> list[str]:

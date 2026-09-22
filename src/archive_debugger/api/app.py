@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from archive_debugger import flags, scopes
+from archive_debugger import crisis, flags, scopes
 from archive_debugger.api.cache import AnswerCache, cache_key, retrieval_fingerprint
 from archive_debugger.api.coverage import coverage as compute_coverage
 from archive_debugger.eval import store
@@ -178,12 +178,17 @@ def corpus_facts(conn, pilot_window: dict) -> dict:
         "WHERE i.dated = 0 OR i.dated IS NULL").fetchone()[0]
     undated_items = conn.execute(
         "SELECT COUNT(*) FROM items WHERE dated = 0 OR dated IS NULL").fetchone()[0]
-    # Dated items whose metadata year falls outside the nominal window. The literal 1960/2009 match
-    # ingest.normalize.period_of and _PERIOD_CASE, so this equals by_period['pre-1960'] +
-    # by_period['post-2009'] on the same items table: the header's span note and the timeline's
-    # out-of-window bars carry one count.
+    # Dated items whose metadata year falls outside the scope's nominal (config) window. The bounds
+    # come from the scope's own config window (pilot_window), never a literal, so each scope measures
+    # against its own window. Both scopes' config window is 1960-2009, matching
+    # ingest.normalize.period_of and _PERIOD_CASE, so this still equals by_period['pre-1960'] +
+    # by_period['post-2009'] on the same items table (one count across header, timeline, sources).
+    w0 = (pilot_window or {}).get("min_year")
+    w1 = (pilot_window or {}).get("max_year")
     out_of_window = conn.execute(
-        "SELECT COUNT(*) FROM items WHERE dated = 1 AND (year < 1960 OR year > 2009)").fetchone()[0]
+        "SELECT COUNT(*) FROM items WHERE dated = 1 AND "
+        "((? IS NOT NULL AND year < ?) OR (? IS NOT NULL AND year > ?))",
+        (w0, w0, w1, w1)).fetchone()[0]
     mn, mx = conn.execute("SELECT MIN(year), MAX(year) FROM items WHERE dated = 1").fetchone()
     return {
         "items": items,
@@ -255,10 +260,49 @@ def _config_collections(config_path) -> list[str]:
     return [str(c) for c in cols]
 
 
+def _coverage_window(nominal: dict, span: dict, unclamped: bool) -> dict:
+    """The window a scope should DISPLAY as its coverage, derived from its own data + config: the
+    start is clamped past pre-window outliers to the nominal start, and the end is the true dated-span
+    max when the scope reaches materially past its window (unclamped, e.g. microlog into the 2010s) or
+    the nominal end otherwise (the pilot, which never frames itself as reaching the present). No literal
+    years; both bounds resolve from the scope's config window and its own dated span."""
+    ns = (nominal or {}).get("min_year")
+    ne = (nominal or {}).get("max_year")
+    ss = (span or {}).get("min_year")
+    se = (span or {}).get("max_year")
+    starts = [y for y in (ns, ss) if y is not None]
+    start = max(starts) if starts else None
+    if unclamped:
+        end = se if se is not None else ne
+    else:
+        ends = [y for y in (ne, se) if y is not None]
+        end = min(ends) if ends else None
+    return {"min_year": start, "max_year": end}
+
+
+def _harvested_count(entry: dict) -> Optional[int]:
+    """The scope's harvested item total, read from its committed harvest manifest (data, not a code
+    literal): the recorded `count`, or the authoritative numFound the harvest targeted. None when no
+    manifest is configured or it cannot be read, so the explorer simply omits the reconciliation."""
+    path = entry.get("manifest")
+    if not path:
+        return None
+    try:
+        m = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    c = m.get("count")
+    if c is None:
+        c = m.get("authoritative_numfound_expected")
+    return int(c) if isinstance(c, (int, float)) else None
+
+
 def scope_facts(name: str, config_path, corpus: dict) -> dict:
-    """The active scope's identity for the switcher: label, source collection with its
-    archive.org link, and item count. Labels come from the registry (config/scopes.toml);
-    the collection falls back to the scope config; the count comes from the built corpus."""
+    """The active scope's identity for the switcher: label, source collection with its archive.org
+    link, item count, the config binning window, the DISPLAYED coverage window (per-scope, from data
+    + config), and the harvested item total (from the scope's manifest) so the explorer can reconcile
+    harvested vs live. Labels come from the registry (config/scopes.toml); the collection falls back
+    to the scope config; the counts come from the built corpus."""
     entry = _registry_entry(name)
     cols = _config_collections(config_path)
     collection = entry.get("collection") or (cols[0] if cols else None)
@@ -271,6 +315,9 @@ def scope_facts(name: str, config_path, corpus: dict) -> dict:
         "collections": cols,
         "item_count": corpus["items"],
         "window": corpus["pilot_window"],
+        "coverage_window": _coverage_window(corpus["pilot_window"], corpus["window"],
+                                            bool(entry.get("coverage_unclamped"))),
+        "harvested_count": _harvested_count(entry),
     }
 
 
@@ -614,7 +661,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         source collection with an archive.org link, and item count. The pilot is the default."""
         default = app.state.default_scope
         order = [default] + [n for n in app.state.bundles if n != default]
-        return {"default": default, "scopes": [app.state.bundles[n].facts for n in order]}
+        return {"default": default, "scopes": [app.state.bundles[n].facts for n in order],
+                "crisis": crisis.serialized()}
 
     @app.get("/examples")
     def examples(scope: Optional[str] = None) -> list[dict]:

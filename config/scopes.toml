@@ -28,9 +28,12 @@ config = "config/pilot.toml"
 inherit = true
 # Display facts for the scope switcher (read by the API /scopes endpoint; ignored by
 # resolve_scope). Additive: no data path or behavior depends on these.
-label = "Federal public health, 1960-2009"
+# Label carries no year range: the per-scope coverage window (1960-2009 for the pilot) is derived
+# from data/config and shown in the app subtitle, so it is not hardcoded into the label.
+label = "Federal public health"
 blurb = "Clean Government of Canada publications"
 collection = "governmentpublications"
+manifest = "data/manifest/public_health.scope.json"
 
 [scopes.microlog]
 # The pooled national microlog public-health corpus the pilot excluded (reserve-only,
@@ -43,3 +46,9 @@ index_path = "data/exploration/microlog/index/vectors_microlog.db"
 label = "National public health, all provinces"
 blurb = "Microlog microfiche: federal, provincial, and municipal issuers"
 collection = "microlog"
+manifest = "data/manifest/microlog_public_health.scope.json"
+# This scope reaches into the 2010s (dated span to 2018), so its displayed coverage window shows its
+# true recent reach unclamped, not the 1960-2009 binning window. The pilot stays clamped to its
+# nominal window (never framed as reaching the present). See reports/microlog/audit_numbers.json
+# (out_of_window_note). Display fact only; no data path or retrieval behavior depends on it.
+coverage_unclamped = true

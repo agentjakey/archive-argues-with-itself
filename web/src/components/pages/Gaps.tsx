@@ -1,149 +1,211 @@
 import { Page, Source } from "./Page";
+import { CrisisLines } from "../CrisisLines";
+import type { Crisis, ScopeInfo } from "../../types";
 
-/** What the archive cannot tell you. Numbers match docs/gaps.md and the reports it cites. */
-export function Gaps() {
+/** What the archive cannot tell you, per active scope. Each scope states its own coverage window
+ *  (years from the active scope's data/config, never hardcoded) and its own audit findings: the
+ *  pilot's late-2000s framing and pilot audit numbers show only under the pilot; the microlog scope
+ *  shows its own window, its jurisdiction caveat, its support audit, and where it slipped. The care
+ *  note's crisis resources come from the single source of truth (crisis.py) via /scopes. Numbers
+ *  match docs/gaps.md and reports/microlog. */
+export function Gaps({ scope, crisis }: { scope: ScopeInfo | null; crisis: Crisis | null }) {
+  const isMicrolog = scope?.name === "microlog";
+  const cw = scope?.coverage_window;
+  const start = cw?.min_year ?? null;
+  const end = cw?.max_year ?? null;
+  const unknownPct =
+    scope?.composition != null ? Math.round(scope.composition.jurisdiction_unknown_share * 100) : null;
+  const careLines = crisis?.defaults.indigenous_sensitive ?? [];
+
   return (
     <Page title="Gaps">
+      {scope && start != null && end != null && (
+        <p className="text-muted">
+          {scope.label}, {start} to {end}
+        </p>
+      )}
       <p>
         An archive argues with itself partly by what it leaves out. These are the gaps this tool knows about,
         with the numbers that measure them.
       </p>
 
-      <h3>The national scope does not feature Indigenous-identifying health content</h3>
-      <p>
-        The national scope is a second, wider corpus: about 13,500 microlog items, their dated span running
-        1963 to 2018, a broader and more recent net than the pilot. A national public-health record of that
-        reach inevitably holds Indigenous-identifying health content, including residential-school health,
-        coerced sterilization, the tainted-blood years, and the early HIV and AIDS response. That content
-        cannot be responsibly consulted on under CARE and OCAP in the time before this is shown, so the
-        decision is deliberate and narrow. The national scope ships searchable with the sensitivity layer on,
-        and its harm-adjacent pages carry the contextual note and the crisis lines; but Indigenous-identifying
-        health content is not featured. It is used in no golden question, no attract tile, no story, and no
-        retrieval highlight. The coverage map still shows that the provinces and territories exist in the
-        record, because showing that the record reaches a place is not the same as putting its most sensitive
-        pages forward.
-      </p>
-      <p>
-        The line is featuring, not existence. The pages stay searchable, and when a visitor's own question
-        reaches them they are shown with the contextual note and the crisis lines, never sanitized and never
-        hidden. Featuring waits until the communities whose record this is can be consulted. The crisis lines
-        carried on this content are the National Indian Residential School Crisis Line (1-866-925-4419), the
-        Hope for Wellness Help Line (1-855-242-3310), and 9-8-8.
-      </p>
+      {!scope || start == null || end == null ? (
+        <p className="text-muted" aria-live="polite">
+          Loading coverage.
+        </p>
+      ) : isMicrolog ? (
+        <>
+          <h3>What this collection covers, and where it is thin</h3>
+          <p>
+            This national collection is built from Internet Archive Canada's microfiche of government health
+            publications, and it runs from {start} to {end}. It reaches every province and all three territories.
+            Jurisdiction is a weak point. For about {unknownPct}% of the items I cannot reliably tell which
+            government produced them, so I do not make coverage claims province by province. Read this as a
+            national view with uneven edges, not a regional scorecard.
+          </p>
 
-      <h3>Almost half of the passages carry no date</h3>
-      <p>
-        338,338 of 745,893 passages (45.4%) belong to items with no usable date, after 36 items were dated from
-        an explicit year in their titles. No date is ever guessed. Undated passages get their own lane on the
-        timeline and their own row in the coverage grid.{" "}
-        <Source file="reports/phase5/normalize_report.json" /> <Source file="reports/phase4/parse_report.md" />
-      </p>
+          <h3>I read every cited sentence against its page</h3>
+          <p>
+            I checked the answers against the pages they cite. Across the questions this collection answered, it
+            produced 304 sentences, and each one points to a specific scanned page. I read all 304 against the
+            actual page. 298 were fully supported, 6 were partly supported, and none were unsupported. So 98
+            percent held up in full and every sentence held up at least in part. I did that reading myself, one
+            sentence at a time, not with a keyword or similarity check that could pass a sentence the page does
+            not actually back.
+          </p>
 
-      <h3>The record stops around 2009</h3>
-      <p>
-        Among public-health items in the government-publications collection, 1,352 are dated 1990 to 2009, 44
-        are dated 2010 or later, and 18 are dated 2015 or later. Scanned government publications with OCR
-        effectively end in the 2000s, so the tool frames itself as 1960 to 2009 and never claims to reach the
-        present. <Source file="reports/coverage_audit/finalist_sizing.md" />
-      </p>
+          <h3>Where it slipped</h3>
+          <p>
+            Three moments are worth showing, because the honest thing is to show where it slipped, not only where
+            it worked.
+          </p>
+          <p>
+            Once it was asked about hospital funding and declined to answer, because the record it had was too
+            thin to say anything real. That is the system doing the right thing. Better to say nothing than to
+            guess.
+          </p>
+          <p>
+            Twice it answered when it should have stayed quiet. One question was about eligibility for Medicaid, a
+            United States program that a Canadian record has no standing to explain. It answered anyway, quoting a
+            Canadian report that happened to describe the American system. The other asked about public health in
+            the 1950s, which is earlier than this collection reaches. What came back were later documents that
+            mention the 1950s only in passing. In both, the sentences were faithful to the pages behind them. The
+            failure was earlier than that. It should have recognized that the question fell outside what this
+            collection can speak to and declined, the way it did on hospital funding. Both are logged as answers
+            that should have been abstentions.
+          </p>
 
-      <h3>Front and back matter, and what demotion did</h3>
-      <p>
-        Title pages, tables of contents, transmittal letters, indexes and reference lists match many queries
-        while answering nothing. A deterministic classifier (leaf position plus text patterns, no labels, no
-        model) marked 12,684 pages front matter and 3,823 back matter out of 448,496 pages with text. Its first
-        version was about 60% precise on back matter because a citation pattern fired on years beside times and
-        ratios in tables; the second version, needing a page range or an author entry with a nearby year, read 18
-        of 20 on a fresh sample. Demoting those pages (score halved, never excluded) moved recall@20 from 0.6823
-        to 0.8061 on the original gold. The evidence cards show the class as a small tag so you can judge it.{" "}
-        <Source file="reports/phase13/sections_report.md" /> <Source file="docs/evaluation/retrieval_report.md" />
-      </p>
+          <h3>A note on care</h3>
+          <p>
+            Some of this record is about harm done through the health system, including harm to Indigenous people,
+            and some of it names specific communities. That material deserves care, not just a search box. It
+            stays searchable and reachable here, because hiding it would be its own dishonesty. But I am not
+            featuring or promoting Indigenous-identifying health content while I work out how to handle it
+            responsibly, guided by CARE and OCAP principles and, where I can get it, the direction of the
+            communities the record concerns. If you are sitting with hard material and need support, help is here:
+          </p>
+          <CrisisLines lines={careLines} />
+        </>
+      ) : (
+        <>
+          <h3>The readable record, and where it thins</h3>
+          <p>
+            The readable record in this pilot comes from federal, Ontario, and Alberta government publications,
+            and it runs from {start} to {end}. It gets thinner toward the end of that range. Government scanning
+            falls off after the late 2000s, and most of what exists past then was never made machine-readable, so
+            it cannot be cited here. When the record looks like it stops around {end}, that is a limit of what got
+            digitized. It is not a claim that the story ended there.
+          </p>
 
-      <h3>Metadata dates can disagree with the text</h3>
-      <p>
-        Evaluation question q018, rank 25: the item is dated 1984 in its metadata, but the passage is H1N1 and
-        2009 pandemic content dated 2010-10-22. The label was left as decided. Since the retrieval update an evidence card
-        says "mentions 2010 (item dated 1984)" whenever a passage's text names years well after its item's date;
-        nothing is re-ranked and no side is taken. <Source file="eval/labeling_notes.md" />
-      </p>
+          <h3>Almost half of the passages carry no date</h3>
+          <p>
+            338,338 of 745,893 passages (45.4%) belong to items with no usable date, after 36 items were dated from
+            an explicit year in their titles. No date is ever guessed. Undated passages get their own lane on the
+            timeline and their own row in the coverage grid.{" "}
+            <Source file="reports/phase5/normalize_report.json" /> <Source file="reports/phase4/parse_report.md" />
+          </p>
 
-      <h3>Why public health, not housing</h3>
-      <p>
-        The proposal used housing as its example. Housing affordability yields 1,737 texts in the clean
-        government scope (1,747 in the curated union), under the 2,500-item floor; only adding a microfiche-sourced
-        collection (13,796) clears it, and that collection's OCR quality was never verified. Public health clears
-        the floor cleanly with 3,477 items. <Source file="reports/coverage_audit/finalist_sizing.md" />
-      </p>
+          <h3>Front and back matter, and what demotion did</h3>
+          <p>
+            Title pages, tables of contents, transmittal letters, indexes and reference lists match many queries
+            while answering nothing. A deterministic classifier (leaf position plus text patterns, no labels, no
+            model) marked 12,684 pages front matter and 3,823 back matter out of 448,496 pages with text. Its first
+            version was about 60% precise on back matter because a citation pattern fired on years beside times and
+            ratios in tables; the second version, needing a page range or an author entry with a nearby year, read 18
+            of 20 on a fresh sample. Demoting those pages (score halved, never excluded) moved recall@20 from 0.6823
+            to 0.8061 on the original gold. The evidence cards show the class as a small tag so you can judge it.{" "}
+            <Source file="reports/phase13/sections_report.md" /> <Source file="docs/evaluation/retrieval_report.md" />
+          </p>
 
-      <h3>The abstention rule, tested twice</h3>
-      <p>
-        First sweep of the thinness rule on the 50 evaluation questions: 10 of 35 answerable questions would
-        abstain and 4 of 15 should-abstain questions would answer. After one amendment by criterion, then
-        frozen: 1 answerable would abstain (on the word "risks") and 6 of 15 should-abstain would answer. The
-        amendment followed a look at the first sweep on these same questions, so the second number is in-sample
-        and is not an estimate of how the rule behaves on questions it has not seen. On the final retriever the
-        frozen rule reads 0 and 9; six probes still abstain on years or topics the archive does not hold.{" "}
-        <Source file="docs/evaluation/abstention_sweeps.md" /> <Source file="docs/evaluation/retrieval_report.md" />
-      </p>
+          <h3>Metadata dates can disagree with the text</h3>
+          <p>
+            Evaluation question q018, rank 25: the item is dated 1984 in its metadata, but the passage is H1N1 and
+            2009 pandemic content dated 2010-10-22. The label was left as decided. Since the retrieval update an evidence card
+            says "mentions 2010 (item dated 1984)" whenever a passage's text names years well after its item's date;
+            nothing is re-ranked and no side is taken. <Source file="eval/labeling_notes.md" />
+          </p>
 
-      <h3>Verification checks support, not relevance</h3>
-      <p>
-        In the audit run (every question once, real model, final configuration) the tool abstained on 10 of the
-        15 questions that should be abstained and answered 5 (q015, q030, q036, q037, q049). Each of those five is
-        an all-supported answer to a different question than the one asked, on the wrong period or the wrong
-        object: every sentence cites a real page that says what the sentence says. The three checks guarantee
-        that a kept sentence is supported by its page; nothing guarantees the page is about what was asked. Read
-        the pages. False abstentions on the 35 answerable questions: 0. On 15 held-out questions written after
-        everything was frozen and never used in any sweep, 9 of 10 probes abstained and 4 of 5 answerable
-        questions were answered. <Source file="docs/evaluation/audit_report.md" />{" "}
-        <Source file="docs/evaluation/holdout_run.md" />
-      </p>
+          <h3>Why public health, not housing</h3>
+          <p>
+            The proposal used housing as its example. Housing affordability yields 1,737 texts in the clean
+            government scope (1,747 in the curated union), under the 2,500-item floor; only adding a microfiche-sourced
+            collection (13,796) clears it, and that collection's OCR quality was never verified. Public health clears
+            the floor cleanly with 3,477 items. <Source file="reports/coverage_audit/finalist_sizing.md" />
+          </p>
 
-      <h3>Two held-out misses, rule unchanged</h3>
-      <p>
-        "What did reports say about injuries from electric scooters?" was answered. The gate covers a word if
-        any retrieved page contains it, and "scooters" was covered by an undated child-safety pamphlet (tricycles,
-        carts, wagons and scooters under a child's care) and a 1988 occupational-health report (scooter steering
-        under equipment maintenance). A lexical gate cannot tell electric scooters from toy or workplace scooters;
-        every sentence is supported by its page and none is about the question. Same class as the five above.
-      </p>
-      <p>
-        "What did federal reports say about the mass influenza vaccination program announced in 1976?" was
-        abstained at the gate: "federal" counts as a salient word under the frozen rule, no retrieved page
-        contains it, and the pages that describe the program name the federal government in other ways. The
-        stoplist's actor-noun criterion holds "government", "department", "ministry" and "agency" but not
-        "federal". Both results were recorded after a single held-out run and no rule was changed; "federal" is
-        the first candidate for a v2 stoplist if one is ever opened.{" "}
-        <Source file="docs/evaluation/holdout_run.md" /> <Source file="docs/gaps.md" />
-      </p>
+          <h3>The abstention rule, tested twice</h3>
+          <p>
+            First sweep of the thinness rule on the 50 evaluation questions: 10 of 35 answerable questions would
+            abstain and 4 of 15 should-abstain questions would answer. After one amendment by criterion, then
+            frozen: 1 answerable would abstain (on the word "risks") and 6 of 15 should-abstain would answer. The
+            amendment followed a look at the first sweep on these same questions, so the second number is in-sample
+            and is not an estimate of how the rule behaves on questions it has not seen. On the final retriever the
+            frozen rule reads 0 and 9; six probes still abstain on years or topics the archive does not hold.{" "}
+            <Source file="docs/evaluation/abstention_sweeps.md" /> <Source file="docs/evaluation/retrieval_report.md" />
+          </p>
 
-      <h3>What the audit measured</h3>
-      <p>
-        Every question once, the configured model, the shipped configuration; every kept sentence judged by the
-        author against the full text of the pages it cites. Strict support (every claim in the cited text):
-        93.3%, 166 of 178 sentences on the 35 answerable questions. Lenient (supported or partly): 99.4%, 177 of
-        178. The 12 sentences that fell short added a date or a period, moved an attribution from a quoted body
-        to the report's author, or, once, inverted a relation. Retrieval recall@10 on the fully judged gold:
-        0.3470 before the retrieval changes, 0.4581 after. Cited passages resolving to a recorded page: 119 of
-        119. <Source file="docs/evaluation/audit_report.md" />
-      </p>
+          <h3>Verification checks support, not relevance</h3>
+          <p>
+            In the audit run (every question once, real model, final configuration) the tool abstained on 10 of the
+            15 questions that should be abstained and answered 5 (q015, q030, q036, q037, q049). Each of those five is
+            an all-supported answer to a different question than the one asked, on the wrong period or the wrong
+            object: every sentence cites a real page that says what the sentence says. The three checks guarantee
+            that a kept sentence is supported by its page; nothing guarantees the page is about what was asked. Read
+            the pages. False abstentions on the 35 answerable questions: 0. On 15 held-out questions written after
+            everything was frozen and never used in any sweep, 9 of 10 probes abstained and 4 of 5 answerable
+            questions were answered. <Source file="docs/evaluation/audit_report.md" />{" "}
+            <Source file="docs/evaluation/holdout_run.md" />
+          </p>
 
-      <h3>British Columbia is not a second scope here</h3>
-      <p>
-        Applying the corpus-choice method to BC: texts whose publisher or creator names British Columbia give
-        590 public-health items, 278 of them dated 1960 to 2009, against the 2,500-item floor. Only 1 of 30
-        sampled BC health texts sits in the Canadian-government portal collection this tool uses; the rest live
-        in medical-library and microfiche collections. <Source file="reports/bc_audit/bc_sizing.md" />
-      </p>
+          <h3>Two held-out misses, rule unchanged</h3>
+          <p>
+            "What did reports say about injuries from electric scooters?" was answered. The gate covers a word if
+            any retrieved page contains it, and "scooters" was covered by an undated child-safety pamphlet (tricycles,
+            carts, wagons and scooters under a child's care) and a 1988 occupational-health report (scooter steering
+            under equipment maintenance). A lexical gate cannot tell electric scooters from toy or workplace scooters;
+            every sentence is supported by its page and none is about the question. Same class as the five above.
+          </p>
+          <p>
+            "What did federal reports say about the mass influenza vaccination program announced in 1976?" was
+            abstained at the gate: "federal" counts as a salient word under the frozen rule, no retrieved page
+            contains it, and the pages that describe the program name the federal government in other ways. The
+            stoplist's actor-noun criterion holds "government", "department", "ministry" and "agency" but not
+            "federal". Both results were recorded after a single held-out run and no rule was changed; "federal" is
+            the first candidate for a v2 stoplist if one is ever opened.{" "}
+            <Source file="docs/evaluation/holdout_run.md" /> <Source file="docs/gaps.md" />
+          </p>
 
-      <h3>The judge is not independent</h3>
-      <p>
-        All labels and judgments were decided by the author. To speed adjudication, candidate labels for the
-        Phase 13 extension and the Phase 16 support judgments were first proposed by an assistant model and each
-        was reviewed and decided by the author; the same model family generates the tool's answers, so this
-        judge is not independent of the system. <Source file="eval/labeling_notes.md" />
+          <h3>What the audit measured</h3>
+          <p>
+            Every question once, the configured model, the shipped configuration; every kept sentence judged by the
+            author against the full text of the pages it cites. Strict support (every claim in the cited text):
+            93.3%, 166 of 178 sentences on the 35 answerable questions. Lenient (supported or partly): 99.4%, 177 of
+            178. The 12 sentences that fell short added a date or a period, moved an attribution from a quoted body
+            to the report's author, or, once, inverted a relation. Retrieval recall@10 on the fully judged gold:
+            0.3470 before the retrieval changes, 0.4581 after. Cited passages resolving to a recorded page: 119 of
+            119. <Source file="docs/evaluation/audit_report.md" />
+          </p>
+
+          <h3>British Columbia is not a second scope here</h3>
+          <p>
+            Applying the corpus-choice method to BC: texts whose publisher or creator names British Columbia give
+            590 public-health items, 278 of them dated 1960 to 2009, against the 2,500-item floor. Only 1 of 30
+            sampled BC health texts sits in the Canadian-government portal collection this tool uses; the rest live
+            in medical-library and microfiche collections. <Source file="reports/bc_audit/bc_sizing.md" />
+          </p>
+
+          <h3>The judge is not independent</h3>
+          <p>
+            All labels and judgments were decided by the author. To speed adjudication, candidate labels for the
+            Phase 13 extension and the Phase 16 support judgments were first proposed by an assistant model and each
+            was reviewed and decided by the author; the same model family generates the tool's answers, so this
+            judge is not independent of the system. <Source file="eval/labeling_notes.md" />
+          </p>
+        </>
+      )}
+      <p className="mt-5 border-t border-rule pt-3 text-sm text-muted">
+        The full gap report with sources: docs/gaps.md in the repository.
       </p>
-      <p className="text-sm text-muted">The full gap report with sources: docs/gaps.md in the repository.</p>
     </Page>
   );
 }

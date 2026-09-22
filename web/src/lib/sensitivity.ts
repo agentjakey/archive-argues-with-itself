@@ -6,7 +6,7 @@ import type { Flagged } from "../types";
 
 // 1. Entry advisory: persistent, small, shown at app entry.
 export const ENTRY_ADVISORY =
-  "This tool surfaces Canadian government public-health documents from 1960 to 2009. Some contain " +
+  "This tool surfaces Canadian government public-health documents. Some contain " +
   "outdated, inaccurate, or harmful language and reflect the government's position at the time. " +
   "Reader discretion is advised.";
 
@@ -66,8 +66,8 @@ export function ocrUncertain(ocr: number | null | undefined): boolean {
 
 // Union of two backend-computed flagged objects (e.g. the /ask answer's flag and a story's
 // pins flag), so the compare's note reflects both the question and the compared documents.
-// crisis_lines come pre-mapped from the backend, so this only de-duplicates them; it never
-// maps topics to lines itself (that mapping stays solely in flags.py).
+// crisis_lines come pre-mapped and resolved from the backend (src/archive_debugger/crisis.py via
+// flags.py), so this only de-duplicates them by resource key; it never maps topics to lines itself.
 export function mergeFlagged(...args: (Flagged | null | undefined)[]): Flagged | null {
   const parts = args.filter(Boolean) as Flagged[];
   if (parts.length === 0) return null;
@@ -76,7 +76,7 @@ export function mergeFlagged(...args: (Flagged | null | undefined)[]): Flagged |
   const lines: Flagged["crisis_lines"] = [];
   for (const p of parts) {
     for (const l of p.crisis_lines) {
-      if (!lines.some((x) => x.name === l.name && x.number === l.number)) lines.push(l);
+      if (!lines.some((x) => x.key === l.key)) lines.push(l);
     }
   }
   return { topics, year: years.length ? Math.min(...years) : null, crisis_lines: lines };
