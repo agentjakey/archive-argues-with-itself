@@ -227,6 +227,30 @@ def main() -> int:
         else:
             check(False, "/flag test setup", "no HIV-titled passage or story pins found")
 
+        # ---- coverage map: the Canada boundary file is served from the local bundle (no network), and
+        # a missing file degrades to the map's text alternative -- never a server error or a live fetch. ----
+        def _is_fc(resp):
+            try:
+                j = resp.json()
+                return isinstance(j, dict) and j.get("type") == "FeatureCollection" and isinstance(j.get("features"), list)
+            except Exception:  # noqa: BLE001 - non-JSON (the SPA fallback) is not a boundary file
+                return False
+        rg = c.get("/canada.geojson")
+        n_feat = len(rg.json().get("features", [])) if _is_fc(rg) else 0
+        check(rg.status_code == 200 and _is_fc(rg) and n_feat >= 13,
+              "coverage map: bundled Canada boundary file served locally (map renders offline)",
+              f"status={rg.status_code} features={n_feat}")
+        rm = c.get("/canada-missing-xyz.geojson")
+        check(rm.status_code < 500 and not _is_fc(rm),
+              "coverage map: a missing boundary file degrades to the text alternative (no error)",
+              f"status={rm.status_code}")
+
+        # ---- crisis lines come only from crisis.py; spot-check MMIWG hours = 24/7 (author-decided). ----
+        cr = c.get("/scopes").json().get("crisis", {})
+        mmiwg = cr.get("resources", {}).get("mmiwg_crisis_line", {})
+        check(mmiwg.get("hours") == "24/7" and "2SLGBTQQIA+" in (mmiwg.get("for") or ""),
+              "crisis MMIWG line shows 24/7 (from crisis.py, no marked slot)", f"hours={mmiwg.get('hours')!r}")
+
         # ---- microlog scope: offline parity (R1 + sensitivity). Skipped where microlog is not served
         # here (e.g. the pilot-only festival volume), so the pilot box stays GREEN. ----
         print("\n== MICROLOG SCOPE (offline parity; skipped if not served here) ==")
