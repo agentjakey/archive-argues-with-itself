@@ -1,7 +1,0 @@
-# sha256 of the scope database + index files uploaded to Cloudflare R2.
-# Format: <sha256>  <key>  (<bytes> bytes). No secrets are stored here.
-
-00a8fffb007ff9b5eefc95a782ce371bfead6db3f7b0a9f8d177fe31943152c5  pilot/civic.db  (1878642688 bytes)
-0fcabe77cb7764f23e10114de5a11c5bb09747b53d4d2ca320cc553ddb9b211e  pilot/vectors.db  (1557426176 bytes)
-6b6cd30e0f22532df0a23e3ba0f986136bbb0360efef7af30689fbd927a861fe  microlog/civic_microlog.db  (2926825472 bytes)
-83913570df5d2387513f578645fb09b936d7ba708581b458dbbd8b1e6fd4ef50  microlog/vectors_microlog.db  (2379706368 bytes)

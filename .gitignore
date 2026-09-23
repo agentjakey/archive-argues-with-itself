@@ -154,6 +154,7 @@ activemq-data/
 !.env.example
 .envrc
 .venv
+.lockenv
 env/
 venv/
 ENV/
@@ -274,3 +275,9 @@ web/dist/
 !tests/fixtures/
 !tests/fixtures/**
 !tests/fixtures/**/*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+scopes.r2.sha256
