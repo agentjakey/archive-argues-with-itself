@@ -196,13 +196,22 @@ export default function App() {
   // reloads to the bare kiosk URL (clearing any typed-but-unsent question), carrying the kiosk
   // launch params so the dwell stays at the launched ?idle= value across every return-home.
   const goHome = useCallback(() => {
+    // Carry the active scope so an attract/idle reset returns to the same corpus's home, not the
+    // pilot default: scope survives the idle reset and the attract timeout.
+    const scope = initial.current.scope;
+    const def = scopesInfo?.default ?? "";
     const flags = [
+      scope && scope !== def ? `scope=${encodeURIComponent(scope)}` : "",
       kiosk ? "kiosk=1" : "",
       offline ? "offline=1" : "",
       idleParam.current ? `idle=${encodeURIComponent(idleParam.current)}` : "",
     ].filter(Boolean).join("&");
-    window.location.assign(`${window.location.pathname}${flags ? `?${flags}` : ""}`);
-  }, [kiosk, offline]);
+    const target = `${window.location.pathname}${flags ? `?${flags}` : ""}`;
+    // Idempotent: if already on the clean home for this scope, do not reload -- so a no-story scope
+    // (microlog) resets to home once on idle, then rests without re-blinking every idle interval.
+    if (window.location.pathname + window.location.search === target) return;
+    window.location.assign(target);
+  }, [kiosk, offline, scopesInfo]);
   const idleMs = useMemo(() => {
     const v = Number(idleParam.current);
     return Number.isFinite(v) && v > 0 ? v * 1000 : undefined;
@@ -551,7 +560,7 @@ export default function App() {
       )}
 
       <Footer onAbout={() => goView("about")} />
-      <PageDrawer row={drawer} onClose={() => setDrawer(null)} source={activeScopeInfo} />
+      <PageDrawer row={drawer} onClose={() => setDrawer(null)} source={activeScopeInfo} offline={offline || kiosk} />
     </div>
   );
 }

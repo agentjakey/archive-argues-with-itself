@@ -1,64 +1,37 @@
-// Layout and color bins for the coverage map (a tile-grid choropleth of Canada). Equal-area
-// tiles, arranged roughly west-to-east with the territories on top, so the map never distorts
-// coverage by land area and never implies national uniformity. Every tile also shows its count,
-// so the map is readable without color (colorblind- and print-safe). No-data is a hatch, never a
-// ramp step, so absence never reads as a little coverage.
+// Province/territory metadata and the coarse coverage bands for the coverage map. The map is a real
+// map of Canada (see canadaMap.ts + CoverageMap.tsx), shaded in three coarse bands, NOT a precise
+// per-province scorecard: jurisdiction is an issuer-derived proxy with ~15% unknown, so exact counts
+// are never presented as fact. A single-hue light->dark ramp keeps the bands colorblind- and print-safe.
 
-export interface Tile {
+export interface Province {
   slug: string;   // jurisdiction_norm value the resolver produces
-  abbr: string;
+  abbr: string;   // postal code; the ISO 3166-2 code is "CA-" + abbr, which matches the geojson features
   name: string;
-  col: number;
-  row: number;
 }
 
-// 7 columns (0..6 west->east), 3 rows (0 north). Atlantic clusters at the northeast corner.
-export const PROVINCE_TILES: Tile[] = [
-  { slug: "yukon", abbr: "YT", name: "Yukon", col: 1, row: 0 },
-  { slug: "northwest_territories", abbr: "NT", name: "Northwest Territories", col: 2, row: 0 },
-  { slug: "nunavut", abbr: "NU", name: "Nunavut", col: 3, row: 0 },
-  { slug: "newfoundland", abbr: "NL", name: "Newfoundland and Labrador", col: 6, row: 0 },
-  { slug: "british_columbia", abbr: "BC", name: "British Columbia", col: 0, row: 1 },
-  { slug: "alberta", abbr: "AB", name: "Alberta", col: 1, row: 1 },
-  { slug: "saskatchewan", abbr: "SK", name: "Saskatchewan", col: 2, row: 1 },
-  { slug: "manitoba", abbr: "MB", name: "Manitoba", col: 3, row: 1 },
-  { slug: "ontario", abbr: "ON", name: "Ontario", col: 4, row: 1 },
-  { slug: "quebec", abbr: "QC", name: "Quebec", col: 5, row: 1 },
-  { slug: "prince_edward_island", abbr: "PE", name: "Prince Edward Island", col: 6, row: 1 },
-  { slug: "new_brunswick", abbr: "NB", name: "New Brunswick", col: 5, row: 2 },
-  { slug: "nova_scotia", abbr: "NS", name: "Nova Scotia", col: 6, row: 2 },
+export const PROVINCES: Province[] = [
+  { slug: "british_columbia", abbr: "BC", name: "British Columbia" },
+  { slug: "alberta", abbr: "AB", name: "Alberta" },
+  { slug: "saskatchewan", abbr: "SK", name: "Saskatchewan" },
+  { slug: "manitoba", abbr: "MB", name: "Manitoba" },
+  { slug: "ontario", abbr: "ON", name: "Ontario" },
+  { slug: "quebec", abbr: "QC", name: "Quebec" },
+  { slug: "new_brunswick", abbr: "NB", name: "New Brunswick" },
+  { slug: "nova_scotia", abbr: "NS", name: "Nova Scotia" },
+  { slug: "prince_edward_island", abbr: "PE", name: "Prince Edward Island" },
+  { slug: "newfoundland", abbr: "NL", name: "Newfoundland and Labrador" },
+  { slug: "yukon", abbr: "YT", name: "Yukon" },
+  { slug: "northwest_territories", abbr: "NT", name: "Northwest Territories" },
+  { slug: "nunavut", abbr: "NU", name: "Nunavut" },
 ];
 
-// Every province/territory the resolver can produce; used for the floor caveat check.
-export const PROVINCE_SLUGS = new Set(PROVINCE_TILES.map((t) => t.slug));
+export const PROVINCE_SLUGS = new Set(PROVINCES.map((p) => p.slug));
 
-// Buckets shown off the map, not as province tiles (federal is national; unknown has no province).
-export const OFFMAP_SLUGS = ["federal", "international", "unknown"] as const;
-
-// Single-hue warm sequential ramp (light -> dark), harmonized with the paper/ink tokens. Fixed
-// count thresholds (not per-scope quantiles) so the same count reads the same across scopes.
-export interface Bucket {
-  min: number;
-  label: string;
-  fill: string;
-  text: string;
-}
-
-export const BUCKETS: Bucket[] = [
-  { min: 600, label: "600 or more", fill: "#4a3a24", text: "#f6f1e7" },
-  { min: 300, label: "300 to 599", fill: "#8a6a3f", text: "#f6f1e7" },
-  { min: 100, label: "100 to 299", fill: "#c2a273", text: "#1c1a17" },
-  { min: 1, label: "1 to 99", fill: "#e3d7bd", text: "#1c1a17" },
-];
-
-/** The color bucket for an item count, or null for no data (absent or zero). No data is never a
- *  ramp step: the caller renders it as a hatch. */
-export function bucketOf(count: number): Bucket | null {
-  if (!count || count <= 0) return null;
-  for (const b of BUCKETS) {
-    if (count >= b.min) return b;
-  }
-  return BUCKETS[BUCKETS.length - 1];
+/** A geojson feature's ISO 3166-2 code (e.g. "CA-ON") -> our province, or undefined. */
+export function provinceByCode(code: string | undefined): Province | undefined {
+  if (!code) return undefined;
+  const abbr = (code.startsWith("CA-") ? code.slice(3) : code).toUpperCase();
+  return PROVINCES.find((p) => p.abbr === abbr);
 }
 
 /** name -> item count, from a scope composition's jurisdiction list. */
@@ -66,4 +39,29 @@ export function countsByJurisdiction(jurisdictions: { name: string; items: numbe
   const out: Record<string, number> = {};
   for (const j of jurisdictions) out[j.name] = j.items;
   return out;
+}
+
+// Three coarse bands on a single-hue light->dark ramp (colorblind- and print-safe). Fixed count
+// thresholds so the same amount reads the same across scopes; labelled with words, never exact counts,
+// because jurisdiction is a proxy and the map is reach, not a ranking.
+export interface Band {
+  key: "well" | "some" | "sparse";
+  label: string;
+  fill: string;
+  text: string;
+}
+
+export const BANDS: Band[] = [
+  { key: "well", label: "well represented", fill: "#7a5a30", text: "#f6f1e7" },
+  { key: "some", label: "some", fill: "#c2a273", text: "#1c1a17" },
+  { key: "sparse", label: "sparse", fill: "#e6dcc6", text: "#1c1a17" },
+];
+
+/** The coarse band for a province's item count, or null for none (absent / zero). Thresholds are
+ *  deliberately coarse; the map never presents the exact count as a precise fact. */
+export function bandOf(count: number): Band | null {
+  if (!count || count <= 0) return null;
+  if (count >= 300) return BANDS[0];
+  if (count >= 50) return BANDS[1];
+  return BANDS[2];
 }

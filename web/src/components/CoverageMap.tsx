@@ -1,15 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatInt } from "../lib/format";
-import { BUCKETS, PROVINCE_TILES, bucketOf, countsByJurisdiction } from "../lib/coverage";
+import { BANDS, PROVINCES, bandOf, countsByJurisdiction, provinceByCode } from "../lib/coverage";
+import { featurePath, fitConicConformal, isFeatureCollection, type FeatureCollection } from "../lib/canadaMap";
 import type { View } from "../lib/urlstate";
 import type { ScopeInfo } from "../types";
 import { Page } from "./pages/Page";
 
-const CELL = 84;
-const PAD = 4;
-const SIZE = CELL - PAD * 2;
-const COLS = 7;
-const ROWS = 3;
+const MAP_W = 720;
+const MAP_H = 460;
+
+// Author-fixed caption for the national map (verbatim). About 15% is the microlog proxy-unknown share.
+const CAPTION =
+  "Jurisdiction here is a rough proxy. About 15% of items could not be placed and are not shown on " +
+  "the map. This is a rough picture of reach, not a scorecard.";
 
 interface Props {
   scope: ScopeInfo | null;
@@ -17,201 +20,249 @@ interface Props {
   onNav: (view: View) => void;
 }
 
-interface Active {
-  slug: string;
-  name: string;
-  count: number;
-  rank: number | null;   // null = no data in this corpus
-  total: number;         // number of province/territory tiles with data
-  col: number;
-  row: number;
-}
-
-/** Coverage map: an interactive equal-tile cartogram of the active scope's per-province/territory
- *  item density, from the live /scopes composition (never hardcoded). Equal-area tiles arranged so
- *  the grid reads as Canada (territories across the top, provinces west-to-east, Atlantic clustered
- *  at the northeast); colour encodes real item count, NOT land area. No-data is hatched, distinct
- *  from the lowest count bucket. Hover or keyboard focus on any tile reveals its jurisdiction, exact
- *  count, and rank within the scope (or a "no data in this corpus" note); every tile is
- *  keyboard-reachable and screen-reader labeled. Same component serves every scope. */
+/** Coverage map: a real, recognizable map of Canada (Lambert conic, rendered from a LOCAL boundary
+ *  file, no external tiles or basemap fetch) shaded in coarse bands. Jurisdiction is an issuer-derived
+ *  proxy with ~15% unknown, so this is orientation, not a scorecard: no exact counts as fact, the
+ *  unknown items shown as a separate figure, and the pilot (federal + Ontario + Alberta) never drawn as
+ *  a national ranking. Keyboard-navigable, ARIA-labelled, with a text-alternative table that carries
+ *  the same figures; when web/public/canada.geojson is absent, it falls back to that table cleanly. */
 export function CoverageMap({ scope, onExplore, onNav }: Props) {
-  const comp = scope?.composition;
+  const [geo, setGeo] = useState<FeatureCollection | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const url = `${import.meta.env.BASE_URL || "/"}canada.geojson`;
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (alive) setGeo(isFeatureCollection(j) ? j : null); })
+      .catch(() => { if (alive) setGeo(null); });   // absent boundary file -> the text alternative, no error
+    return () => { alive = false; };
+  }, []);
   return (
     <Page title="Coverage map">
       <p>
-        Where the record is thick and thin across Canada for the corpus you are exploring
-        {scope ? <> (<span className="text-ink">{scope.label}</span>)</> : null}. Each tile is a
-        province or territory, equal in size and arranged roughly as Canada; the shade is how many
-        items name it as their jurisdiction. Colour is real item count, not land area, and no-data is
-        hatched, not a pale colour, so an empty jurisdiction never reads as a little coverage. Hover or
-        tab to a tile for its exact count and rank.
+        A rough map of where this record reaches across Canada
+        {scope ? <> (<span className="text-ink">{scope.label}</span>)</> : null}. Jurisdiction is an
+        issuer-derived proxy, so this is orientation, not a scorecard: provinces are shaded in coarse
+        bands, exact counts are never claimed as precise, and the items with no jurisdiction signal are
+        shown as a separate figure, never spread across provinces.
       </p>
-      {!comp ? (
-        <p className="text-muted" aria-live="polite">
-          Loading coverage.
-        </p>
+      {!scope?.composition ? (
+        <p className="text-muted" aria-live="polite">Loading coverage.</p>
       ) : (
-        <CoverageBody scope={scope!} onExplore={onExplore} onNav={onNav} />
+        <CoverageMapView scope={scope} geo={geo} onExplore={onExplore} onNav={onNav} />
       )}
     </Page>
   );
 }
 
-function CoverageBody({ scope, onExplore, onNav }: { scope: ScopeInfo; onExplore: (s: string) => void; onNav: (v: View) => void }) {
+export function CoverageMapView({
+  scope, geo, onExplore, onNav,
+}: {
+  scope: ScopeInfo;
+  geo: FeatureCollection | null;
+  onExplore: (s: string) => void;
+  onNav: (v: View) => void;
+}) {
   const comp = scope.composition!;
   const counts = countsByJurisdiction(comp.jurisdictions);
   const isFloor = comp.jurisdiction_is_floor;
   const federal = counts["federal"] ?? 0;
-  const unknown = counts["unknown"] ?? 0;
   const international = counts["international"] ?? 0;
+  const unknown = counts["unknown"] ?? 0;
   const unknownPct = Math.round(comp.jurisdiction_unknown_share * 100);
-  const [active, setActive] = useState<Active | null>(null);
+  const national = scope.name !== "pilot";   // the pilot (federal + Ontario + Alberta) is not national
+  const [active, setActive] = useState<string | null>(null);
 
-  // Rank each province/territory tile that has data, by item count (descending). Ties share the
-  // ranking order they sort into; the point is a quick "how does this tile stand in the scope".
-  const { rankOf, total } = useMemo(() => {
-    const withData = PROVINCE_TILES.map((t) => ({ slug: t.slug, count: counts[t.slug] ?? 0 }))
-      .filter((t) => t.count > 0)
-      .sort((a, b) => b.count - a.count);
-    const r: Record<string, number> = {};
-    withData.forEach((t, i) => (r[t.slug] = i + 1));
-    return { rankOf: r, total: withData.length };
-  }, [counts]);
+  const rows = useMemo(() => PROVINCES.map((p) => ({ ...p, count: counts[p.slug] ?? 0 })), [counts]);
+  const placedTotal = rows.reduce((n, p) => n + p.count, 0);
 
-  const tileLabel = (slug: string, name: string, count: number, resolved: boolean): string =>
-    resolved
-      ? `${name}: ${formatInt(count)} items, rank ${rankOf[slug] ?? "-"} of ${total} with data${isFloor ? ", proxy floor" : ""}`
-      : `${name}: no data in this corpus`;
+  const shareText = (count: number): string =>
+    count <= 0
+      ? "not placed in this corpus"
+      : `roughly ${placedTotal ? Math.max(1, Math.round((count / placedTotal) * 100)) : 0}% of placed items (rough proxy)`;
 
-  const leftPct = active ? ((active.col + 0.5) / COLS) * 100 : 0;
-  const below = active ? active.row === 0 : false;
-  const topPct = active ? (below ? ((active.row + 1) / ROWS) * 100 : (active.row / ROWS) * 100) : 0;
+  const bandLabel = (count: number): string =>
+    national ? bandOf(count)?.label ?? "not placed" : count > 0 ? "in this pilot" : "not in this pilot";
+
+  const project = useMemo(
+    () => (geo && geo.features.length ? fitConicConformal(geo.features, MAP_W, MAP_H) : null),
+    [geo],
+  );
+  const activeRow = active ? rows.find((p) => p.slug === active) ?? null : null;
 
   return (
     <>
+      {!national && (
+        <p className="mt-3 rounded border border-rule bg-sheet px-3 py-2 text-sm">
+          This pilot covers <span className="text-ink">federal, Ontario, and Alberta</span> only. It is
+          not a national picture, so there is no national ranking here: Ontario and Alberta are
+          highlighted, federal is stated separately below, and the rest of the map is shown de-emphasized
+          for orientation.
+        </p>
+      )}
+
       <figure className="mt-4 m-0">
-        <div className="relative w-full max-w-[640px]">
+        {project && geo ? (
           <svg
-            viewBox={`0 0 ${COLS * CELL} ${ROWS * CELL}`}
-            className="w-full h-auto"
+            viewBox={`0 0 ${MAP_W} ${MAP_H}`}
+            className="w-full h-auto max-w-[760px]"
             role="group"
-            aria-label={`Coverage of ${scope.label} by province and territory`}
+            aria-label={`A map of Canada showing where ${scope.label} reaches, shaded in coarse proxy bands, not a precise scorecard.`}
           >
             <defs>
-              <pattern id="cov-nodata" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                <rect width="7" height="7" fill="#fcfaf4" />
-                <line x1="0" y1="0" x2="0" y2="7" stroke="#b8ad97" strokeWidth="2.5" />
+              <pattern id="cov-none" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width="6" height="6" fill="#fcfaf4" />
+                <line x1="0" y1="0" x2="0" y2="6" stroke="#d9d2c3" strokeWidth="2" />
               </pattern>
-              <style>{".cov-tile:hover rect,.cov-tile:focus rect{stroke:#8b2e1f;stroke-width:3}.cov-tile:focus{outline:none}.cov-clickable{cursor:pointer}"}</style>
+              <style>{".cov-p:focus{outline:none}.cov-p:hover,.cov-p:focus{stroke:#8b2e1f;stroke-width:2}.cov-click{cursor:pointer}"}</style>
             </defs>
-            {PROVINCE_TILES.map((t) => {
-              const count = counts[t.slug] ?? 0;
-              const bucket = bucketOf(count);
-              const x = t.col * CELL + PAD;
-              const y = t.row * CELL + PAD;
-              const resolved = count > 0;
-              const fill = bucket ? bucket.fill : "url(#cov-nodata)";
-              const textColor = bucket ? bucket.text : "#6b655c";
-              const label = tileLabel(t.slug, t.name, count, resolved);
-              const enter = () =>
-                setActive({ slug: t.slug, name: t.name, count, rank: resolved ? rankOf[t.slug] : null, total, col: t.col, row: t.row });
-              const activate = resolved ? () => onExplore(t.slug) : undefined;
+            {geo.features.map((f, i) => {
+              const d = featurePath(f, project);
+              if (!d) return null;
+              const prov = provinceByCode(f.properties?.code as string | undefined);
+              const count = prov ? counts[prov.slug] ?? 0 : 0;
+              const isONAB = !!prov && (prov.slug === "ontario" || prov.slug === "alberta");
+              let fill = "url(#cov-none)";
+              if (national) fill = bandOf(count)?.fill ?? "url(#cov-none)";
+              else fill = isONAB && count > 0 ? "#8a6a3f" : "#f2ecdd";   // pilot: highlight ON/AB, rest de-emphasized
+              const explorable = !!prov && count > 0 && (national || isONAB);
+              const label = prov
+                ? `${prov.name}: ${bandLabel(count)}, ${shareText(count)}`
+                : "area outside the corpus jurisdictions";
               return (
-                <g
-                  key={t.slug}
+                <path
+                  key={(f.properties?.code as string) ?? i}
+                  d={d}
+                  fill={fill}
+                  stroke="#b8ad97"
+                  strokeWidth={0.8}
+                  className={`cov-p ${explorable ? "cov-click" : ""}`}
+                  tabIndex={prov ? 0 : -1}
+                  role={explorable ? "button" : "img"}
                   aria-label={label}
-                  role={resolved ? "button" : "img"}
-                  tabIndex={0}
-                  className={`cov-tile ${resolved ? "cov-clickable" : ""}`}
-                  onMouseEnter={enter}
+                  onMouseEnter={() => prov && setActive(prov.slug)}
                   onMouseLeave={() => setActive(null)}
-                  onFocus={enter}
+                  onFocus={() => prov && setActive(prov.slug)}
                   onBlur={() => setActive(null)}
-                  onClick={activate}
+                  onClick={explorable ? () => onExplore(prov!.slug) : undefined}
                   onKeyDown={
-                    resolved
+                    explorable
                       ? (e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            onExplore(t.slug);
+                            onExplore(prov!.slug);
                           }
                         }
                       : undefined
                   }
                 >
                   <title>{label}</title>
-                  <rect x={x} y={y} width={SIZE} height={SIZE} fill={fill} stroke="#d9d2c3" strokeWidth="1.5" rx="3" />
-                  <text x={x + SIZE / 2} y={y + SIZE / 2 - 6} textAnchor="middle" fontSize="20" fontWeight="600" fill={textColor} fontFamily="ui-sans-serif, system-ui">
-                    {t.abbr}
-                  </text>
-                  <text x={x + SIZE / 2} y={y + SIZE / 2 + 18} textAnchor="middle" fontSize="14" fill={textColor} fontFamily="ui-monospace, monospace">
-                    {resolved ? formatInt(count) : "no data"}
-                  </text>
-                </g>
+                </path>
               );
             })}
           </svg>
-          {active && (
-            <div
-              className="pointer-events-none absolute z-10 max-w-[15rem] whitespace-nowrap border border-ink bg-sheet px-2 py-1 text-sm shadow-sm"
-              style={{ left: `${leftPct}%`, top: `${topPct}%`, transform: below ? "translate(-50%, 8px)" : "translate(-50%, calc(-100% - 8px))" }}
-              aria-hidden="true"
-            >
-              <span className="font-medium text-ink">{active.name}</span>
-              {active.rank != null ? (
-                <span className="text-muted">
-                  : {formatInt(active.count)} items (rank {active.rank} of {active.total})
+        ) : (
+          <p className="text-sm text-muted">
+            The map image is not on this device. The same figures are in the list below.
+          </p>
+        )}
+
+        <p className="mt-2 min-h-[1.5em] text-sm" aria-live="polite">
+          {activeRow ? (
+            <span>
+              <span className="text-ink">{activeRow.name}</span>
+              {" -- "}
+              {bandLabel(activeRow.count)}, {shareText(activeRow.count)}
+            </span>
+          ) : (
+            <span className="text-muted">Hover or tab a province for its band and approximate share.</span>
+          )}
+        </p>
+
+        <figcaption className="mt-2 max-w-prose text-sm text-muted">
+          {national ? CAPTION : "This pilot is federal, Ontario, and Alberta only, not a national map."}
+        </figcaption>
+
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" aria-hidden="true">
+          {national ? (
+            <>
+              {BANDS.map((b) => (
+                <span key={b.key} className="inline-flex items-center gap-2">
+                  <span style={{ background: b.fill }} className="inline-block h-4 w-4 border border-rule" />
+                  {b.label}
                 </span>
-              ) : (
-                <span className="text-muted"> - no data in this corpus</span>
-              )}
-            </div>
+              ))}
+              <span className="inline-flex items-center gap-2">
+                <span style={{ backgroundImage: "repeating-linear-gradient(45deg,#fcfaf4,#fcfaf4 2px,#d9d2c3 2px,#d9d2c3 4px)" }} className="inline-block h-4 w-4 border border-rule" />
+                not placed
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="inline-flex items-center gap-2">
+                <span style={{ background: "#8a6a3f" }} className="inline-block h-4 w-4 border border-rule" />
+                in this pilot (Ontario, Alberta)
+              </span>
+              <span className="inline-flex items-center gap-2">
+                <span style={{ background: "#f2ecdd" }} className="inline-block h-4 w-4 border border-rule" />
+                not in this pilot
+              </span>
+            </>
           )}
         </div>
-        <figcaption className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          {[...BUCKETS].reverse().map((b) => (
-            <span key={b.label} className="inline-flex items-center gap-2">
-              <span aria-hidden="true" style={{ background: b.fill }} className="inline-block h-4 w-4 border border-rule" />
-              {b.label}
-            </span>
-          ))}
-          <span className="inline-flex items-center gap-2">
-            <span aria-hidden="true" style={{ backgroundImage: "repeating-linear-gradient(45deg,#fcfaf4,#fcfaf4 2px,#b8ad97 2px,#b8ad97 4px)" }} className="inline-block h-4 w-4 border border-rule" />
-            no data
-          </span>
-        </figcaption>
       </figure>
 
       <div className="mt-5 border-t border-rule pt-3">
-        <h3 className="tag">Not on the map</h3>
-        <p className="mt-1 text-sm">
-          These items are real but sit on no province or territory tile:{" "}
-          <span className="text-ink">federal {formatInt(federal)}</span> items
-          {international > 0 ? <>, international {formatInt(international)} items</> : null}, and{" "}
-          <span className="text-ink">{formatInt(unknown)}</span> items ({unknownPct}%) with no
-          jurisdiction signal in their issuer metadata (unknown). The map does not fold these into any
-          province.
-        </p>
+        <h3 className="tag">Not shown on the map</h3>
+        <ul className="mt-1 space-y-1 text-sm">
+          <li>
+            <span className="text-ink">About {unknownPct}% of items ({formatInt(unknown)})</span> could not
+            be placed and are not shown on the map. They are counted here, never spread across provinces.
+          </li>
+          <li>
+            <span className="text-ink">Federal (national): {formatInt(federal)} items</span> -- a
+            national issuer, not a province.
+          </li>
+          {international > 0 && <li>International: {formatInt(international)} items.</li>}
+        </ul>
       </div>
 
       {isFloor && (
-        <p className="mt-3 text-sm text-muted">
-          These per-province counts are proxy-derived and a floor, not precise per-province coverage:
-          an item is placed only when its issuer metadata names the jurisdiction, so a body that does
-          not name its province stays in the unknown count rather than being guessed onto the map.
+        <p className="mt-3 max-w-prose text-sm text-muted">
+          These bands are proxy-derived and a floor, not precise per-province coverage: an item is placed
+          only when its issuer metadata names the jurisdiction, so a body that does not name its province
+          stays in the unknown figure rather than being guessed onto the map.
         </p>
       )}
 
+      <div className="mt-5 border-t border-rule pt-3">
+        <h3 className="tag">The same figures as a list</h3>
+        <table className="mt-2 text-sm">
+          <caption className="sr-only">Coverage band by province or territory for {scope.label}. Jurisdiction is a rough proxy.</caption>
+          <thead>
+            <tr>
+              <th scope="col" className="pr-6 text-left font-sans font-semibold">Province or territory</th>
+              <th scope="col" className="pr-6 text-left font-sans font-semibold">{national ? "Band" : "In this pilot"}</th>
+              <th scope="col" className="text-left font-sans font-semibold">Approx. share (proxy)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.slug}>
+                <td className="pr-6">{p.name}</td>
+                <td className="pr-6">{national ? bandLabel(p.count) : p.count > 0 ? "yes" : "no"}</td>
+                <td className="text-muted">{shareText(p.count)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       <p className="mt-5 border-t border-rule pt-3 text-sm text-muted">
-        Coverage is uneven: the record is thick in a few jurisdictions and thin or absent in most. It
-        was never national and this map does not pretend otherwise. See{" "}
-        <button type="button" className="linkish" onClick={() => onNav("gaps")}>
-          Gaps
-        </button>{" "}
+        This is a rough picture of reach, not a scorecard. See{" "}
+        <button type="button" className="linkish" onClick={() => onNav("gaps")}>Gaps</button>{" "}
         for what is missing and{" "}
-        <button type="button" className="linkish" onClick={() => onNav("how")}>
-          How this works
-        </button>{" "}
+        <button type="button" className="linkish" onClick={() => onNav("how")}>How this works</button>{" "}
         for how jurisdiction is derived.
       </p>
     </>

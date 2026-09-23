@@ -6,7 +6,7 @@ interface Props {
 
 /** Calm, plain list of support resources, rendered exactly as provided by the single source of
  *  truth (src/archive_debugger/crisis.py) via the API. Each shows its label, how to reach it, who
- *  it is for, and its hours (a marked slot where hours are pending). Static, works offline. */
+ *  it is for, and its hours. Static, works offline. */
 export function CrisisLines({ lines }: Props) {
   if (!lines || lines.length === 0) return null;
   return (

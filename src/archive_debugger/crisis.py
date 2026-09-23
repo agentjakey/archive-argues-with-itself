@@ -9,7 +9,7 @@ Canada for Hope for Wellness, the Residential School line, and the MMIWG line). 
 of the event. Provenance is kept in the gitignored notes/ folder, not the public repo.
 
 Each resource carries a label, a contact instruction (call/text/chat), its hours, who it is for,
-and, where it has one, a link. The MMIWG hours are a marked slot the author will confirm.
+and, where it has one, a link.
 """
 from __future__ import annotations
 
@@ -43,8 +43,8 @@ RESOURCES: dict[str, dict] = {
         "key": "mmiwg_crisis_line",
         "label": "MMIWG Crisis Line",
         "contact": "Call 1-844-413-6649",
-        "hours": "CONFIRM-HOURS-SLOT (leave marked; I will confirm)",
-        "for": "People affected by Missing and Murdered Indigenous Women and Girls",
+        "hours": "24/7",
+        "for": "Anyone affected by Missing and Murdered Indigenous Women, Girls and 2SLGBTQQIA+ people",
     },
 }
 
@@ -53,8 +53,8 @@ RESOURCES: dict[str, dict] = {
 # existing hyphenated detection keys one-to-one.
 TOPIC_RESOURCES: dict[str, list[str]] = {
     "residential-school-health": ["irs_crisis_line", "hope_for_wellness", "helpline_988"],
-    # REVIEW (author-flagged): mmiwg_crisis_line is mapped to the sterilization topic. Kept and
-    # marked for the author's decision; do not drop it without that decision.
+    # mmiwg_crisis_line is included here deliberately (author-decided): the sterilization topic can
+    # surface MMIWG-adjacent harm, so this line is offered alongside Hope for Wellness and 9-8-8.
     "coerced-sterilization-indigenous": ["hope_for_wellness", "mmiwg_crisis_line", "helpline_988"],
     "tainted-blood-krever": ["helpline_988"],
     "early-hiv-aids": ["helpline_988"],

@@ -1,5 +1,7 @@
 # Microlog national scope: sensitivity pass and Gate 2 decision
 
+Canonical crisis numbers live in src/archive_debugger/crisis.py; this file is a dated review record.
+
 Author: Jacob Ortiz. Scope: microlog_public_health (national). Read-only over the built scope; no
 pilot file, gate, or database touched. This is the ethics gate microlog must pass before it is shown.
 

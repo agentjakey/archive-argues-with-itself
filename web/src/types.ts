@@ -156,7 +156,7 @@ export interface CrisisResource {
   key: string;
   label: string;
   contact: string;   // the actionable instruction: call / text / chat
-  hours: string;     // may be a marked slot (e.g. the MMIWG line) pending author confirmation
+  hours: string;     // free-text hours from the canonical resource
   for: string;       // who the line is for
   link?: string;     // present only when the resource has a web link
 }

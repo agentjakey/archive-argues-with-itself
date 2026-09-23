@@ -59,6 +59,20 @@ def _app(tmp_path, r, **kw):
     return create_app(CFG, retriever=r, load_env=False, **kw)
 
 
+def test_enabled_scopes_gates_exposure(tmp_path):
+    from archive_debugger.api.app import parse_enabled_scopes
+    assert parse_enabled_scopes(None) is None
+    assert parse_enabled_scopes("") is None
+    assert parse_enabled_scopes("pilot") == {"pilot"}
+    assert parse_enabled_scopes(" pilot , microlog ") == {"pilot", "microlog"}
+    # ENABLED_SCOPES=pilot: even when microlog is requested via serve_scopes, /scopes exposes pilot
+    # only, and microlog is never built (so it needs no data and none is loaded here).
+    r, _ = _retriever(tmp_path, [("a", 1990, "ontario")])
+    with TestClient(_app(tmp_path, r, serve_scopes=["microlog"], enabled_scopes=["pilot"])) as c:
+        names = [s["name"] for s in c.get("/scopes").json()["scopes"]]
+    assert names == ["pilot"]
+
+
 def test_health_with_corpus_facts(tmp_path):
     r, _ = _retriever(tmp_path, [("late", 1990, "ontario"), ("early", 1975, "federal"), ("nodate", None, "alberta")])
     with TestClient(_app(tmp_path, r)) as c:

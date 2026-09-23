@@ -83,23 +83,32 @@ def story_pins(civic_db: Path, stories: list[dict]) -> tuple[dict, list[str]]:
 def main(argv=None) -> int:
     from dotenv import load_dotenv  # CLI only
     load_dotenv(".env")
-    from archive_debugger.api.app import DEFAULT_CACHE, DEFAULT_PAGES, DEFAULT_STORIES, ENV_PAGES_DIR, load_stories
+    from archive_debugger.api.app import DEFAULT_PAGES, ENV_PAGES_DIR, load_stories, offline_scopes
     from archive_debugger.harvest.pages import page_file
-    from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path, resolve_db_path
+    from archive_debugger.ingest.db import env_path
 
-    config = Path("config/pilot.toml")
-    cache_db = env_path(ENV_CACHE_PATH, DEFAULT_CACHE)
     pages_dir = env_path(ENV_PAGES_DIR, DEFAULT_PAGES)
-    civic_db = Path(resolve_db_path(config))
-    stories = load_stories(DEFAULT_STORIES)
+    served = offline_scopes()   # pilot, plus any built scope present (e.g. microlog); shared pack
 
-    refs = cached_evidence(cache_db)          # (item,leaf) -> sources
-    pins, missing_pins = story_pins(civic_db, stories)
-    for target, labels in pins.items():
-        refs[target] |= labels
-
+    # (item,leaf) -> {"scope:source"} across every served scope; the pack is one shared, item-id-keyed
+    # dir, so both scopes' pages coexist without collision (item ids are distinct).
+    refs: dict = defaultdict(set)
+    missing_pins: list[str] = []
     print(f"pages dir: {pages_dir} ({'present' if Path(pages_dir).is_dir() else 'ABSENT'})")
-    print(f"answer cache: {cache_db} ({'present' if cache_db.exists() else 'ABSENT'})")
+    print(f"scopes covered offline: {', '.join(s['name'] for s in served)}")
+    for s in served:
+        cache_db = Path(s["cache_db"])
+        civic_db = Path(s["civic_db"])
+        stories = load_stories(s["stories"])
+        ev = cached_evidence(cache_db)
+        pins, miss = story_pins(civic_db, stories)
+        for target, labels in ev.items():
+            refs[target] |= {f"{s['name']}:{lab}" for lab in labels}
+        for target, labels in pins.items():
+            refs[target] |= {f"{s['name']}:{lab}" for lab in labels}
+        missing_pins += [f"{s['name']}:{m}" for m in miss]
+        print(f"  [{s['name']}] answer cache {'present' if cache_db.exists() else 'ABSENT'} "
+              f"({len(ev)} answer pages); stories {len(stories)} ({len(pins)} pin pages)")
     print(f"surfaceable pages: {len(refs)} (thumb + medium = {2 * len(refs)} images)")
     if missing_pins:
         print(f"UNRESOLVED story pins (not in civic.db): {', '.join(missing_pins)}")

@@ -14,9 +14,11 @@ interface Options {
   stepMs?: number;
 }
 
-/** Kiosk attract loop: after idleMs with no input, cycle through the stories every
- *  stepMs; any input while cycling stops the loop and calls onHome. Any input while
- *  idle-but-not-cycling just resets the idle timer. */
+/** Kiosk attract loop: after idleMs with no input, cycle through the stories every stepMs; any
+ *  input while cycling stops the loop and calls onHome. Any input while idle-but-not-cycling just
+ *  resets the idle timer. A scope with no stories (microlog, which by design carries no featured
+ *  attract stories) does not cycle; instead an idle timeout calls onHome, which resets to the active
+ *  scope's home with the scope preserved. */
 export function useAttractLoop({ enabled, stories, onShow, onHome, idleMs = IDLE_MS, stepMs = STEP_MS }: Options) {
   const looping = useRef(false);
   const index = useRef(0);
@@ -26,7 +28,7 @@ export function useAttractLoop({ enabled, stories, onShow, onHome, idleMs = IDLE
   home.current = onHome;
 
   useEffect(() => {
-    if (!enabled || stories.length === 0) return;
+    if (!enabled) return;
     let idleTimer: number | null = null;
     let stepTimer: number | null = null;
 
@@ -34,14 +36,21 @@ export function useAttractLoop({ enabled, stories, onShow, onHome, idleMs = IDLE
       show.current(stories[index.current % stories.length]);
       index.current += 1;
     };
-    const startLoop = () => {
+    const onIdle = () => {
+      // With curated stories (the pilot), cycle them. With none (microlog), do not feature content;
+      // reset to the active scope's home so the next visitor starts clean. onHome preserves the
+      // scope, so an idle microlog kiosk returns to microlog, not the pilot.
+      if (stories.length === 0) {
+        home.current();
+        return;
+      }
       looping.current = true;
       step();
       stepTimer = window.setInterval(step, stepMs);
     };
     const armIdle = () => {
       if (idleTimer !== null) window.clearTimeout(idleTimer);
-      idleTimer = window.setTimeout(startLoop, idleMs);
+      idleTimer = window.setTimeout(onIdle, idleMs);
     };
     const onInput = () => {
       if (looping.current) {

@@ -47,6 +47,7 @@ DEFAULT_PAGES = Path("data/cache/pages")           # offline pack of page images
 DEFAULT_STORIES = Path("config/stories.json")
 ENV_PAGES_DIR = "CIVIC_PAGES_DIR"
 ENV_SERVE_SCOPES = "CIVIC_SERVE_SCOPES"   # local multi-scope opt-in: "pilot,microlog". Unset = single base scope.
+ENV_ENABLED_SCOPES = "CIVIC_ENABLED_SCOPES"   # deploy gate: only these scopes are built/exposed. Unset = all.
 SNIPPET = 300
 _PAGE_FILE = re.compile(r"^n(\d+)_(thumb|medium)\.jpg$")
 # Memory-map extra scopes' large databases. SQLite clamps to its own compiled max, so an
@@ -231,6 +232,56 @@ def parse_serve_scopes(raw: Optional[str]) -> Optional[list[str]]:
         return None
     names = [s.strip() for s in raw.split(",") if s.strip()]
     return names or None
+
+
+def parse_enabled_scopes(raw: Optional[str]) -> Optional[set]:
+    """CIVIC_ENABLED_SCOPES -> the set of scopes a deployment exposes, or None (all scopes). A scope
+    not enabled is never built, served, or listed by /scopes, so a pilot-only deploy cannot advertise
+    a scope it has no data for. The base/default scope is always served (a process must serve one)."""
+    if not raw:
+        return None
+    names = {s.strip() for s in raw.split(",") if s.strip()}
+    return names or None
+
+
+def offline_scopes() -> list[dict]:
+    """Every scope this box can serve offline, for the page-pack tooling (scan_coverage, offline_pack).
+    The base pilot (via config + CIVIC_* env, exactly like the deploy) plus any registered non-inherit
+    scope whose built database is present. Each entry names the paths the shared, item-id-keyed page
+    pack (data/cache/pages) must cover for that scope: its answer cache, its civic.db, and its optional
+    stories file. A scope whose database is absent (e.g. microlog on the pilot-only festival volume) is
+    skipped, so the pilot box is unaffected."""
+    from archive_debugger.ingest.db import resolve_db_path
+    out: list[dict] = [{
+        "name": "pilot",
+        "config": Path("config/pilot.toml"),
+        "cache_db": env_path(ENV_CACHE_PATH, DEFAULT_CACHE),
+        "civic_db": Path(resolve_db_path("config/pilot.toml")),
+        "stories": DEFAULT_STORIES,
+    }]
+    try:
+        reg = scopes.load_registry()
+    except scopes.ScopeError:
+        return out
+    default = reg.get("default", "pilot")
+    for name in reg.get("scopes", {}):
+        if name == default:
+            continue
+        try:
+            rs = scopes.resolve_scope(name)
+        except scopes.ScopeError:
+            continue
+        if rs.inherit or not Path(rs.db_path).exists():
+            continue
+        root = Path(rs.db_path).parent
+        out.append({
+            "name": name,
+            "config": rs.config_path,
+            "cache_db": root / "cache" / "answers.db",
+            "civic_db": Path(rs.db_path),
+            "stories": root / "stories.json",
+        })
+    return out
 
 
 def _enable_mmap(conn: sqlite3.Connection) -> None:
@@ -455,7 +506,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                seed_path: Path = DEFAULT_SEED, web_dist: Path = WEB_DIST, load_env: bool = True,
                cache_path: Optional[Path] = None, pages_dir: Optional[Path] = None,
                stories_path: Path = DEFAULT_STORIES, scope: Optional[str] = None,
-               serve_scopes: Optional[list[str]] = None) -> FastAPI:
+               serve_scopes: Optional[list[str]] = None,
+               enabled_scopes: Optional[list[str]] = None) -> FastAPI:
     if load_env:
         from dotenv import load_dotenv
         load_dotenv()
@@ -526,8 +578,15 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         base = _build_bundle(base_name, cfg_path=base_config, retr=retriever, cache_p=base_cache_path,
                              seed_p=seed_path, stories_list=base_stories, llm_obj=llm, mmap=False)
         bundles = {base.name: base}
+        # ENABLED_SCOPES gate: only build/serve/expose the enabled scopes (None = all). The base is
+        # always served; extra scopes not enabled are never built, so /scopes and the switcher never
+        # advertise a scope this deployment has no data for.
+        enabled = (set(enabled_scopes) if enabled_scopes is not None
+                   else parse_enabled_scopes(os.environ.get(ENV_ENABLED_SCOPES)))
         for name in (serve_scopes or []):
             if name in bundles:
+                continue
+            if enabled is not None and name not in enabled:
                 continue
             extra = _extra_bundle(name)
             if extra is not None:

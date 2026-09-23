@@ -1,89 +1,95 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { CoverageMap } from "../components/CoverageMap";
-import { bucketOf } from "../lib/coverage";
+import { CoverageMapView } from "../components/CoverageMap";
+import { bandOf } from "../lib/coverage";
+import type { FeatureCollection } from "../lib/canadaMap";
 import type { ScopeInfo } from "../types";
 
-function scope(jurisdictions: { name: string; items: number }[], isFloor: boolean): ScopeInfo {
+function scope(
+  name: string, label: string, jurisdictions: { name: string; items: number }[],
+  isFloor: boolean, unknownShare = 0.149,
+): ScopeInfo {
   return {
-    name: "microlog",
-    label: "National public health, all provinces",
-    blurb: "",
-    collection: "microlog",
-    collection_url: "https://archive.org/details/microlog",
-    collections: ["microlog"],
-    item_count: jurisdictions.reduce((n, j) => n + j.items, 0),
+    name, label, blurb: "", collection: name, collection_url: `https://archive.org/details/${name}`,
+    collections: [name], item_count: jurisdictions.reduce((n, j) => n + j.items, 0),
     window: { min_year: 1960, max_year: 2009 },
     composition: {
-      passages: 1,
-      dated_span: { min_year: 1963, max_year: 2018 },
-      window: { min_year: 1960, max_year: 2009 },
-      undated: { items: 0, item_share: 0, passages: 0, passage_share: 0 },
-      ocr: { high: 1, medium: 0, low: 0 },
+      passages: 1, dated_span: { min_year: 1963, max_year: 2018 }, window: { min_year: 1960, max_year: 2009 },
+      undated: { items: 0, item_share: 0, passages: 0, passage_share: 0 }, ocr: { high: 1, medium: 0, low: 0 },
       jurisdictions: jurisdictions.map((j) => ({ ...j, share: 0 })),
-      jurisdiction_unknown_share: 0.149,
-      jurisdiction_is_floor: isFloor,
-      date_method: {},
-      by_period: {},
+      jurisdiction_unknown_share: unknownShare, jurisdiction_is_floor: isFloor, date_method: {}, by_period: {},
     },
   };
 }
 
-describe("bucketOf", () => {
-  it("returns null for no data and the right bin otherwise", () => {
-    expect(bucketOf(0)).toBeNull();
-    expect(bucketOf(50)?.label).toBe("1 to 99");
-    expect(bucketOf(250)?.label).toBe("100 to 299");
-    expect(bucketOf(400)?.label).toBe("300 to 599");
-    expect(bucketOf(878)?.label).toBe("600 or more");
+const MICRO = scope("microlog", "National public health, all provinces", [
+  { name: "federal", items: 5103 }, { name: "ontario", items: 1828 }, { name: "saskatchewan", items: 878 },
+  { name: "alberta", items: 424 }, { name: "british_columbia", items: 261 }, { name: "manitoba", items: 332 },
+  { name: "unknown", items: 2018 }, { name: "international", items: 1 },
+], true);
+
+const PILOT = scope("pilot", "Federal public health", [
+  { name: "federal", items: 1198 }, { name: "ontario", items: 1024 }, { name: "alberta", items: 949 },
+  { name: "unknown", items: 301 },
+], false, 0.087);
+
+const FC: FeatureCollection = {
+  type: "FeatureCollection",
+  features: [
+    { type: "Feature", properties: { code: "CA-ON" }, geometry: { type: "Polygon", coordinates: [[[-80, 45], [-79, 45], [-79, 44], [-80, 44], [-80, 45]]] } },
+    { type: "Feature", properties: { code: "CA-AB" }, geometry: { type: "Polygon", coordinates: [[[-114, 52], [-113, 52], [-113, 51], [-114, 51], [-114, 52]]] } },
+    { type: "Feature", properties: { code: "CA-NU" }, geometry: { type: "Polygon", coordinates: [[[-95, 65], [-94, 65], [-94, 64], [-95, 64], [-95, 65]]] } },
+  ],
+};
+
+const CAPTION =
+  "Jurisdiction here is a rough proxy. About 15% of items could not be placed and are not shown on " +
+  "the map. This is a rough picture of reach, not a scorecard.";
+
+describe("bandOf", () => {
+  it("coarse bands, null for none", () => {
+    expect(bandOf(0)).toBeNull();
+    expect(bandOf(10)?.label).toBe("sparse");
+    expect(bandOf(120)?.label).toBe("some");
+    expect(bandOf(878)?.label).toBe("well represented");
   });
 });
 
-describe("CoverageMap", () => {
-  const juris = [
-    { name: "federal", items: 5103 },
-    { name: "ontario", items: 1828 },
-    { name: "saskatchewan", items: 878 },
-    { name: "unknown", items: 2018 },
-    { name: "international", items: 1 },
-  ];
-
-  it("renders resolved tiles with counts, no-data tiles, off-map counts, and the floor caveat", () => {
-    const { container } = render(
-      <CoverageMap scope={scope(juris, true)} onExplore={vi.fn()} onNav={vi.fn()} />,
-    );
-    // a resolved province tile is a button carrying its count
-    expect(screen.getByRole("button", { name: /Saskatchewan: 878 items/ })).toBeInTheDocument();
-    // absent provinces render as no data (e.g. Nunavut, Quebec) and are not buttons
-    expect(screen.queryByRole("button", { name: /Nunavut/ })).toBeNull();
-    expect(container.textContent).toContain("no data");
-    // off-map: federal and unknown shown as numbers, never folded into a province
-    expect(container.textContent).toContain("federal 5,103");
-    expect(container.textContent).toContain("2,018");
-    // floor caveat present when is_floor
-    expect(container.textContent).toContain("a floor");
+describe("CoverageMapView (national)", () => {
+  it("without the boundary file: text-alternative list, unknown figure, federal separate, fixed caption", () => {
+    const { container } = render(<CoverageMapView scope={MICRO} geo={null} onExplore={vi.fn()} onNav={vi.fn()} />);
+    expect(screen.getByText(/The same figures as a list/)).toBeInTheDocument();
+    // unknown shown as a separate figure, never spread across provinces
+    expect(container.textContent).toContain("About 15% of items (2,018)");
+    expect(container.textContent).toContain("Federal (national): 5,103 items");
+    // the author-fixed national caption, verbatim
+    expect(container.textContent).toContain(CAPTION);
+    // absent boundary file -> clean fallback, no error
+    expect(screen.getByText(/map image is not on this device/)).toBeInTheDocument();
+    // the table carries the band, not the exact count
+    expect(container.textContent).toContain("Saskatchewan");
+    expect(container.textContent).toContain("well represented");
+    expect(container.textContent).not.toContain("878 items");
   });
 
-  it("clicking a resolved province calls onExplore with its slug", () => {
+  it("with the boundary file: province paths render; a shaded province is a button that explores it", () => {
     const onExplore = vi.fn();
-    render(<CoverageMap scope={scope(juris, true)} onExplore={onExplore} onNav={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: /Saskatchewan/ }));
-    expect(onExplore).toHaveBeenCalledWith("saskatchewan");
+    render(<CoverageMapView scope={MICRO} geo={FC} onExplore={onExplore} onNav={vi.fn()} />);
+    const on = screen.getByRole("button", { name: /Ontario: well represented/ });
+    expect(on).toBeInTheDocument();
+    fireEvent.click(on);
+    expect(onExplore).toHaveBeenCalledWith("ontario");
+    // Nunavut has no data in this corpus -> present on the map but not a button
+    expect(screen.queryByRole("button", { name: /Nunavut/ })).toBeNull();
   });
+});
 
-  it("hides the floor caveat when is_floor is false (pilot)", () => {
-    const pilot = [
-      { name: "federal", items: 1198 },
-      { name: "ontario", items: 1024 },
-      { name: "alberta", items: 949 },
-      { name: "unknown", items: 301 },
-    ];
-    const { container } = render(
-      <CoverageMap scope={scope(pilot, false)} onExplore={vi.fn()} onNav={vi.fn()} />,
-    );
-    expect(container.textContent).not.toContain("a floor");
-    // territories and most provinces are no data on the pilot
-    expect(screen.queryByRole("button", { name: /Yukon/ })).toBeNull();
-    expect(screen.getByRole("button", { name: /Ontario: 1,024 items/ })).toBeInTheDocument();
+describe("CoverageMapView (pilot)", () => {
+  it("no national ranking: pilot note, federal stated separately, no national caption or bands", () => {
+    const { container } = render(<CoverageMapView scope={PILOT} geo={null} onExplore={vi.fn()} onNav={vi.fn()} />);
+    expect(container.textContent).toContain("This pilot covers federal, Ontario, and Alberta only");
+    expect(container.textContent).toContain("Federal (national): 1,198 items");
+    expect(container.textContent).not.toContain("Jurisdiction here is a rough proxy");   // national caption absent
+    expect(container.textContent).not.toContain("well represented");                     // no bands under pilot
   });
 });

@@ -65,13 +65,12 @@ def uncached_stories(cache_db: Path, stories: list[dict], config_path: Path) -> 
 def main(argv=None) -> int:
     from dotenv import load_dotenv  # CLI only
     load_dotenv(".env")
-    from archive_debugger.api.app import DEFAULT_CACHE, DEFAULT_PAGES, DEFAULT_STORIES, ENV_PAGES_DIR, load_stories
+    from archive_debugger.api.app import DEFAULT_PAGES, ENV_PAGES_DIR, load_stories, offline_scopes
     from archive_debugger.harvest.pages import fetch_page_images
-    from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path, resolve_db_path
+    from archive_debugger.ingest.db import env_path
 
     p = argparse.ArgumentParser(description="Fetch page images for cached answers and stories into the offline pack.")
-    p.add_argument("--config", default="config/pilot.toml", type=Path)
-    p.add_argument("--stories", default=DEFAULT_STORIES, type=Path)
+    p.add_argument("--config", default="config/pilot.toml", type=Path, help="config that supplies the User-Agent contact")
     p.add_argument("--contact", default=None, help="contact for the User-Agent (default: [harvest].user_agent_contact)")
     p.add_argument("--delay", default=0.5, type=float)
     p.add_argument("--dry-run", action="store_true", help="list targets and uncached stories; fetch nothing")
@@ -79,13 +78,23 @@ def main(argv=None) -> int:
 
     with args.config.open("rb") as fh:
         contact = args.contact or tomllib.load(fh).get("harvest", {}).get("user_agent_contact", "")
-    cache_db = env_path(ENV_CACHE_PATH, DEFAULT_CACHE)
     pages_dir = env_path(ENV_PAGES_DIR, DEFAULT_PAGES)
-    stories = load_stories(args.stories)
-    targets, missing_pins = collect_targets(cache_db, resolve_db_path(args.config), stories)
-    uncached = uncached_stories(cache_db, stories, args.config)
 
-    print(f"answer cache: {cache_db} ({'present' if cache_db.exists() else 'absent'})")
+    # Select targets across every served scope (pilot + any built scope present, e.g. microlog) into
+    # the one shared, item-id-keyed pack. This is the SELECTION only; the fetch below is the operator's
+    # network-on step. A scope whose build is absent (pilot-only festival volume) is skipped.
+    served = offline_scopes()
+    targets: set = set()
+    missing_pins: list[str] = []
+    uncached: list[str] = []
+    for s in served:
+        stories = load_stories(s["stories"])
+        t, miss = collect_targets(Path(s["cache_db"]), Path(s["civic_db"]), stories)
+        targets |= t
+        missing_pins += [f"{s['name']}:{m}" for m in miss]
+        uncached += [f"{s['name']}:{u}" for u in uncached_stories(Path(s["cache_db"]), stories, Path(s["config"]))]
+
+    print(f"scopes: {', '.join(s['name'] for s in served)}")
     print(f"pages to hold: {len(targets)} (thumb + medium each) under {pages_dir}")
     if missing_pins:
         print(f"story pins not found in civic.db: {missing_pins}")

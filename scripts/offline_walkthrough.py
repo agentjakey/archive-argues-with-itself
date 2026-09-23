@@ -109,23 +109,27 @@ def main() -> int:
     ]
 
     reds: list[str] = []
+    ran: list[str] = []
     intercepted: list[str] = []
     golden_flagged: dict = {}
     novel_ocr_present = False
 
     def check(ok: bool, label: str, detail: str = "") -> None:
+        ran.append(label)
         print(f"[{GREEN if ok else RED}] {label}" + (f"  {detail}" if detail else ""))
         if not ok:
             reds.append(label)
 
-    app = create_app(Path("config/pilot.toml"), load_env=True)
+    # Serve microlog too where its build is present, so this walkthrough covers both scopes; on the
+    # pilot-only festival volume microlog is simply not served and its checks are skipped.
+    app = create_app(Path("config/pilot.toml"), load_env=True, serve_scopes=["microlog"])
     # A server-side exception becomes a 500 response instead of raising, so an unhandled
     # exception shows up here as a red (status != 200), never as a crashed harness.
     with TestClient(app, raise_server_exceptions=False) as c:
-        # Keep the run strictly read-only: intercept every cache write (a gate abstention on
-        # a novel query would otherwise be cached by normal behavior) so the real cache is
-        # never touched. Reads still hit the warmed cache.
-        app.state.cache.put = lambda key, response: intercepted.append(key)  # type: ignore[assignment]
+        # Keep the run strictly read-only across every served scope: intercept every cache write (a
+        # gate abstention on a novel query would otherwise be cached) so no real cache is touched.
+        for _b in app.state.bundles.values():
+            _b.cache.put = lambda key, response: intercepted.append(key)  # type: ignore[assignment]
 
         print("== 54 EXHIBIT QUESTIONS (must serve from cache, must NOT degrade) ==")
         for label, text, filt in golden:
@@ -223,6 +227,56 @@ def main() -> int:
         else:
             check(False, "/flag test setup", "no HIV-titled passage or story pins found")
 
+        # ---- microlog scope: offline parity (R1 + sensitivity). Skipped where microlog is not served
+        # here (e.g. the pilot-only festival volume), so the pilot box stays GREEN. ----
+        print("\n== MICROLOG SCOPE (offline parity; skipped if not served here) ==")
+        served = [x["name"] for x in c.get("/scopes").json().get("scopes", [])]
+        if "microlog" not in served:
+            check(True, "MICROLOG not served on this box -> skipped", f"served={served}")
+        else:
+            # R1: a covered microlog question, model unreachable, must degrade to limited mode with the
+            # record attached -- never error or hang (nocache forces retrieval + the model, then degrade).
+            r = c.post("/ask?scope=microlog",
+                       json={"question": "What did FluWatch reports describe about influenza surveillance?", "nocache": True})
+            j = r.json() if r.status_code == 200 else {}
+            a = j.get("answer", {}) if isinstance(j, dict) else {}
+            ev = (j.get("evidence") or []) if isinstance(j, dict) else []
+            deg = (j.get("degraded") or {}) if isinstance(j, dict) else {}
+            is_deg = isinstance(j, dict) and "degraded" in j
+            ok = (r.status_code == 200 and shape_ok(j) and "error" not in j
+                  and a.get("abstained") is True and a.get("cached") is None)
+            if is_deg:
+                ok = ok and deg.get("reason") in VALID_REASONS and len(ev) > 0   # limited mode carries the record
+            check(ok, "MICROLOG /ask degrades offline to limited mode with the record (R1)",
+                  f"status={r.status_code} mode={'degraded:' + str(deg.get('reason')) if is_deg else 'gate-abstain'} evidence={len(ev)}")
+
+            # every microlog evidence row carries a page-level deep link (N3) and the pack fields, so the
+            # drawer degrades gracefully offline (local image when packed, else a clear 'not on device' state).
+            rows_ok = bool(ev) and all(
+                isinstance(row.get("deep_link"), str) and "/page/n" in row["deep_link"]
+                and "page_image" in row and "offline" in row for row in ev)
+            check(rows_ok, "MICROLOG evidence rows carry a page-level deep link + pack fields (drawer degrades)",
+                  f"rows={len(ev)} sample_offline={ev[0].get('offline') if ev else None}")
+
+            # sensitivity fires offline on microlog content, crisis lines resolved from crisis.py.
+            r2 = c.post("/ask?scope=microlog",
+                        json={"question": "What did reports describe about HIV testing and AIDS prevention?", "nocache": True})
+            j2 = r2.json() if r2.status_code == 200 else {}
+            a2 = j2.get("answer", {}) if isinstance(j2, dict) else {}
+            fl = j2.get("flagged") if isinstance(j2, dict) else None
+            non_gen = ("degraded" in j2) or bool(a2.get("abstained")) if isinstance(j2, dict) else False
+            keys = [ln.get("key") for ln in (fl or {}).get("crisis_lines", [])] if isinstance(fl, dict) else []
+            check(r2.status_code == 200 and non_gen and isinstance(fl, dict)
+                  and "early-hiv-aids" in (fl.get("topics") or []) and "helpline_988" in keys,
+                  "MICROLOG sensitivity fires offline; crisis lines from crisis.py",
+                  f"topics={(fl or {}).get('topics') if isinstance(fl, dict) else None} crisis_keys={keys}")
+
+            # the care-note crisis payload for the scope-aware Gaps is served from crisis.py.
+            crisis = c.get("/scopes").json().get("crisis", {})
+            ind = [x.get("key") for x in crisis.get("defaults", {}).get("indigenous_sensitive", [])]
+            check(ind == ["helpline_988", "hope_for_wellness"],
+                  "MICROLOG care-note crisis payload served from crisis.py", f"indigenous_sensitive={ind}")
+
     after = cache_row_count(cache_db)
     check(before == after, "answer cache not poisoned",
           f"rows before={before} after={after}; write attempts intercepted={len(intercepted)}")
@@ -230,7 +284,7 @@ def main() -> int:
           f"novel-clean rows carry ocr_quality={novel_ocr_present}")
 
     print()
-    total = len(golden) + len(adversarial) + 9
+    total = len(ran)
     if reds:
         print(f"RED: {len(reds)} of {total} checks failed: {', '.join(reds[:12])}" + (" ..." if len(reds) > 12 else ""))
         return 1
