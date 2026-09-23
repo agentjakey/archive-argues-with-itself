@@ -4,6 +4,12 @@ What this archive cannot tell you, and what the tool does about each gap.
 Numbers are copied from the named report files; derived figures show their
 arithmetic.
 
+This report covers the **federal public-health pilot**. The app also serves the national
+**microlog** corpus as a separate scope: it reaches 1963-2018 (so, unlike the pilot, it
+is not framed as stopping around 2009), and its jurisdiction is an issuer-derived proxy
+(a floor, ~15% unplaced, no per-province claim). The microlog gaps and audit are recorded
+under [`reports/microlog/`](../reports/microlog/).
+
 ## The record stops around 2009
 
 Source: `reports/coverage_audit/finalist_sizing.md`.

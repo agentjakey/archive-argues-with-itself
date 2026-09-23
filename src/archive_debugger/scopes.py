@@ -132,18 +132,29 @@ def resolve_scope(name: str, *, registry_path: Optional[Path] = None) -> Scope:
         return Scope(name=name, config_path=config_path, db_path=db_path,
                      index_path=index_path, cache_dir=cache_dir, inherit=True)
 
-    # Fenced scope: registry paths are authoritative and the env is ignored.
-    db_path = Path(entry.get("db_path") or cfg_db or "")
-    index_path = Path(entry.get("index_path") or cfg_index or "")
-    if not str(db_path) or not str(index_path):
+    # Fenced scope: the registry paths are authoritative for the BUILD, and the CIVIC_* env is
+    # ignored. A per-scope deploy override (below) may still relocate the built files at serve time.
+    reg_db = Path(entry.get("db_path") or cfg_db or "")
+    reg_index = Path(entry.get("index_path") or cfg_index or "")
+    if not str(reg_db) or not str(reg_index):
         raise ScopeError(f"scope {name!r} must declare db_path and index_path in the registry")
 
     # Drift guard: if the config also declares these, they must agree with the registry,
     # so a scoped build cannot land its data somewhere the config disowns.
-    if cfg_db is not None and Path(cfg_db) != db_path:
-        raise ScopeError(f"scope {name!r} db_path {db_path} disagrees with {config_path} [index].db_path {cfg_db}")
-    if cfg_index is not None and Path(cfg_index) != index_path:
-        raise ScopeError(f"scope {name!r} index_path {index_path} disagrees with {config_path} [retrieve].index_path {cfg_index}")
+    if cfg_db is not None and Path(cfg_db) != reg_db:
+        raise ScopeError(f"scope {name!r} db_path {reg_db} disagrees with {config_path} [index].db_path {cfg_db}")
+    if cfg_index is not None and Path(cfg_index) != reg_index:
+        raise ScopeError(f"scope {name!r} index_path {reg_index} disagrees with {config_path} [retrieve].index_path {cfg_index}")
+
+    # Per-scope deploy override (runtime relocation, not a build path): a deployment may point a
+    # built scope's files at a mounted volume with <NAME>_DB_PATH / <NAME>_INDEX_PATH (e.g.
+    # MICROLOG_DB_PATH / MICROLOG_INDEX_PATH), the scope-scoped analogue of the pilot's CIVIC_*
+    # overrides. It never touches the registry or the config (the drift guard above still holds
+    # against the declared build paths), and the fence tracks the overridden paths, so the scope
+    # can still only ever open its own databases. The CIVIC_* env stays ignored for a fenced scope.
+    env_base = "".join(ch if ch.isalnum() else "_" for ch in name).upper()
+    db_path = Path(os.environ[f"{env_base}_DB_PATH"]) if os.environ.get(f"{env_base}_DB_PATH") else reg_db
+    index_path = Path(os.environ[f"{env_base}_INDEX_PATH"]) if os.environ.get(f"{env_base}_INDEX_PATH") else reg_index
 
     return Scope(name=name, config_path=config_path, db_path=db_path,
                  index_path=index_path, cache_dir=cache_dir, inherit=False)

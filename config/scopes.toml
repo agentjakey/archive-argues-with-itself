@@ -65,7 +65,10 @@ url_env = "DATA_RELEASE_URL"
 [scopes.microlog]
 # The pooled national microlog public-health corpus the pilot excluded (reserve-only,
 # microfiche-sourced). Built as its own release, fully isolated under
-# data/exploration/microlog/. These paths mirror config/microlog.toml exactly.
+# data/exploration/microlog/. These paths mirror config/microlog.toml exactly and are where a
+# BUILD lands; on a deploy the built files are relocated onto the mounted volume with the
+# MICROLOG_DB_PATH / MICROLOG_INDEX_PATH env vars (resolve_scope honors <NAME>_DB_PATH /
+# <NAME>_INDEX_PATH for a fenced scope; the image defaults them to /data/microlog/...). See docs/deploy.md.
 config = "config/microlog.toml"
 db_path = "data/exploration/microlog/civic_microlog.db"
 index_path = "data/exploration/microlog/index/vectors_microlog.db"

@@ -21,16 +21,20 @@ The steps below use Railway. Nothing deploys automatically from CI.
   logged in (`gh auth login`), for the one-time data release.
 - A Railway account connected to GitHub.
 - Your API key for the configured language-model provider (the variable named in `.env.example`).
-- The two data files on your machine, built by the Reproduce steps in the README
-  (or downloaded from an existing release, see the README "Run it yourself").
+- A Cloudflare R2 bucket (S3-compatible) with its endpoint, access key id, and secret,
+  for hosting the scope data (see "Both scopes from R2").
+- The scope data files on your machine (both scopes' db + index), built by the
+  Reproduce steps in the README, to upload to R2 once.
 
 ## Environment variables
 
 | variable | value on Railway | meaning |
 | --- | --- | --- |
-| `CIVIC_DB_PATH` | `/data/civic.db` | corpus database on the volume |
-| `CIVIC_INDEX_PATH` | `/data/index/vectors.db` | dense index on the volume |
-| `CIVIC_CACHE_PATH` | `/data/cache/answers.db` | answer cache (image default; set it only to move it) |
+| `CIVIC_DB_PATH` | `/data/civic.db` | pilot corpus database (image default; under the `/data` volume) |
+| `CIVIC_INDEX_PATH` | `/data/index/vectors.db` | pilot dense index (under the `/data` volume) |
+| `CIVIC_CACHE_PATH` | `/data/cache/answers.db` | pilot answer cache (under the `/data` volume) |
+| `MICROLOG_DB_PATH` | `/data/microlog/civic_microlog.db` | microlog corpus database (image default; relocates the fenced scope onto the `/data` volume) |
+| `MICROLOG_INDEX_PATH` | `/data/microlog/index/vectors_microlog.db` | microlog dense index (its answer cache follows at `/data/microlog/cache/answers.db`) |
 | `R2_ENDPOINT` | `https://<accountid>.r2.cloudflarestorage.com` | Cloudflare R2 S3 endpoint (the scope data source) |
 | `R2_BUCKET` | your bucket | R2 bucket holding the `pilot/*` and `microlog/*` objects |
 | `R2_ACCESS_KEY_ID` | your R2 key id | R2 access key id |
@@ -44,10 +48,16 @@ The steps below use Railway. Nothing deploys automatically from CI.
 
 ## Both scopes from R2 (pilot + microlog)
 
-The two data files per scope live in one R2 bucket under `pilot/` and `microlog/`,
-uploaded once with `scripts/upload_scopes_to_r2.py` (it prints and records their
-sha256; those hashes are already filled into `config/scopes.toml`, which the boot
-verifies against). To serve both scopes:
+The two data files per scope live in one R2 bucket, keyed by scope:
+
+```
+pilot/civic.db               pilot/vectors.db
+microlog/civic_microlog.db   microlog/vectors_microlog.db
+```
+
+They are uploaded once with `scripts/upload_scopes_to_r2.py` (it prints and records
+their sha256; those hashes are already filled into `config/scopes.toml`, which the
+boot verifies against). To serve both scopes:
 
 1. **Upload the four files to R2** (from your machine, one time):
 
@@ -58,24 +68,30 @@ verifies against). To serve both scopes:
    .\.venv\Scripts\python.exe scripts\upload_scopes_to_r2.py    # prompts for the secret, no echo
    ```
 
-2. **Mount the volume at `/app/data`** and set the paths so both scopes land on it.
-   microlog's paths are repo-relative under `data/exploration/microlog/`, which
-   resolves under `/app`, so one volume at `/app/data` holds both scopes:
+2. **Mount the volume at `/data`** (Railway: Settings -> Volumes -> Add Volume,
+   mount path `/data`). These path values are the image defaults and all sit under that
+   mount; set them explicitly to be sure (copy-paste):
 
-   | variable | value |
-   | --- | --- |
-   | `CIVIC_DB_PATH` | `/app/data/civic.db` |
-   | `CIVIC_INDEX_PATH` | `/app/data/index/vectors.db` |
-   | `CIVIC_CACHE_PATH` | `/app/data/cache/answers.db` |
+   ```
+   CIVIC_DB_PATH=/data/civic.db
+   CIVIC_INDEX_PATH=/data/index/vectors.db
+   CIVIC_CACHE_PATH=/data/cache/answers.db
+   MICROLOG_DB_PATH=/data/microlog/civic_microlog.db
+   MICROLOG_INDEX_PATH=/data/microlog/index/vectors_microlog.db
+   ```
 
-   (The image default `/data` still works for a pilot-only deploy; use `/app/data`
-   when serving microlog too, so neither scope is re-downloaded on restart.)
+   The pilot honors the `CIVIC_*` paths; the microlog scope is fenced and ignores
+   `CIVIC_*`, so it is relocated onto the volume with its own `MICROLOG_DB_PATH` /
+   `MICROLOG_INDEX_PATH` (its answer cache follows beside the db, at
+   `/data/microlog/cache/answers.db`). With these set, every db, index, and cache for
+   both scopes sits under the single `/data` mount; nothing writes outside it, and
+   nothing is re-downloaded on restart.
 
 3. **Set the R2 and scope variables**: `R2_ENDPOINT`, `R2_BUCKET`,
    `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (a secret variable),
    `CIVIC_ENABLED_SCOPES=pilot,microlog`, `CIVIC_DEFAULT_SCOPE=microlog`, and
-   `ANTHROPIC_API_KEY`. Size the volume for both scopes (about 10.5 GiB of data;
-   16 GB is comfortable, with headroom for a partial download).
+   `ANTHROPIC_API_KEY`. Size the volume for both scopes: about 10.5 GiB of data, so
+   ~15 GB gives headroom for the answer cache and a partial download.
 
 4. **Deploy.** The boot log lists each file verified or downloaded, then
    `Application startup complete`; `/scopes` reports `"default": "microlog"` with
@@ -87,6 +103,15 @@ If the R2 vars are absent, the pilot falls back to its GitHub release
 2 GiB per-asset cap) is R2-only: with R2 unavailable and no local copy present, its
 boot fails fast with a message naming the scope and key, and the server does not
 start half-served.
+
+### Cost: stop the service when idle
+
+The corpus is large and the exhibit is not in use continuously, so the service is
+stopped when idle to control cost and started again when needed (Railway: stop the
+service, or scale it to zero, from the service menu). Because the data is cached on
+the `/data` volume and verified by hash, a restart re-attaches the volume and
+serves in seconds without re-downloading; only a first boot onto a cold volume pays
+the one-time R2 download.
 
 ## Steps (pilot only, GitHub release)
 

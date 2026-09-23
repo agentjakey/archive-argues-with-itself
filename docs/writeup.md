@@ -10,13 +10,16 @@ Repo: https://github.com/agentjakey/archive-argues-with-itself
 ## What it is
 
 This is public AI over the Internet Archive's Democracy's Library. It works over the
-Canadian government's own public-health record, roughly 1960 to 2009, as scanned and
-OCR'd by the Internet Archive. It is an inspectable civic-memory tool, not a chatbot.
-The point is not fluent answers. The point is that you can see the page behind every
-claim, see where the record is thin, and see how the government's own wording changed
-from one decade to the next.
+Canadian government's own public-health record, as scanned and OCR'd by the Internet
+Archive. It is an inspectable civic-memory tool, not a chatbot. The point is not fluent
+answers. The point is that you can see the page behind every claim, see where the record
+is thin, and see how the government's own wording changed from one decade to the next.
 
-The corpus is 3,477 items and 745,893 passages.
+It serves two corpora, switchable in the app: the clean federal pilot (3,477 items,
+745,893 passages; 1960-2009) and the national microlog microfiche corpus (13,539 items,
+1,136,827 passages; 1963-2018, all provinces). The data is hosted on Cloudflare R2 and
+cached to the deploy on boot, with the pilot also on a GitHub Release as a fallback.
+[Jacob: the audit numbers below are the pilot's; the microlog audit is in reports/microlog/.]
 
 ## A worked example
 
@@ -67,8 +70,9 @@ labels and judgments by the author:
 
 ## Coverage and limits
 
-The record stops around 2009; scanned government publications with usable OCR
-effectively end in the 2000s, and the tool never claims to reach the present. Almost
+The pilot's record stops around 2009; scanned government publications with usable OCR
+effectively end in the 2000s (the national microlog scope reaches 2018), and the tool
+never claims to reach the present. Almost
 half of the passages carry no date: 338,338 of 745,893, or 45.4%, and no date is ever
 guessed. OCR quality is uneven: of 745,893 passages, 6,186 are in the low-quality
 bucket and 191,881 in the medium bucket, and the trail shows the raw excerpt so you can

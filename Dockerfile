@@ -1,8 +1,9 @@
-# Read-only serve layer image. Expects the two data files on a mounted volume:
-#   $CIVIC_DB_PATH     (default /data/civic.db)
-#   $CIVIC_INDEX_PATH  (default /data/index/vectors.db)
-# The entrypoint waits for both before starting uvicorn on $PORT. The web app is
-# built inside the image (node stage), so the image never depends on a laptop build.
+# Read-only serve layer image. One persistent volume is mounted at /data, and every scope's
+# data lands under it: the pilot at $CIVIC_DB_PATH / $CIVIC_INDEX_PATH and the microlog scope at
+# $MICROLOG_DB_PATH / $MICROLOG_INDEX_PATH (both default to /data/... below; override per deploy).
+# The entrypoint provisions each enabled scope's files from its configured source (R2, or a
+# GitHub release as a fallback) and verifies their sha256 before starting uvicorn on $PORT. The
+# web app is built inside the image (node stage), so the image never depends on a laptop build.
 
 # --- stage 1: web app -------------------------------------------------------
 FROM node:20-bookworm-slim AS web
@@ -21,6 +22,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     CIVIC_DB_PATH=/data/civic.db \
     CIVIC_INDEX_PATH=/data/index/vectors.db \
     CIVIC_CACHE_PATH=/data/cache/answers.db \
+    MICROLOG_DB_PATH=/data/microlog/civic_microlog.db \
+    MICROLOG_INDEX_PATH=/data/microlog/index/vectors_microlog.db \
     FASTEMBED_CACHE_PATH=/opt/fastembed
 # PORT is NOT baked in: a hardcoded ENV PORT=8080 would shadow the port Railway
 # injects at runtime, so uvicorn would listen on 8080 while the proxy routed

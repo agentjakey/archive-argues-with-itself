@@ -5,6 +5,10 @@ pressure. Prepare once with the network on, prove it with the demo self-test, an
 it with the network off. Every command is from the repository root with the venv, the
 `.env` (key and the `CIVIC_*` paths), and the two data files in place.
 
+This runbook is the offline kiosk (one laptop, local data files). For the cloud deploy
+that serves both scopes from Cloudflare R2 onto a `/data` volume, see
+[`deploy.md`](deploy.md); this page covers the festival pilot exhibit.
+
 ## 1. Boot sequence
 
 1. Start the API (serves the built web app and the read-only endpoints):

@@ -16,9 +16,17 @@ The public record disagrees with itself across decades. This tool shows you the 
 An official answer is not fixed: what a government said caused a problem, or how it
 described a program, changes from one decade's report to the next, and the wording of
 that change is often the point. This tool puts the scanned Canadian government
-public-health pages (about 1960 to 2009, held by the Internet Archive) in front of
-you, ties every sentence of its answer to a page you can open, and says plainly where
-the record is too thin to answer instead of guessing.
+public-health pages (held by the Internet Archive) in front of you, ties every sentence
+of its answer to a page you can open, and says plainly where the record is too thin to
+answer instead of guessing.
+
+It serves two corpora from one app, switchable in the interface: a clean federal pilot
+(Government of Canada publications, federal plus Ontario and Alberta, roughly 1960-2009)
+and the national microlog microfiche corpus (federal, provincial, and municipal
+issuers, 1963-2018). The data is hosted on Cloudflare R2 and cached to the deploy's disk
+on boot; the pilot is also mirrored on a GitHub Release as a fallback. Neither corpus
+reaches the present: scanned government OCR runs out in the 2010s, and there is no 2020s
+material in this archive.
 
 ## Contents
 
@@ -42,8 +50,8 @@ view for how official language changes between decades, and a coverage view that
 where the archive is silent or undated. It is not a chatbot. Provenance, coverage, and
 uncertainty rank above fluency. The model may only write sentences it can cite to a
 retrieved page, and the tool abstains when the evidence is thin. It never claims to
-reach the present, because scanned government publications with OCR effectively stop
-around 2009.
+reach the present: the federal pilot's scanned OCR effectively stops around 2009, the
+national microlog corpus reaches 2018, and neither holds 2020s material.
 
 ## The four rules
 
@@ -58,25 +66,40 @@ are additive and recorded with who decided what.
 
 ## The numbers
 
-Measured on an audit run of all 50 evaluation questions with the shipped
-configuration; labels and judgments by the author. Each figure links to the report it
-comes from, under [`docs/evaluation/`](docs/evaluation/).
+Each scope is evaluated on its own audit run with the shipped configuration; all labels
+and judgments are by the author, and every figure links to the report it comes from.
+
+**Federal pilot** (3,477 items, 745,893 passages; 1960-2009), audit over the 50
+evaluation questions, reports under [`docs/evaluation/`](docs/evaluation/):
 
 | what | value | source |
 | --- | --- | --- |
-| Citation support, strict: every claim in the sentence appears in the cited page (178 kept sentences on the 35 answerable questions) | 93.3% | [audit report](docs/evaluation/audit_report.md) |
-| Citation support, lenient: supported or partly supported | 99.4% | [audit report](docs/evaluation/audit_report.md) |
+| Citation support, strict: every claim in the sentence appears in the cited page (178 kept sentences on the 35 answerable questions) | 93.3% (166/178) | [audit report](docs/evaluation/audit_report.md) |
+| Citation support, lenient: supported or partly supported | 99.4% (177/178) | [audit report](docs/evaluation/audit_report.md) |
 | Cited passages that resolve to a recorded page | 119/119 | [audit report](docs/evaluation/audit_report.md) |
 | Abstention on questions the archive cannot answer | 10/15 in-sample, 9/10 held out | [audit report](docs/evaluation/audit_report.md), [held-out run](docs/evaluation/holdout_run.md) |
 | False abstention on answerable questions | 0/35 in-sample, 1/5 held out | [held-out run](docs/evaluation/holdout_run.md) |
 | Retrieval recall@10 on the fully judged gold, before and after the retrieval changes | 0.347 to 0.4581 | [retrieval report](docs/evaluation/retrieval_report.md) |
 
-Two caveats, stated in the reports: the abstention rule was amended once against the
-same 50 questions (the held-out set is the exception), and the candidate labels behind
-the gold extension and the sentence judgments were proposed by an assistant model of
+**National microlog** (13,539 items, 1,136,827 passages; 1963-2018), audit over 47
+evaluation questions, machine-readable numbers in
+[`reports/microlog/audit_numbers.json`](reports/microlog/audit_numbers.json):
+
+| what | value | source |
+| --- | --- | --- |
+| Claim-level citation support, strict (fully supported only), 304 kept sentences (298 supported / 6 partly / 0 not) | 98.0% (298/304) | [audit numbers](reports/microlog/audit_numbers.json) |
+| Claim-level citation support, lenient (supported or partly) | 100% (304/304) | [audit numbers](reports/microlog/audit_numbers.json) |
+| Cited passages that resolve to a recorded page | 200/200 | [audit numbers](reports/microlog/audit_numbers.json) |
+| Abstention on should-abstain questions | 5/7 (mq43, mq44 answered off target) | [audit numbers](reports/microlog/audit_numbers.json) |
+| False abstention on answerable questions | 1/40 (mq28) | [audit numbers](reports/microlog/audit_numbers.json) |
+| Jurisdiction is an issuer proxy, a floor with no per-province claim (~15% unplaced, shown as its own figure) | 14.9% unknown | [audit numbers](reports/microlog/audit_numbers.json) |
+
+Two caveats, stated in the reports: the pilot's abstention rule was amended once against
+its 50 questions (its held-out set is the exception), and the candidate labels behind
+the gold extensions and the sentence judgments were proposed by an assistant model of
 the same family that writes the answers, then reviewed and decided by the author. See
-[`docs/evaluation/abstention_sweeps.md`](docs/evaluation/abstention_sweeps.md) for both
-unedited sweeps.
+[`docs/evaluation/abstention_sweeps.md`](docs/evaluation/abstention_sweeps.md) for the
+pilot's unedited sweeps.
 
 ## Quickstart
 
@@ -96,7 +119,10 @@ key line; the key is never committed.
 
 ## Run it yourself
 
-Two ways to get the corpus database and the dense index (about 3.2 GiB).
+Two ways to get the federal pilot's corpus database and dense index (about 3.2 GiB).
+The national microlog corpus is larger and is hosted on Cloudflare R2 (see
+[`docs/deploy.md`](docs/deploy.md)); the pilot below is the quickest way to run the app
+locally.
 
 **Fast path: download the data release** and verify the checksums:
 
@@ -120,8 +146,10 @@ cd web; npm ci; npm run build; cd ..
 
 Open `http://127.0.0.1:8000/`. Append `?kiosk=1` for the exhibit mode; see
 [`docs/demo.md`](docs/demo.md) for the unattended, offline setup and
-[`docs/deploy.md`](docs/deploy.md) to host it (one Docker image that downloads the
-release on first boot; Railway steps; any Docker host).
+[`docs/deploy.md`](docs/deploy.md) to host both scopes (one Docker image that, on boot,
+downloads each enabled scope's data from Cloudflare R2 -- the pilot also mirrored on a
+GitHub Release as a fallback -- verifies the checksums, and caches them to a volume;
+Railway steps; any Docker host).
 
 **Reproducible path: rebuild from the manifest.** The item set is fixed by
 [`data/manifest/`](data/manifest/); the rebuild yields the same corpus, and the dense
@@ -150,7 +178,9 @@ back demotion, and a per-item cap, then attaches page-level provenance to every 
 `generate/` drafts cited sentences with the configured model, verifies each citation
 with the three checks, drops what fails, and abstains by rule when the record is thin.
 `eval/` scores retrieval against human labels and holds the labeling tools. `api/` is a
-read-only FastAPI layer with an answer cache; `web/` is the Vite and React interface.
+read-only FastAPI layer with an answer cache that can serve several scopes from one
+process, each with its own isolated databases and a scope switcher in the UI; `web/` is
+the Vite and React interface.
 
 An answer names its sources. Every sentence carries a numbered mark, the Sources list
 gives each page, and the evidence trail shows what was retrieved by decade.
@@ -168,13 +198,16 @@ page mentions, and the coverage grid of what the archive does hold.
 
 ## Methods and gaps
 
-- [`docs/methods.md`](docs/methods.md): how the corpus was chosen, parsed, indexed,
-  retrieved, cited, and measured, every number tied to its report file.
-- [`docs/gaps.md`](docs/gaps.md): what the archive cannot tell you (45% undated
-  passages, no record after 2009, front-matter pollution, metadata dates that disagree
-  with the text, why housing was not the pilot, what the abstention sweeps showed, and
-  why verification checks support and not relevance).
-- The same content is in the app under "How this works" and "Gaps".
+- [`docs/methods.md`](docs/methods.md): how the federal pilot corpus was chosen, parsed,
+  indexed, retrieved, cited, and measured, every number tied to its report file.
+- [`docs/gaps.md`](docs/gaps.md): what the pilot archive cannot tell you (45% undated
+  passages, the pilot's record stopping around 2009, front-matter pollution, metadata
+  dates that disagree with the text, why housing was not the pilot, what the abstention
+  sweeps showed, and why verification checks support and not relevance).
+- The national microlog scope has its own audit under
+  [`reports/microlog/`](reports/microlog/) (support, abstention, the jurisdiction proxy,
+  and a sensitivity review); its dated span reaches 2018.
+- The same content is in the app under "How this works" and "Gaps", per scope.
 
 ## Reproducing the evaluation
 
@@ -195,11 +228,12 @@ the reports comes from one of these; none is typed in by hand.
 
 Issues are welcome, especially corpus gaps: a question the archive should answer and
 does not, a page that resolves to the wrong scan, or a date the metadata gets wrong.
-To add a second scope (another topic or jurisdiction), write a new config (query,
-collections, window, and its own `[index].db_path` / `[retrieve].index_path` under an
-isolated data root), register it in [`config/scopes.toml`](config/scopes.toml) with its
-name and paths, and build it with one resumable command; the code does not change. The
-frozen public_health pilot is the default scope and stays byte-identical.
+The national microlog corpus is the worked example of a second scope: a new config
+(query, collections, window, and its own `[index].db_path` / `[retrieve].index_path`
+under an isolated data root) registered in [`config/scopes.toml`](config/scopes.toml)
+with its name and paths, then built with one resumable command; the code does not
+change. The frozen public_health pilot is the base scope and stays byte-identical
+whether it is served alone or alongside another scope.
 
 ```powershell
 python -m archive_debugger.build_scope --scope microlog --contact you@example.com

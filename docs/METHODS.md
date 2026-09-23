@@ -5,6 +5,13 @@ Every number below is copied from a report in this repository and names the
 file it came from; nothing is restated from memory. Where a figure is derived
 from two reported numbers, the arithmetic is shown.
 
+This document covers the **federal public-health pilot** (Government of Canada
+publications: federal, Ontario, and Alberta; 3,477 items; 1960-2009). The app also
+serves the national **microlog** microfiche corpus (13,539 items; 1963-2018) as a
+separate scope with its own build and audit; its numbers live under
+[`reports/microlog/`](../reports/microlog/) (claim-level support 298/304 strict = 0.980,
+lenient 304/304 = 1.000; jurisdiction an issuer proxy, ~15% unplaced), not here.
+
 ## 1. Choosing the corpus (the initial audit)
 
 Source: `reports/coverage_audit/discovery.md`, `reports/coverage_audit/finalist_sizing.md`.
