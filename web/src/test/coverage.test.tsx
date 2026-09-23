@@ -28,6 +28,6 @@ describe("CoveragePanel", () => {
   it("renders a waiting line before coverage arrives", () => {
     render(<CoveragePanel coverage={null} undatedShare={null} />);
     expect(screen.getByText(/Counting lexical matches/)).toBeInTheDocument();
-    expect(screen.getByText(/45% of passages carry no date/)).toBeInTheDocument(); // fallback share
+    expect(screen.getByText(/some passages carry no date/)).toBeInTheDocument(); // share unavailable -> no fabricated %
   });
 });

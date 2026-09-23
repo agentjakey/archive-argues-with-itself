@@ -1,13 +1,34 @@
+import { formatInt } from "../../lib/format";
+import type { ScopeInfo } from "../../types";
 import { Page } from "./Page";
 
-export function About() {
+/** The jurisdiction description of the active corpus's publications. Per scope, never a
+ *  hardcoded single-scope claim: the pilot is federal/Ontario/Alberta; the microlog scope is
+ *  national (federal, provincial, and municipal); with no active scope, a neutral phrasing. */
+function jurisdictionPhrase(scope: ScopeInfo | null | undefined): string {
+  if (scope?.name === "microlog") return "Canadian federal, provincial, and municipal";
+  if (scope?.name === "pilot") return "Canadian federal, Ontario and Alberta";
+  return "Canadian";
+}
+
+export function About({ scope }: { scope?: ScopeInfo | null }) {
+  const cw = scope?.coverage_window;
+  const window = cw && cw.min_year != null && cw.max_year != null ? `${cw.min_year} to ${cw.max_year}` : null;
   return (
     <Page title="About">
       <p>
         The public record disagrees with itself across decades; this tool shows you the pages. It was built
         by Jacob Ortiz during the AI Builders Fellowship of the BC + AI Ecosystem, with the Internet Archive,
-        whose collections, OCR and page images make it possible. The pilot corpus is 3,477 Canadian government
-        public-health publications held by the Internet Archive, roughly 1960 to 2009.
+        whose collections, OCR and page images make it possible.{" "}
+        {scope ? (
+          <>
+            The corpus you are exploring, <span className="text-ink">{scope.label}</span>, is{" "}
+            {formatInt(scope.item_count)} Canadian government public-health publications held by the Internet
+            Archive{window ? `, ${window}` : ""}.
+          </>
+        ) : (
+          <>It works over Canadian government public-health publications held by the Internet Archive.</>
+        )}
       </p>
       <h3>Where the pages come from</h3>
       <p>
@@ -17,8 +38,8 @@ export function About() {
       </p>
       <h3>The publications</h3>
       <p>
-        The documents are Canadian federal, Ontario and Alberta government publications and remain under their
-        own terms. The tool adds no claims of ownership; it indexes, retrieves and cites.
+        The documents are {jurisdictionPhrase(scope)} government publications and remain under their own terms.
+        The tool adds no claims of ownership; it indexes, retrieves and cites.
       </p>
       <h3>Source and live site</h3>
       <p>

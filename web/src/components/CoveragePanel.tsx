@@ -1,16 +1,22 @@
 import { formatInt, formatShare } from "../lib/format";
-import type { CoverageResponse } from "../types";
+import type { CoverageResponse, ScopeInfo } from "../types";
 
 interface Props {
   coverage: CoverageResponse | null;
   undatedShare: number | null;
   explanation?: boolean;
+  scope?: ScopeInfo | null;
 }
 
 /** Term-by-decade grid of lexical passage counts (zeros shown), a baseline row,
- *  a jurisdiction row, and the fixed line on what this cannot tell you. */
-export function CoveragePanel({ coverage, undatedShare, explanation }: Props) {
-  const share = undatedShare == null ? "45%" : formatShare(undatedShare);
+ *  a jurisdiction row, and the fixed line on what this cannot tell you. The caption is per-scope:
+ *  the temporal ceiling comes from the active scope's coverage window and the undated share from
+ *  the active scope; a share that has not loaded is omitted, never faked as another scope's number. */
+export function CoveragePanel({ coverage, undatedShare, explanation, scope }: Props) {
+  const share = undatedShare == null ? null : formatShare(undatedShare);
+  const ceiling = scope?.coverage_window?.max_year ?? null;
+  const reach = ceiling != null ? `the record is effectively absent past ${ceiling}` : "post-2009 OCR is effectively absent";
+  const dateClause = share ? `${share} of passages carry no date` : "some passages carry no date";
   return (
     <section className="mt-8" aria-labelledby="coverage-heading">
       <h2 id="coverage-heading" className="font-serif text-2xl">
@@ -66,8 +72,7 @@ export function CoveragePanel({ coverage, undatedShare, explanation }: Props) {
         </div>
       )}
       <p className="mt-3 text-sm text-muted max-w-prose">
-        What this cannot tell you: post-2009 OCR is effectively absent; {share} of passages carry no date; counts are
-        lexical matches, not relevance.
+        What this cannot tell you: {reach}; {dateClause}; counts are lexical matches, not relevance.
       </p>
     </section>
   );

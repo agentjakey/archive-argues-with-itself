@@ -1,17 +1,16 @@
 import type { View } from "../lib/urlstate";
-import type { CorpusFacts, ScopeInfo } from "../types";
+import type { ScopeInfo } from "../types";
 import { CorpusStrip } from "./CorpusStrip";
 import { KioskQr } from "./KioskQr";
 import { ScopeSwitcher } from "./ScopeSwitcher";
 
 interface Props {
-  corpus: CorpusFacts | null;
   kiosk: boolean;
   view: View | null;
   onView: (view: View | null) => void;
   scopes?: ScopeInfo[] | null;      // more than one -> the switcher renders; null/one -> hidden
   activeScope?: string;
-  activeScopeInfo?: ScopeInfo | null;   // the active scope's facts, for the per-scope subtitle
+  activeScopeInfo?: ScopeInfo | null;   // the active scope's facts, for the subtitle and the corpus strip
   onSwitchScope?: (name: string) => void;
 }
 
@@ -25,7 +24,7 @@ const LINKS: { view: View; label: string }[] = [
   { view: "about", label: "About" },
 ];
 
-export function Header({ corpus, kiosk, view, onView, scopes, activeScope, activeScopeInfo, onSwitchScope }: Props) {
+export function Header({ kiosk, view, onView, scopes, activeScope, activeScopeInfo, onSwitchScope }: Props) {
   const cw = activeScopeInfo?.coverage_window;
   return (
     <header className="mb-6">
@@ -64,10 +63,10 @@ export function Header({ corpus, kiosk, view, onView, scopes, activeScope, activ
           </button>
         ))}
       </nav>
-      {view === null && scopes && onSwitchScope && (
+      {scopes && onSwitchScope && (
         <ScopeSwitcher scopes={scopes} active={activeScope ?? ""} onSwitch={onSwitchScope} />
       )}
-      {view === null && <CorpusStrip corpus={corpus} />}
+      {view === null && <CorpusStrip scope={activeScopeInfo ?? null} />}
     </header>
   );
 }

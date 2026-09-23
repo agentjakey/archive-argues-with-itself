@@ -20,7 +20,6 @@ import { WaitingLabel } from "./components/WaitingLabel";
 import { useAsk } from "./hooks/useAsk";
 import { useCoverage } from "./hooks/useCoverage";
 import { useExamples } from "./hooks/useExamples";
-import { useHealth } from "./hooks/useHealth";
 import { useKiosk, useOffline } from "./hooks/useKiosk";
 import { About } from "./components/pages/About";
 import { Gaps } from "./components/pages/Gaps";
@@ -46,7 +45,6 @@ import type { EvidenceRow, Example, Filters, Flagged, Period, Story } from "./ty
 export default function App() {
   const kiosk = useKiosk();
   const offline = useOffline();   // ?offline=1: no ask box, cached questions and stories only
-  const health = useHealth();
   const chips = useExamples();
   const { status, elapsed, response, error, run, completion } = useAsk();
 
@@ -218,22 +216,23 @@ export default function App() {
   }, []);
   useAttractLoop({ enabled: kiosk, stories, onShow: openStory, onHome: goHome, idleMs });
 
-  // Switch corpora with a full reload into a clean home for the chosen scope: no q/filters/
-  // pins/view/story carried over, so no result from the other corpus can linger. Only the
-  // venue launch flags (kiosk/offline/idle) are preserved. The pilot is the default and
-  // carries no ?scope, so its URL stays exactly as before.
+  // Switch corpora with a full reload into a clean copy of the CURRENT page for the chosen scope:
+  // the page (view) is kept so the switch stays where you are, but no q/filters/pins/story carry
+  // over, so no result from the other corpus can linger. Only the venue launch flags
+  // (kiosk/offline/idle) are preserved. The pilot is the default and carries no ?scope.
   const switchScope = useCallback(
     (name: string) => {
       const def = scopesInfo?.default ?? "";
       const params = new URLSearchParams();
       if (name && name !== def) params.set("scope", name);
+      if (view) params.set("view", view);   // stay on the current page after the switch, not bounce home
       if (kiosk) params.set("kiosk", "1");
       if (offline) params.set("offline", "1");
       if (idleParam.current) params.set("idle", idleParam.current);
       const qs = params.toString();
       window.location.assign(`${window.location.pathname}${qs ? `?${qs}` : ""}`);
     },
-    [scopesInfo, kiosk, offline],
+    [scopesInfo, kiosk, offline, view],
   );
 
   // Enter a corpus on a specific question from the explorer: reload into that scope with the
@@ -391,7 +390,9 @@ export default function App() {
   const resultFlagged = mergeFlagged(response?.flagged ?? null, storyFlagged);
   const flagged = mergeFlagged(resultFlagged, pinFlagged);
   const busy = status === "waiting";
-  const undatedShare = health?.corpus.undated_share ?? null;
+  // Per-scope, from the active scope's live composition (same source as the strip and subtitle),
+  // never the no-scope /health corpus -- so the coverage caption reads the active corpus's figure.
+  const undatedShare = activeScopeInfo?.composition?.undated?.passage_share ?? null;
   // Attract tiles: the curated non-flagged cached questions, in config order, pulled from
   // /examples so their text and filters match the cache exactly (offline-instant on tap).
   const tiles = TILE_QIDS.map((id) => chips.find((c) => c.qid === id)).filter((e): e is Example => Boolean(e));
@@ -399,7 +400,6 @@ export default function App() {
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6">
       <Header
-        corpus={health?.corpus ?? null}
         kiosk={kiosk}
         view={view}
         onView={goView}
@@ -417,7 +417,7 @@ export default function App() {
           onEnterQuestion={enterScopeWithQuestion}
         />
       )}
-      {view === "how" && <HowItWorks />}
+      {view === "how" && <HowItWorks scope={activeScopeInfo} />}
       {view === "gaps" && <Gaps scope={activeScopeInfo} crisis={scopesInfo?.crisis ?? null} />}
       {view === "sources" && <SourcesPage scopes={scopesInfo?.scopes ?? null} />}
       {view === "map" && <CoverageMap scope={activeScopeInfo} onExplore={exploreProvince} onNav={goView} />}
@@ -429,7 +429,7 @@ export default function App() {
           onCompareDecades={onCompareDecades}
         />
       )}
-      {view === "about" && <About />}
+      {view === "about" && <About scope={activeScopeInfo} />}
       {view === null && (
       <>
       {showStories && <AttractHero />}
@@ -462,7 +462,7 @@ export default function App() {
           kiosk={kiosk}
         />
       )}
-      <WaitingLabel status={status} elapsed={elapsed} completion={completion} passages={health?.corpus.passages ?? null} />
+      <WaitingLabel status={status} elapsed={elapsed} completion={completion} passages={activeScopeInfo?.composition?.passages ?? null} />
       {showStories && <Stories stories={stories} onOpen={openStory} />}
 
       {status === "error" && error && (
@@ -517,12 +517,12 @@ export default function App() {
               {response.degraded ? (
                 <>
                   <LimitedModeCard answer={response.answer} degraded={response.degraded} />
-                  <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation />
+                  <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation scope={activeScopeInfo} />
                 </>
               ) : response.answer.abstained ? (
                 <>
                   <AbstentionCard answer={response.answer} />
-                  <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation />
+                  <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation scope={activeScopeInfo} />
                 </>
               ) : (
                 <AnswerCard answer={response.answer} byId={byId} onOpen={setDrawer} />
@@ -550,7 +550,7 @@ export default function App() {
                 onPin={togglePin}
                 source={activeScopeInfo}
               />
-              {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} />}
+              {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} scope={activeScopeInfo} />}
             </>
           )}
         </main>
