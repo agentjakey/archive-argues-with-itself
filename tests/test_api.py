@@ -73,6 +73,30 @@ def test_enabled_scopes_gates_exposure(tmp_path):
     assert names == ["pilot"]
 
 
+def test_scopes_to_build_and_landing_scope():
+    from archive_debugger.api.app import resolve_landing_scope, scopes_to_build
+    # enabled drives serving; enabled always gates; serve_scopes honored; base never returned
+    assert scopes_to_build("pilot", None, {"pilot", "microlog"}) == ["microlog"]   # deploy: enabled serves both
+    assert scopes_to_build("pilot", ["microlog"], {"pilot"}) == []                 # microlog gated out
+    assert scopes_to_build("pilot", ["microlog"], None) == ["microlog"]            # legacy serve_scopes
+    assert scopes_to_build("pilot", None, None) == []                              # single-scope default
+    # landing: requested if built, else the always-served base (never errors on an unavailable default)
+    assert resolve_landing_scope("microlog", ["pilot", "microlog"], "pilot") == "microlog"
+    assert resolve_landing_scope("microlog", ["pilot"], "pilot") == "pilot"
+    assert resolve_landing_scope(None, ["pilot"], "pilot") == "pilot"
+
+
+def test_landing_scope_falls_back_when_default_not_built(tmp_path):
+    # An unavailable landing default falls back cleanly to the served base, and no-scope routing
+    # stays on the base (the pilot request path is unchanged).
+    r, _ = _retriever(tmp_path, [("a", 1990, "ontario")])
+    with TestClient(_app(tmp_path, r, default_scope="microlog")) as c:
+        body = c.get("/scopes").json()
+        assert body["default"] == "pilot"                          # microlog not built here -> clean fallback
+        assert [s["name"] for s in body["scopes"]] == ["pilot"]
+        assert c.get("/health").json()["corpus"]["items"] == 1     # no-scope health -> the base (pilot)
+
+
 def test_health_with_corpus_facts(tmp_path):
     r, _ = _retriever(tmp_path, [("late", 1990, "ontario"), ("early", 1975, "federal"), ("nodate", None, "alberta")])
     with TestClient(_app(tmp_path, r)) as c:

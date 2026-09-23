@@ -23,6 +23,7 @@ dependencies = [
     "pydantic==2.13.5",         # generate: structured-output schema (explicit, was transitive)
     "anthropic==1.5.0",         # generate: the only permitted external LLM call (N1); stubbed in CI
     "python-dotenv==1.2.3",     # generate CLI only: loads .env (never overrides real env vars)
+    "boto3>=1.34,<2",           # boot: stream each scope's DB files from Cloudflare R2 (archive_debugger.boot), S3-compatible
 ]
 
 [project.optional-dependencies]

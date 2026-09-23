@@ -1,10 +1,17 @@
 # Deploying
 
-The API runs from one Docker image on any host with a persistent disk. On first
-boot the container downloads the two data files (about 3.2 GiB) from a GitHub
-release, verifies their checksums, and serves; on every later boot it verifies
-the files already on the disk and starts in seconds. The web app is built inside
-the image and served at `/`.
+The API runs from one Docker image on any host with a persistent disk. On boot the
+container provisions each ENABLED scope's two data files onto the disk from that
+scope's configured source -- Cloudflare R2 by default, or a GitHub release as a
+fallback -- verifies their sha256 against `config/scopes.toml`, and serves; a file
+already present with the right hash is not re-downloaded, so later boots start in
+seconds. The web app is built inside the image and served at `/`.
+
+Two scopes ship this way: the frozen public_health pilot and the national microlog
+corpus. Both are sourced from R2, and the UI lands on microlog with the pilot in the
+switcher. The pilot's bytes and answers are unchanged (same `civic.db`); only its
+delivery origin moves to R2, and the GitHub-release path stays available as a
+fallback (see "Both scopes from R2" below).
 
 The steps below use Railway. Nothing deploys automatically from CI.
 
@@ -24,12 +31,67 @@ The steps below use Railway. Nothing deploys automatically from CI.
 | `CIVIC_DB_PATH` | `/data/civic.db` | corpus database on the volume |
 | `CIVIC_INDEX_PATH` | `/data/index/vectors.db` | dense index on the volume |
 | `CIVIC_CACHE_PATH` | `/data/cache/answers.db` | answer cache (image default; set it only to move it) |
-| `DATA_RELEASE_URL` | `https://github.com/<you>/archive-argues-with-itself/releases/download/data-v1` | base URL of the release assets; the container downloads `civic.db`, `vectors.db`, `data-release.sha256` from it |
-| `ANTHROPIC_API_KEY` | your key | the only external call the server makes |
+| `R2_ENDPOINT` | `https://<accountid>.r2.cloudflarestorage.com` | Cloudflare R2 S3 endpoint (the scope data source) |
+| `R2_BUCKET` | your bucket | R2 bucket holding the `pilot/*` and `microlog/*` objects |
+| `R2_ACCESS_KEY_ID` | your R2 key id | R2 access key id |
+| `R2_SECRET_ACCESS_KEY` | your R2 secret | R2 secret (set it as a Railway *secret* variable) |
+| `CIVIC_ENABLED_SCOPES` | `pilot,microlog` | scopes to provision and serve (both here); unset serves the pilot only |
+| `CIVIC_DEFAULT_SCOPE` | `microlog` | scope the UI lands on first (default microlog; both stay in the switcher) |
+| `DATA_RELEASE_URL` | `https://github.com/<you>/archive-argues-with-itself/releases/download/data-v1` | fallback only: the pilot's GitHub release, used when the R2 vars are absent (its files are under GitHub's 2 GiB cap). microlog has no release fallback. |
+| `ANTHROPIC_API_KEY` | your key | the only external call the server makes at serve time |
 | `ALLOWED_ORIGINS` | (unset) | only for a separately hosted web app; comma-separated origins |
 | `PORT` | set by Railway | uvicorn listens on it |
 
-## Steps
+## Both scopes from R2 (pilot + microlog)
+
+The two data files per scope live in one R2 bucket under `pilot/` and `microlog/`,
+uploaded once with `scripts/upload_scopes_to_r2.py` (it prints and records their
+sha256; those hashes are already filled into `config/scopes.toml`, which the boot
+verifies against). To serve both scopes:
+
+1. **Upload the four files to R2** (from your machine, one time):
+
+   ```powershell
+   $env:R2_ENDPOINT = "https://<accountid>.r2.cloudflarestorage.com"
+   $env:R2_BUCKET = "<bucket>"
+   $env:R2_ACCESS_KEY_ID = "<key id>"
+   .\.venv\Scripts\python.exe scripts\upload_scopes_to_r2.py    # prompts for the secret, no echo
+   ```
+
+2. **Mount the volume at `/app/data`** and set the paths so both scopes land on it.
+   microlog's paths are repo-relative under `data/exploration/microlog/`, which
+   resolves under `/app`, so one volume at `/app/data` holds both scopes:
+
+   | variable | value |
+   | --- | --- |
+   | `CIVIC_DB_PATH` | `/app/data/civic.db` |
+   | `CIVIC_INDEX_PATH` | `/app/data/index/vectors.db` |
+   | `CIVIC_CACHE_PATH` | `/app/data/cache/answers.db` |
+
+   (The image default `/data` still works for a pilot-only deploy; use `/app/data`
+   when serving microlog too, so neither scope is re-downloaded on restart.)
+
+3. **Set the R2 and scope variables**: `R2_ENDPOINT`, `R2_BUCKET`,
+   `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (a secret variable),
+   `CIVIC_ENABLED_SCOPES=pilot,microlog`, `CIVIC_DEFAULT_SCOPE=microlog`, and
+   `ANTHROPIC_API_KEY`. Size the volume for both scopes (about 10.5 GiB of data;
+   16 GB is comfortable, with headroom for a partial download).
+
+4. **Deploy.** The boot log lists each file verified or downloaded, then
+   `Application startup complete`; `/scopes` reports `"default": "microlog"` with
+   both scopes listed. Preview the plan without a container with
+   `python -m archive_debugger.boot --dry-run` (no network, no download).
+
+If the R2 vars are absent, the pilot falls back to its GitHub release
+(`DATA_RELEASE_URL`) and boots exactly as before. microlog (files over GitHub's
+2 GiB per-asset cap) is R2-only: with R2 unavailable and no local copy present, its
+boot fails fast with a message naming the scope and key, and the server does not
+start half-served.
+
+## Steps (pilot only, GitHub release)
+
+The steps below deploy the pilot alone from a GitHub release (no R2). For the
+two-scope R2 deploy, use the section above.
 
 1. **Push** the repository to GitHub (your fork or your own repo).
 

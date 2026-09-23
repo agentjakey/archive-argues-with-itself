@@ -28,6 +28,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from archive_debugger import crisis, flags, scopes
+from archive_debugger.scopes import parse_enabled_scopes
 from archive_debugger.api.cache import AnswerCache, cache_key, retrieval_fingerprint
 from archive_debugger.api.coverage import coverage as compute_coverage
 from archive_debugger.eval import store
@@ -48,6 +49,8 @@ DEFAULT_STORIES = Path("config/stories.json")
 ENV_PAGES_DIR = "CIVIC_PAGES_DIR"
 ENV_SERVE_SCOPES = "CIVIC_SERVE_SCOPES"   # local multi-scope opt-in: "pilot,microlog". Unset = single base scope.
 ENV_ENABLED_SCOPES = "CIVIC_ENABLED_SCOPES"   # deploy gate: only these scopes are built/exposed. Unset = all.
+ENV_DEFAULT_SCOPE = "CIVIC_DEFAULT_SCOPE"     # UI landing scope (GET /scopes 'default'); falls back if not built.
+DEFAULT_LANDING = "microlog"                  # landing when CIVIC_DEFAULT_SCOPE is unset (falls back to the base scope)
 SNIPPET = 300
 _PAGE_FILE = re.compile(r"^n(\d+)_(thumb|medium)\.jpg$")
 # Memory-map extra scopes' large databases. SQLite clamps to its own compiled max, so an
@@ -234,14 +237,31 @@ def parse_serve_scopes(raw: Optional[str]) -> Optional[list[str]]:
     return names or None
 
 
-def parse_enabled_scopes(raw: Optional[str]) -> Optional[set]:
-    """CIVIC_ENABLED_SCOPES -> the set of scopes a deployment exposes, or None (all scopes). A scope
-    not enabled is never built, served, or listed by /scopes, so a pilot-only deploy cannot advertise
-    a scope it has no data for. The base/default scope is always served (a process must serve one)."""
-    if not raw:
-        return None
-    names = {s.strip() for s in raw.split(",") if s.strip()}
-    return names or None
+def scopes_to_build(base_name: str, serve_scopes: Optional[list], enabled: Optional[set]) -> list:
+    """Non-base scope names to attempt to build. serve_scopes are honored (the local multi-scope
+    opt-in); when an ENABLED set is given, every enabled scope is also built, so a deploy that sets
+    only CIVIC_ENABLED_SCOPES=pilot,microlog serves both. ENABLED always gates: a scope not in it is
+    dropped. The base is never returned (it is always built)."""
+    out: list = []
+    for name in (serve_scopes or []):
+        if name != base_name and name not in out:
+            out.append(name)
+    if enabled is not None:
+        for name in sorted(enabled):
+            if name != base_name and name not in out:
+                out.append(name)
+        out = [n for n in out if n in enabled]
+    return out
+
+
+def resolve_landing_scope(requested: Optional[str], built: list, base_name: str) -> str:
+    """The scope the UI lands on first (GET /scopes 'default'): the requested scope when it is
+    actually built/served here, else the base (always-served) scope. Never errors on an unavailable
+    default -- a pilot-only box asked to land on microlog simply lands on the pilot. This is a UI
+    concern only; no-scope request routing stays on the base scope, so the pilot path is unchanged."""
+    if requested and requested in built:
+        return requested
+    return base_name
 
 
 def offline_scopes() -> list[dict]:
@@ -507,7 +527,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                cache_path: Optional[Path] = None, pages_dir: Optional[Path] = None,
                stories_path: Path = DEFAULT_STORIES, scope: Optional[str] = None,
                serve_scopes: Optional[list[str]] = None,
-               enabled_scopes: Optional[list[str]] = None) -> FastAPI:
+               enabled_scopes: Optional[list[str]] = None,
+               default_scope: Optional[str] = None) -> FastAPI:
     if load_env:
         from dotenv import load_dotenv
         load_dotenv()
@@ -583,16 +604,21 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         # advertise a scope this deployment has no data for.
         enabled = (set(enabled_scopes) if enabled_scopes is not None
                    else parse_enabled_scopes(os.environ.get(ENV_ENABLED_SCOPES)))
-        for name in (serve_scopes or []):
+        for name in scopes_to_build(base.name, serve_scopes, enabled):
             if name in bundles:
-                continue
-            if enabled is not None and name not in enabled:
                 continue
             extra = _extra_bundle(name)
             if extra is not None:
                 bundles[extra.name] = extra
         app.state.bundles = bundles
+        # Routing default (no-scope requests + the back-compat aliases below): always the base, so
+        # the pilot request path stays byte-identical.
         app.state.default_scope = base.name
+        # UI landing scope (GET /scopes 'default'): CIVIC_DEFAULT_SCOPE when that scope is actually
+        # built here, else the base. Lets the deploy land on microlog while a pilot-only box lands on
+        # the pilot, both scopes in the switcher. Separate from routing so no-scope calls stay on the base.
+        requested_landing = default_scope or os.environ.get(ENV_DEFAULT_SCOPE) or DEFAULT_LANDING
+        app.state.landing_scope = resolve_landing_scope(requested_landing, list(bundles), base.name)
         app.state.model_ratelimit = RateLimiter(RATE_BURST, RATE_REFILL)   # one process-wide model budget
         # Back-compat aliases: the pilot request path and offline_walkthrough (which patches
         # app.state.cache.put) see the default bundle exactly as the single-scope app did.
@@ -716,9 +742,10 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
 
     @app.get("/scopes")
     def scopes_view() -> dict:
-        """The scopes this process serves, each with its identity for the switcher: label,
-        source collection with an archive.org link, and item count. The pilot is the default."""
-        default = app.state.default_scope
+        """The scopes this process serves, each with its identity for the switcher: label, source
+        collection with an archive.org link, and item count. 'default' is the UI landing scope
+        (CIVIC_DEFAULT_SCOPE, default microlog when served, else the base)."""
+        default = app.state.landing_scope   # UI landing; no-scope request routing stays on the base
         order = [default] + [n for n in app.state.bundles if n != default]
         return {"default": default, "scopes": [app.state.bundles[n].facts for n in order],
                 "crisis": crisis.serialized()}

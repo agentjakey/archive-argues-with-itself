@@ -17,6 +17,12 @@
 # active the process physically cannot open any database outside these paths. The
 # declared paths must match the scope config's [index].db_path / [retrieve].index_path,
 # or resolution fails (drift guard).
+#
+# BOOT DATA SOURCE (per scope, read by archive_debugger.boot; ignored by resolve_scope and
+# the serve layer): source = "r2" | "github_release", plus an optional [scopes.<name>.r2]
+# block (object keys + expected sha256) and an optional [scopes.<name>.github_release] block
+# (fallback release URL). On container boot each ENABLED scope's two files are put on the
+# scope's resolved paths from this source, then verified against the sha256 here.
 
 default = "pilot"
 
@@ -26,6 +32,10 @@ default = "pilot"
 # so this entry never contradicts the deploy's mounted store.
 config = "config/pilot.toml"
 inherit = true
+# Boot data source: "r2" (Cloudflare R2) or "github_release". The pilot ships from R2 with a
+# GitHub-release fallback (its files are under GitHub's 2 GiB per-asset cap), so with the R2
+# vars absent it still boots the old way. See [scopes.pilot.r2] / [scopes.pilot.github_release].
+source = "r2"
 # Display facts for the scope switcher (read by the API /scopes endpoint; ignored by
 # resolve_scope). Additive: no data path or behavior depends on these.
 # Label carries no year range: the per-scope coverage window (1960-2009 for the pilot) is derived
@@ -35,6 +45,23 @@ blurb = "Clean Government of Canada publications"
 collection = "governmentpublications"
 manifest = "data/manifest/public_health.scope.json"
 
+[scopes.pilot.r2]
+# Object keys under R2_BUCKET, mapped to the scope's resolved db/index paths (the CIVIC_* paths
+# for the pilot). db_sha256 / index_sha256 are the expected hashes: boot verifies each object
+# after download and skips a file already present with this hash. Hashes were computed from the
+# local files with scripts/upload_scopes_to_r2.py.
+db_key = "pilot/civic.db"
+index_key = "pilot/vectors.db"
+db_sha256 = "00a8fffb007ff9b5eefc95a782ce371bfead6db3f7b0a9f8d177fe31943152c5"
+index_sha256 = "0fcabe77cb7764f23e10114de5a11c5bb09747b53d4d2ca320cc553ddb9b211e"
+
+[scopes.pilot.github_release]
+# Selectable fallback: the existing GitHub release. Used when source = "github_release", and
+# also when source = "r2" but the R2 vars are absent, so the pilot still boots the old way with
+# R2 unconfigured. The base URL comes from this env var (the current deploy variable); the
+# release carries civic.db, vectors.db, and data-release.sha256 (data_release verifies against it).
+url_env = "DATA_RELEASE_URL"
+
 [scopes.microlog]
 # The pooled national microlog public-health corpus the pilot excluded (reserve-only,
 # microfiche-sourced). Built as its own release, fully isolated under
@@ -42,6 +69,10 @@ manifest = "data/manifest/public_health.scope.json"
 config = "config/microlog.toml"
 db_path = "data/exploration/microlog/civic_microlog.db"
 index_path = "data/exploration/microlog/index/vectors_microlog.db"
+# Boot data source: "r2" only. The microlog files exceed GitHub's 2 GiB per-asset release cap,
+# so there is no github_release fallback for this scope; with the R2 vars absent and no local
+# data, the boot fails fast rather than serving this scope half-provisioned.
+source = "r2"
 # Display facts for the scope switcher (see the pilot entry).
 label = "National public health, all provinces"
 blurb = "Microlog microfiche: federal, provincial, and municipal issuers"
@@ -52,3 +83,11 @@ manifest = "data/manifest/microlog_public_health.scope.json"
 # nominal window (never framed as reaching the present). See reports/microlog/audit_numbers.json
 # (out_of_window_note). Display fact only; no data path or retrieval behavior depends on it.
 coverage_unclamped = true
+
+[scopes.microlog.r2]
+# See [scopes.pilot.r2]. Keys map to the scope's registry db/index paths under
+# data/exploration/microlog/. R2-only: no github_release fallback (files over the 2 GiB cap).
+db_key = "microlog/civic_microlog.db"
+index_key = "microlog/vectors_microlog.db"
+db_sha256 = "6b6cd30e0f22532df0a23e3ba0f986136bbb0360efef7af30689fbd927a861fe"
+index_sha256 = "83913570df5d2387513f578645fb09b936d7ba708581b458dbbd8b1e6fd4ef50"

@@ -153,6 +153,17 @@ def registered_scopes(registry_path: Optional[Path] = None) -> list[str]:
     return sorted(load_registry(registry_path).get("scopes", {}))
 
 
+def parse_enabled_scopes(raw: Optional[str]) -> Optional[set]:
+    """CIVIC_ENABLED_SCOPES -> the set of scopes a deployment exposes, or None (all scopes). A scope
+    not enabled is never built, served, or listed by /scopes, so a pilot-only deploy cannot advertise
+    a scope it has no data for. The base/default scope is always served (a process must serve one).
+    Lives here (not in the api layer) so the boot provisioner can share it without importing the app."""
+    if not raw:
+        return None
+    names = {s.strip() for s in raw.split(",") if s.strip()}
+    return names or None
+
+
 # --------------------------------------------------------------------------- #
 # Active scope + fence
 # --------------------------------------------------------------------------- #
