@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { periodOfRow, timelineBars } from "../lib/timeline";
+import { periodOfRow, pickDecadeRows, timelineBars } from "../lib/timeline";
 import { TimelinePage } from "../components/pages/Timeline";
 import type { Composition, ScopeInfo } from "../types";
 
@@ -35,6 +35,40 @@ describe("periodOfRow", () => {
     expect(periodOfRow({ year: 1988 })).toBe("1980s");
     expect(periodOfRow({ year: 2005 })).toBe("2000s");
     expect(periodOfRow({ year: 2015 })).toBe("post-2009");
+  });
+});
+
+describe("pickDecadeRows", () => {
+  const row = (year: number | null) => ({ year, passage_id: String(year) });
+
+  it("picks the top row of each period and reports none missing when both are present", () => {
+    const pool = [row(1985), row(2003), row(1972)];
+    const { rowA, rowB, missing } = pickDecadeRows(pool, "1980s", "2000s");
+    expect(rowA?.year).toBe(1985);
+    expect(rowB?.year).toBe(2003);
+    expect(missing).toEqual([]);
+  });
+
+  it("reports a period as missing when the pool has no passage there (the empty-decade case)", () => {
+    const pool = [row(1985), row(1988), row(2003)];
+    const { rowA, rowB, missing } = pickDecadeRows(pool, "1960s", "2000s");
+    expect(rowA).toBeNull();
+    expect(rowB?.year).toBe(2003);
+    expect(missing).toEqual(["1960s"]);
+  });
+
+  it("reports both periods missing when neither is in the pool", () => {
+    const pool = [row(1995), row(1998)];
+    const { rowA, rowB, missing } = pickDecadeRows(pool, "1960s", "2000s");
+    expect(rowA).toBeNull();
+    expect(rowB).toBeNull();
+    expect(missing).toEqual(["1960s", "2000s"]);
+  });
+
+  it("takes the first (top-ranked) row when several share a period", () => {
+    const pool = [row(2001), row(2007)];
+    const { rowA } = pickDecadeRows(pool, "2000s", "1980s");
+    expect(rowA?.year).toBe(2001);
   });
 });
 

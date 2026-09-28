@@ -1,20 +1,31 @@
 # Audit report
 
-Five headline numbers, measured on the audit run: every seed question once through /ask with the
-configured model (claude-haiku-4-5-20251001), final retrieval configuration, 50 questions: 40 answered, 10 abstained; sentence judgments by the author.
+Generated 2026-09-27 20:25 UTC by scripts/audit_report.py.
+Every rate below is computed from the committed judgment and gold files and carries a Wilson
+95% interval; none is typed in by hand. Recall is the exception: it is a per-question mean that
+needs the retriever's ranked output (the index), so it is read from the committed retrieval
+report and carries no Wilson interval (a mean of fractions is not a binomial proportion).
+
+Audit run: every seed question once through /ask with the configured model (claude-haiku-4-5-20251001), final retrieval configuration, 50 questions: 40 answered, 10 abstained; sentence judgments by the author.
 
 | # | number | value | source |
 | --- | --- | --- | --- |
-| 1 | Citation support, strict (supported only), kept sentences on the 35 gold-answerable questions | **93.3%** (166 of 178) | eval/judgments_phase16.json over reports/phase16/judgment_worksheet.jsonl |
-| 2 | Citation support, lenient (supported + partly) | **99.4%** (177 of 178) | same |
-| 3 | Abstention | in-sample: **10/15** gold-abstain abstained (5 answered off target); false abstentions **0/35**. held-out: **9/10** probes abstained (answered: h009); **4/5** answerable answered (abstained: h015) | this run; holdout_run.md; retrieval_report.md (sweep) |
-| 4 | Retrieval recall@10 on the final gold, before -> after the retrieval changes | **0.3470 -> 0.4581** (recall@20 0.5928 -> 0.7276; nDCG@10 0.4174 -> 0.5082) | retrieval_report.md, final section |
-| 5 | Cited passages resolving to a recorded page | **119/119 = 1.00** | every kept citation in the run re-checked with retrieve.citation.verify_citation |
+| 1 | Citation support, strict (supported only), kept sentences on the 35 gold-answerable questions | **93.3% (166/178, 95% CI 88.6-96.1%)** | eval/judgments_phase16.json over reports/phase16/judgment_worksheet.jsonl |
+| 2 | Citation support, lenient (supported + partly) | **99.4% (177/178, 95% CI 96.9-99.9%)** | same |
+| 3 | Abstention on should-abstain questions | **66.7% (10/15, 95% CI 41.7-84.8%)** in-sample; held-out: **9/10** probes abstained (answered: h009); **4/5** answerable answered (abstained: h015) | this run; holdout_run.md |
+| 4 | Off-target answers (should-abstain questions answered on the wrong question) | **33.3% (5/15, 95% CI 15.2-58.3%)** in-sample (q015, q030, q036, q037, q049) | this run; section 3 |
+| 5 | False abstention on answerable questions | **0.0% (0/35, 95% CI 0.0-9.9%)** in-sample | this run |
+| 6 | Retrieval recall@10 on the final gold, before -> after the retrieval changes | **0.3470 -> 0.4581** (recall@20 0.5928 -> 0.7276; nDCG@10 0.4174 -> 0.5082) | retrieval_report.md, final section (no CI: per-question mean) |
+| 7 | Cited passages resolving to a recorded page | **100.0% (119/119, 95% CI 96.9-100.0%)** | every kept citation re-checked; 1.0 by construction |
 
 In-sample means the 50 seed questions, which were used to amend the abstention rule (once) and to
 label the gold the retriever was chosen on. Held-out means `eval/holdout_questions.jsonl`: 15 questions
 written after the abstention rule and retrieval configuration were frozen, never used in any sweep or
 design decision, verdicts assigned by the author before the single run.
+
+Off-target and abstention share the same denominator (the should-abstain questions), reported side by
+side: the tool abstained on some and answered others on the wrong question. Verification guarantees that a
+kept sentence is supported by its page; it does not guarantee the page is about what was asked.
 
 ## Disclosure
 
@@ -65,7 +76,7 @@ the passage. Reasons for every p and n: `eval/judgments_phase16_notes.md`.
 | q045 | 8 | 8 | 0 | 0 |
 | **all** | **178** | **166** | **11** | **1** |
 
-Strict support rate (s only): 166 / 178 = 93.3%. Lenient (s + p): 177 / 178 = 99.4%. The 12 kept sentences on the five off-target answers (section 3) are excluded from these rates; 3 drafted sentences were dropped by the verifier or the fact-leak guard before anyone judged them.
+Strict support rate (s only): 93.3% (166/178, 95% CI 88.6-96.1%). Lenient (s + p): 99.4% (177/178, 95% CI 96.9-99.9%). The 12 kept sentences on the off-target answers (section 3) are excluded from these rates; 3 drafted sentences were dropped by the verifier or the fact-leak guard before anyone judged them.
 
 ### Every partly and not sentence, with the reason
 
@@ -117,27 +128,16 @@ Strict support rate (s only): 166 / 178 = 93.3%. Lenient (s + p): 177 / 178 = 99
   > Traditional approaches to occupational health and safety in the early 1990s included one-on-one inspections, enforcement, a focus on safety rather than health, reactive priorities, and a focus on fatalities.
   Reason: "in the early 1990s" is added; the passage lists past approaches as of 1992.
 
-## 3. Abstention: verification guarantees support, not relevance
+## 3. Off-target: verification guarantees support, not relevance
 
-In-sample, on the 15 gold-abstain questions the tool abstained on 10: q022, q029, q039, q040, q041, q042, q046, q047, q048, q050. It answered 5: q015, q030, q036, q037, q049. The author's
-judgment of the five: each is an all-supported answer to a different question than the one asked, on
-the wrong period or the wrong object (marks on their sentences: {"q015": {"s": 3}, "q030": {"s": 3}, "q036": {"p": 1, "s": 1}, "q037": {"s": 2, "p": 1}, "q049": {"s": 1}}).
-Every kept sentence cites a passage that exists, was in the retrieved evidence, resolves to a recorded
-page, and says what the sentence says; the passages do not bear on the question's period or subject.
-The three structural checks and the fact-leak guard guarantee support by the page; nothing in the
-pipeline guarantees the page is about what was asked.
+Off-target answer rate: **33.3% (5/15, 95% CI 15.2-58.3%)** of the should-abstain questions. In-sample the tool abstained on 10 of the 15 gold-abstain questions (q022, q029, q039, q040, q041, q042, q046, q047, q048, q050) and answered 5 (q015, q030, q036, q037, q049). The author's judgment of those 5: each is an all-supported answer to a different question than the one asked, on the wrong period or the wrong object. Every kept sentence cites a passage that exists, was in the retrieved evidence, and resolves to a recorded page; the passages do not bear on the question's period or subject. The three structural checks and the fact-leak guard guarantee support by the page; nothing in the pipeline guarantees the page is about what was asked.
 
-The frozen thinness sweep on this configuration (`retrieval_report.md`, final section)
-predicted 9 of the 15 gold-abstain questions would pass the gate: 5 passed and answered off target, and
-the rest abstained at the gate or downstream when no drafted sentence survived verification. False
-abstentions on the 35 answerable questions: 0, as the sweep predicted.
+False abstentions on the 35 answerable questions: **0.0% (0/35, 95% CI 0.0-9.9%)**.
 
 ### Held-out run
 
-`eval/holdout_questions.jsonl`, one run on 2026-09-11T19:45:29+00:00 (UTC): 9/10 gold-abstain probes abstained, answered: h009; 4/5 gold-answerable questions answered, abstained: h015.
-Per-question outcomes, uncovered terms and abstention texts: `holdout_run.md`. These
-held-out numbers are the only abstention figures here that were not available while the rule and
-the retrieval configuration were being designed.
+`eval/holdout_questions.jsonl`, one run on 2026-09-11T19:45:29+00:00 (UTC): 9/10 gold-abstain probes abstained, answered: h009; 4/5 gold-answerable answered, abstained: h015. These held-out numbers are the only abstention figures here that were not available while the rule
+and the retrieval configuration were being designed.
 
 - h001 gold abstain: abstained (gate: no passage mentions zika)
 - h002 gold abstain: abstained (gate: no passage mentions mpox)
@@ -155,37 +155,13 @@ the retrieval configuration were being designed.
 - h014 gold answerable: answered
 - h015 gold answerable: abstained (gate: no passage mentions federal)
 
-The two held-out misses, recorded after this single run with no rule changed (mechanisms read
-from the cached answers and the frozen stoplist in `src/archive_debugger/stopwords.py`):
-
-- h009 (electric scooters) answered: "scooters" was covered by an undated child-safety pamphlet and a
-  1988 occupational-health maintenance note; the lexical gate cannot separate electric scooters from
-  toy or workplace scooters. Same class as the five in-sample off-target answers.
-- h015 (1976 influenza program) abstained at the gate: "federal" is salient under the frozen rule and
-  no retrieved passage contains the word; the stoplist's actor-noun criterion lacks "federal". First
-  candidate for a v2 stoplist, if one is opened; v1 stands and this false abstention counts against it.
-
 ## 4. Retrieval, before and after (final gold, all top-20 judged)
 
-recall@10 0.3470 -> 0.4581; recall@20 0.5928 -> 0.7276; nDCG@10 0.4174 -> 0.5082; unjudged@10 and @20 0.0 for both (`retrieval_report.md`, final section).
+0.3470 -> 0.4581 (recall@20 0.5928 -> 0.7276; nDCG@10 0.4174 -> 0.5082) (`retrieval_report.md`, final section). This is a per-question mean, not a binomial proportion,
+so it carries no Wilson interval, and it is not recomputable from the committed judgment files: it needs
+the retriever's ranked output (the index).
 
 ## 5. Citations resolving to a recorded page
 
-119 kept citations across the 40 answered questions; 119 exist, 119 were in the retrieved evidence,
-119 resolve to a recorded page: 1.00. This is 1.0 by construction: verifier check 3 (`resolves`) drops
-any citation whose (item, leaf) has no page row before a sentence can be kept, so a kept citation
-cannot fail to resolve. The number confirms the gate held on the live run; it is not evidence of
-anything beyond that.
-
-## Later-years cases the audit surfaced
-
-- q023 s8 cites `39282716050165#462:1`: item metadata year 1984, passage text names 2002; judged p for
-  that reason. The evidence card carries "mentions 2002 (item dated 1984)".
-- q018 s2 cites `39262009090110#18:1`: item metadata year 1984; this passage's own text contains no
-  year, so its card carries no mark. The 2010-10-22 date recorded in `eval/labeling_notes.md` sits in
-  another passage of the same item. The annotation is passage-level; an item-level date conflict shows
-  only on the chunks that name the later year.
-- 34 further cited passages in the run carry a later-years mark, mostly annual reports whose item year
-  predates the report year in the text (for example `birthdeathstatistics1986` items dated 1984 with
-  1986-1989 text).
+119 distinct cited passages across the answered questions; all 119 resolve to a recorded page: 100.0% (119/119, 95% CI 96.9-100.0%). This is 1.0 by construction: verifier check 3 (`resolves`) drops any citation whose (item, leaf) has no page row before a sentence can be kept, so a kept citation cannot fail to resolve. The interval reflects the finite sample; the number confirms the gate held.
 

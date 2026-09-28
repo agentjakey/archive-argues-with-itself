@@ -34,12 +34,12 @@ import { useAttractLoop } from "./hooks/useAttractLoop";
 import { useScopes } from "./hooks/useScopes";
 import { useScopeExamples } from "./hooks/useScopeExamples";
 import { useStories } from "./hooks/useStories";
-import { flag as apiFlag } from "./lib/api";
+import { ask as apiAsk, flag as apiFlag } from "./lib/api";
 import { TILE_QIDS } from "./lib/attract";
 import { applyState, readState, type View } from "./lib/urlstate";
 import { mergeFlagged, needsInterstitial } from "./lib/sensitivity";
 import { PROVINCE_SLUGS } from "./lib/coverage";
-import { periodOfRow } from "./lib/timeline";
+import { periodOfRow, pickDecadeRows } from "./lib/timeline";
 import type { EvidenceRow, Example, Filters, Flagged, Period, Story } from "./types";
 
 export default function App() {
@@ -69,6 +69,9 @@ export default function App() {
   const [pendingDecadeCompare, setPendingDecadeCompare] = useState<{ a: Period; b: Period } | null>(null);
   const [decadeCompare, setDecadeCompare] = useState<{ a: EvidenceRow; b: EvidenceRow; terms: string[] } | null>(null);
   const [decadeCompareNote, setDecadeCompareNote] = useState<string | null>(null);
+  // True while a chosen decade absent from the unfiltered pool is being filled on demand with a
+  // period-filtered retrieval, so the compare view shows progress instead of appearing to do nothing.
+  const [decadeCompareLoading, setDecadeCompareLoading] = useState(false);
   const stories = useStories();
   const scopesInfo = useScopes();
   const activeScopeInfo =
@@ -155,6 +158,7 @@ export default function App() {
       setPinFlagged(null);
       setDecadeCompare(null);       // a fresh ask clears any decade comparison...
       setDecadeCompareNote(null);
+      setDecadeCompareLoading(false);
       setPendingDecadeCompare(null);   // ...but onCompareDecades sets pendingDecadeCompare after this
       setFlaggedAck(false);   // each new result must re-acknowledge its interstitial
       setDrawer(null);
@@ -324,37 +328,73 @@ export default function App() {
       setFilters({});
       ask(text, {});
       setPendingDecadeCompare({ a, b });
+      setDecadeCompareLoading(true);   // enter compare mode at once; the effect fills and resolves it
       window.scrollTo({ top: 0 });
     },
     [ask],
   );
 
-  // Resolve a pending two-decade comparison once its answer's pool is in. Picks the top-ranked pool
-  // passage in each period (period_of matches the histogram's buckets). If either period has no
-  // retrieved passage for the question, say so honestly rather than inventing one.
+  // Resolve a pending two-decade comparison once its answer's pool is in. Pick the top-ranked pool
+  // passage in each period (period_of matches the histogram's buckets). For a period the unfiltered
+  // pool did not surface, fill that column on demand with one period-filtered retrieval: the EXISTING
+  // /ask path, no model call (provider "stub"), so N1 holds (no new external call, reuses retrieval).
+  // Only a period with no passage even then is reported as empty, so the compare view never
+  // dead-ends: it shows a real side-by-side comparison or a clear inline reason.
   useEffect(() => {
     if (!pendingDecadeCompare || !response) return;
     const { a, b } = pendingDecadeCompare;
-    const pool = response.evidence;
-    const rowA = pool.find((r) => periodOfRow(r) === a) ?? null;
-    const rowB = pool.find((r) => periodOfRow(r) === b) ?? null;
-    if (rowA && rowB) {
-      setDecadeCompare({ a: rowA, b: rowB, terms: response.answer.coverage.salient_terms ?? [] });
-      setDecadeCompareNote(null);
-    } else {
-      setDecadeCompare(null);
-      const missing = [!rowA ? a : null, !rowB ? b : null].filter(Boolean).join(" and ");
-      setDecadeCompareNote(
-        `The record surfaced no passage in ${missing} for this question, so there is nothing to compare there. ` +
-          `That period may be sparse for this question; try another decade or a different question.`,
-      );
+    setPendingDecadeCompare(null);   // consume; the fill below finishes the resolution
+    const question = asked;
+    const terms = response.answer.coverage.salient_terms ?? [];
+
+    const settle = (rowA: EvidenceRow | null, rowB: EvidenceRow | null) => {
+      setDecadeCompareLoading(false);
+      if (rowA && rowB) {
+        setDecadeCompare({ a: rowA, b: rowB, terms });
+        setDecadeCompareNote(null);
+      } else {
+        setDecadeCompare(null);
+        const empty = [!rowA ? a : null, !rowB ? b : null].filter(Boolean).join(" and ");
+        setDecadeCompareNote(
+          `The record has no passage in ${empty} for this question, even when the search is narrowed ` +
+            `to that period, so there is nothing to compare there. Try another decade or a different question.`,
+        );
+      }
+    };
+
+    const picked = pickDecadeRows(response.evidence, a, b);
+    if (picked.missing.length === 0) {
+      settle(picked.rowA, picked.rowB);
+      return;
     }
-    setPendingDecadeCompare(null);
-  }, [response, pendingDecadeCompare]);
+
+    setDecadeCompareLoading(true);
+    let cancelled = false;
+    Promise.all(
+      picked.missing.map((p) =>
+        apiAsk({ question, filters: { period: p }, provider: "stub" })
+          .then((r) => ({ p, row: r.evidence.find((e) => periodOfRow(e) === p) ?? null }))
+          .catch(() => ({ p, row: null as EvidenceRow | null })),
+      ),
+    ).then((fills) => {
+      if (cancelled) return;
+      let rowA = picked.rowA;
+      let rowB = picked.rowB;
+      for (const { p, row } of fills) {
+        if (row && p === a) rowA = row;
+        if (row && p === b) rowB = row;
+      }
+      settle(rowA, rowB);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [response, pendingDecadeCompare, asked]);
 
   const clearDecadeCompare = useCallback(() => {
     setDecadeCompare(null);
     setDecadeCompareNote(null);
+    setDecadeCompareLoading(false);
     setPendingDecadeCompare(null);
   }, []);
 
@@ -378,7 +418,7 @@ export default function App() {
   // A two-decade comparison from the timeline takes over the compare slot, ahead of a story or a
   // free pinned pair. decadeResult also covers the honest "no passage in that period" note, which
   // stands in place of the answer for a comparison that could not be formed.
-  const decadeResult = decadeCompare !== null || decadeCompareNote !== null;
+  const decadeResult = decadeCompare !== null || decadeCompareNote !== null || decadeCompareLoading;
   const compare: [EvidenceRow, EvidenceRow] | null = decadeCompare
     ? [decadeCompare.a, decadeCompare.b]
     : storyRows ?? (pinned.length === 2 ? [pinned[0], pinned[1]] : null);
@@ -494,7 +534,13 @@ export default function App() {
               <p className="mt-2 font-sans text-xs uppercase tracking-wide text-muted">
                 Two decades of the record, side by side
               </p>
-              {compare ? (
+              {decadeCompareLoading ? (
+                <div className="card mt-4">
+                  <p className="leading-relaxed" aria-live="polite">
+                    Looking for a passage from each decade for this question...
+                  </p>
+                </div>
+              ) : compare ? (
                 <CompareView
                   a={compare[0]}
                   b={compare[1]}

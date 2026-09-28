@@ -7,7 +7,7 @@ it with the network off. Every command is from the repository root with the venv
 
 This runbook is the offline kiosk (one laptop, local data files). For the cloud deploy
 that serves both scopes from Cloudflare R2 onto a `/data` volume, see
-[`deploy.md`](deploy.md); this page covers the festival pilot exhibit.
+[`DEPLOY.md`](DEPLOY.md); this page covers the festival pilot exhibit.
 
 ## 1. Boot sequence
 

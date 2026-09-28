@@ -3,6 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#f6f1e7" />
+
     <title>Archive Argues With Itself</title>
 
     <!-- Share / link-preview metadata. Copy is Jacob's to edit. The image at og-image.png
@@ -31,9 +37,57 @@
       content="Public AI over the Internet Archive's Democracy's Library. It reads the Canadian government's own public-health record from 1960 to 2009, cites every answer to the scanned page, and refuses when the record is silent. Open source."
     />
     <meta name="twitter:image" content="https://archive-argues-with-itself-production.up.railway.app/og-image.png" />
+
+    <!-- Critical inline styles: paint the paper background and a themed skeleton immediately, so
+         there is no white flash before the JS bundle loads and React mounts. No animation, so it
+         is reduced-motion safe by construction. Tailwind (in the bundle) takes over on hydrate. -->
+    <style>
+      html { background: #f6f1e7; }
+      body {
+        margin: 0;
+        background: #f6f1e7;
+        color: #1c1a17;
+        font-family: system-ui, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      #app-skeleton { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+      #app-skeleton .sk-title {
+        font-family: "Iowan Old Style", Charter, Georgia, "Times New Roman", serif;
+        font-size: clamp(28px, 5vw, 40px);
+        line-height: 1.1;
+        color: #1c1a17;
+      }
+      #app-skeleton .sk-sub { margin-top: 8px; color: #6b655c; font-size: 15px; }
+      #app-skeleton .sk-rule { margin-top: 16px; border-top: 2px solid #d9d2c3; }
+      #app-skeleton .sk-line {
+        height: 16px;
+        margin-top: 14px;
+        background: #fcfaf4;
+        border: 1px solid #d9d2c3;
+        border-radius: 4px;
+      }
+      #app-skeleton .sk-block {
+        height: 200px;
+        margin-top: 20px;
+        background: #fcfaf4;
+        border: 1px solid #d9d2c3;
+        border-radius: 6px;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Replaced by React on mount. Shown instantly so the first paint is the themed reading
+           room, never a blank white screen (matters on a projector and a cold kiosk boot). -->
+      <div id="app-skeleton" aria-hidden="true">
+        <div class="sk-title">Archive Argues With Itself</div>
+        <div class="sk-sub">Public AI over Canada's public-health record. Loading the reading room.</div>
+        <div class="sk-rule"></div>
+        <div class="sk-line" style="width: 60%"></div>
+        <div class="sk-line" style="width: 45%"></div>
+        <div class="sk-block"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

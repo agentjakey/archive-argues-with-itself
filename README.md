@@ -74,12 +74,13 @@ evaluation questions, reports under [`docs/evaluation/`](docs/evaluation/):
 
 | what | value | source |
 | --- | --- | --- |
-| Citation support, strict: every claim in the sentence appears in the cited page (178 kept sentences on the 35 answerable questions) | 93.3% (166/178) | [audit report](docs/evaluation/audit_report.md) |
-| Citation support, lenient: supported or partly supported | 99.4% (177/178) | [audit report](docs/evaluation/audit_report.md) |
-| Cited passages that resolve to a recorded page | 119/119 | [audit report](docs/evaluation/audit_report.md) |
-| Abstention on questions the archive cannot answer | 10/15 in-sample, 9/10 held out | [audit report](docs/evaluation/audit_report.md), [held-out run](docs/evaluation/holdout_run.md) |
-| False abstention on answerable questions | 0/35 in-sample, 1/5 held out | [held-out run](docs/evaluation/holdout_run.md) |
-| Retrieval recall@10 on the fully judged gold, before and after the retrieval changes | 0.347 to 0.4581 | [retrieval report](docs/evaluation/retrieval_report.md) |
+| Citation support, strict: every claim in the sentence appears in the cited page (178 kept sentences on the 35 answerable questions) | 93.3% (166/178, 95% CI 88.6-96.1%) | [audit report](docs/evaluation/audit_report.md) |
+| Citation support, lenient: supported or partly supported | 99.4% (177/178, 95% CI 96.9-99.9%) | [audit report](docs/evaluation/audit_report.md) |
+| Cited passages that resolve to a recorded page | 100% (119/119, 95% CI 96.9-100%) | [audit report](docs/evaluation/audit_report.md) |
+| Abstention on questions the archive cannot answer | 66.7% (10/15, 95% CI 41.7-84.8%) in-sample; 9/10 held out | [audit report](docs/evaluation/audit_report.md), [held-out run](docs/evaluation/holdout_run.md) |
+| Off-target answers: should-abstain questions answered on the wrong question (q015, q030, q036, q037, q049) | 33.3% (5/15, 95% CI 15.2-58.3%) in-sample | [audit report](docs/evaluation/audit_report.md) |
+| False abstention on answerable questions | 0% (0/35, 95% CI 0.0-9.9%) in-sample; 1/5 held out | [held-out run](docs/evaluation/holdout_run.md) |
+| Retrieval recall@10 on the fully judged gold, before and after the retrieval changes (per-question mean, not a proportion; no interval) | 0.347 to 0.4581 | [retrieval report](docs/evaluation/retrieval_report.md) |
 
 **National microlog** (13,539 items, 1,136,827 passages; 1963-2018), audit over 47
 evaluation questions, machine-readable numbers in
@@ -87,12 +88,21 @@ evaluation questions, machine-readable numbers in
 
 | what | value | source |
 | --- | --- | --- |
-| Claim-level citation support, strict (fully supported only), 304 kept sentences (298 supported / 6 partly / 0 not) | 98.0% (298/304) | [audit numbers](reports/microlog/audit_numbers.json) |
-| Claim-level citation support, lenient (supported or partly) | 100% (304/304) | [audit numbers](reports/microlog/audit_numbers.json) |
-| Cited passages that resolve to a recorded page | 200/200 | [audit numbers](reports/microlog/audit_numbers.json) |
-| Abstention on should-abstain questions | 5/7 (mq43, mq44 answered off target) | [audit numbers](reports/microlog/audit_numbers.json) |
-| False abstention on answerable questions | 1/40 (mq28) | [audit numbers](reports/microlog/audit_numbers.json) |
-| Jurisdiction is an issuer proxy, a floor with no per-province claim (~15% unplaced, shown as its own figure) | 14.9% unknown | [audit numbers](reports/microlog/audit_numbers.json) |
+| Claim-level citation support, strict (fully supported only), 304 kept sentences (298 supported / 6 partly / 0 not) | 98.0% (298/304, 95% CI 95.8-99.1%) | [audit numbers](reports/microlog/audit_numbers.json) |
+| Claim-level citation support, lenient (supported or partly) | 100% (304/304, 95% CI 98.8-100%) | [audit numbers](reports/microlog/audit_numbers.json) |
+| Cited passages that resolve to a recorded page | 100% (200/200, 95% CI 98.1-100%) | [audit numbers](reports/microlog/audit_numbers.json) |
+| Abstention on should-abstain questions | 71.4% (5/7, 95% CI 35.9-91.8%) | [audit numbers](reports/microlog/audit_numbers.json) |
+| Off-target answers: should-abstain questions answered on the wrong question (mq43, mq44) | 28.6% (2/7, 95% CI 8.2-64.1%) | [audit numbers](reports/microlog/audit_numbers.json) |
+| False abstention on answerable questions | 2.5% (1/40, 95% CI 0.4-12.9%) (mq28) | [audit numbers](reports/microlog/audit_numbers.json) |
+| Jurisdiction is an issuer proxy, a floor with no per-province claim (~15% unplaced, shown as its own figure) | 14.9% unknown (2,018/13,539; corpus census, no interval) | [audit numbers](reports/microlog/audit_numbers.json) |
+
+Every rate above carries a Wilson 95% confidence interval, computed in code from the
+committed judgment files by `scripts/audit_report.py`. Off-target answers (a cited,
+supported answer to a different question than the one asked) are reported with equal billing
+next to abstention: the two share the should-abstain denominator. Recall is a per-question
+mean rather than a binomial proportion, so it carries no interval and is sourced from the
+committed retrieval report (it needs the index, which is not committed); the microlog
+jurisdiction figure is a corpus census, not a sample.
 
 Two caveats, stated in the reports: the pilot's abstention rule was amended once against
 its 50 questions (its held-out set is the exception), and the candidate labels behind
@@ -121,7 +131,7 @@ key line; the key is never committed.
 
 Two ways to get the federal pilot's corpus database and dense index (about 3.2 GiB).
 The national microlog corpus is larger and is hosted on Cloudflare R2 (see
-[`docs/deploy.md`](docs/deploy.md)); the pilot below is the quickest way to run the app
+[`docs/DEPLOY.md`](docs/DEPLOY.md)); the pilot below is the quickest way to run the app
 locally.
 
 **Fast path: download the data release** and verify the checksums:
@@ -145,8 +155,8 @@ cd web; npm ci; npm run build; cd ..
 ```
 
 Open `http://127.0.0.1:8000/`. Append `?kiosk=1` for the exhibit mode; see
-[`docs/demo.md`](docs/demo.md) for the unattended, offline setup and
-[`docs/deploy.md`](docs/deploy.md) to host both scopes (one Docker image that, on boot,
+[`docs/DEMO.md`](docs/DEMO.md) for the unattended, offline setup and
+[`docs/DEPLOY.md`](docs/DEPLOY.md) to host both scopes (one Docker image that, on boot,
 downloads each enabled scope's data from Cloudflare R2 -- the pilot also mirrored on a
 GitHub Release as a fallback -- verifies the checksums, and caches them to a volume;
 Railway steps; any Docker host).
@@ -198,7 +208,7 @@ page mentions, and the coverage grid of what the archive does hold.
 
 ## Methods and gaps
 
-- [`docs/methods.md`](docs/methods.md): how the federal pilot corpus was chosen, parsed,
+- [`docs/METHODS.md`](docs/METHODS.md): how the federal pilot corpus was chosen, parsed,
   indexed, retrieved, cited, and measured, every number tied to its report file.
 - [`docs/gaps.md`](docs/gaps.md): what the pilot archive cannot tell you (45% undated
   passages, the pilot's record stopping around 2009, front-matter pollution, metadata
@@ -217,12 +227,18 @@ relevance decisions in `eval/gold_decisions.json` and the two additive extension
 `eval/holdout_questions.jsonl`, and the sentence judgments in
 `eval/judgments_phase16.json`, each with a notes file giving the reasons. The
 reproducibility artifacts (worksheets, per-phase build reports, machine JSON) live
-under [`reports/`](reports/). With a built `civic.db` and index in place,
-`python -m archive_debugger.eval.report` writes the retrieval scores,
-`python -m archive_debugger.eval.retrieval_sweep` reruns the before and after
-configuration sweep, and `python scripts/audit_report.py` recomputes the five headline
-numbers from the judgments into `docs/evaluation/`. Every number in this README and in
-the reports comes from one of these; none is typed in by hand.
+under [`reports/`](reports/). `python scripts/audit_report.py` recomputes every pilot
+headline number from the committed judgment files alone, with a Wilson 95% interval on each
+rate and off-target as a first-class metric, into `docs/evaluation/audit_report.md` and
+`reports/phase16/audit_numbers.json`; `python scripts/audit_report.py --scope microlog` does
+the same for the national corpus into `reports/microlog/audit_numbers.json`. Both refuse to
+write and print the mismatch if a recomputed value differs from what is published, so the
+tables cannot drift from the judgments. Two figures are not judgment-derived and are sourced,
+not typed: retrieval recall needs the built index, so it is read from the committed retrieval
+report (`python -m archive_debugger.eval.report` and `python -m archive_debugger.eval.retrieval_sweep`
+regenerate it with a built `civic.db` and index), and the microlog jurisdiction share is a
+corpus census from the built database. Every rate in this README and the reports is computed
+by code; none is typed in by hand.
 
 ## Contributing
 

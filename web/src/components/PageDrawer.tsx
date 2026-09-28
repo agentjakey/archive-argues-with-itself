@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useEscape } from "../hooks/useKeyboard";
 import { chipLabel, dateMethodDetail, shortTitle } from "../lib/format";
 import { ocrUncertain } from "../lib/sensitivity";
@@ -19,9 +19,30 @@ interface Props {
  *  network at all; online, a failed load falls back to the same clear state. */
 export function PageDrawer({ row, onClose, source, offline = false }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const opener = useRef<Element | null>(null);
   const [imgError, setImgError] = useState(false);
   useEscape(row !== null, onClose);
+
+  // Keep Tab inside the modal drawer: on the first/last focusable, wrap to the other end. With the
+  // Escape handler and the focus move on open/restore on close below, focus never escapes to the
+  // page obscured behind the drawer.
+  const onTrapTab = (e: ReactKeyboardEvent<HTMLElement>) => {
+    if (e.key !== "Tab" || !panelRef.current) return;
+    const items = panelRef.current.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), iframe, input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
 
   useEffect(() => {
     setImgError(false);   // a new page starts fresh, so a prior load failure never sticks
@@ -43,7 +64,7 @@ export function PageDrawer({ row, onClose, source, offline = false }: Props) {
   return (
     <>
       <div className="backdrop" onClick={onClose} aria-hidden="true" />
-      <aside className="drawer p-5" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <aside ref={panelRef} onKeyDown={onTrapTab} className="drawer p-5" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 id="drawer-title" className="font-sans font-semibold">

@@ -7,7 +7,7 @@ arithmetic.
 This report covers the **federal public-health pilot**. The app also serves the national
 **microlog** corpus as a separate scope: it reaches 1963-2018 (so, unlike the pilot, it
 is not framed as stopping around 2009), and its jurisdiction is an issuer-derived proxy
-(a floor, ~15% unplaced, no per-province claim). The microlog gaps and audit are recorded
+(a floor, 14.9% unplaced, no per-province claim). The microlog gaps and audit are recorded
 under [`reports/microlog/`](../reports/microlog/).
 
 ## The record stops around 2009
@@ -134,16 +134,20 @@ should be read with that in mind.
 Source: `docs/evaluation/audit_report.md`, `docs/evaluation/holdout_run.md`.
 
 Every seed question once, configured model, final configuration; sentence
-judgments by the author. Strict citation support (every claim in the cited
-text) 93.3% (166 of 178 kept sentences on the 35 answerable questions); lenient
-(supported or partly) 99.4% (177 of 178); the one "not" sentence inverted a
-relation ("part of a series from the Centre" read as the Centre being part of a
-series); the 11 "partly" sentences added a date or period, or moved an
-attribution from a quoted body to the report's author. Abstention 10 of 15
-in-sample; held-out 9 of 10 probes abstained and 4 of 5 answerable questions
-answered; false abstentions 0 of 35 in-sample and 1 of 5 held-out (h015, on the
-question word "federal", which no passage repeats). Recall@10 0.3470 -> 0.4581.
-Cited passages resolving to a recorded page 119 of 119.
+judgments by the author. Each rate carries a Wilson 95% interval, recomputed from
+the committed judgment files by `scripts/audit_report.py`. Strict citation support
+(every claim in the cited text) 93.3% (166 of 178 kept sentences on the 35
+answerable questions, 95% CI 88.6-96.1%); lenient (supported or partly) 99.4%
+(177 of 178, 95% CI 96.9-99.9%); the one "not" sentence inverted a relation
+("part of a series from the Centre" read as the Centre being part of a series);
+the 11 "partly" sentences added a date or period, or moved an attribution from a
+quoted body to the report's author. Abstention 10 of 15 in-sample (66.7%, 95% CI
+41.7-84.8%); off-target answers 5 of 15 (33.3%, 95% CI 15.2-58.3%: q015, q030,
+q036, q037, q049); held-out 9 of 10 probes abstained and 4 of 5 answerable
+questions answered; false abstentions 0 of 35 in-sample (0%, 95% CI 0.0-9.9%) and
+1 of 5 held-out (h015, on the question word "federal", which no passage repeats).
+Recall@10 0.3470 -> 0.4581 (a per-question mean, not a proportion; no interval).
+Cited passages resolving to a recorded page 119 of 119 (100%, 95% CI 96.9-100%).
 
 ## Verification checks support, not relevance
 
@@ -161,8 +165,8 @@ is supported by its page; nothing in the pipeline guarantees that the page is
 about what was asked. The frozen thinness rule predicted 9 of these 15 would
 pass the gate (`retrieval_report.md`, final sweep); five did and answered off
 target, four passed the gate and then abstained downstream when no sentence
-survived. False abstentions on the 35 answerable questions: 0 in the run, as
-the sweep predicted.
+survived. False abstentions on the 35 answerable questions: 0 in the run (95% CI
+0.0-9.9%), as the sweep predicted.
 
 Held out: 15 questions written after the rule and the retrieval configuration
 were frozen, never used in any sweep or design decision, verdicts assigned before

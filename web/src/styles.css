@@ -241,3 +241,16 @@ body.kiosk .chip {
 .backdrop {
   @apply fixed inset-0 z-20 bg-ink/30;
 }
+
+/* Honor a reduced-motion preference: quiet the attract-loop fade and the decade-dot pulse
+   (AttractHero) and every transition, without removing any content or function. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

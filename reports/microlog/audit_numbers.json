@@ -240,9 +240,108 @@
       "supported": 298,
       "partly": 6,
       "not": 0,
-      "partly_qids": ["mq03 s2", "mq04 s1", "mq10 s3", "mq10 s4", "mq14 s1", "mq44 s1"]
+      "partly_qids": [
+        "mq03 s2",
+        "mq04 s1",
+        "mq10 s3",
+        "mq10 s4",
+        "mq14 s1",
+        "mq44 s1"
+      ]
     },
     "support_robustness": "strict in [0.980 (this audit), 0.987 (first-pass, if the two divergences mq10 s4 and mq44 s1 revert to supported)]; lenient in [0.997 (if the OCR-fused mq14 s1 is counted not-supported), 1.000]. Both bounds clear the 0.90 target (N2).",
     "support_status": "RECORDED: each of the 304 kept sentences was read against its cited page text (N2). strict (fully-supported only) = 298/304 = 0.980; lenient (supported or partly) = 304/304 = 1.000; not-supported = 0. Six 'partly' sentences and the two gate scope-flags (mq43, mq44) are itemized in reports/microlog/judgment_decided.json."
-  }
+  },
+  "recomputed": {
+    "provenance": "recomputed from committed files (reports/microlog/judgment_worksheet.jsonl judgment field; reports/microlog/gold_decisions.json questions verdicts) by scripts/audit_report.py --scope microlog; none typed by hand.",
+    "support_scope": "all kept sentences (includes the off-target answers mq43, mq44)",
+    "counts": {
+      "answerable_questions": 40,
+      "should_abstain_questions": 7,
+      "answered_questions": 41,
+      "kept_sentences_scored": 304,
+      "supported": 298,
+      "partly": 6,
+      "not": 0,
+      "support_scope": "all_kept"
+    },
+    "strict_support": {
+      "num": 298,
+      "den": 304,
+      "rate": 0.9803,
+      "ci95": [
+        0.9576,
+        0.9909
+      ]
+    },
+    "lenient_support": {
+      "num": 304,
+      "den": 304,
+      "rate": 1.0,
+      "ci95": [
+        0.9875,
+        1.0
+      ]
+    },
+    "citations_resolving": {
+      "num": 200,
+      "den": 200,
+      "rate": 1.0,
+      "ci95": [
+        0.9812,
+        1.0
+      ],
+      "note": "1.0 by construction; the verifier drops any citation that does not resolve"
+    },
+    "abstention_on_should_abstain": {
+      "num": 5,
+      "den": 7,
+      "rate": 0.7143,
+      "ci95": [
+        0.3589,
+        0.9178
+      ],
+      "qids": [
+        "mq41",
+        "mq42",
+        "mq45",
+        "mq46",
+        "mq48"
+      ]
+    },
+    "off_target_answers": {
+      "num": 2,
+      "den": 7,
+      "rate": 0.2857,
+      "ci95": [
+        0.0822,
+        0.6411
+      ],
+      "qids": [
+        "mq43",
+        "mq44"
+      ],
+      "definition": "should-abstain questions answered with cited, supported sentences that address a different question than the one asked"
+    },
+    "false_abstention_on_answerable": {
+      "num": 1,
+      "den": 40,
+      "rate": 0.025,
+      "ci95": [
+        0.0044,
+        0.1288
+      ],
+      "qids": [
+        "mq28"
+      ]
+    },
+    "jurisdiction_unknown": {
+      "unknown_items": 2018,
+      "total_items": 13539,
+      "rate": 0.1491,
+      "note": "corpus census from civic_microlog.db (issuer-derived proxy, a floor); not a sample, no interval; not recomputable from a committed judgment file"
+    }
+  },
+  "strict_support_rate": 0.9803,
+  "lenient_support_rate": 1.0
 }

@@ -10,7 +10,8 @@ publications: federal, Ontario, and Alberta; 3,477 items; 1960-2009). The app al
 serves the national **microlog** microfiche corpus (13,539 items; 1963-2018) as a
 separate scope with its own build and audit; its numbers live under
 [`reports/microlog/`](../reports/microlog/) (claim-level support 298/304 strict = 0.980,
-lenient 304/304 = 1.000; jurisdiction an issuer proxy, ~15% unplaced), not here.
+95% CI 95.8-99.1%; lenient 304/304 = 1.000, 95% CI 98.8-100%; jurisdiction an issuer proxy,
+14.9% unplaced), not here.
 
 ## 1. Choosing the corpus (the initial audit)
 
@@ -212,15 +213,20 @@ every kept sentence against the full text of its cited passages (s = every
 factual claim appears in the cited text; p = a claim, date or attribution is
 added or shifted; n = the sentence misstates the passage).
 
+Each rate below is recomputed from the committed judgment files by `scripts/audit_report.py`
+and carries a Wilson 95% interval; recall is a per-question mean rather than a proportion, so
+it carries none.
+
 | number | value |
 | --- | --- |
-| Citation support, strict (s only), kept sentences on the 35 answerable questions | 93.3% (166 of 178) |
-| Citation support, lenient (s + p) | 99.4% (177 of 178) |
-| Abstention, in-sample (15 should-abstain questions) | 10 of 15 abstained; 5 answered off target |
-| False abstentions, in-sample (35 answerable) | 0 of 35 |
+| Citation support, strict (s only), kept sentences on the 35 answerable questions | 93.3% (166 of 178, 95% CI 88.6-96.1%) |
+| Citation support, lenient (s + p) | 99.4% (177 of 178, 95% CI 96.9-99.9%) |
+| Abstention on should-abstain questions, in-sample (15) | 10 of 15 abstained (66.7%, 95% CI 41.7-84.8%) |
+| Off-target answers, in-sample (should-abstain answered on the wrong question) | 5 of 15 (33.3%, 95% CI 15.2-58.3%): q015, q030, q036, q037, q049 |
+| False abstentions, in-sample (35 answerable) | 0 of 35 (0%, 95% CI 0.0-9.9%) |
 | Abstention, held-out (`eval/holdout_questions.jsonl`, one run) | 9 of 10 probes abstained (h009 answered); 4 of 5 answerable answered (h015 abstained at the gate on the word "federal") |
-| Retrieval recall@10 on the final gold, before -> after the retrieval changes | 0.3470 -> 0.4581 |
-| Cited passages resolving to a recorded page | 119 of 119 (verifier check 3 guarantees it) |
+| Retrieval recall@10 on the final gold, before -> after the retrieval changes | 0.3470 -> 0.4581 (a per-question mean, not a proportion; no interval) |
+| Cited passages resolving to a recorded page | 119 of 119 (100%, 95% CI 96.9-100%; verifier check 3 guarantees it) |
 
 The five off-target answers (q015, q030, q036, q037, q049) are all-supported
 answers to a different question than the one asked, on the wrong period or the
@@ -228,6 +234,13 @@ wrong object: verification guarantees support by the page, not relevance to the
 question. The 12 p and 1 n sentences are listed with the author's reason for each
 in the audit report; the shifts are added dates or periods, attributions moved
 from a quoted body to the report's author, and one inverted relation.
+
+A note on the two scopes' support bases, so the difference is disclosed rather than hidden:
+the pilot strict rate above is computed over the sentences on the 35 answerable questions,
+with the off-target answers' sentences excluded, while the microlog scope computes strict
+support over all its kept sentences, the off-target ones (mq43, mq44) included. The two
+rates rest on different denominators and are not directly comparable; each is reproduced as
+its own audit computed it, and no number is changed.
 
 ## 9. What is fixed by rule
 

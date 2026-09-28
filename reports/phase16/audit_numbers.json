@@ -1,4 +1,7 @@
 {
+  "scope": "pilot",
+  "generated": "2026-09-27T20:25:08Z",
+  "provenance": "recomputed from committed files by scripts/audit_report.py; no number typed by hand. recall is sourced from the committed retrieval report (needs the index; not judgment-derived).",
   "run": {
     "questions": 50,
     "answered": 40,
@@ -13,58 +16,119 @@
   "not": 1,
   "strict_support_rate": 0.9326,
   "lenient_support_rate": 0.9944,
+  "strict_support": {
+    "num": 166,
+    "den": 178,
+    "rate": 0.9326,
+    "ci95": [
+      0.8859,
+      0.961
+    ]
+  },
+  "lenient_support": {
+    "num": 177,
+    "den": 178,
+    "rate": 0.9944,
+    "ci95": [
+      0.9689,
+      0.999
+    ]
+  },
+  "citations_resolving_count": 119,
+  "citations_resolving": {
+    "num": 119,
+    "den": 119,
+    "rate": 1.0,
+    "ci95": [
+      0.9687,
+      1.0
+    ],
+    "note": "1.0 by construction; the verifier drops any citation that does not resolve"
+  },
   "abstention_on_gold_abstain_in_sample": "10/15",
-  "off_target_answers": [
-    "q015",
-    "q030",
-    "q036",
-    "q037",
-    "q049"
-  ],
-  "off_target_marks": {
-    "q015": {
-      "s": 3
-    },
-    "q030": {
-      "s": 3
-    },
-    "q036": {
-      "p": 1,
-      "s": 1
-    },
-    "q037": {
-      "s": 2,
-      "p": 1
-    },
-    "q049": {
-      "s": 1
-    }
+  "abstention_on_should_abstain": {
+    "num": 10,
+    "den": 15,
+    "rate": 0.6667,
+    "ci95": [
+      0.4171,
+      0.8482
+    ],
+    "qids": [
+      "q022",
+      "q029",
+      "q039",
+      "q040",
+      "q041",
+      "q042",
+      "q046",
+      "q047",
+      "q048",
+      "q050"
+    ]
+  },
+  "off_target_answers": {
+    "num": 5,
+    "den": 15,
+    "rate": 0.3333,
+    "ci95": [
+      0.1518,
+      0.5829
+    ],
+    "qids": [
+      "q015",
+      "q030",
+      "q036",
+      "q037",
+      "q049"
+    ],
+    "definition": "should-abstain questions answered with cited, supported sentences that address a different question than the one asked"
   },
   "false_abstentions_on_answerable_in_sample": "0/35",
+  "false_abstention_on_answerable": {
+    "num": 0,
+    "den": 35,
+    "rate": 0.0,
+    "ci95": [
+      0.0,
+      0.0989
+    ],
+    "qids": []
+  },
   "holdout": {
     "gold_abstain": "9/10",
+    "gold_abstain_ci": [
+      0.5958,
+      0.9821
+    ],
     "gold_abstain_answered": [
       "h009"
     ],
     "gold_answerable": "4/5",
+    "gold_answerable_ci": [
+      0.3755,
+      0.9638
+    ],
     "gold_answerable_abstained": [
       "h015"
     ],
     "ts": "2026-09-11T19:45:29+00:00"
   },
-  "recall10_before_after": [
-    0.347,
-    0.4581
-  ],
-  "recall20_before_after": [
-    0.5928,
-    0.7276
-  ],
-  "ndcg10_before_after": [
-    0.4174,
-    0.5082
-  ],
-  "citations_resolving": "119/119 = 1.0 (verifier check 3)",
+  "recall_final_gold": {
+    "recall@10": [
+      0.347,
+      0.4581
+    ],
+    "recall@20": [
+      0.5928,
+      0.7276
+    ],
+    "ndcg@10": [
+      0.4174,
+      0.5082
+    ],
+    "source": "docs/evaluation/retrieval_report.md"
+  },
   "judgment_meta": {
     "source": "Phase 16 sentence-support judgments over reports/phase16/judgment_worksheet.jsonl. Rule: s = every factual claim in the sentence appears in the cited passage text; p = a claim, date, or attribution is added or shifted; n = the sentence misstates the passage. Candidate judgments were first proposed by an assistant model from the full cited passage text; each was reviewed and decided by Jacob Ortiz. Reasons for every p and n in eval/judgments_phase16_notes.md."
   }

@@ -63,6 +63,23 @@ export function periodOfRow(row: { year: number | null }): Period {
   return `${Math.floor(row.year / 10) * 10}s` as Period;
 }
 
+/** Pick one pool passage per period for a two-decade compare: the top-ranked pool row (the pool is
+ *  already in rank order) whose period matches each side, plus the requested periods that have no
+ *  passage in the pool at all. The caller fills a missing period on demand with a period-filtered
+ *  retrieval, so the compare never dead-ends on a decade the unfiltered pool happened to miss. */
+export function pickDecadeRows<T extends { year: number | null }>(
+  pool: T[],
+  a: Period,
+  b: Period,
+): { rowA: T | null; rowB: T | null; missing: Period[] } {
+  const rowA = pool.find((r) => periodOfRow(r) === a) ?? null;
+  const rowB = pool.find((r) => periodOfRow(r) === b) ?? null;
+  const missing: Period[] = [];
+  if (!rowA) missing.push(a);
+  if (!rowB) missing.push(b);
+  return { rowA, rowB, missing };
+}
+
 /** A readable label for a period key, for compare captions and controls. */
 export function periodLabel(key: Period): string {
   return key;
