@@ -14,7 +14,7 @@ interface Props {
 
 /** Right-side overlay drawer: the page image and provenance. Offline strategy (R1, both scopes):
  *  a page in the local pack shows its scanned image; a page NOT in the pack degrades to a clear
- *  "not on this device" state with the citation and the archive.org deep link -- never a broken
+ *  "not on this device" state with the citation and the archive.org deep link, never a broken
  *  image, an error, or a live fetch. In kiosk/offline mode no page image is fetched from the
  *  network at all; online, a failed load falls back to the same clear state. */
 export function PageDrawer({ row, onClose, source, offline = false }: Props) {

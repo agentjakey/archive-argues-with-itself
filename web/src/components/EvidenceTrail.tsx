@@ -40,6 +40,10 @@ export function EvidenceTrail({ rows, salientTerms, pinned, heading, matched, on
         active={active}
         onJump={jump}
       />
+      <p className="mt-2 text-sm text-muted">
+        Legend: <span className="text-ink">retrieved</span> is passages returned for your question;{" "}
+        <span className="text-ink">matched</span> is passages anywhere in the corpus that mention your terms.
+      </p>
       <ol className="mt-4" data-testid="lanes">
         {[...lanes.entries()].map(([decade, list]) => (
           <li key={decade} id={laneId(decade)} className="lane" data-empty={list.length === 0}>

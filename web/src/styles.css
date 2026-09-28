@@ -109,6 +109,26 @@ body.kiosk .chip {
   padding: 0.75em 1.1em;
 }
 
+/* Primary action button: dark ink fill, paper text. A compound selector (.chip.chip-primary)
+   so the dark fill wins over the .chip base by specificity, without fighting utilities. Paper on
+   ink is about 15:1 (AA). Disabled greys to a rule fill with muted text (about 3.8:1, still
+   legible) and is visually distinct from the enabled dark fill. */
+.chip.chip-primary {
+  @apply bg-ink text-paper border-ink;
+}
+
+.chip.chip-primary:disabled {
+  @apply bg-rule border-rule text-muted;
+  cursor: not-allowed;
+}
+
+/* Any chip when disabled: greyed and clearly inactive, still legible (muted on sheet is about
+   5.5:1). The primary rule above wins over this for a disabled primary button. */
+.chip:disabled {
+  @apply border-rule text-muted;
+  cursor: not-allowed;
+}
+
 .linkish {
   @apply font-sans text-ink underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer;
   min-height: 0;
@@ -233,6 +253,19 @@ body.kiosk .chip {
   text-decoration: none;
 }
 
+/* --- compare breakout: on wide screens the two-page compare uses the horizontal width past the
+   reading column, centered and capped at min(96vw, 1500px), so the side-by-side reads at a glance on
+   a projector. Capped at 96vw so it never triggers horizontal scroll; only above 1280px, where the
+   cap always exceeds the reading column, so it widens and never shrinks the column. --- */
+@media (min-width: 1280px) {
+  .compare-wide {
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(96vw, 1500px);
+  }
+}
+
 /* --- drawer --- */
 .drawer {
   @apply fixed top-0 right-0 z-30 h-full w-full md:w-[min(720px,60vw)] bg-sheet border-l border-rule overflow-y-auto;
@@ -242,8 +275,8 @@ body.kiosk .chip {
   @apply fixed inset-0 z-20 bg-ink/30;
 }
 
-/* Honor a reduced-motion preference: quiet the attract-loop fade and the decade-dot pulse
-   (AttractHero) and every transition, without removing any content or function. */
+/* Honor a reduced-motion preference: quiet the kiosk attract-loop fade, the skeleton shimmer, and
+   every transition, without removing any content or function. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -253,4 +286,65 @@ body.kiosk .chip {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* --- answer skeleton (shown only after a short delay, so cached answers never flash it; the
+   shimmer is decorative and is quieted by the reduced-motion rule above) --- */
+.sk-line,
+.sk-page {
+  display: block;
+  background: linear-gradient(90deg, #efe9db 25%, #f6f1e7 37%, #efe9db 63%);
+  background-size: 400% 100%;
+  animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+
+.sk-line {
+  height: 1rem;
+  border-radius: 3px;
+}
+
+.sk-page {
+  height: 320px;
+  max-width: 420px;
+  border: 1px solid theme("colors.rule");
+  border-radius: 2px;
+}
+
+@keyframes sk-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+/* --- evidence + coverage disclosure: the full trail and coverage collapse behind a summary,
+   so the answer and Sources are not buried; depth stays one click away. --- */
+.evidence-disclosure {
+  @apply mt-8 border-t border-rule pt-3;
+}
+
+.evidence-disclosure > summary {
+  @apply font-sans text-sm text-ink cursor-pointer list-none;
+}
+
+.evidence-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A CSS caret (no glyph): right-pointing when closed, down-pointing when open. */
+.evidence-disclosure > summary::before {
+  content: "";
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 0.5em;
+  vertical-align: middle;
+  border-left: 5px solid theme("colors.muted");
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.evidence-disclosure[open] > summary::before {
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid theme("colors.muted");
+  border-bottom: 0;
 }

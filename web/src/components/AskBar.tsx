@@ -72,7 +72,7 @@ export function AskBar({ question, filters, busy, kiosk, onQuestion, onFilters, 
             autoComplete="off"
             maxLength={300}
           />
-          <button type="submit" className="chip bg-ink text-paper border-ink px-5" disabled={busy || !question.trim()}>
+          <button type="submit" className="chip chip-primary px-5" disabled={busy || !question.trim()}>
             Ask
           </button>
         </div>

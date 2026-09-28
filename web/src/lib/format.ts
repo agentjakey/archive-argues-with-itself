@@ -50,6 +50,12 @@ export function formatInt(n: number): string {
   return n.toLocaleString("en-CA");
 }
 
+/** A count with a correctly pluralized noun: plural(1, "item") -> "1 item", plural(3, "item") ->
+ *  "3 items". Pass an explicit plural for irregular nouns. */
+export function plural(n: number, noun: string, pluralNoun?: string): string {
+  return `${formatInt(n)} ${n === 1 ? noun : pluralNoun ?? `${noun}s`}`;
+}
+
 export function formatShare(share: number): string {
   return `${Math.round(share * 100)}%`;
 }

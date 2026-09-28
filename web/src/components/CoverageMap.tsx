@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatInt } from "../lib/format";
+import { formatInt, plural } from "../lib/format";
 import { BANDS, PROVINCES, bandOf, countsByJurisdiction, provinceByCode } from "../lib/coverage";
 import { featurePath, fitConicConformal, isFeatureCollection, type FeatureCollection } from "../lib/canadaMap";
 import type { View } from "../lib/urlstate";
@@ -171,7 +171,7 @@ export function CoverageMapView({
           {activeRow ? (
             <span>
               <span className="text-ink">{activeRow.name}</span>
-              {" -- "}
+              {": "}
               {bandLabel(activeRow.count)}, {shareText(activeRow.count)}
             </span>
           ) : (
@@ -220,10 +220,10 @@ export function CoverageMapView({
             be placed and are not shown on the map. They are counted here, never spread across provinces.
           </li>
           <li>
-            <span className="text-ink">Federal (national): {formatInt(federal)} items</span> -- a
+            <span className="text-ink">Federal (national): {plural(federal, "item")}</span>. A
             national issuer, not a province.
           </li>
-          {international > 0 && <li>International: {formatInt(international)} items.</li>}
+          {international > 0 && <li>International: {plural(international, "item")}.</li>}
         </ul>
       </div>
 

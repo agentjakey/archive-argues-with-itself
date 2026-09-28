@@ -2,6 +2,32 @@ import { Page, Source } from "./Page";
 import { CrisisLines } from "../CrisisLines";
 import type { Crisis, ScopeInfo } from "../../types";
 
+/** The concrete "what this record leaves out" hero, before the prose: the window it covers, that it
+ *  goes quiet after, and a plain bar of the covered span against the years since. Every number is the
+ *  active scope's own coverage window; the gap to now is computed, never asserting the tool reaches
+ *  the present. */
+function GapsHero({ start, end }: { start: number; end: number }) {
+  const now = new Date().getFullYear();
+  const axisEnd = Math.max(now, end + 1);
+  const gap = Math.max(0, now - end);
+  const coveredPct = Math.min(100, Math.max(0, Math.round(((end - start) / (axisEnd - start)) * 100)));
+  return (
+    <div className="rule-left my-4">
+      <p className="font-sans text-xs uppercase tracking-wide text-muted">What this record leaves out</p>
+      <p className="mt-1 font-serif text-2xl leading-snug">
+        The readable record runs {start} to {end}, then goes quiet. Nothing here reaches the present.
+      </p>
+      <div className="mt-3 flex h-3 w-full max-w-prose overflow-hidden border border-ink bg-paper" aria-hidden="true">
+        <div className="h-full bg-ink" style={{ width: `${coveredPct}%` }} />
+      </div>
+      <p className="mt-1 max-w-prose text-sm text-muted">
+        Covered {start} to {end} (filled). The roughly {gap} years since are effectively absent from what this
+        tool can cite.
+      </p>
+    </div>
+  );
+}
+
 /** What the archive cannot tell you, per active scope. Each scope states its own coverage window
  *  (years from the active scope's data/config, never hardcoded) and its own audit findings: the
  *  pilot's late-2000s framing and pilot audit numbers show only under the pilot; the microlog scope
@@ -19,11 +45,8 @@ export function Gaps({ scope, crisis }: { scope: ScopeInfo | null; crisis: Crisi
 
   return (
     <Page title="Gaps">
-      {scope && start != null && end != null && (
-        <p className="text-muted">
-          {scope.label}, {start} to {end}
-        </p>
-      )}
+      {scope && start != null && end != null && <GapsHero start={start} end={end} />}
+      {scope && <p className="text-muted">{scope.label}</p>}
       <p>
         An archive argues with itself partly by what it leaves out. These are the gaps this tool knows about,
         with the numbers that measure them.

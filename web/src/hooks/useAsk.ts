@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as api from "../lib/api";
+import { plural } from "../lib/format";
 import type { AskRequest, AskResponse } from "../types";
 
 export type AskStatus = "idle" | "waiting" | "done" | "error";
@@ -51,7 +52,7 @@ export function useAsk() {
   const completion = response
     ? response.answer.abstained
       ? response.answer.abstention_text ?? "abstained"
-      : `${response.answer.verified_citations.length} citations verified`
+      : `${plural(response.answer.verified_citations.length, "citation")} verified`
     : null;
 
   return { status, elapsed, response, error, run, completion };

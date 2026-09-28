@@ -1,7 +1,7 @@
 // Minimal Lambert conformal conic projection + geojson path builder, so the coverage map renders a
 // real, recognizable Canada from a LOCAL boundary file with no external dependency and no network
 // (N1). Shape-equivalent to d3.geoConicConformal().fitSize(); if d3-geo is ever added, swap these two
-// helpers for it. Standard parallels 49N and 77N, central meridian 96W -- a conventional Canada conic.
+// helpers for it. Standard parallels 49N and 77N, central meridian 96W, a conventional Canada conic.
 
 export interface Feature {
   type: "Feature";

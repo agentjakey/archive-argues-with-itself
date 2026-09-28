@@ -83,7 +83,10 @@ describe("reading pages", () => {
 
   it("About names the partners, the image source, and the licence", () => {
     render(<About />);
-    expect(screen.getByText(/AI Builders Fellowship of the BC \+ AI Ecosystem, with the Internet Archive/)).toBeInTheDocument();
+    expect(screen.getByText(/AI Builders Fellowship of the/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Jacob Ortiz" })).toHaveAttribute("href", "https://github.com/agentjakey");
+    expect(screen.getByRole("link", { name: "BC + AI Ecosystem" })).toHaveAttribute("href", "https://bc-ai.ca");
+    expect(screen.getByRole("link", { name: "Internet Archive" })).toHaveAttribute("href", "https://archive.org");
     expect(screen.getByText(/served by archive.org/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /github.com\/agentjakey/ })).toHaveAttribute("href", "https://github.com/agentjakey/archive-argues-with-itself");
     expect(screen.getByText(/MIT licence/)).toBeInTheDocument();

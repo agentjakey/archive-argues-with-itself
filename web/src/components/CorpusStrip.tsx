@@ -6,7 +6,7 @@ interface Props {
 }
 
 /** Per-scope corpus facts for the header strip. Every figure is read from the ACTIVE scope
- *  (GET /scopes) -- the same source the subtitle uses -- so the band and the subtitle can never
+ *  (GET /scopes), the same source the subtitle uses, so the band and the subtitle can never
  *  disagree, and no pilot value can render under another corpus. When the active scope has not
  *  loaded, nothing is shown (never another scope's number as a fallback). */
 export function CorpusStrip({ scope }: Props) {

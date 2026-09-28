@@ -41,17 +41,17 @@ export function EvidenceCard({ row, salientTerms, pinned, onOpen, onPin, source 
               {dateMethodLabel(row)}
             </span>
           )}
-          <span className="tag">{row.jurisdiction ?? "unknown"}</span>
-          <span className="tag">{(row.doc_type ?? "unknown").replace(/_/g, " ")}</span>
-          {row.bm25_rank != null && <span className="tag">lexical</span>}
-          {row.dense_rank != null && <span className="tag">semantic</span>}
-          {row.section_class === "front" && <span className="tag">front matter</span>}
-          {row.section_class === "back" && <span className="tag">back matter</span>}
-          {!row.in_prompt && <span className="tag">not sent to the model</span>}
+          <span className="tag" title="Jurisdiction, from the issuer (a proxy, not a verified per-item claim)">{row.jurisdiction ?? "unknown"}</span>
+          <span className="tag" title="Document type">{(row.doc_type ?? "unknown").replace(/_/g, " ")}</span>
+          {row.bm25_rank != null && <span className="tag" title="Matched by keyword search (BM25)">lexical</span>}
+          {row.dense_rank != null && <span className="tag" title="Matched by meaning (dense vector search)">semantic</span>}
+          {row.section_class === "front" && <span className="tag" title="Front matter (title page, contents, or transmittal); demoted in ranking">front matter</span>}
+          {row.section_class === "back" && <span className="tag" title="Back matter (index or references); demoted in ranking">back matter</span>}
+          {!row.in_prompt && <span className="tag" title="In the retrieved pool but not among the passages sent to the model">not sent to the model</span>}
           {ocrUncertain(row.ocr_quality) && <OcrBadge />}
           {row.cited && <span className="cited">Cited</span>}
         </div>
-        <h4 className="mt-1 font-serif text-lg leading-snug">{shortTitle(row.title, 96)}</h4>
+        <h4 className="mt-1 font-serif text-lg leading-snug" title={row.title ?? undefined}>{shortTitle(row.title, 96)}</h4>
         <p className="font-mono text-xs text-muted">
           {source?.collection ? `${source.collection} / ` : ""}
           {row.item_id} leaf {row.leaf_index}

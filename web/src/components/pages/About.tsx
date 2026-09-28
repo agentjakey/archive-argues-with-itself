@@ -18,8 +18,19 @@ export function About({ scope }: { scope?: ScopeInfo | null }) {
     <Page title="About">
       <p>
         The public record disagrees with itself across decades; this tool shows you the pages. It was built
-        by Jacob Ortiz during the AI Builders Fellowship of the BC + AI Ecosystem, with the Internet Archive,
-        whose collections, OCR and page images make it possible.{" "}
+        by{" "}
+        <a className="linkish" href="https://github.com/agentjakey" target="_blank" rel="noopener noreferrer">
+          Jacob Ortiz
+        </a>{" "}
+        during the AI Builders Fellowship of the{" "}
+        <a className="linkish" href="https://bc-ai.ca" target="_blank" rel="noopener noreferrer">
+          BC + AI Ecosystem
+        </a>
+        , with the{" "}
+        <a className="linkish" href="https://archive.org" target="_blank" rel="noopener noreferrer">
+          Internet Archive
+        </a>
+        , whose collections, OCR and page images make it possible.{" "}
         {scope ? (
           <>
             The corpus you are exploring, <span className="text-ink">{scope.label}</span>, is{" "}

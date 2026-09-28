@@ -31,7 +31,7 @@ export function Sources({ numbered, byId }: Props) {
           return (
             <li key={id}>
               {n}.{" "}
-              <button type="button" className="linkish" onClick={() => jump(id)} title="Jump to the evidence card">
+              <button type="button" className="linkish" onClick={() => jump(id)} title={r.title ?? "Jump to the evidence card"}>
                 {shortTitle(r.title, 60)} ({yearLabel(r.year)})
               </button>
               , {page},{" "}

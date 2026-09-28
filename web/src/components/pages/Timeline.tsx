@@ -179,7 +179,7 @@ function TimelineBody({
         </div>
         <button
           type="button"
-          className="chip border-ink bg-ink text-paper disabled:opacity-40"
+          className="chip chip-primary"
           disabled={!canCompare}
           onClick={() => canCompare && onCompareDecades(q, a as Period, b as Period)}
         >

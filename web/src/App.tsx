@@ -3,9 +3,10 @@ import { AbstentionCard } from "./components/AbstentionCard";
 import { AnswerCard } from "./components/AnswerCard";
 import { LimitedModeCard } from "./components/LimitedModeCard";
 import { AskBar } from "./components/AskBar";
-import { AttractHero } from "./components/AttractHero";
+import { LandingHero } from "./components/LandingHero";
 import { QuestionTiles } from "./components/QuestionTiles";
 import { CompareView } from "./components/CompareView";
+import { CorpusStrip } from "./components/CorpusStrip";
 import { CoveragePanel } from "./components/CoveragePanel";
 import { ContextualNote } from "./components/ContextualNote";
 import { EntryAdvisory } from "./components/EntryAdvisory";
@@ -16,7 +17,7 @@ import { ExampleChips } from "./components/ExampleChips";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { PageDrawer } from "./components/PageDrawer";
-import { WaitingLabel } from "./components/WaitingLabel";
+import { AnswerSkeleton } from "./components/AnswerSkeleton";
 import { useAsk } from "./hooks/useAsk";
 import { useCoverage } from "./hooks/useCoverage";
 import { useExamples } from "./hooks/useExamples";
@@ -29,7 +30,6 @@ import { ExplorePage } from "./components/pages/Explore";
 import { TimelinePage } from "./components/pages/Timeline";
 import { SourceLine } from "./components/SourceLine";
 import { CoverageMap } from "./components/CoverageMap";
-import { Stories } from "./components/Stories";
 import { useAttractLoop } from "./hooks/useAttractLoop";
 import { useScopes } from "./hooks/useScopes";
 import { useScopeExamples } from "./hooks/useScopeExamples";
@@ -40,13 +40,14 @@ import { applyState, readState, type View } from "./lib/urlstate";
 import { mergeFlagged, needsInterstitial } from "./lib/sensitivity";
 import { PROVINCE_SLUGS } from "./lib/coverage";
 import { periodOfRow, pickDecadeRows } from "./lib/timeline";
+import { plural } from "./lib/format";
 import type { EvidenceRow, Example, Filters, Flagged, Period, Story } from "./types";
 
 export default function App() {
   const kiosk = useKiosk();
   const offline = useOffline();   // ?offline=1: no ask box, cached questions and stories only
   const chips = useExamples();
-  const { status, elapsed, response, error, run, completion } = useAsk();
+  const { status, elapsed, response, error, run } = useAsk();
 
   const initial = useRef(readState(window.location.search));
   const [question, setQuestion] = useState(initial.current.q);
@@ -72,7 +73,7 @@ export default function App() {
   // True while a chosen decade absent from the unfiltered pool is being filled on demand with a
   // period-filtered retrieval, so the compare view shows progress instead of appearing to do nothing.
   const [decadeCompareLoading, setDecadeCompareLoading] = useState(false);
-  const stories = useStories();
+  const { stories, loading: storiesLoading } = useStories();
   const scopesInfo = useScopes();
   const activeScopeInfo =
     scopesInfo?.scopes.find((s) => s.name === (initial.current.scope ?? scopesInfo.default)) ?? null;
@@ -171,6 +172,18 @@ export default function App() {
 
   const onAsk = useCallback(() => ask(question.trim(), filters), [ask, question, filters]);
 
+  // The hero's one primary action: bring the visitor to the ask box and focus it. Offline (no ask
+  // box) falls back to scrolling to the curated questions, so the button always lands somewhere real.
+  const focusAsk = useCallback(() => {
+    const input = document.getElementById("question") as HTMLInputElement | null;
+    if (input) {
+      input.scrollIntoView({ behavior: "smooth", block: "center" });
+      input.focus({ preventScroll: true });
+    } else {
+      document.getElementById("tiles-region")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
   // A story asks its question and shows its two pinned pages side by side, whatever
   // the retrieval pool holds.
   const openStory = useCallback(
@@ -209,7 +222,7 @@ export default function App() {
       idleParam.current ? `idle=${encodeURIComponent(idleParam.current)}` : "",
     ].filter(Boolean).join("&");
     const target = `${window.location.pathname}${flags ? `?${flags}` : ""}`;
-    // Idempotent: if already on the clean home for this scope, do not reload -- so a no-story scope
+    // Idempotent: if already on the clean home for this scope, do not reload, so a no-story scope
     // (microlog) resets to home once on idle, then rests without re-blinking every idle interval.
     if (window.location.pathname + window.location.search === target) return;
     window.location.assign(target);
@@ -431,11 +444,22 @@ export default function App() {
   const flagged = mergeFlagged(resultFlagged, pinFlagged);
   const busy = status === "waiting";
   // Per-scope, from the active scope's live composition (same source as the strip and subtitle),
-  // never the no-scope /health corpus -- so the coverage caption reads the active corpus's figure.
+  // never the no-scope /health corpus, so the coverage caption reads the active corpus's figure.
   const undatedShare = activeScopeInfo?.composition?.undated?.passage_share ?? null;
   // Attract tiles: the curated non-flagged cached questions, in config order, pulled from
   // /examples so their text and filters match the cache exactly (offline-instant on tap).
   const tiles = TILE_QIDS.map((id) => chips.find((c) => c.qid === id)).filter((e): e is Example => Boolean(e));
+  // A one-line summary for the collapsed "About this corpus" strip, from the same live per-scope
+  // composition the strip itself reads, so the summary and the opened band can never disagree.
+  const strip = activeScopeInfo?.composition ?? null;
+  const stripWindow = activeScopeInfo?.coverage_window ?? null;
+  const corpusSummary =
+    activeScopeInfo && strip
+      ? `${plural(activeScopeInfo.item_count, "item")}, ${plural(strip.passages, "passage")}` +
+        (stripWindow && stripWindow.min_year != null && stripWindow.max_year != null
+          ? `, ${stripWindow.min_year} to ${stripWindow.max_year}`
+          : "")
+      : "corpus facts";
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6">
@@ -472,8 +496,22 @@ export default function App() {
       {view === "about" && <About scope={activeScopeInfo} />}
       {view === null && (
       <>
-      {showStories && <AttractHero />}
-      {showStories && <QuestionTiles tiles={tiles} onPick={pick} disabled={busy} />}
+      {showStories && (
+        <>
+          <LandingHero
+            stories={stories}
+            loading={storiesLoading}
+            canAsk={!offline}
+            busy={busy}
+            onAsk={focusAsk}
+            onOpenStory={openStory}
+            onOpen={setDrawer}
+          />
+          <div id="tiles-region" className="mt-6">
+            <QuestionTiles tiles={tiles} onPick={pick} disabled={busy} />
+          </div>
+        </>
+      )}
       {!offline && (
         <div className={showStories ? "mt-6" : undefined}>
           {showStories && <p className="mb-2 text-sm text-muted">Or ask your own question:</p>}
@@ -488,9 +526,6 @@ export default function App() {
           />
         </div>
       )}
-      {showStories && (
-        <p className="mt-3 text-muted">Open a story below to see two pages from the record, years apart.</p>
-      )}
       {!showStories && (
         <ExampleChips
           chips={chips}
@@ -502,8 +537,13 @@ export default function App() {
           kiosk={kiosk}
         />
       )}
-      <WaitingLabel status={status} elapsed={elapsed} completion={completion} passages={activeScopeInfo?.composition?.passages ?? null} />
-      {showStories && <Stories stories={stories} onOpen={openStory} />}
+      <AnswerSkeleton status={status} elapsed={elapsed} passages={activeScopeInfo?.composition?.passages ?? null} />
+      {showStories && (
+        <details className="evidence-disclosure">
+          <summary>About this corpus: {corpusSummary}</summary>
+          <CorpusStrip scope={activeScopeInfo ?? null} />
+        </details>
+      )}
 
       {status === "error" && error && (
         <main>
@@ -586,17 +626,24 @@ export default function App() {
                 />
               )}
 
-              <EvidenceTrail
-                rows={response.evidence}
-                salientTerms={salient}
-                pinned={pins}
-                heading={response.degraded ? "The record for your question" : response.answer.abstained ? "Nearest evidence, not an answer" : "Evidence trail"}
-                matched={matched}
-                onOpen={setDrawer}
-                onPin={togglePin}
-                source={activeScopeInfo}
-              />
-              {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} scope={activeScopeInfo} />}
+              <details className="evidence-disclosure">
+                <summary>
+                  {response.answer.abstained
+                    ? `Nearest evidence: ${plural(response.evidence.length, "passage")} by decade. Open to read the pages.`
+                    : `Full evidence trail and coverage: ${plural(response.evidence.length, "passage")} by decade. Open to read every page and the coverage grid.`}
+                </summary>
+                <EvidenceTrail
+                  rows={response.evidence}
+                  salientTerms={salient}
+                  pinned={pins}
+                  heading={response.degraded ? "The record for your question" : response.answer.abstained ? "Nearest evidence, not an answer" : "Evidence trail"}
+                  matched={matched}
+                  onOpen={setDrawer}
+                  onPin={togglePin}
+                  source={activeScopeInfo}
+                />
+                {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} scope={activeScopeInfo} />}
+              </details>
             </>
           )}
         </main>

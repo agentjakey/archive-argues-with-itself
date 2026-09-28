@@ -56,7 +56,10 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
   const columns: [EvidenceRow, EvidenceRow] = [a, b];
 
   return (
-    <section className="card mt-6" aria-labelledby="compare-title">
+    // On wide screens (>=1280px) .compare-wide breaks the compare out past the reading column,
+    // centered and capped, so the two pages read side by side at a glance on a projector without ever
+    // causing horizontal scroll. Below that width it stays within the normal column.
+    <section className="card compare-wide mt-6" aria-labelledby="compare-title">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <p className="font-sans text-xs uppercase tracking-wide text-muted">What the record said, then and later</p>
@@ -81,7 +84,7 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2">
         {columns.map((row, i) => {
           const tag = eraTag(row, columns[1 - i]);
           return (
@@ -119,7 +122,7 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
                 />
               </button>
               <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" className="chip border-ink bg-ink text-paper" onClick={() => onOpen(row)}>
+                <button type="button" className="chip chip-primary" onClick={() => onOpen(row)}>
                   View the scanned page
                 </button>
                 <a className="chip" href={row.deep_link} target="_blank" rel="noopener noreferrer">

@@ -24,7 +24,7 @@ export function Interstitial({ flagged, onContinue, onBack }: Props) {
         <p className="mt-3 max-w-prose leading-relaxed">{contextualNote(flagged)}</p>
         <CrisisLines lines={flagged.crisis_lines} />
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className="chip border-ink bg-ink text-paper" onClick={onContinue}>
+          <button type="button" className="chip chip-primary" onClick={onContinue}>
             {INTERSTITIAL_COPY.continueLabel}
           </button>
           <button type="button" className="chip" onClick={onBack}>

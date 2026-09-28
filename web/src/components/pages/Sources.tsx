@@ -1,4 +1,4 @@
-import { formatInt, windowNote } from "../../lib/format";
+import { formatInt, plural, windowNote } from "../../lib/format";
 import { outOfWindowCount } from "../../lib/timeline";
 import type { ScopeInfo, YearWindow } from "../../types";
 import { Page } from "./Page";
@@ -79,7 +79,7 @@ function ScopeComposition({ scope }: { scope: ScopeInfo }) {
       <ul className="mt-1 text-sm space-y-0.5">
         {c.jurisdictions.map((j) => (
           <li key={j.name}>
-            {j.name}: {pct(j.items, scope.item_count)} ({formatInt(j.items)} items)
+            {j.name}: {pct(j.items, scope.item_count)} ({plural(j.items, "item")})
           </li>
         ))}
       </ul>
