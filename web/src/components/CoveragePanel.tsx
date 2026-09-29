@@ -15,7 +15,7 @@ interface Props {
 export function CoveragePanel({ coverage, undatedShare, explanation, scope }: Props) {
   const share = undatedShare == null ? null : formatShare(undatedShare);
   const ceiling = scope?.coverage_window?.max_year ?? null;
-  const reach = ceiling != null ? `the record is effectively absent past ${ceiling}` : "post-2009 OCR is effectively absent";
+  const reach = ceiling != null ? `the record is effectively absent past ${ceiling}` : "recent OCR is effectively absent";
   const dateClause = share ? `${share} of passages carry no date` : "some passages carry no date";
   return (
     <section className="mt-8" aria-labelledby="coverage-heading">

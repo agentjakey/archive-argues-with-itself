@@ -51,10 +51,14 @@ export interface Band {
   text: string;
 }
 
+// Warm brown ramp, widened for clear at-a-glance separation on a projector (dark -> mid -> light),
+// staying in the paper/ink-plus-single-accent system. Text pairing keeps contrast (paper on the dark
+// well, ink on the mid and light bands). The pilot ON/AB highlight (#8a6a3f, in CoverageMap) sits
+// between well and some, so it still reads as "represented" and coherent with this ramp.
 export const BANDS: Band[] = [
-  { key: "well", label: "well represented", fill: "#7a5a30", text: "#f6f1e7" },
-  { key: "some", label: "some", fill: "#c2a273", text: "#1c1a17" },
-  { key: "sparse", label: "sparse", fill: "#e6dcc6", text: "#1c1a17" },
+  { key: "well", label: "well represented", fill: "#6f4e26", text: "#f6f1e7" },
+  { key: "some", label: "some", fill: "#c9a86a", text: "#1c1a17" },
+  { key: "sparse", label: "sparse", fill: "#ece2cc", text: "#1c1a17" },
 ];
 
 /** The coarse band for a province's item count, or null for none (absent / zero). Thresholds are

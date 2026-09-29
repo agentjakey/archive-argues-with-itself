@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import type { DocType, Filters, Jurisdiction, Period } from "../types";
+import type { DocType, Filters, Jurisdiction, Period, ScopeInfo } from "../types";
 
 const PERIODS: Period[] = ["pre-1960", "1960s", "1970s", "1980s", "1990s", "2000s", "post-2009", "undated"];
 const JURISDICTIONS: Jurisdiction[] = [
@@ -35,6 +35,7 @@ interface Props {
   filters: Filters;
   busy: boolean;
   kiosk: boolean;
+  scope?: ScopeInfo | null;   // the active corpus, so the placeholder names its real window, never a hardcoded one
   onQuestion: (q: string) => void;
   onFilters: (f: Filters) => void;
   onAsk: () => void;
@@ -42,7 +43,14 @@ interface Props {
 
 /** Controlled by App so the URL can restore it. Selects sized to content, one row,
  *  stacking below 700px. Filters are hidden in kiosk mode. */
-export function AskBar({ question, filters, busy, kiosk, onQuestion, onFilters, onAsk }: Props) {
+export function AskBar({ question, filters, busy, kiosk, scope, onQuestion, onFilters, onAsk }: Props) {
+  const cw = scope?.coverage_window;
+  // The placeholder reads the active scope's coverage window (pilot 1960-2009, microlog 1963-2018),
+  // never a hardcoded one; before the scope loads it drops the years rather than guess.
+  const placeholder =
+    cw && cw.min_year != null && cw.max_year != null
+      ? `Ask about the public-health record, ${cw.min_year} to ${cw.max_year}`
+      : "Ask about the public-health record";
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (question.trim()) onAsk();
@@ -65,7 +73,7 @@ export function AskBar({ question, filters, busy, kiosk, onQuestion, onFilters, 
           <input
             id="question"
             className="flex-1 min-w-0 border border-ink bg-sheet px-3 rounded-sm font-sans"
-            placeholder="Ask about the public-health record, 1960 to 2009"
+            placeholder={placeholder}
             value={question}
             onChange={(e) => onQuestion(e.target.value)}
             disabled={busy}

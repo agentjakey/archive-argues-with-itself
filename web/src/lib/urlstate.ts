@@ -6,6 +6,23 @@ import type { Filters } from "../types";
 export type View = "explore" | "how" | "gaps" | "sources" | "map" | "timeline" | "about";
 export const VIEWS: readonly View[] = ["explore", "how", "gaps", "sources", "map", "timeline", "about"];
 
+// Short label per view, matching the nav, for the browser tab title. The home/ask view (null) uses
+// the bare site name.
+const SITE_NAME = "Archive Argues With Itself";
+export const VIEW_TITLE: Record<View, string> = {
+  explore: "Explore",
+  how: "How this works",
+  gaps: "Gaps",
+  sources: "Sources",
+  map: "Coverage map",
+  timeline: "Timeline",
+  about: "About",
+};
+
+export function documentTitle(view: View | null): string {
+  return view ? `${VIEW_TITLE[view]} - ${SITE_NAME}` : SITE_NAME;
+}
+
 export interface UrlState {
   q: string;
   filters: Filters;

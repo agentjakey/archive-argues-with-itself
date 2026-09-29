@@ -36,7 +36,7 @@ import { useScopeExamples } from "./hooks/useScopeExamples";
 import { useStories } from "./hooks/useStories";
 import { ask as apiAsk, flag as apiFlag } from "./lib/api";
 import { TILE_QIDS } from "./lib/attract";
-import { applyState, readState, type View } from "./lib/urlstate";
+import { applyState, documentTitle, readState, type View } from "./lib/urlstate";
 import { mergeFlagged, needsInterstitial } from "./lib/sensitivity";
 import { PROVINCE_SLUGS } from "./lib/coverage";
 import { periodOfRow, pickDecadeRows } from "./lib/timeline";
@@ -95,6 +95,24 @@ export default function App() {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  // Per-view browser tab title, driven off the same view state the nav uses.
+  useEffect(() => {
+    document.title = documentTitle(view);
+  }, [view]);
+
+  // Announce a page change by moving focus to the new view's heading (reading pages have
+  // #page-heading) or its main landmark (home). Skips the first render, so it never steals focus on
+  // load, only on navigation.
+  const navigated = useRef(false);
+  useEffect(() => {
+    if (!navigated.current) {
+      navigated.current = true;
+      return;
+    }
+    const target = document.getElementById("page-heading") ?? document.getElementById("main-content");
+    target?.focus({ preventScroll: true });
+  }, [view]);
 
   // Restore from the URL on load and run the ask.
   useEffect(() => {
@@ -463,6 +481,7 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <Header
         kiosk={kiosk}
         view={view}
@@ -495,7 +514,7 @@ export default function App() {
       )}
       {view === "about" && <About scope={activeScopeInfo} />}
       {view === null && (
-      <>
+      <main id="main-content" tabIndex={-1}>
       {showStories && (
         <>
           <LandingHero
@@ -520,6 +539,7 @@ export default function App() {
             filters={filters}
             busy={busy}
             kiosk={kiosk}
+            scope={activeScopeInfo}
             onQuestion={setQuestion}
             onFilters={setFilters}
             onAsk={onAsk}
@@ -545,17 +565,13 @@ export default function App() {
         </details>
       )}
 
-      {status === "error" && error && (
-        <main>
-          <ErrorCard detail={error} />
-        </main>
-      )}
+      {status === "error" && error && <ErrorCard detail={error} />}
 
       {response && (
         needsInterstitial(resultFlagged) && !flaggedAck ? (
           <Interstitial flagged={resultFlagged!} onContinue={() => setFlaggedAck(true)} onBack={goHome} />
         ) : (
-        <main>
+        <>
           {flagged && <ContextualNote flagged={flagged} />}
           {activeScopeInfo && <SourceLine scope={activeScopeInfo} />}
           {askedFilters.jurisdiction &&
@@ -646,10 +662,10 @@ export default function App() {
               </details>
             </>
           )}
-        </main>
+        </>
         )
       )}
-      </>
+      </main>
       )}
 
       <Footer onAbout={() => goView("about")} />

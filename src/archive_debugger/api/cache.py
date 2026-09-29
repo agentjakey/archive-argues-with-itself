@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import threading
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,23 +46,32 @@ def cache_key(*, question: str, filters: Optional[dict], provider: str, model: s
 
 
 class AnswerCache:
+    """One SQLite file behind a lock. The serve layer now runs requests concurrently (a read-only
+    connection pool, no shared lock around generation), so the single cache connection is guarded
+    here; every access is a fast keyed read or one INSERT, so the lock never holds across a model
+    call. Behavior and stored content are unchanged."""
+
     def __init__(self, path: Path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(path), check_same_thread=False)
         self.conn.executescript(SCHEMA)
+        self._lock = threading.Lock()
 
     def get(self, key: str) -> Optional[dict]:
-        row = self.conn.execute("SELECT response_json, created_at FROM answers WHERE key = ?", (key,)).fetchone()
+        with self._lock:
+            row = self.conn.execute("SELECT response_json, created_at FROM answers WHERE key = ?", (key,)).fetchone()
         if row is None:
             return None
         return {"response": json.loads(row[0]), "created_at": row[1]}
 
     def put(self, key: str, response: dict) -> str:
         created = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        self.conn.execute("INSERT OR REPLACE INTO answers (key, response_json, created_at) VALUES (?,?,?)",
-                          (key, json.dumps(response, ensure_ascii=False), created))
-        self.conn.commit()
+        with self._lock:
+            self.conn.execute("INSERT OR REPLACE INTO answers (key, response_json, created_at) VALUES (?,?,?)",
+                              (key, json.dumps(response, ensure_ascii=False), created))
+            self.conn.commit()
         return created
 
     def close(self) -> None:
-        self.conn.close()
+        with self._lock:
+            self.conn.close()

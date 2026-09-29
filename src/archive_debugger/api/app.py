@@ -13,12 +13,13 @@ import copy
 import functools
 import json
 import os
+import queue
 import re
 import sqlite3
 import threading
 import time
 import tomllib
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -50,7 +51,7 @@ ENV_PAGES_DIR = "CIVIC_PAGES_DIR"
 ENV_SERVE_SCOPES = "CIVIC_SERVE_SCOPES"   # local multi-scope opt-in: "pilot,microlog". Unset = single base scope.
 ENV_ENABLED_SCOPES = "CIVIC_ENABLED_SCOPES"   # deploy gate: only these scopes are built/exposed. Unset = all.
 ENV_DEFAULT_SCOPE = "CIVIC_DEFAULT_SCOPE"     # UI landing scope (GET /scopes 'default'); falls back if not built.
-DEFAULT_LANDING = "microlog"                  # landing when CIVIC_DEFAULT_SCOPE is unset (falls back to the base scope)
+DEFAULT_LANDING = "pilot"                     # landing when CIVIC_DEFAULT_SCOPE is unset (falls back to the base scope)
 SNIPPET = 300
 _PAGE_FILE = re.compile(r"^n(\d+)_(thumb|medium)\.jpg$")
 # Memory-map extra scopes' large databases. SQLite clamps to its own compiled max, so an
@@ -63,6 +64,14 @@ MMAP_BYTES = 1 << 33   # 8 GiB target
 # generate/ is untouched (N5): the hard timeout lives here, on the client this layer
 # builds.
 GEN_TIMEOUT_S = 20.0                 # hard cap on one generation call; the kiosk must never hang
+# Per-request wall-clock budget so the server always returns before the client's 30s abort. The
+# model call is given only the budget left after retrieval; when too little remains, /ask returns
+# the limited-mode record (a 200) instead of racing the client timeout. Keep BUDGET_S under the web
+# client's REQUEST_TIMEOUT_MS (30s) by a margin.
+BUDGET_S = 26.0                      # per-request wall-clock budget (< 30s client timeout)
+MODEL_MARGIN_S = 1.0                 # reserve for verification + response building + the network return
+MODEL_FLOOR_S = 2.0                  # below this remaining, skip the model and show the record (limited mode)
+POOL_SIZE = 8                        # read-only connections per scope, so concurrent asks do not serialize
 MAX_QUESTION_CHARS = 500             # server-side defense in depth; the web input caps lower
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://archive-argues-with-itself-production.up.railway.app")
 RATE_BURST, RATE_REFILL = 5, 0.5     # token bucket on model-calling requests (this process)
@@ -71,8 +80,16 @@ _DEGRADE_MSG = {
     "no_key": "offline: showing the record, read the source yourself; the live version at {url} generates answers.",
     "model_unreachable": "offline: showing the record, read the source yourself; the live version at {url} generates answers.",
     "rate_limited": "one moment: showing the record below while the answer service catches up.",
+    "budget": "one moment: this question ran long, so here is the record below rather than keep you waiting.",
     "empty": "type a question to search the record.",
 }
+
+
+def _log_timing(scope: str, retrieval_s: float, model_s: float, outcome: str, n_hits: int) -> None:
+    """One line per cache-miss /ask, to stdout (Railway logs), so retrieval and model time on the
+    real instance are measurable without shell access: grep '[ask-timing]'. Diagnostic only."""
+    print(f"[ask-timing] scope={scope} retrieval_ms={retrieval_s * 1000:.0f} "
+          f"model_ms={model_s * 1000:.0f} outcome={outcome} hits={n_hits}", flush=True)
 
 
 def clean_question(q: str) -> str:
@@ -305,13 +322,77 @@ def offline_scopes() -> list[dict]:
 
 
 def _enable_mmap(conn: sqlite3.Connection) -> None:
-    """Memory-map the connection's main and attached (vec) databases. Read-only I/O tuning
-    only; query results are unchanged. Applied to extra scopes, never the pilot."""
+    """Memory-map the connection's main and attached (vec) databases. Read-only I/O tuning only;
+    query results are byte-identical. Now applied to every scope's connections, including the pilot
+    (a latency fix; the dense scan is the same query, just not paging through read() syscalls)."""
     for target in (f"PRAGMA mmap_size = {MMAP_BYTES}", f"PRAGMA vec.mmap_size = {MMAP_BYTES}"):
         try:
             conn.execute(target)
         except sqlite3.Error:
             pass
+
+
+def _warm(conn: sqlite3.Connection) -> None:
+    """Read the dense index and passage text once so the OS page cache holds them: the first
+    cache-miss dense scan then runs warm (CPU-bound) instead of cold (paging the whole index off the
+    volume). Read-only, byte-identical, best-effort; any failure is ignored. Warming one connection
+    warms the shared OS cache for every connection to the same files."""
+    for sql in (
+        "SELECT SUM(LENGTH(embedding)) FROM vec.passages_vec",   # the dominant cost: the vector blobs
+        "SELECT SUM(LENGTH(text)) FROM passages",                # passage text (provenance + snippets)
+        "SELECT COUNT(*) FROM passages_fts WHERE passages_fts MATCH 'health'",   # the FTS pages
+    ):
+        try:
+            conn.execute(sql).fetchone()
+        except sqlite3.Error:
+            pass
+
+
+class _LockedEmbedder:
+    """Wrap the shared embedder so the pooled connections can call it concurrently. fastembed's
+    ONNX session is generally thread-safe, but the query embed is ~35ms, so a mutex here is free
+    insurance and never serializes the model call. Results are identical (same embedder)."""
+
+    def __init__(self, inner):
+        self._inner = inner
+        self._lock = threading.Lock()
+        self.dim = getattr(inner, "dim", None)
+
+    def embed_query(self, text: str):
+        with self._lock:
+            return self._inner.embed_query(text)
+
+    def embed_passages(self, texts):
+        with self._lock:
+            return self._inner.embed_passages(texts)
+
+
+class ConnPool:
+    """A small pool of read-only Retrievers (each its own SQLite connection, all sharing one
+    thread-guarded embedder and the OS page cache). A cache-miss /ask checks one out for its whole
+    lifetime, so the model call holds no shared lock and concurrent asks run on separate connections
+    instead of serializing behind one generation. Read-only; retrieval results are unchanged."""
+
+    def __init__(self, retrievers: list):
+        self._all = retrievers
+        self._q: "queue.Queue" = queue.Queue()
+        for r in retrievers:
+            self._q.put(r)
+
+    @contextmanager
+    def checkout(self):
+        r = self._q.get()
+        try:
+            yield r
+        finally:
+            self._q.put(r)
+
+    def close(self) -> None:
+        for r in self._all:
+            try:
+                r.close()
+            except Exception:  # noqa: BLE001 - closing a read-only connection must never fail shutdown
+                pass
 
 
 def _registry_entry(name: str) -> dict:
@@ -501,10 +582,11 @@ class Bundle:
     only ever read its own DBs. The base (default) scope's fields are aliased onto app.state
     so the pilot request path and offline_walkthrough see it exactly as before."""
 
-    def __init__(self, *, name, retriever, gcfg, pilot_window, cache, retrieval_sha256,
+    def __init__(self, *, name, retriever, pool, gcfg, pilot_window, cache, retrieval_sha256,
                  corpus, facts, stories, seed_path, pages_dir, provider, llm, own_retriever):
         self.name = name
         self.retriever = retriever
+        self.pool = pool           # read-only connection pool for the /ask miss path (no lock across the model call)
         self.gcfg = gcfg
         self.pilot_window = pilot_window
         self.cache = cache
@@ -518,7 +600,10 @@ class Bundle:
         self.provider = provider
         self.llm = llm
         self.own_retriever = own_retriever
-        self.lock = threading.Lock()   # one sqlite connection per bundle; sync endpoints run in a threadpool
+        # Guards the base retriever's single connection, used only by the fast read endpoints
+        # (/coverage, /examples, /stories, /flag) and the cached-answer serve path. The slow
+        # /ask miss path uses the pool instead, so it never holds this lock across a model call.
+        self.lock = threading.Lock()
 
 
 def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Optional[Retriever] = None,
@@ -557,27 +642,39 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
     pages_dir = pages_dir or env_path(ENV_PAGES_DIR, DEFAULT_PAGES)
     base_stories = load_stories(stories_path)
 
-    def _build_bundle(name, *, cfg_path, retr, cache_p, seed_p, stories_list, llm_obj, mmap) -> Bundle:
-        """Open one scope's databases and generation config with only that scope active, so
-        the connection is fenced to its own corpus. The base scope may pass an injected
-        retriever (tests) and is never memory-mapped (the pilot stays exactly as before)."""
+    def _build_bundle(name, *, cfg_path, retr, cache_p, seed_p, stories_list, llm_obj) -> Bundle:
+        """Open one scope's databases and generation config with only that scope active, so the
+        connections are fenced to its own corpus. A real scope also opens a small read-only pool
+        (POOL_SIZE connections sharing one thread-guarded embedder and the OS page cache) for the
+        concurrent /ask miss path, and memory-maps every connection (byte-identical I/O tuning, now
+        including the pilot). Tests inject a retriever and reuse it as a one-connection pool."""
         resolved_b = scopes.resolve_scope(name)
         active = None if resolved_b.inherit else resolved_b
+        own = retr is None
         with scopes.activate(active):
             r = retr or Retriever(cfg_path)
-            if mmap and retr is None:
-                _enable_mmap(r.conn)
+            _enable_mmap(r.conn)
+            if own:
+                locked = _LockedEmbedder(r.embedder)   # shared across the pool; guards the ~35ms embed
+                pool_rs = []
+                for _ in range(POOL_SIZE):
+                    pr = Retriever(cfg_path, embedder=locked, cfg=r.cfg)
+                    _enable_mmap(pr.conn)
+                    pool_rs.append(pr)
+                pool = ConnPool(pool_rs)
+            else:
+                pool = ConnPool([r])   # tests: reuse the injected retriever as the pool
             gcfg = load_generate_config(cfg_path)
             pilot_window = _pilot_window(cfg_path)
             sha = retrieval_fingerprint(r.cfg)
             corpus = corpus_facts(r.conn, pilot_window)
             facts = scope_facts(name, cfg_path, corpus)
             facts["composition"] = scope_composition(r.conn, corpus)   # real numbers for the sources view
-        return Bundle(name=name, retriever=r, gcfg=gcfg, pilot_window=pilot_window,
+        return Bundle(name=name, retriever=r, pool=pool, gcfg=gcfg, pilot_window=pilot_window,
                       cache=AnswerCache(cache_p), retrieval_sha256=sha, corpus=corpus,
                       facts=facts, stories=stories_list,
                       seed_path=seed_p, pages_dir=pages_dir, provider=provider, llm=llm_obj,
-                      own_retriever=retr is None)
+                      own_retriever=own)
 
     def _extra_bundle(name) -> Optional[Bundle]:
         """Build one additional scope, or None if it cannot be served here because its
@@ -590,14 +687,14 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             cache_p = Path(rs.db_path).parent / "cache" / "answers.db"     # isolated, never the pilot's cache
             story_file = Path(rs.db_path).parent / "stories.json"          # optional; absent -> no stories
             return _build_bundle(name, cfg_path=rs.config_path, retr=None, cache_p=cache_p,
-                                 seed_p=None, stories_list=load_stories(story_file), llm_obj=None, mmap=True)
+                                 seed_p=None, stories_list=load_stories(story_file), llm_obj=None)
         except Exception:  # noqa: BLE001 - a bad extra scope is skipped, never fatal to the base serve
             return None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         base = _build_bundle(base_name, cfg_path=base_config, retr=retriever, cache_p=base_cache_path,
-                             seed_p=seed_path, stories_list=base_stories, llm_obj=llm, mmap=False)
+                             seed_p=seed_path, stories_list=base_stories, llm_obj=llm)
         bundles = {base.name: base}
         # ENABLED_SCOPES gate: only build/serve/expose the enabled scopes (None = all). The base is
         # always served; extra scopes not enabled are never built, so /scopes and the switcher never
@@ -628,12 +725,29 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         app.state.coverage_cache = base.coverage_cache
         app.state.retrieval_sha256 = base.retrieval_sha256
         app.state.corpus = base.corpus
+        # Warm each real scope's index into the OS page cache in the background, so the first
+        # cache-miss dense scan runs warm (CPU-bound) instead of paging the whole index off the
+        # volume. Off the request path (a pooled connection, never the base lock); /health answers
+        # immediately, and the [boot-warm] log line records how long each scope took.
+        def _warm_all():
+            for b in bundles.values():
+                if not b.own_retriever:
+                    continue
+                try:
+                    t0 = time.monotonic()
+                    with b.pool.checkout() as wr:
+                        _warm(wr.conn)
+                    print(f"[boot-warm] scope={b.name} warmed in {time.monotonic() - t0:.1f}s", flush=True)
+                except Exception:  # noqa: BLE001 - warming is best-effort, never fatal to serving
+                    pass
+        threading.Thread(target=_warm_all, name="boot-warm", daemon=True).start()
         try:
             yield
         finally:
             for b in bundles.values():
                 b.cache.close()
                 if b.own_retriever:
+                    b.pool.close()
                     b.retriever.close()
 
     app = FastAPI(title="archive-argues-with-itself", lifespan=lifespan)
@@ -665,24 +779,26 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         key = answer_cache_key(gcfg, kind, model_id, question, filters, b.retrieval_sha256)
         clean = clean_question(question)
 
-        def degraded(reason: str, pool: list, hits: list) -> dict:
-            """A 200 limited-mode response: the record, a designed message, no model
-            paragraph, no raw error, and never cached (N6)."""
+        def degraded(reason: str, pool_rows: list, hits: list, conn) -> dict:
+            """A 200 limited-mode response: the record, a designed message, no model paragraph, no
+            raw error, and never cached (N6). `conn` is the caller's connection (the base connection
+            under b.lock for the empty/cached paths, or the request's pooled connection for the miss
+            path), so date-method attachment never touches a connection another thread is using."""
             msg = _DEGRADE_MSG[reason].format(url=PUBLIC_URL)
             cov = coverage_of(clean, hits)
             ans = Answer(text=msg, sentences=[], verified_citations=[], unsupported=[],
                          abstained=True, coverage=cov, abstention_text=msg, generation=gen)
             out = {"answer": ans.to_dict(),
-                   "evidence": evidence_rows(pool, [], {h["passage_id"] for h in hits}, b.pages_dir),
+                   "evidence": evidence_rows(pool_rows, [], {h["passage_id"] for h in hits}, b.pages_dir),
                    "degraded": {"reason": reason, "live_url": PUBLIC_URL}}
             out["answer"]["cached"] = None
-            with b.lock:
-                _attach_date_method(r.conn, out["evidence"])
+            _attach_date_method(conn, out["evidence"])
             out["flagged"] = flags.detect(out["evidence"])
             return out
 
         if not clean:
-            return degraded("empty", [], [])
+            with b.lock:
+                return degraded("empty", [], [], r.conn)
         if not nocache:
             hit = b.cache.get(key)
             if hit is not None:
@@ -701,38 +817,54 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 served["flagged"] = flags.detect(served["evidence"])   # on serve, from stored evidence; not cached
                 return served
 
-        # Cache miss. Retrieve first, so the record can be shown even when the model cannot run.
-        with b.lock:   # retrieval reads through r.conn
-            pool, hits = retrieve_pool(r, clean, build_filters(filters), gcfg["top_k"])
+        # Cache miss. Hold one pooled read-only connection for this whole request, so the model call
+        # no longer serializes other requests behind one generation (concurrent asks use other pooled
+        # connections). A wall-clock budget keeps the server ahead of the client's 30s abort: retrieve
+        # first (so the record can be shown even when the model cannot run), then give the model only
+        # the time left; if too little remains, return the record in limited mode before the client
+        # would give up. Retrieval reads through the pooled connection, never the base lock.
+        t_start = time.monotonic()
+        with b.pool.checkout() as pr:
+            pool_rows, hits = retrieve_pool(pr, clean, build_filters(filters), gcfg["top_k"])
+            t_ret = time.monotonic() - t_start
 
-        if kind == "anthropic" and b.llm is None and not _key_available():
-            return degraded("no_key", pool, hits)
-        if kind == "anthropic" and b.llm is None and not app.state.model_ratelimit.allow():
-            return degraded("rate_limited", pool, hits)
+            if kind == "anthropic" and b.llm is None and not _key_available():
+                _log_timing(b.name, t_ret, 0.0, "degraded:no_key", len(hits))
+                return degraded("no_key", pool_rows, hits, pr.conn)
+            if kind == "anthropic" and b.llm is None and not app.state.model_ratelimit.allow():
+                _log_timing(b.name, t_ret, 0.0, "degraded:rate_limited", len(hits))
+                return degraded("rate_limited", pool_rows, hits, pr.conn)
 
-        try:
-            if b.llm is not None:
-                model = b.llm
-            elif kind == "stub":
-                model = make_llm("stub", model_id, gcfg["max_tokens"])
-            else:                                        # real provider: hard timeout, no retries (kiosk must never hang; N5: llm.py untouched)
-                import anthropic
-                client = anthropic.Anthropic(timeout=GEN_TIMEOUT_S, max_retries=0)
-                model = AnthropicLLM(model_id, gcfg["max_tokens"], client=client, temperature=temp)
-            verify = functools.partial(citation.verify_citations, r.conn)
-            with b.lock:   # the LLM call and verification read through r.conn
+            # The model gets only the budget left after retrieval, never more than the flat cap.
+            model_budget = min(GEN_TIMEOUT_S, BUDGET_S - t_ret - MODEL_MARGIN_S)
+            if model_budget < MODEL_FLOOR_S:   # retrieval already ate the budget: show the record now
+                _log_timing(b.name, t_ret, 0.0, "degraded:budget", len(hits))
+                return degraded("budget", pool_rows, hits, pr.conn)
+
+            t_model = time.monotonic()
+            try:
+                if b.llm is not None:
+                    model = b.llm
+                elif kind == "stub":
+                    model = make_llm("stub", model_id, gcfg["max_tokens"])
+                else:                            # real provider: budget-aware hard timeout, no retries (N5: llm.py untouched)
+                    import anthropic
+                    client = anthropic.Anthropic(timeout=model_budget, max_retries=0)
+                    model = AnthropicLLM(model_id, gcfg["max_tokens"], client=client, temperature=temp)
+                verify = functools.partial(citation.verify_citations, pr.conn)
                 ans = compose(clean, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
-        except Exception:  # noqa: BLE001 - offline / timeout / provider error -> show the record, not a raw error (N6)
-            return degraded("model_unreachable", pool, hits)
+            except Exception:  # noqa: BLE001 - offline / timeout / provider error -> show the record, not a raw error (N6)
+                _log_timing(b.name, t_ret, time.monotonic() - t_model, "degraded:model_unreachable", len(hits))
+                return degraded("model_unreachable", pool_rows, hits, pr.conn)
 
-        result = {"answer": ans.to_dict(),
-                  "evidence": evidence_rows(pool, ans.verified_citations, {h["passage_id"] for h in hits}, b.pages_dir)}
-        b.cache.put(key, result)   # flagged + date_method are computed on serve below, never stored (like cached=)
-        result["answer"]["cached"] = None
-        with b.lock:
-            _attach_date_method(r.conn, result["evidence"])
-        result["flagged"] = flags.detect(result["evidence"])
-        return result
+            result = {"answer": ans.to_dict(),
+                      "evidence": evidence_rows(pool_rows, ans.verified_citations, {h["passage_id"] for h in hits}, b.pages_dir)}
+            b.cache.put(key, result)   # flagged + date_method are computed on serve below, never stored (like cached=)
+            result["answer"]["cached"] = None
+            _attach_date_method(pr.conn, result["evidence"])
+            result["flagged"] = flags.detect(result["evidence"])
+            _log_timing(b.name, t_ret, time.monotonic() - t_model, "abstain" if ans.abstained else "answer", len(hits))
+            return result
 
     @app.get("/health")
     def health(scope: Optional[str] = None) -> dict:

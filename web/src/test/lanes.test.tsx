@@ -24,7 +24,9 @@ describe("EvidenceTrail", () => {
     const lanes = within(screen.getByTestId("lanes")).getAllByRole("heading", { level: 3 });
     expect(lanes.map((h) => h.textContent?.split(" ")[0])).toEqual(["1960s", "1970s", "1980s", "1990s", "2000s", "undated"]);
     expect(screen.getAllByText(/no passages retrieved/)).toHaveLength(3); // 1960s, 1980s, 2000s
-    expect(screen.getAllByText("Cited")).toHaveLength(1);
+    // Exactly one CARD is marked Cited (the "what these labels mean" key also shows the term, so
+    // scope the count to the lanes, not the whole trail).
+    expect(within(screen.getByTestId("lanes")).getAllByText("Cited")).toHaveLength(1);
     const timeline = screen.getByRole("navigation", { name: "Decades" });
     expect(within(timeline).getByRole("button", { name: /1970s: 1 retrieved, 40 matching/ })).toBeInTheDocument();
     expect(within(timeline).getByRole("button", { name: /1960s: 0 retrieved, 0 matching/ })).toHaveClass("is-zero");

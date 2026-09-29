@@ -9,10 +9,12 @@
 // otherwise leads with a real curated example, not a slogan).
 export const ATTRACT_HOOK = "The record argues with itself.";
 export const ATTRACT_SUBHOOK =
-  "See what the Canadian government said about public health from 1960 to 2009, and when it changed.";
+  "See what the Canadian government said about public health, and when it changed.";
 
-// Tile selection: qids from /examples (cached, non-flagged). Order is the tile order.
-export const TILE_QIDS = ["q034", "q032", "q033", "q038", "q001", "q027"];
+// Tile selection: qids from /examples (cached, non-flagged). Order is the tile order. Led by q001
+// (a strong 5-sentence, 3-citation answer, verified against the cache) so the first tap is a rich
+// cited answer rather than a duplicate of the hero's compare (q034).
+export const TILE_QIDS = ["q001", "q027", "q038", "q034", "q032", "q033"];
 
 // The payoff label under every tile, so the reward is clear before tapping.
 export const TILE_CALLOUT = "See what the government said, and when it changed";

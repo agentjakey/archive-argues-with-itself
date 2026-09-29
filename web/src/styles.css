@@ -35,6 +35,29 @@ input {
   outline-offset: 2px;
 }
 
+/* Skip link: the first focusable element, off-screen until focused, then a solid chip at top-left
+   that jumps to the single #main-content landmark. Paper on ink (~15:1). The transition is quieted
+   by the reduced-motion rule below. */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 60;
+  transform: translateY(-200%);
+  transition: transform 0.15s ease;
+  background: theme("colors.ink");
+  color: theme("colors.paper");
+  padding: 0.5rem 0.9rem;
+  border-radius: 2px;
+  text-decoration: none;
+  font-family: theme("fontFamily.sans");
+  font-size: 0.875rem;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 /* --- type --- */
 .excerpt {
   @apply font-serif leading-relaxed;

@@ -44,6 +44,19 @@ export function EvidenceTrail({ rows, salientTerms, pinned, heading, matched, on
         Legend: <span className="text-ink">retrieved</span> is passages returned for your question;{" "}
         <span className="text-ink">matched</span> is passages anywhere in the corpus that mention your terms.
       </p>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-sm text-muted">What these labels mean</summary>
+        <ul className="mt-2 space-y-1.5 text-sm leading-snug max-w-prose">
+          <li><span className="cited">Cited</span> <span className="text-muted">used in the answer above: the passage exists, was retrieved for this question, and links to a real page on archive.org.</span></li>
+          <li><span className="tag">lexical</span> <span className="text-muted">matched by keyword search (BM25).</span></li>
+          <li><span className="tag">semantic</span> <span className="text-muted">matched by meaning (dense vector search).</span></li>
+          <li><span className="tag">front matter</span> / <span className="tag">back matter</span> <span className="text-muted">a title page, contents, index, or reference list; scored down in ranking, never removed.</span></li>
+          <li><span className="tag">not sent to the model</span> <span className="text-muted">retrieved into the pool, but not among the passages the model was given.</span></li>
+          <li><span className="tag">date from metadata</span> / <span className="tag">date from the title</span> <span className="text-muted">how the item's date was resolved; recorded, never guessed.</span></li>
+          <li><span className="text-muted"><span className="text-ink">jurisdiction</span> the issuer's jurisdiction, a proxy and a floor, not a verified per-item claim.</span></li>
+          <li><span className="text-muted"><span className="text-ink">uncertain OCR</span> the scan's text may be garbled; open the page to read it.</span></li>
+        </ul>
+      </details>
       <ol className="mt-4" data-testid="lanes">
         {[...lanes.entries()].map(([decade, list]) => (
           <li key={decade} id={laneId(decade)} className="lane" data-empty={list.length === 0}>

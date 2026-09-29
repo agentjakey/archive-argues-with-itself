@@ -9,7 +9,7 @@ import { Page, Source } from "./Page";
 export function HowItWorks({ scope }: { scope?: ScopeInfo | null }) {
   const isMicrolog = scope?.name === "microlog";
   const cw = scope?.coverage_window;
-  const windowStr = cw && cw.min_year != null && cw.max_year != null ? `${cw.min_year} to ${cw.max_year}` : "about 1960 to 2009";
+  const windowStr = cw && cw.min_year != null && cw.max_year != null ? `${cw.min_year} to ${cw.max_year}` : "the years it covers";
   return (
     <Page title="How this works">
       <p>
