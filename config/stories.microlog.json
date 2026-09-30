@@ -1,0 +1,30 @@
+[
+  {
+    "id": "microlog-communicable-disease-1987-2009",
+    "question": "What did the Canada Communicable Disease Report describe about notifiable disease trends?",
+    "filters": {},
+    "pins": ["micro_IA40243213_0884#13:0", "micro_IA40244215_3271#11:1"],
+    "caption": "1987: an Alberta annual report describes the province monitoring notifiable diseases and advising local health units, hospitals, and physicians under a new Public Health Act. 2009: a Canada Communicable Disease Report supplement sets out how the Public Health Agency of Canada pools case data across jurisdictions and publishes national surveillance summaries. A provincial watch, then a national one."
+  },
+  {
+    "id": "microlog-drinking-water-1984-2012",
+    "question": "What did drinking-water quality guidelines recommend about contaminants?",
+    "filters": {},
+    "pins": ["micro_IA40243512_0687#300:0", "micro_IA24402414_0343#53:0"],
+    "caption": "1984: a federal report on drinking water warns that conventional treatment cannot remove some contaminants, and presses for a safe drinking water act. 2011: British Columbia's progress report describes water quality already measured by routine sampling at the treatment plant and through the distribution system. A case for the law, then a monitoring program running."
+  },
+  {
+    "id": "microlog-immunization-1984-2016",
+    "question": "What did National Advisory Committee on Immunization statements recommend about immunization schedules?",
+    "filters": {},
+    "pins": ["micro_IA40243513_0439#13:1", "micro_IA40242402_2632#11:2"],
+    "caption": "1984: the federal Guide to Immunization sets the routine, measles, mumps and rubella given together and repeated when an immune globulin got in the way. 2016: a Canada Communicable Disease Report works through a measles outbreak, asking for earlier and repeated contact with primary care and emergency departments to catch what the routine missed. Writing the schedule, then chasing what slipped past it."
+  },
+  {
+    "id": "microlog-cancer-registry-1990-2006",
+    "question": "What did reports describe about cancer incidence or cancer registry data?",
+    "filters": {},
+    "pins": ["micro_IA40242803_0845#48:0", "micro_IA40243316_0548#40:0"],
+    "caption": "1990: Prince Edward Island's health annual report describes a provincial tumour registry sending cancer incidence data to Statistics Canada from two hospitals' pathology labs. 2006: the Alberta Cancer Board publishes a regional cancer picture from its own registry of every new cancer and cancer death in the province. A small registry reporting up, a large one reporting out."
+  }
+]

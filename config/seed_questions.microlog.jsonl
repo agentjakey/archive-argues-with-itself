@@ -1,0 +1,11 @@
+# Microlog demo seed-examples (author-decided, N4). Candidate question text + scoping only; no
+# labels, no expected answers. Model-proposed, author-decided per reports/microlog/candidate_gold_labels.json;
+# the same model family generates the tool's answers, so this judge is not independent of the system.
+{"qid":"mq02","topic":"communicable_disease","qtype":"factual","filters":{},"text":"What did the Canada Communicable Disease Report describe about notifiable disease trends?"}
+{"qid":"mq04","topic":"immunization","qtype":"factual","filters":{},"text":"What did National Advisory Committee on Immunization statements recommend about immunization schedules?"}
+{"qid":"mq08","topic":"occupational_health","qtype":"factual","filters":{},"text":"What did workers' compensation board reports describe about occupational injury claims?"}
+{"qid":"mq10","topic":"drinking_water","qtype":"factual","filters":{},"text":"What did drinking-water quality guidelines recommend about contaminants?"}
+{"qid":"mq13","topic":"cancer","qtype":"factual","filters":{},"text":"What did reports describe about cancer incidence or cancer registry data?"}
+{"qid":"mq22","topic":"tobacco","qtype":"factual","filters":{},"text":"What did reports describe about tobacco control or smoking reduction programs?"}
+{"qid":"mq40","topic":"sars","qtype":"factual","filters":{},"text":"What did reports describe about the SARS outbreak of 2003?"}
+{"qid":"mq41","topic":"covid19","qtype":"abstention_probe","filters":{},"text":"What did reports describe about the COVID-19 pandemic response in 2020?"}

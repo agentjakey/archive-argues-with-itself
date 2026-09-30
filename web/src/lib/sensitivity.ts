@@ -5,6 +5,9 @@
 import type { Flagged } from "../types";
 
 // 1. Entry advisory: persistent, small, shown at app entry.
+// The compact, always-visible one-liner; the full advisory below is the expandable "why".
+export const ENTRY_ADVISORY_SHORT =
+  "Reader discretion: some documents carry outdated or harmful language.";
 export const ENTRY_ADVISORY =
   "This tool surfaces Canadian government public-health documents. Some contain " +
   "outdated, inaccurate, or harmful language and reflect the government's position at the time. " +

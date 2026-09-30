@@ -677,17 +677,24 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                       own_retriever=own)
 
     def _extra_bundle(name) -> Optional[Bundle]:
-        """Build one additional scope, or None if it cannot be served here because its
-        databases are not present (e.g. the festival volume holds only the pilot). A missing
-        or broken extra scope never breaks serving the base, so the deploy is unaffected."""
+        """Build one additional scope, or None if it cannot be served here because its databases are
+        not present (e.g. the festival volume holds only the pilot). A missing or broken extra scope
+        never breaks serving the base, so the deploy is unaffected. Its curated demo surfaces (stories
+        and seed examples) live in the repo config as config/stories.<name>.json and
+        config/seed_questions.<name>.jsonl, so they ship in the image and load on both local and the
+        deploy; a scope with neither falls back cleanly to no gallery and an empty /examples. The data
+        dir remains a backward-compatible fallback for a stories file placed next to the database."""
         try:
             rs = scopes.resolve_scope(name)
             if not (Path(rs.db_path).exists() and Path(rs.index_path).exists()):
                 return None
             cache_p = Path(rs.db_path).parent / "cache" / "answers.db"     # isolated, never the pilot's cache
-            story_file = Path(rs.db_path).parent / "stories.json"          # optional; absent -> no stories
+            repo_stories = Path("config") / f"stories.{name}.json"
+            story_file = repo_stories if repo_stories.exists() else Path(rs.db_path).parent / "stories.json"
+            repo_seed = Path("config") / f"seed_questions.{name}.jsonl"
+            seed_p = repo_seed if repo_seed.exists() else None
             return _build_bundle(name, cfg_path=rs.config_path, retr=None, cache_p=cache_p,
-                                 seed_p=None, stories_list=load_stories(story_file), llm_obj=None)
+                                 seed_p=seed_p, stories_list=load_stories(story_file), llm_obj=None)
         except Exception:  # noqa: BLE001 - a bad extra scope is skipped, never fatal to the base serve
             return None
 

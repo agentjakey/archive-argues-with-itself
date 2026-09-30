@@ -87,6 +87,22 @@ export default function App() {
     [asked, askedFilters, pins, kiosk, offline],
   );
 
+  // The nav "Ask" returns to the landing AND focuses the ask input, so asking is one click from any
+  // page. Coming from another page, the focus-on-nav effect below does it (flagged here); when
+  // already on the landing the view does not change, so the effect will not fire and we focus now.
+  const focusAskNext = useRef(false);
+  const goAsk = useCallback(() => {
+    const already = view === null;
+    focusAskNext.current = true;
+    goView(null);
+    if (already) {
+      focusAskNext.current = false;
+      const input = document.getElementById("question") as HTMLInputElement | null;
+      input?.scrollIntoView({ behavior: "smooth", block: "center" });
+      input?.focus({ preventScroll: true });
+    }
+  }, [view, goView]);
+
   // Back/forward buttons move between the ask view and the reading pages.
   useEffect(() => {
     const onPop = () => setView(readState(window.location.search).view ?? null);
@@ -107,6 +123,15 @@ export default function App() {
     if (!navigated.current) {
       navigated.current = true;
       return;
+    }
+    if (focusAskNext.current) {
+      focusAskNext.current = false;
+      const input = document.getElementById("question") as HTMLInputElement | null;
+      if (input) {
+        input.scrollIntoView({ behavior: "smooth", block: "center" });
+        input.focus({ preventScroll: true });
+        return;
+      }
     }
     const target = document.getElementById("page-heading") ?? document.getElementById("main-content");
     target?.focus({ preventScroll: true });
@@ -450,10 +475,13 @@ export default function App() {
   // Per-scope, from the active scope's live composition (same source as the strip and subtitle),
   // never the no-scope /health corpus, so the coverage caption reads the active corpus's figure.
   const undatedShare = activeScopeInfo?.composition?.undated?.passage_share ?? null;
-  // The "watch it refuse" doorway runs the COVID-2020 out-of-window probe (q039) through the existing
-  // pick/ask path. It is a real seed example of the active scope, so the card appears only when the
-  // question is actually available (present on the pilot, absent on a scope that does not carry it).
-  const refuseExample = chips.find((c) => c.qid === "q039") ?? null;
+  // The "watch it refuse" doorway is scope-aware: the pilot runs q039, microlog runs mq41, both real
+  // out-of-record COVID-2020 probes that abstain. It is a real seed example of the active scope,
+  // pulled from that scope's /examples, so the card appears only when the question is actually
+  // available (a scope without it, or with no examples, shows no refuse card).
+  const refuseQid = activeScopeInfo?.name === "microlog" ? "mq41" : "q039";
+  const refuseExample = chips.find((c) => c.qid === refuseQid) ?? null;
+  const refuseCeiling = activeScopeInfo?.coverage_window?.max_year ?? null;
   // A one-line summary for the collapsed "About this corpus" strip, from the same live per-scope
   // composition the strip itself reads, so the summary and the opened band can never disagree.
   const strip = activeScopeInfo?.composition ?? null;
@@ -473,9 +501,9 @@ export default function App() {
         kiosk={kiosk}
         view={view}
         onView={goView}
+        onAsk={goAsk}
         scopes={scopesInfo?.scopes ?? null}
         activeScope={initial.current.scope ?? scopesInfo?.default ?? ""}
-        activeScopeInfo={activeScopeInfo}
         onSwitchScope={switchScope}
       />
       <EntryAdvisory />
@@ -509,7 +537,7 @@ export default function App() {
               The public record disagrees with itself across decades. See the pages.
             </p>
             <p className="mt-2 max-w-prose text-muted">
-              Every claim is cited to a scanned page, and it refuses when the record is thin.
+              Cited to the page, and silent when the record is thin.
             </p>
           </section>
           <StoryGallery stories={stories} loading={storiesLoading} onOpen={openStory} />
@@ -524,8 +552,8 @@ export default function App() {
               <span className="block font-sans text-xs uppercase tracking-wide text-muted">Watch it refuse</span>
               <span className="mt-1 block max-w-prose font-serif text-xl leading-snug">{refuseExample.text}</span>
               <span className="mt-1 block max-w-prose text-sm text-muted">
-                The record goes quiet after 2009. Ask it about 2020 and it declines rather than guess, showing the
-                coverage gap instead.
+                The record goes quiet after {refuseCeiling ?? "its last year"}. Ask it about 2020 and it declines
+                rather than guess, showing the coverage gap instead.
               </span>
               <span className="mt-2 block font-sans text-sm text-ink underline decoration-transparent underline-offset-2 group-hover:decoration-current">
                 Run this question

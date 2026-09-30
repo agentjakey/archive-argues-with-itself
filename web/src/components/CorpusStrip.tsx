@@ -27,6 +27,15 @@ export function CorpusStrip({ scope }: Props) {
             <Figure value={formatShare(c.undated.item_share)} label="of items undated" />
             <Figure value={formatShare(c.jurisdiction_unknown_share)} label="jurisdiction unknown" />
           </dl>
+          {scope.collection && scope.collection_url && (
+            <p className="mt-2 text-sm text-muted">
+              Source:{" "}
+              <a className="linkish" href={scope.collection_url} target="_blank" rel="noopener noreferrer">
+                {scope.collection} on archive.org
+              </a>
+              {scope.blurb ? `. ${scope.blurb}.` : "."}
+            </p>
+          )}
           <p className="mt-2 text-sm text-muted">{spanNote(hasWindow ? cov : null, c.dated_span)}</p>
           {c.jurisdiction_is_floor && (
             <p className="mt-1 text-sm text-muted">

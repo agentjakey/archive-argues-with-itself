@@ -7,9 +7,9 @@ interface Props {
   kiosk: boolean;
   view: View | null;
   onView: (view: View | null) => void;
+  onAsk?: () => void;               // nav "Ask": return to the landing AND focus the ask input
   scopes?: ScopeInfo[] | null;      // more than one -> the switcher renders; null/one -> hidden
   activeScope?: string;
-  activeScopeInfo?: ScopeInfo | null;   // the active scope's facts, for the subtitle and the corpus strip
   onSwitchScope?: (name: string) => void;
 }
 
@@ -23,41 +23,37 @@ const LINKS: { view: View; label: string }[] = [
   { view: "about", label: "About" },
 ];
 
-// A lighter, secondary nav: muted by default so it never competes with the hero's primary
-// action; the active page reads in ink, and any link inks in on hover.
+// A lighter, secondary nav: muted by default so it never competes with the content; the active page
+// reads in ink, and any link inks in on hover.
 const navCls = (active: boolean) =>
   `bg-transparent border-0 p-0 cursor-pointer font-sans text-sm underline-offset-2 hover:underline ${
     active ? "text-ink underline" : "text-muted hover:text-ink"
   }`;
 
-export function Header({ kiosk, view, onView, scopes, activeScope, activeScopeInfo, onSwitchScope }: Props) {
-  const cw = activeScopeInfo?.coverage_window;
+/** The slim persistent band: title, nav, and (multi-scope only) the compact scope switcher. The
+ *  framing lives once on the landing, the corpus provenance in the "About this corpus" disclosure,
+ *  and the discretion note is its own compact line, so this band stays short on every page. */
+export function Header({ kiosk, view, onView, onAsk, scopes, activeScope, onSwitchScope }: Props) {
   return (
-    <header className="mb-6">
+    <header className="mb-5">
       <div className="flex items-start justify-between gap-6">
-        <div>
-          <h1 className="font-serif text-3xl leading-tight">
-            <button type="button" className="linkish no-underline font-serif text-3xl" onClick={() => onView(null)}>
-              Archive Argues With Itself
-            </button>
-          </h1>
-          <p className="mt-2 max-w-prose text-muted">
-            An evidence trail with page-level provenance over Canadian government public-health
-            publications. Not a chatbot.
-          </p>
-          {activeScopeInfo && cw && cw.min_year != null && cw.max_year != null && (
-            <p className="mt-1 max-w-prose text-sm text-muted">
-              {activeScopeInfo.label}, {cw.min_year} to {cw.max_year}
-            </p>
-          )}
-        </div>
+        <h1 className="font-serif text-3xl leading-tight">
+          <button type="button" className="linkish no-underline font-serif text-3xl" onClick={() => onView(null)}>
+            Archive Argues With Itself
+          </button>
+        </h1>
         {kiosk && <KioskQr />}
       </div>
       <nav
-        className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-rule pt-2"
+        className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-rule pt-2"
         aria-label="Pages"
       >
-        <button type="button" className={navCls(view === null)} aria-current={view === null ? "page" : undefined} onClick={() => onView(null)}>
+        <button
+          type="button"
+          className={navCls(view === null)}
+          aria-current={view === null ? "page" : undefined}
+          onClick={onAsk ?? (() => onView(null))}
+        >
           Ask
         </button>
         {LINKS.map((l) => (
