@@ -85,11 +85,16 @@ export function AskBar({ question, filters, busy, kiosk, scope, onQuestion, onFi
           </button>
         </div>
         {!kiosk && (
-          <div className="flex flex-col min-[700px]:flex-row gap-2">
-            <Select label="Period" value={filters.period ?? ""} options={PERIODS} onChange={(v) => set("period", v)} disabled={busy} />
-            <Select label="Jurisdiction" value={filters.jurisdiction ?? ""} options={JURISDICTIONS} onChange={(v) => set("jurisdiction", v)} disabled={busy} />
-            <Select label="Document type" value={filters.doc_type ?? ""} options={DOC_TYPES} onChange={(v) => set("doc_type", v)} disabled={busy} />
-          </div>
+          // Filters are collapsed by default so the ask box stays a single clean line; the selects
+          // are always in the DOM (a native disclosure), so a set filter still applies and restores.
+          <details className="filters">
+            <summary className="cursor-pointer font-sans text-sm text-muted">Filters</summary>
+            <div className="mt-2 flex flex-col min-[700px]:flex-row gap-2">
+              <Select label="Period" value={filters.period ?? ""} options={PERIODS} onChange={(v) => set("period", v)} disabled={busy} />
+              <Select label="Jurisdiction" value={filters.jurisdiction ?? ""} options={JURISDICTIONS} onChange={(v) => set("jurisdiction", v)} disabled={busy} />
+              <Select label="Document type" value={filters.doc_type ?? ""} options={DOC_TYPES} onChange={(v) => set("doc_type", v)} disabled={busy} />
+            </div>
+          </details>
         )}
       </form>
     </section>

@@ -3,8 +3,7 @@ import { AbstentionCard } from "./components/AbstentionCard";
 import { AnswerCard } from "./components/AnswerCard";
 import { LimitedModeCard } from "./components/LimitedModeCard";
 import { AskBar } from "./components/AskBar";
-import { LandingHero } from "./components/LandingHero";
-import { QuestionTiles } from "./components/QuestionTiles";
+import { StoryGallery } from "./components/Stories";
 import { CompareView } from "./components/CompareView";
 import { CorpusStrip } from "./components/CorpusStrip";
 import { CoveragePanel } from "./components/CoveragePanel";
@@ -35,7 +34,6 @@ import { useScopes } from "./hooks/useScopes";
 import { useScopeExamples } from "./hooks/useScopeExamples";
 import { useStories } from "./hooks/useStories";
 import { ask as apiAsk, flag as apiFlag } from "./lib/api";
-import { TILE_QIDS } from "./lib/attract";
 import { applyState, documentTitle, readState, type View } from "./lib/urlstate";
 import { mergeFlagged, needsInterstitial } from "./lib/sensitivity";
 import { PROVINCE_SLUGS } from "./lib/coverage";
@@ -189,18 +187,6 @@ export default function App() {
   );
 
   const onAsk = useCallback(() => ask(question.trim(), filters), [ask, question, filters]);
-
-  // The hero's one primary action: bring the visitor to the ask box and focus it. Offline (no ask
-  // box) falls back to scrolling to the curated questions, so the button always lands somewhere real.
-  const focusAsk = useCallback(() => {
-    const input = document.getElementById("question") as HTMLInputElement | null;
-    if (input) {
-      input.scrollIntoView({ behavior: "smooth", block: "center" });
-      input.focus({ preventScroll: true });
-    } else {
-      document.getElementById("tiles-region")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, []);
 
   // A story asks its question and shows its two pinned pages side by side, whatever
   // the retrieval pool holds.
@@ -464,9 +450,10 @@ export default function App() {
   // Per-scope, from the active scope's live composition (same source as the strip and subtitle),
   // never the no-scope /health corpus, so the coverage caption reads the active corpus's figure.
   const undatedShare = activeScopeInfo?.composition?.undated?.passage_share ?? null;
-  // Attract tiles: the curated non-flagged cached questions, in config order, pulled from
-  // /examples so their text and filters match the cache exactly (offline-instant on tap).
-  const tiles = TILE_QIDS.map((id) => chips.find((c) => c.qid === id)).filter((e): e is Example => Boolean(e));
+  // The "watch it refuse" doorway runs the COVID-2020 out-of-window probe (q039) through the existing
+  // pick/ask path. It is a real seed example of the active scope, so the card appears only when the
+  // question is actually available (present on the pilot, absent on a scope that does not carry it).
+  const refuseExample = chips.find((c) => c.qid === "q039") ?? null;
   // A one-line summary for the collapsed "About this corpus" strip, from the same live per-scope
   // composition the strip itself reads, so the summary and the opened band can never disagree.
   const strip = activeScopeInfo?.composition ?? null;
@@ -517,23 +504,39 @@ export default function App() {
       <main id="main-content" tabIndex={-1}>
       {showStories && (
         <>
-          <LandingHero
-            stories={stories}
-            loading={storiesLoading}
-            canAsk={!offline}
-            busy={busy}
-            onAsk={focusAsk}
-            onOpenStory={openStory}
-            onOpen={setDrawer}
-          />
-          <div id="tiles-region" className="mt-6">
-            <QuestionTiles tiles={tiles} onPick={pick} disabled={busy} />
-          </div>
+          <section className="my-4" aria-label="What this is">
+            <p className="max-w-prose font-serif text-2xl leading-snug">
+              The public record disagrees with itself across decades. See the pages.
+            </p>
+            <p className="mt-2 max-w-prose text-muted">
+              Every claim is cited to a scanned page, and it refuses when the record is thin.
+            </p>
+          </section>
+          <StoryGallery stories={stories} loading={storiesLoading} onOpen={openStory} />
+          {refuseExample && (
+            <button
+              type="button"
+              onClick={() => pick(refuseExample)}
+              disabled={busy}
+              aria-label={`Watch the tool decline: ${refuseExample.text}`}
+              className="rule-left group block w-full cursor-pointer bg-transparent text-left disabled:opacity-60"
+            >
+              <span className="block font-sans text-xs uppercase tracking-wide text-muted">Watch it refuse</span>
+              <span className="mt-1 block max-w-prose font-serif text-xl leading-snug">{refuseExample.text}</span>
+              <span className="mt-1 block max-w-prose text-sm text-muted">
+                The record goes quiet after 2009. Ask it about 2020 and it declines rather than guess, showing the
+                coverage gap instead.
+              </span>
+              <span className="mt-2 block font-sans text-sm text-ink underline decoration-transparent underline-offset-2 group-hover:decoration-current">
+                Run this question
+              </span>
+            </button>
+          )}
         </>
       )}
       {!offline && (
-        <div className={showStories ? "mt-6" : undefined}>
-          {showStories && <p className="mb-2 text-sm text-muted">Or ask your own question:</p>}
+        <div className={showStories ? "mt-8" : undefined}>
+          {showStories && <p className="mb-2 text-sm text-muted">Or ask the record your own question:</p>}
           <AskBar
             question={question}
             filters={filters}
