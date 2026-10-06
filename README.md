@@ -267,8 +267,8 @@ and [`SECURITY.md`](SECURITY.md).
 
 ## Acknowledgements
 
-Built during the AI Builders Fellowship of the BC + AI Ecosystem, with the Internet
-Archive, whose collections, OCR, and page images make the tool possible. Page images
+Built during the AI Builders Fellowship of the BC + AI Ecosystem, with Internet
+Archive Canada, whose collections, OCR, and page images make the tool possible. Page images
 are served by archive.org and are not redistributed here. The publications are Canadian
 government documents and remain under their own terms.
 

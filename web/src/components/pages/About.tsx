@@ -26,9 +26,9 @@ export function About({ scope }: { scope?: ScopeInfo | null }) {
         <a className="linkish" href="https://bc-ai.ca" target="_blank" rel="noopener noreferrer">
           BC + AI Ecosystem
         </a>
-        , with the{" "}
-        <a className="linkish" href="https://archive.org" target="_blank" rel="noopener noreferrer">
-          Internet Archive
+        , with{" "}
+        <a className="linkish" href="https://internetarchivecanada.org" target="_blank" rel="noopener noreferrer">
+          Internet Archive Canada
         </a>
         , whose collections, OCR and page images make it possible.{" "}
         {scope ? (

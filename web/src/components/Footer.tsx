@@ -6,7 +6,7 @@ export function Footer({ onAbout }: Props) {
   return (
     <footer className="mt-12 border-t border-rule pt-4 text-sm text-muted">
       <p>
-        Built during the AI Builders Fellowship of the BC + AI Ecosystem, with the Internet Archive.{" "}
+        Built during the AI Builders Fellowship of the BC + AI Ecosystem, with Internet Archive Canada.{" "}
         <a className="linkish" href="https://archive-argues-with-itself-production.up.railway.app" target="_blank" rel="noopener noreferrer">
           Live demo
         </a>
