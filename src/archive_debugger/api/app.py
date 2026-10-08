@@ -25,7 +25,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from archive_debugger import crisis, flags, scopes
@@ -71,6 +71,15 @@ GEN_TIMEOUT_S = 20.0                 # hard cap on one generation call; the kios
 BUDGET_S = 26.0                      # per-request wall-clock budget (< 30s client timeout)
 MODEL_MARGIN_S = 1.0                 # reserve for verification + response building + the network return
 MODEL_FLOOR_S = 2.0                  # below this remaining, skip the model and show the record (limited mode)
+# Retrieval is a flat exact dense scan; cold it can run far longer than the client's 30s abort, and it
+# is a single uninterruptible SQLite C call. So the dense scan gets its own hard deadline, enforced by
+# sqlite3's cross-thread interrupt(): if retrieval overruns, the scan is aborted and /ask returns the
+# designed limited-mode state (a 200) well before the client would give up. The deadline is set under
+# the budget with room for the model floor + the response return, so retrieval can never be the thing
+# that races the client timeout. A retrieval interrupted mid-scan has no hits, so limited mode shows the
+# message and the ask box, not a populated record; a populated record before the abort requires
+# retrieval to actually finish in time (the warm/readiness work and, if needed, the A4 in-memory path).
+RETRIEVAL_DEADLINE_S = BUDGET_S - MODEL_FLOOR_S - MODEL_MARGIN_S   # hard cap on the dense scan (< budget)
 POOL_SIZE = 8                        # read-only connections per scope, so concurrent asks do not serialize
 MAX_QUESTION_CHARS = 500             # server-side defense in depth; the web input caps lower
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://archive-argues-with-itself-production.up.railway.app")
@@ -81,8 +90,32 @@ _DEGRADE_MSG = {
     "model_unreachable": "offline: showing the record, read the source yourself; the live version at {url} generates answers.",
     "rate_limited": "one moment: showing the record below while the answer service catches up.",
     "budget": "one moment: this question ran long, so here is the record below rather than keep you waiting.",
+    "retrieval_slow": "this search ran long and stopped before it finished. Try it again, or pick an example or story below.",
     "empty": "type a question to search the record.",
 }
+
+
+class _RetrievalTimeout(Exception):
+    """The dense scan overran its deadline and was interrupted; show limited mode, never hang."""
+
+
+def _bounded_retrieve(conn: sqlite3.Connection, deadline_s: float, fn):
+    """Run a retrieval callable under a hard wall-clock deadline enforced by sqlite3's cross-thread
+    interrupt(). Returns fn()'s value, or raises _RetrievalTimeout when the scan was interrupted (or
+    when no time was left to start). Read-only; a completed call is byte-identical to calling fn()
+    directly, so retrieval results and the audited numbers are unchanged."""
+    if deadline_s <= 0:
+        raise _RetrievalTimeout()
+    timer = threading.Timer(deadline_s, conn.interrupt)
+    timer.start()
+    try:
+        return fn()
+    except sqlite3.OperationalError as exc:
+        if "interrupt" in str(exc).lower():
+            raise _RetrievalTimeout() from exc
+        raise
+    finally:
+        timer.cancel()
 
 
 def _log_timing(scope: str, retrieval_s: float, model_s: float, outcome: str, n_hits: int) -> None:
@@ -724,6 +757,14 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         requested_landing = default_scope or os.environ.get(ENV_DEFAULT_SCOPE) or DEFAULT_LANDING
         app.state.landing_scope = resolve_landing_scope(requested_landing, list(bundles), base.name)
         app.state.model_ratelimit = RateLimiter(RATE_BURST, RATE_REFILL)   # one process-wide model budget
+        # Readiness gate: /health reports "warming" (503) until every own-retriever scope's first _warm
+        # completes, so a redeploy/restart does not route an uncached ask into the cold window where the
+        # first dense scan pages the whole index off the volume. With no own retrievers to warm (tests,
+        # an injected retriever) readiness is immediate, so the hermetic API tests still see /health 200.
+        app.state.ready = threading.Event()
+        needs_warm = any(b.own_retriever for b in bundles.values())
+        if not needs_warm:
+            app.state.ready.set()
         # Back-compat aliases: the pilot request path and offline_walkthrough (which patches
         # app.state.cache.put) see the default bundle exactly as the single-scope app did.
         app.state.retriever = base.retriever
@@ -747,6 +788,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     print(f"[boot-warm] scope={b.name} warmed in {time.monotonic() - t0:.1f}s", flush=True)
                 except Exception:  # noqa: BLE001 - warming is best-effort, never fatal to serving
                     pass
+            app.state.ready.set()   # readiness only after every own scope's index is warm in the OS cache
         threading.Thread(target=_warm_all, name="boot-warm", daemon=True).start()
         try:
             yield
@@ -832,7 +874,16 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         # would give up. Retrieval reads through the pooled connection, never the base lock.
         t_start = time.monotonic()
         with b.pool.checkout() as pr:
-            pool_rows, hits = retrieve_pool(pr, clean, build_filters(filters), gcfg["top_k"])
+            # Retrieval under its own hard deadline: a cold/overlong dense scan is interrupted and we
+            # return limited mode (a 200) before the client's 30s abort, instead of sitting inside one
+            # uninterruptible SQLite call while the client gives up and shows the scary timeout.
+            try:
+                pool_rows, hits = _bounded_retrieve(
+                    pr.conn, RETRIEVAL_DEADLINE_S,
+                    lambda: retrieve_pool(pr, clean, build_filters(filters), gcfg["top_k"]))
+            except _RetrievalTimeout:
+                _log_timing(b.name, time.monotonic() - t_start, 0.0, "degraded:retrieval_slow", 0)
+                return degraded("retrieval_slow", [], [], pr.conn)
             t_ret = time.monotonic() - t_start
 
             if kind == "anthropic" and b.llm is None and not _key_available():
@@ -874,10 +925,17 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             return result
 
     @app.get("/health")
-    def health(scope: Optional[str] = None) -> dict:
+    def health(scope: Optional[str] = None):
+        """Readiness-gated: while any own-retriever scope's index is still warming this returns a 503
+        with status 'warming', so the deploy platform does not cut traffic over to a cold instance
+        where the first uncached scan would page the whole index off the volume. Once warm it is the
+        same 200 corpus-facts payload as before (plus a 'ready' flag)."""
         b = _bundle(scope)
-        return {"status": "ok", "provider": b.provider or b.gcfg["provider"], "model": b.gcfg["model"],
-                "corpus": b.corpus}
+        ready = app.state.ready.is_set()
+        payload = {"status": "ok" if ready else "warming", "ready": ready,
+                   "provider": b.provider or b.gcfg["provider"], "model": b.gcfg["model"],
+                   "corpus": b.corpus}
+        return payload if ready else JSONResponse(payload, status_code=503)
 
     @app.get("/scopes")
     def scopes_view() -> dict:

@@ -78,6 +78,13 @@ input {
   letter-spacing: 0.08em;
 }
 
+/* The one metadata tag that carries real honesty meaning (a pooled row the model never saw) stays
+   legible rather than muted: readable words, a little more contrast, a quiet dotted underline. */
+.tag-note {
+  @apply font-sans text-xs text-ink;
+  border-bottom: 1px dotted theme("colors.muted");
+}
+
 .cited {
   @apply font-sans text-xs text-accent;
   font-variant-caps: all-small-caps;
@@ -327,10 +334,16 @@ body.kiosk .chip {
 }
 
 .sk-page {
-  height: 320px;
-  max-width: 420px;
+  height: 180px;
+  max-width: 320px;
   border: 1px solid theme("colors.rule");
   border-radius: 2px;
+}
+
+/* Reserve the answer region's vertical space so content landing does not shift the page (the
+   skeleton and the real answer occupy the same minimum height). */
+.answer-region {
+  min-height: 220px;
 }
 
 @keyframes sk-shimmer {

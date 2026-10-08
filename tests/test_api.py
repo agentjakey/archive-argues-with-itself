@@ -316,3 +316,33 @@ def test_spa_fallback_serves_index_when_dist_exists(tmp_path):
         assert c.get("/some/client/route").text == "<h1>app</h1>"   # fallback
         assert c.get("/health").json()["status"] == "ok"          # API routes still win
         assert c.get("/ask", params={"q": "vaccination hospital"}).status_code == 200  # GET /ask beats the catch-all
+
+
+def test_health_reports_ready_when_warm(tmp_path):
+    # An injected retriever has no own pool to warm, so readiness is immediate and /health is a 200
+    # with status "ok" and ready true (the deploy gate only holds traffic while a real index warms).
+    r, _ = _retriever(tmp_path, [("a", 1990, "ontario")])
+    with TestClient(_app(tmp_path, r)) as c:
+        body = c.get("/health")
+        assert body.status_code == 200
+        j = body.json()
+        assert j["status"] == "ok" and j["ready"] is True
+
+
+def test_bounded_retrieve_no_time_left_degrades():
+    # The retrieval deadline helper raises _RetrievalTimeout when no time is left (so /ask returns the
+    # designed limited-mode state), and passes a value straight through when there is time. A real scan
+    # interrupt is exercised by the running app, not here; this locks the no-time and pass-through paths.
+    import pytest
+    from archive_debugger.api.app import _bounded_retrieve, _RetrievalTimeout
+    r, _ = _retriever_conn()
+    with pytest.raises(_RetrievalTimeout):
+        _bounded_retrieve(r, 0.0, lambda: 1 / 0)          # deadline <= 0: never even starts fn
+    assert _bounded_retrieve(r, 5.0, lambda: "ok") == "ok"   # time left: plain pass-through
+    r.close()
+
+
+def _retriever_conn():
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    return conn, None

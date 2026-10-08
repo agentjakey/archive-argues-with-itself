@@ -10,7 +10,7 @@ export function AbstentionCard({ answer }: Props) {
   const terms = answer.coverage.uncovered_terms;
   return (
     <article className="rule-left" role="status" aria-labelledby="abstain-heading">
-      <h2 id="abstain-heading" className="font-serif text-2xl">
+      <h2 id="abstain-heading" className="font-serif text-xl">
         No answer from the record
       </h2>
       <p className="mt-3 max-w-prose leading-relaxed">{answer.abstention_text}</p>

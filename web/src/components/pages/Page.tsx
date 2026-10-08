@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 export function Page({ title, children }: { title: string; children: ReactNode }) {
   return (
     <main id="main-content" tabIndex={-1} className="reading" aria-labelledby="page-heading">
-      <h2 id="page-heading" tabIndex={-1} className="font-serif text-2xl">
+      <h2 id="page-heading" tabIndex={-1} className="font-serif text-xl">
         {title}
       </h2>
       <div className="mt-3 max-w-prose leading-relaxed reading-body">{children}</div>

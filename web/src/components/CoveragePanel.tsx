@@ -19,7 +19,7 @@ export function CoveragePanel({ coverage, undatedShare, explanation, scope }: Pr
   const dateClause = share ? `${share} of passages carry no date` : "some passages carry no date";
   return (
     <section className="mt-8" aria-labelledby="coverage-heading">
-      <h2 id="coverage-heading" className="font-serif text-2xl">
+      <h2 id="coverage-heading" className="font-serif text-xl">
         {explanation ? "Why the record is thin here" : "Coverage"}
       </h2>
       {!coverage ? (

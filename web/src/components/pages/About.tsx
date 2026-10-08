@@ -43,9 +43,23 @@ export function About({ scope }: { scope?: ScopeInfo | null }) {
       </p>
       <h3>Where the pages come from</h3>
       <p>
-        Every page image you see is served by archive.org from the Internet Archive's own copies; this tool
-        redistributes none of them. Each evidence card and citation links to the page on archive.org. The
-        text the tool searches is the Internet Archive's existing OCR of those scans.
+        The pages come from Internet Archive Canada, hosted on archive.org. Every page image you see is served
+        by archive.org from the Internet Archive's own copies; this tool redistributes none of them. Each
+        evidence card and citation links to the page on archive.org. The text the tool searches is the Internet
+        Archive's existing OCR of those scans.
+      </p>
+      <h3>How to read the record</h3>
+      <p>
+        The record is not neutral. People decided what to document, what language to use, and how events were
+        framed.
+      </p>
+      <h3>Care and consent</h3>
+      <p>
+        Some of this material touches on harm. We keep it searchable and grounded, with every claim supported
+        by a source page, but we keep it out of the featured stories until the consent and governance work is
+        done. We follow the CARE principles for Indigenous data governance (collective benefit, authority to
+        control, responsibility, and ethics) and the First Nations principles of OCAP (ownership, control,
+        access, and possession).
       </p>
       <h3>The publications</h3>
       <p>

@@ -18,6 +18,10 @@ export function HowItWorks({ scope }: { scope?: ScopeInfo | null }) {
         evidence allows it, writes a short answer in which every sentence points at the page it came from. When
         the evidence does not allow it, the tool says so instead.
       </p>
+      <p>
+        The record is not neutral. People decided what to document, what language to use, and how events were
+        framed.
+      </p>
 
       <h3>Four rules that never move</h3>
       <ol>

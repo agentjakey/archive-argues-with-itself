@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useEscape } from "../hooks/useKeyboard";
 import { highlight } from "../lib/highlight";
-import { shortTitle, yearLabel } from "../lib/format";
+import { jurisdictionLabel, shortTitle, yearLabel } from "../lib/format";
 import { ocrUncertain } from "../lib/sensitivity";
 import { OcrBadge } from "./OcrBadge";
 import type { EvidenceRow } from "../types";
@@ -91,8 +91,10 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
             <div key={row.passage_id} className="min-w-0">
               <div className="flex items-baseline gap-2 border-b border-rule pb-1">
                 {tag && <span className="tag">{tag}</span>}
-                <span className="font-serif text-2xl">{yearLabel(row.year)}</span>
-                <span className="text-sm text-muted">{row.jurisdiction ?? "unknown"}</span>
+                <span className="font-serif text-lg">{yearLabel(row.year)}</span>
+                {jurisdictionLabel(row.jurisdiction) && (
+                  <span className="text-sm text-muted">{jurisdictionLabel(row.jurisdiction)}</span>
+                )}
                 {row.offline && (
                   <span className="tag ml-auto" title="Served from the local scan pack, no network">
                     local scan

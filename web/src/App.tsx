@@ -16,7 +16,7 @@ import { ExampleChips } from "./components/ExampleChips";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { PageDrawer } from "./components/PageDrawer";
-import { AnswerSkeleton } from "./components/AnswerSkeleton";
+import { AnswerSkeleton, SkeletonBody } from "./components/AnswerSkeleton";
 import { useAsk } from "./hooks/useAsk";
 import { useCoverage } from "./hooks/useCoverage";
 import { useExamples } from "./hooks/useExamples";
@@ -71,6 +71,11 @@ export default function App() {
   // True while a chosen decade absent from the unfiltered pool is being filled on demand with a
   // period-filtered retrieval, so the compare view shows progress instead of appearing to do nothing.
   const [decadeCompareLoading, setDecadeCompareLoading] = useState(false);
+  // When a period fill is interrupted or times out (not a genuine empty result), hold the two periods
+  // so the honest "did not finish in time" note can offer a retry, and run the same elapsed counter
+  // the main skeleton uses so the two-phase wait reads as one process (A2.3, A3).
+  const [decadeRetry, setDecadeRetry] = useState<{ a: Period; b: Period } | null>(null);
+  const [decadeElapsed, setDecadeElapsed] = useState(0);
   const { stories, loading: storiesLoading } = useStories();
   const scopesInfo = useScopes();
   const activeScopeInfo =
@@ -389,24 +394,38 @@ export default function App() {
     const question = asked;
     const terms = response.answer.coverage.salient_terms ?? [];
 
-    const settle = (rowA: EvidenceRow | null, rowB: EvidenceRow | null) => {
+    const settle = (rowA: EvidenceRow | null, rowB: EvidenceRow | null, timedOut: Set<Period>) => {
       setDecadeCompareLoading(false);
       if (rowA && rowB) {
         setDecadeCompare({ a: rowA, b: rowB, terms });
         setDecadeCompareNote(null);
-      } else {
-        setDecadeCompare(null);
-        const empty = [!rowA ? a : null, !rowB ? b : null].filter(Boolean).join(" and ");
+        setDecadeRetry(null);
+        return;
+      }
+      setDecadeCompare(null);
+      const missing = [!rowA ? a : null, !rowB ? b : null].filter(Boolean) as Period[];
+      const slow = missing.filter((p) => timedOut.has(p));
+      if (slow.length > 0) {
+        // A fill that did not finish in time is NOT an absence in the record. Say so plainly and
+        // offer a retry; never present a timeout as "the record has no passage here" (A2.3).
+        setDecadeRetry({ a, b });
         setDecadeCompareNote(
-          `The record has no passage in ${empty} for this question, even when the search is narrowed ` +
-            `to that period, so there is nothing to compare there. Try another decade or a different question.`,
+          `The search for ${slow.join(" and ")} did not finish in time, so this comparison is not ` +
+            `ready yet. Nothing is missing from the record; the search just ran long. Try it again.`,
+        );
+      } else {
+        setDecadeRetry(null);
+        setDecadeCompareNote(
+          `The record has no passage in ${missing.join(" and ")} for this question, even when the ` +
+            `search is narrowed to that period, so there is nothing to compare there. Try another ` +
+            `decade or a different question.`,
         );
       }
     };
 
     const picked = pickDecadeRows(response.evidence, a, b);
     if (picked.missing.length === 0) {
-      settle(picked.rowA, picked.rowB);
+      settle(picked.rowA, picked.rowB, new Set());
       return;
     }
 
@@ -415,18 +434,27 @@ export default function App() {
     Promise.all(
       picked.missing.map((p) =>
         apiAsk({ question, filters: { period: p }, provider: "stub" })
-          .then((r) => ({ p, row: r.evidence.find((e) => periodOfRow(e) === p) ?? null }))
-          .catch(() => ({ p, row: null as EvidenceRow | null })),
+          // A degraded stub response (budget or an interrupted scan) did not complete normally, so
+          // its missing row is a timeout, not a real absence; a thrown error (client abort / network)
+          // is likewise "did not finish," never an absence.
+          .then((r) => ({
+            p,
+            row: r.evidence.find((e) => periodOfRow(e) === p) ?? null,
+            timedOut: Boolean(r.degraded),
+          }))
+          .catch(() => ({ p, row: null as EvidenceRow | null, timedOut: true })),
       ),
     ).then((fills) => {
       if (cancelled) return;
       let rowA = picked.rowA;
       let rowB = picked.rowB;
-      for (const { p, row } of fills) {
+      const timedOut = new Set<Period>();
+      for (const { p, row, timedOut: to } of fills) {
         if (row && p === a) rowA = row;
         if (row && p === b) rowB = row;
+        if (!row && to) timedOut.add(p);
       }
-      settle(rowA, rowB);
+      settle(rowA, rowB, timedOut);
     });
     return () => {
       cancelled = true;
@@ -438,7 +466,18 @@ export default function App() {
     setDecadeCompareNote(null);
     setDecadeCompareLoading(false);
     setPendingDecadeCompare(null);
+    setDecadeRetry(null);
   }, []);
+
+  // Elapsed counter for the two-decade fill, so its "looking for a passage" state carries the same
+  // honest progress signal as the main skeleton. Resets to 0 when the fill starts, ticks each second.
+  useEffect(() => {
+    if (!decadeCompareLoading) return;
+    setDecadeElapsed(0);
+    const t0 = Date.now();
+    const id = window.setInterval(() => setDecadeElapsed(Math.round((Date.now() - t0) / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, [decadeCompareLoading]);
 
   const togglePin = useCallback(
     (row: EvidenceRow) => {
@@ -471,6 +510,14 @@ export default function App() {
   // post-hoc pin adds the note without re-gating the result the visitor is already reading.
   const resultFlagged = mergeFlagged(response?.flagged ?? null, storyFlagged);
   const flagged = mergeFlagged(resultFlagged, pinFlagged);
+  // The contextual note and its support line belong only where a flagged document or answer is
+  // actually shown (a normal answer, a compare pair, or a limited-mode card). On a pure abstention
+  // or a coverage-gap refuse nothing is foregrounded, so suppress them there: a suicide crisis line
+  // must never appear on a "the record is silent here" result, and the flagship refuse must not put
+  // harm-adjacent content on screen (D1). The flagged content stays fully searchable and reachable.
+  const abstentionOnly = !!response && response.answer.abstained && !response.degraded && !compare;
+  const showContextualNote =
+    !!flagged && !abstentionOnly && !decadeCompareLoading && decadeCompareNote === null;
   const busy = status === "waiting";
   // Per-scope, from the active scope's live composition (same source as the strip and subtitle),
   // never the no-scope /health corpus, so the coverage caption reads the active corpus's figure.
@@ -481,7 +528,6 @@ export default function App() {
   // available (a scope without it, or with no examples, shows no refuse card).
   const refuseQid = activeScopeInfo?.name === "microlog" ? "mq41" : "q039";
   const refuseExample = chips.find((c) => c.qid === refuseQid) ?? null;
-  const refuseCeiling = activeScopeInfo?.coverage_window?.max_year ?? null;
   // A one-line summary for the collapsed "About this corpus" strip, from the same live per-scope
   // composition the strip itself reads, so the summary and the opened band can never disagree.
   const strip = activeScopeInfo?.composition ?? null;
@@ -533,32 +579,30 @@ export default function App() {
       {showStories && (
         <>
           <section className="my-4" aria-label="What this is">
-            <p className="max-w-prose font-serif text-2xl leading-snug">
-              The public record disagrees with itself across decades. See the pages.
+            <p className="max-w-prose text-base leading-relaxed sm:text-lg">
+              Ask a question of Canada's public health record and you can see how the government's own
+              wording shifted over the decades, instead of one collapsed summary. Every claim links back
+              to the page it came from, so you can check it yourself. When the record is too thin to
+              answer, the tool says so and shows you the gap.
             </p>
-            <p className="mt-2 max-w-prose text-muted">
-              Cited to the page, and silent when the record is thin.
+            <p className="mt-3 max-w-prose border-l-2 border-rule pl-4 text-sm text-ink">
+              If the tool makes a claim, you should be able to trace it back to the page that supports it.
             </p>
           </section>
           <StoryGallery stories={stories} loading={storiesLoading} onOpen={openStory} />
           {refuseExample && (
-            <button
-              type="button"
-              onClick={() => pick(refuseExample)}
-              disabled={busy}
-              aria-label={`Watch the tool decline: ${refuseExample.text}`}
-              className="rule-left group block w-full cursor-pointer bg-transparent text-left disabled:opacity-60"
-            >
-              <span className="block font-sans text-xs uppercase tracking-wide text-muted">Watch it refuse</span>
-              <span className="mt-1 block max-w-prose font-serif text-xl leading-snug">{refuseExample.text}</span>
-              <span className="mt-1 block max-w-prose text-sm text-muted">
-                The record goes quiet after {refuseCeiling ?? "its last year"}. Ask it about 2020 and it declines
-                rather than guess, showing the coverage gap instead.
-              </span>
-              <span className="mt-2 block font-sans text-sm text-ink underline decoration-transparent underline-offset-2 group-hover:decoration-current">
-                Run this question
-              </span>
-            </button>
+            <p className="mt-6 max-w-prose text-sm text-muted">
+              <button
+                type="button"
+                onClick={() => pick(refuseExample)}
+                disabled={busy}
+                aria-label={`See the tool decline: ${refuseExample.text}`}
+                className="linkish text-ink disabled:opacity-60"
+              >
+                See it decline
+              </button>
+              : ask about a year the record does not cover, like 2020, and it shows the gap instead of guessing.
+            </p>
           )}
         </>
       )}
@@ -603,7 +647,7 @@ export default function App() {
           <Interstitial flagged={resultFlagged!} onContinue={() => setFlaggedAck(true)} onBack={goHome} />
         ) : (
         <>
-          {flagged && <ContextualNote flagged={flagged} />}
+          {showContextualNote && <ContextualNote flagged={flagged!} />}
           {activeScopeInfo && <SourceLine scope={activeScopeInfo} />}
           {askedFilters.jurisdiction &&
             PROVINCE_SLUGS.has(askedFilters.jurisdiction) &&
@@ -622,11 +666,10 @@ export default function App() {
                 Two decades of the record, side by side
               </p>
               {decadeCompareLoading ? (
-                <div className="card mt-4">
-                  <p className="leading-relaxed" aria-live="polite">
-                    Looking for a passage from each decade for this question...
-                  </p>
-                </div>
+                <SkeletonBody
+                  heading="Two decades of the record, side by side"
+                  caption={`Looking for a passage from each decade for this question. ${decadeElapsed} s.`}
+                />
               ) : compare ? (
                 <CompareView
                   a={compare[0]}
@@ -639,9 +682,20 @@ export default function App() {
               ) : (
                 <div className="card mt-4">
                   <p className="leading-relaxed">{decadeCompareNote}</p>
-                  <button type="button" className="chip mt-3" onClick={clearDecadeCompare}>
-                    Back to the answer
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {decadeRetry && (
+                      <button
+                        type="button"
+                        className="chip chip-primary"
+                        onClick={() => onCompareDecades(asked, decadeRetry.a, decadeRetry.b)}
+                      >
+                        Try the comparison again
+                      </button>
+                    )}
+                    <button type="button" className="chip" onClick={clearDecadeCompare}>
+                      Back to the answer
+                    </button>
+                  </div>
                 </div>
               )}
             </>
@@ -673,11 +727,14 @@ export default function App() {
                 />
               )}
 
-              <details className="evidence-disclosure">
+              {/* The evidence trail is the point of the tool, so it is open by default (keyed per
+                  answer so a new question re-opens it); the summary stays a working control to
+                  collapse it for readers who want to focus on the answer. */}
+              <details key={asked} className="evidence-disclosure" open>
                 <summary>
                   {response.answer.abstained
-                    ? `Nearest evidence: ${plural(response.evidence.length, "passage")} by decade. Open to read the pages.`
-                    : `Full evidence trail and coverage: ${plural(response.evidence.length, "passage")} by decade. Open to read every page and the coverage grid.`}
+                    ? `Nearest evidence: ${plural(response.evidence.length, "passage")} by decade. Collapse to focus on the answer.`
+                    : `Full evidence trail and coverage: ${plural(response.evidence.length, "passage")} by decade. Collapse to focus on the answer.`}
                 </summary>
                 <EvidenceTrail
                   rows={response.evidence}

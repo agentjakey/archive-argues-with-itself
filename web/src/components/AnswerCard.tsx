@@ -30,7 +30,7 @@ export function AnswerCard({ answer, byId, onOpen }: Props) {
   const topN = topCite ? numbered.get(topCite.passage_id) ?? 0 : 0;
   return (
     <article className="rule-left" aria-labelledby="answer-heading">
-      <h2 id="answer-heading" className="font-serif text-2xl">
+      <h2 id="answer-heading" className="font-serif text-xl">
         Answer from the record
       </h2>
       <div className="mt-3 max-w-prose leading-relaxed">

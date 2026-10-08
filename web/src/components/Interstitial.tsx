@@ -17,7 +17,7 @@ export function Interstitial({ flagged, onContinue, onBack }: Props) {
     <main>
       <section className="card mt-6" role="group" aria-labelledby="interstitial-heading">
         <p className="font-sans text-xs uppercase tracking-wide text-muted">{INTERSTITIAL_COPY.eyebrow}</p>
-        <h2 id="interstitial-heading" className="font-serif text-2xl">
+        <h2 id="interstitial-heading" className="font-serif text-xl">
           {INTERSTITIAL_COPY.heading}
         </h2>
         <p className="mt-3 max-w-prose leading-relaxed">{INTERSTITIAL_COPY.body}</p>

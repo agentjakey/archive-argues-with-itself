@@ -98,6 +98,15 @@ export function dateMethodLabel(row: Pick<EvidenceRow, "year" | "date_method">):
   }
 }
 
+/** The jurisdiction label for an evidence or compare row, or null when the issuer was not
+ *  identified. "unknown" is a real state (the issuer-derived proxy could not place the item), so
+ *  rather than render the bare word, callers suppress the label and show year + title only, which
+ *  reads as a clean record instead of a data gap. */
+export function jurisdictionLabel(j: string | null | undefined): string | null {
+  if (!j || j === "unknown") return null;
+  return j.replace(/_/g, " ");
+}
+
 /** The one-line explanation shown on hover and in the page drawer. */
 export function dateMethodDetail(row: Pick<EvidenceRow, "year" | "date_method">): string {
   if (row.year == null || row.date_method === "unknown")

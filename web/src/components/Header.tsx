@@ -35,10 +35,10 @@ const navCls = (active: boolean) =>
  *  and the discretion note is its own compact line, so this band stays short on every page. */
 export function Header({ kiosk, view, onView, onAsk, scopes, activeScope, onSwitchScope }: Props) {
   return (
-    <header className="mb-5">
+    <header className="mb-4">
       <div className="flex items-start justify-between gap-6">
-        <h1 className="font-serif text-3xl leading-tight">
-          <button type="button" className="linkish no-underline font-serif text-3xl" onClick={() => onView(null)}>
+        <h1 className="font-serif text-2xl leading-tight">
+          <button type="button" className="linkish no-underline font-serif text-2xl" onClick={() => onView(null)}>
             Archive Argues With Itself
           </button>
         </h1>

@@ -14,7 +14,7 @@ function GapsHero({ start, end }: { start: number; end: number }) {
   return (
     <div className="rule-left my-4">
       <p className="font-sans text-xs uppercase tracking-wide text-muted">What this record leaves out</p>
-      <p className="mt-1 font-serif text-2xl leading-snug">
+      <p className="mt-1 font-serif text-lg leading-snug">
         The readable record runs {start} to {end}, then goes quiet. Nothing here reaches the present.
       </p>
       <div className="mt-3 flex h-3 w-full max-w-prose overflow-hidden border border-ink bg-paper" aria-hidden="true">

@@ -36,7 +36,7 @@ os.environ["ANTHROPIC_BASE_URL"] = "http://offline.invalid"
 REPO = Path(r"C:/Users/profe/OneDrive/Desktop/python/archive-argues-with-itself")
 os.chdir(REPO)
 
-VALID_REASONS = {"no_key", "model_unreachable", "rate_limited", "empty"}
+VALID_REASONS = {"no_key", "model_unreachable", "rate_limited", "budget", "retrieval_slow", "empty"}
 GREEN, RED = "OK  ", "FAIL"
 
 
