@@ -727,7 +727,10 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 locked = _LockedEmbedder(r.embedder)   # shared across the pool; guards the ~35ms embed
                 pool_rs = []
                 for _ in range(POOL_SIZE):
-                    pr = Retriever(cfg_path, embedder=locked, cfg=r.cfg)
+                    # Share the base's resident dense index (A4) across every pooled connection, so the
+                    # ~1-2 GB array is held once per scope, not POOL_SIZE times. None when the numpy
+                    # backend is off, so the pool keeps the sqlite-vec leg exactly as before.
+                    pr = Retriever(cfg_path, embedder=locked, cfg=r.cfg, dense_index=r.dense_index)
                     _enable_mmap(pr.conn)
                     pool_rs.append(pr)
                 pool = ConnPool(pool_rs)

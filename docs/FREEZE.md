@@ -14,6 +14,59 @@ the generation logic (`src/archive_debugger/generate/llm.py`,
 (`reports/phase16/audit_numbers.json`). No change in the hardening phases may move a
 published metric or alter these files.
 
+One deliberate, approved exception has since been taken against this set: the dense
+retrieval leg in `src/archive_debugger/retrieve/search.py` was changed for A4 (in-memory
+dense retrieval) and the pilot eval was re-frozen on the new backend. See "## A4:
+in-memory dense retrieval (approved re-freeze)" below. Everything else in the frozen set
+is still byte-identical to the baseline.
+
+## A4: in-memory dense retrieval (approved re-freeze)
+
+A4 replaces the dense leg's per-row sqlite-vec scan with an exact, resident in-memory cosine
+(`CIVIC_DENSE_BACKEND=numpy`), because on the deployed instance an uncached microlog query
+spent about 23 seconds in the per-row scan (warming gave no gain; the index was not resident).
+The in-memory leg returns the identical dense candidate set (top-200, 200/200 on the pilot and
+microlog indexes) in tens of milliseconds. It is exact; the only movement is tie order at
+near-identical distances. This exception was explicitly approved, with a full re-eval and this
+re-freeze.
+
+Files changed for A4 (search.py is the one frozen-set file touched, by approval):
+- `src/archive_debugger/retrieve/dense.py` (new): the resident DenseIndex + exact cosine, a
+  memory-fit guard (reads the cgroup limit; falls back to sqlite-vec rather than OOM), and the
+  `CIVIC_DENSE_BACKEND` switch (default `sqlite`).
+- `src/archive_debugger/retrieve/search.py` (frozen, approved exception): `_dense` uses the
+  resident index when present; the sqlite-vec scan remains the default and the fallback.
+- `src/archive_debugger/api/app.py`: one resident index per scope, shared across the pool.
+- `pyproject.toml`: `numpy` pinned as a direct dependency.
+- `tests/test_retrieve.py`: a numpy-vs-sqlite parity test on the fixture.
+- `src/archive_debugger/eval/report.py`: records the dense backend in the eval report.
+
+Re-eval diff (pilot, the audited scope), sqlite -> numpy:
+- recall@5 / @10 / @20: unchanged (0.2438 / 0.4581 / 0.7276).
+- abstention leakage and unjudged@10/@20: unchanged.
+- nDCG@10: 0.5082 -> 0.5084, from one tie reorder on q021 (same retrieved set, order-sensitive
+  metric nudged). This is the single moved number.
+- microlog: recall over all 40 decided-gold seeds is unchanged (recall@5/10/20 identical; pooled
+  gold is insensitive); one of the 40 (mq39) has a top-10 set that differs by one passage, because
+  microlog has more near-tie distances. Diff run over the committed microlog gold
+  (`reports/microlog/gold_decisions.json`) with question text from the judgment worksheet; no
+  committed microlog eval-report harness exists (its civic.db carries no eval schema), so the
+  judgment-derived numbers (support, abstention) are the manual N2 audit and are backend-
+  independent (computed over the cached answers).
+
+Re-freeze performed here:
+- `reports/phase7/eval_report.json` and `.md` regenerated on `CIVIC_DENSE_BACKEND=numpy`; both
+  now record `dense backend: numpy`. nDCG@10 reads 0.5084.
+- Repository and test default stay on `sqlite`; the parity test guards equivalence; numpy is the
+  deploy variable only.
+
+Still carrying the pre-A4 (sqlite) retrieval numbers, to reconcile on numpy at the same commit
+(flagged, not silently changed): `docs/evaluation/retrieval_report.md` and
+`reports/phase16/audit_numbers.json` (`recall_final_gold.ndcg@10` = `[0.4174, 0.5082]`, parsed
+from that md). Regenerating the retrieval sweep on numpy is the clean way to update both; it is
+a separate step because it re-runs the full sweep and may surface further tie-order nudges. The
+headline recall values in those files are unchanged by A4; only nDCG@10 moves by +0.0002.
+
 ## Freeze baseline
 
 Baseline commit `ba29a88` ("update gate due to prompt phrase diffs"), the last commit
@@ -36,7 +89,7 @@ has not changed since:
 | frozen file | last modified |
 | --- | --- |
 | src/archive_debugger/stopwords.py | d7d02a9 (2026-09-11) |
-| src/archive_debugger/retrieve/search.py | bccbf78 (2026-09-11) |
+| src/archive_debugger/retrieve/search.py | bccbf78 (2026-09-11), then CHANGED by A4 (dense leg; approved re-freeze above) |
 | src/archive_debugger/retrieve/config.py | bccbf78 (2026-09-11) |
 | src/archive_debugger/generate/llm.py | ad32aa8 (2026-09-10) |
 | src/archive_debugger/generate/answer.py | ee81f3c (2026-09-11) |

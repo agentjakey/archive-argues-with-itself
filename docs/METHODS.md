@@ -76,13 +76,43 @@ Sources: README "Retrieval"; `reports/phase7/eval_report.md`;
 `docs/evaluation/retrieval_report.md`.
 
 BM25 over an FTS5 index and dense cosine search (384-dim
-`paraphrase-multilingual-MiniLM-L12-v2`, sqlite-vec, flat and exact) fused by
+`paraphrase-multilingual-MiniLM-L12-v2`, exact) fused by
 Reciprocal Rank Fusion (k = 60), a soft OCR-quality down-weight, and
-pre-filters on period, jurisdiction and document type. The retrieval pass added five
+pre-filters on period, jurisdiction and document type. The dense leg runs either as
+a sqlite-vec per-row flat scan or, with `CIVIC_DENSE_BACKEND=numpy` (the deploy
+default), as a resident in-memory exact cosine over the same vectors; both are exact
+(see "Dense backend" below). The retrieval pass added five
 independently switchable changes, all off by default until measured: front and
 back matter demotion, stopword dropping in the FTS query, a doc_type family
 filter, a per-item cap on the ranking, and a "later years" annotation. Section 6
 gives the measurements.
+
+### Dense backend (A4)
+
+The dense candidate leg can run two ways, both exact. The default historically was a
+sqlite-vec per-row `vec_distance_cosine` scan over the whole index. That scan is slow on a
+shared vCPU and, when the index is not held resident, re-reads it on every query (on the
+deployed instance an uncached microlog query spent about 23 seconds in it, with warming
+giving no gain because the index was not resident). The numpy backend
+(`CIVIC_DENSE_BACKEND=numpy`) loads each scope's vectors once at boot into a resident
+L2-normalized float32 array and does the dense leg as one vectorized exact cosine, which
+cuts it to tens of milliseconds.
+
+It is exact, not approximate: the returned dense candidate set is identical to the
+sqlite-vec scan on both indexes (top-200, 200 of 200 on the pilot and on microlog). The only
+change is tie order at near-identical distances. On the pilot evaluation this moves exactly
+one number, nDCG@10, from 0.5082 to 0.5084, from a single tie reorder on question q021;
+recall@5/10/20, the abstention leakage, and unjudged@k are unchanged. On the microlog index
+more passages sit at near-identical distances, so a tie reorder can shift the boundary of a
+query's final set rather than only its deep ordering; recall over all 40 decided-gold microlog
+seeds is unchanged (recall@5/10/20 identical; the pooled gold is insensitive to this), and one
+of the 40 (mq39) has a top-10 set that differs by one passage. This matters only for novel,
+uncached retrieval: the curated
+stories and the evaluated gold questions shown in the app are served from the answer cache,
+whose key is independent of the dense backend, so those answers are returned exactly as
+generated on the prior sqlite-vec backend. The repository and the test suite default to the
+sqlite backend; a parity test guards that numpy returns the same passage set on a fixture,
+and numpy is a deploy variable only.
 
 ## 4. Evaluation gold
 

@@ -19,8 +19,9 @@ from typing import Optional
 
 import sqlite_vec
 
-from archive_debugger.retrieve import citation
+from archive_debugger.retrieve import citation, dense
 from archive_debugger.retrieve.config import RetrieveConfig, load_retrieve_config
+from archive_debugger.retrieve.dense import DenseIndex
 from archive_debugger.retrieve.embed import Embedder, make_embedder
 from archive_debugger.retrieve.filters import Filters, build_where
 from archive_debugger.retrieve.fusion import apply_downweight, apply_section_weight, rrf
@@ -32,7 +33,7 @@ _YEAR = re.compile(r"\b(1[89]\d\d|20\d\d)\b")
 
 class Retriever:
     def __init__(self, config_path: Optional[Path], *, embedder: Optional[Embedder] = None,
-                 cfg: Optional[RetrieveConfig] = None):
+                 cfg: Optional[RetrieveConfig] = None, dense_index: Optional[DenseIndex] = None):
         self.cfg = cfg or load_retrieve_config(config_path)
         # Read-only. check_same_thread=False lets a server's worker threads use the one
         # connection; callers that share a Retriever across threads must serialize access.
@@ -45,6 +46,10 @@ class Retriever:
         self.embedder = embedder or make_embedder(self.cfg.embedder, self.cfg.embedding_model, self.cfg.embedding_dim)
         # A db built before Phase 13 has no section column; treat every page as body.
         self._has_sections = "section_class" in {r[1] for r in self.conn.execute("PRAGMA table_info(pages)")}
+        # Dense backend (A4): an injected resident index is reused (the server shares one across its
+        # pooled connections so the array is held once per scope); otherwise, when CIVIC_DENSE_BACKEND=
+        # numpy, build one from this connection, else None (keep the sqlite-vec scan). Default: None.
+        self.dense_index = dense_index if dense_index is not None else dense.load_if_enabled(self.conn)
 
     def close(self) -> None:
         self.conn.close()
@@ -67,6 +72,17 @@ class Retriever:
         return [r[0] for r in self.conn.execute(sql, [self._fts_query(query), *params, k])]
 
     def _dense(self, qvec: list[float], where: str, params: list, k: int) -> list[str]:
+        # A4: the resident numpy index does the dense leg as one exact vectorized cosine. A filter is
+        # applied by first resolving the passages it allows (the same passages/items WHERE as the SQL
+        # leg), so the result is 'filter then rank then limit', identical in set to the sqlite-vec scan
+        # (only tie order at identical distances may differ). No filter -> scan every vector.
+        if self.dense_index is not None:
+            allowed = None
+            if where:
+                allowed = [r[0] for r in self.conn.execute(
+                    "SELECT p.passage_id FROM passages p JOIN items i ON i.item_id = p.item_id "
+                    "WHERE 1 = 1" + where, params)]
+            return self.dense_index.search(qvec, allowed, k)
         sql = ("SELECT p.passage_id FROM vec.passages_vec v "
                "JOIN passages p ON p.passage_id = v.passage_id "
                "JOIN items i ON i.item_id = p.item_id "

@@ -312,3 +312,24 @@ def test_importing_retrieve_does_not_import_fastembed():
             "assert 'fastembed' not in sys.modules, 'fastembed imported at module load'")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
+
+
+def test_numpy_dense_backend_matches_sqlite(tmp_path, monkeypatch):
+    # The resident numpy dense leg (CIVIC_DENSE_BACKEND=numpy) returns the same passage set as the
+    # sqlite-vec scan on the fixture, for an unfiltered and a filtered query. Exactness on the real
+    # corpora is validated separately; this locks the code path and the filter (allowed-id) branch.
+    cfg = _fixture(tmp_path)
+    rs = search.Retriever(None, embedder=StubEmbedder(dim=64), cfg=cfg)          # sqlite (default)
+    monkeypatch.setenv("CIVIC_DENSE_BACKEND", "numpy")
+    rn = search.Retriever(None, embedder=StubEmbedder(dim=64), cfg=cfg)          # numpy backend
+    try:
+        assert rn.dense_index is not None and rn.dense_index.n > 0
+        assert rs.dense_index is None                                            # default stays sqlite-vec
+        for q, f in (("vaccination hospital", None),
+                     ("labour safety", Filters(jurisdiction="alberta"))):
+            hs = {h["passage_id"] for h in rs.search(q, filters=f, top_k=5)}
+            hn = {h["passage_id"] for h in rn.search(q, filters=f, top_k=5)}
+            assert hs == hn, (q, hs, hn)
+    finally:
+        rs.close()
+        rn.close()

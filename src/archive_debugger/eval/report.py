@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import tomllib
 from datetime import datetime, timezone
@@ -111,12 +112,18 @@ def run(config_path) -> dict:
         retriever.close()
         conn.close()
 
+    # Record which dense retrieval backend produced these numbers (A4): sqlite = the per-row
+    # sqlite-vec scan; numpy = the resident in-memory exact cosine. The backend is a serve/eval
+    # variable, so the report states it explicitly rather than leaving it implicit.
+    report["dense_backend"] = os.environ.get("CIVIC_DENSE_BACKEND", "sqlite").strip().lower()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "eval_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     lines = [
         "# Phase 7 eval report",
         "",
         f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC.",
+        "",
+        f"dense backend: {report['dense_backend']}",
         "",
         f"labeled questions: {report['labeled']} / {report['total']}",
         "",
