@@ -390,11 +390,15 @@ export default function App() {
   useEffect(() => {
     if (!pendingDecadeCompare || !response) return;
     const { a, b } = pendingDecadeCompare;
-    setPendingDecadeCompare(null);   // consume; the fill below finishes the resolution
+    // NOTE: do NOT clear pendingDecadeCompare here. Clearing it is a dependency change that re-runs
+    // this effect, whose cleanup then flips `cancelled` on the in-flight run, so settle() below would
+    // be skipped and the "Looking for a passage" state would hang forever when a fill is needed. The
+    // pending compare is consumed inside settle() instead, once the work is actually done.
     const question = asked;
     const terms = response.answer.coverage.salient_terms ?? [];
 
     const settle = (rowA: EvidenceRow | null, rowB: EvidenceRow | null, timedOut: Set<Period>) => {
+      setPendingDecadeCompare(null);   // consume only now that the comparison has resolved
       setDecadeCompareLoading(false);
       if (rowA && rowB) {
         setDecadeCompare({ a: rowA, b: rowB, terms });

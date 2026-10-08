@@ -63,7 +63,7 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <p className="font-sans text-xs uppercase tracking-wide text-muted">What the record said, then and later</p>
-          <h2 id="compare-title" className="font-serif text-3xl">
+          <h2 id="compare-title" className="font-serif text-xl">
             {title}
           </h2>
         </div>

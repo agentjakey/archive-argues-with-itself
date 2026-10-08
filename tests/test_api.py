@@ -346,3 +346,42 @@ def _retriever_conn():
     import sqlite3
     conn = sqlite3.connect(":memory:")
     return conn, None
+
+
+def test_bounded_retrieval_cancels_timer_and_cached_path_arms_none(tmp_path, monkeypatch):
+    # A cache miss arms exactly one retrieval-deadline timer and cancels it the instant retrieval
+    # finishes (so a stale timer can never fire after the pooled connection is returned and reused);
+    # the cached fast path arms no timer at all. Guards the "interrupt the next request" hazard.
+    import threading as _t
+    from archive_debugger.api import app as appmod
+
+    real_timer = _t.Timer   # capture before patching, so the tracker wraps the real one, not itself
+    created = []
+
+    class TrackingTimer:
+        def __init__(self, interval, function, *args, **kwargs):
+            self.started = self.cancelled = self.fired = False
+            self._fn = function
+            self._real = real_timer(interval, self._fire, *args, **kwargs)
+            created.append(self)
+
+        def _fire(self, *a, **k):
+            self.fired = True
+            return self._fn(*a, **k)
+
+        def start(self):
+            self.started = True
+            self._real.start()
+
+        def cancel(self):
+            self.cancelled = True
+            self._real.cancel()
+
+    monkeypatch.setattr(appmod.threading, "Timer", TrackingTimer)
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
+    with TestClient(_app(tmp_path, r, provider="stub")) as c:
+        c.post("/ask", json={"question": "vaccination hospital"})          # miss: arms one, cancels it
+        assert len(created) == 1
+        assert created[0].started and created[0].cancelled and not created[0].fired
+        c.post("/ask", json={"question": "vaccination hospital"})          # cached: arms nothing new
+        assert len(created) == 1

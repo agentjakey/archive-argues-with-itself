@@ -365,6 +365,42 @@ def _enable_mmap(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _mem_snapshot() -> tuple[Optional[int], Optional[int]]:
+    """Process resident-set size and the container memory limit, both in bytes, read from the local
+    filesystem only (no external call, N1). Returns None for a source that is unavailable (e.g. on
+    Windows, where /proc and the cgroup files do not exist), so reading it never fails the warm. The
+    limit comes from cgroup v2 (memory.max) or v1 (memory.limit_in_bytes); an unset/'max'/sentinel
+    value reads as None (no limit)."""
+    rss = None
+    try:
+        with open("/proc/self/status", "r", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("VmRSS:"):
+                    rss = int(line.split()[1]) * 1024   # kB -> bytes
+                    break
+    except OSError:
+        pass
+    limit = None
+    for path in ("/sys/fs/cgroup/memory.max",                       # cgroup v2
+                 "/sys/fs/cgroup/memory/memory.limit_in_bytes"):    # cgroup v1
+        try:
+            raw = Path(path).read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if raw and raw != "max":
+            try:
+                val = int(raw)
+            except ValueError:
+                break
+            limit = None if val > (1 << 50) else val   # v1 'unlimited' sentinel reads as no limit
+        break
+    return rss, limit
+
+
+def _mb_or_unknown(n: Optional[int]) -> str:
+    return f"{n / 1_000_000:.0f}" if n is not None else "unknown"
+
+
 def _warm(conn: sqlite3.Connection) -> None:
     """Read the dense index and passage text once so the OS page cache holds them: the first
     cache-miss dense scan then runs warm (CPU-bound) instead of cold (paging the whole index off the
@@ -786,6 +822,12 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     with b.pool.checkout() as wr:
                         _warm(wr.conn)
                     print(f"[boot-warm] scope={b.name} warmed in {time.monotonic() - t0:.1f}s", flush=True)
+                    # Residency check: after this scope's index is paged in, how much of the container
+                    # memory limit the process now holds, so a scope being evicted (RSS not growing to
+                    # hold both indexes) is visible in the logs. Read from the local filesystem only.
+                    rss, limit = _mem_snapshot()
+                    print(f"[mem] scope={b.name} rss_mb={_mb_or_unknown(rss)} "
+                          f"limit_mb={_mb_or_unknown(limit)}", flush=True)
                 except Exception:  # noqa: BLE001 - warming is best-effort, never fatal to serving
                     pass
             app.state.ready.set()   # readiness only after every own scope's index is warm in the OS cache
