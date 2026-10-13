@@ -11,8 +11,8 @@ interface Props {
  *  here," not "the archive does not cover this." The evidence trail renders below. */
 export function LimitedModeCard({ answer, degraded }: Props) {
   return (
-    <article className="rule-left" role="status" aria-labelledby="limited-heading">
-      <h2 id="limited-heading" className="font-serif text-xl">
+    <article className="settle rule-left" role="status" aria-labelledby="limited-heading">
+      <h2 id="limited-heading" className="screen-title">
         Showing the record, not a written answer
       </h2>
       <p className="mt-3 max-w-prose leading-relaxed">{answer.abstention_text}</p>

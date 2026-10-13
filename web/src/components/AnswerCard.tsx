@@ -29,8 +29,8 @@ export function AnswerCard({ answer, byId, onOpen }: Props) {
   const topRow = topCite ? byId.get(topCite.passage_id) : undefined;
   const topN = topCite ? numbered.get(topCite.passage_id) ?? 0 : 0;
   return (
-    <article className="rule-left" aria-labelledby="answer-heading">
-      <h2 id="answer-heading" className="font-serif text-xl">
+    <article className="settle rule-left" aria-labelledby="answer-heading">
+      <h2 id="answer-heading" className="screen-title">
         Answer from the record
       </h2>
       <div className="mt-3 max-w-prose leading-relaxed">
@@ -50,7 +50,7 @@ export function AnswerCard({ answer, byId, onOpen }: Props) {
       </p>
       {cached && <p className="mt-1 text-sm text-muted">{cached}</p>}
       {topRow?.page_image && !scanFailed && (
-        <figure className="mt-4 m-0 max-w-[420px]">
+        <figure className="mt-5 m-0 w-full max-w-[min(100%,620px)]">
           <button
             type="button"
             className="block w-full cursor-pointer border-0 bg-transparent p-0 text-left"
@@ -61,7 +61,7 @@ export function AnswerCard({ answer, byId, onOpen }: Props) {
               src={topRow.page_image}
               alt={`Scanned page behind citation ${topN}, ${shortTitle(topRow.title)}, leaf ${topRow.leaf_index}`}
               loading="eager"
-              className="w-full border border-rule bg-paper hover:border-ink"
+              className="page-artifact"
               onError={() => setScanFailed(true)}
             />
           </button>

@@ -42,10 +42,7 @@ export function ThresholdHero({ featured, onOpen }: Props) {
                   <span className="text-sm text-muted">{jurisdictionLabel(p.jurisdiction)}</span>
                 )}
               </span>
-              <span
-                className="page-artifact mt-2 block overflow-hidden"
-                style={{ height: "min(44vh, 440px)" }}
-              >
+              <span className="page-artifact mt-2 block h-[300px] overflow-hidden sm:h-[min(52vh,480px)]">
                 <img
                   src={p.page_image}
                   alt={`Scanned page, ${shortTitle(p.title)}, ${yearLabel(p.year)}`}

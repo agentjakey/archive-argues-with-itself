@@ -590,9 +590,6 @@ export default function App() {
               to the page it came from, so you can check it yourself. When the record is too thin to
               answer, the tool says so and shows you the gap.
             </p>
-            <p className="mt-3 max-w-prose border-l-2 border-rule pl-4 text-sm text-ink">
-              If the tool makes a claim, you should be able to trace it back to the page that supports it.
-            </p>
           </section>
           <ThresholdHero featured={stories[0] ?? null} onOpen={openStory} />
           <StoryGallery stories={stories.slice(1)} loading={storiesLoading} onOpen={openStory} />
