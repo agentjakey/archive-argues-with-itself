@@ -4,6 +4,7 @@ import { AnswerCard } from "./components/AnswerCard";
 import { LimitedModeCard } from "./components/LimitedModeCard";
 import { AskBar } from "./components/AskBar";
 import { StoryGallery } from "./components/Stories";
+import { ThresholdHero } from "./components/ThresholdHero";
 import { CompareView } from "./components/CompareView";
 import { CorpusStrip } from "./components/CorpusStrip";
 import { CoveragePanel } from "./components/CoveragePanel";
@@ -593,7 +594,8 @@ export default function App() {
               If the tool makes a claim, you should be able to trace it back to the page that supports it.
             </p>
           </section>
-          <StoryGallery stories={stories} loading={storiesLoading} onOpen={openStory} />
+          <ThresholdHero featured={stories[0] ?? null} onOpen={openStory} />
+          <StoryGallery stories={stories.slice(1)} loading={storiesLoading} onOpen={openStory} />
           {refuseExample && (
             <p className="mt-6 max-w-prose text-sm text-muted">
               <button

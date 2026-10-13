@@ -384,3 +384,82 @@ body.kiosk .chip {
   border-top: 5px solid theme("colors.muted");
   border-bottom: 0;
 }
+
+/* ---------------------------------------------------------------------------
+   Experience pass: one display scale, one spacing rhythm, scanned pages as
+   artifacts, and a single gentle settle. Motion is CSS only and is already
+   zeroed by the prefers-reduced-motion rule above, so with reduced motion on,
+   every .settle lands on its final state instantly and nothing is lost.
+   --------------------------------------------------------------------------- */
+
+/* Display scale. One dominant element per screen (the hero line, or the big
+   compare years), a clear second (lead / screen title), then body and meta.
+   rem-based and clamped, so they ride the root font clamp and the kiosk scale. */
+.display {
+  font-family: theme("fontFamily.serif");
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+  font-size: clamp(2rem, 1.1rem + 3.4vw, 3.25rem);
+}
+
+.screen-title {
+  font-family: theme("fontFamily.serif");
+  font-weight: 400;
+  line-height: 1.1;
+  font-size: clamp(1.5rem, 1.15rem + 1.3vw, 2.1rem);
+}
+
+.lead {
+  font-family: theme("fontFamily.serif");
+  line-height: 1.5;
+  font-size: clamp(1.05rem, 0.98rem + 0.5vw, 1.3rem);
+}
+
+/* The big year that carries the disagreement in the compare view. */
+.era-year {
+  font-family: theme("fontFamily.serif");
+  font-weight: 400;
+  line-height: 1;
+  font-size: clamp(2.1rem, 1.2rem + 2.8vw, 3.3rem);
+}
+
+/* A scanned page shown as an artifact: thin rule, paper ground, a soft shadow so
+   it reads as a real document lifted off the page. Used only where the scan is
+   the hero (the threshold feature and the compare). Working surfaces, like the
+   evidence-trail thumbnails and the reading drawer, keep their lighter styling. */
+.page-artifact {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: theme("colors.paper");
+  border: 1px solid theme("colors.rule");
+  box-shadow: 0 1px 2px rgba(28, 26, 23, 0.14), 0 10px 26px rgba(28, 26, 23, 0.10);
+}
+
+a:hover .page-artifact,
+button:hover .page-artifact {
+  border-color: theme("colors.ink");
+}
+
+/* One gentle settle on first paint of a resolved screen. Short, subtle, once per
+   mount, never a per-keystroke re-animation. fill-mode both so the reduced-motion
+   near-zero duration lands on the visible end state. */
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settle {
+  animation: settle 420ms ease-out both;
+}
+
+.settle-delay {
+  animation: settle 440ms ease-out 90ms both;
+}

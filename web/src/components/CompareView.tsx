@@ -63,7 +63,7 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
           <p className="font-sans text-xs uppercase tracking-wide text-muted">What the record said, then and later</p>
-          <h2 id="compare-title" className="font-serif text-xl">
+          <h2 id="compare-title" className="screen-title mt-1">
             {title}
           </h2>
         </div>
@@ -78,20 +78,20 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
       </div>
 
       {caption && (
-        <div className="mt-3 border-l-2 border-ink pl-3 max-w-prose">
+        <div className="mt-4 border-l-2 border-ink pl-4 max-w-prose">
           <p className="font-sans text-xs uppercase tracking-wide text-muted">What changed</p>
-          <p className="mt-1 leading-relaxed">{caption}</p>
+          <p className="lead mt-1 text-ink">{caption}</p>
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2">
+      <div className="mt-5 grid grid-cols-1 gap-8 sm:grid-cols-2">
         {columns.map((row, i) => {
           const tag = eraTag(row, columns[1 - i]);
           return (
             <div key={row.passage_id} className="min-w-0">
-              <div className="flex items-baseline gap-2 border-b border-rule pb-1">
+              <div className="flex items-baseline gap-3 border-b border-rule pb-2">
                 {tag && <span className="tag">{tag}</span>}
-                <span className="font-serif text-lg">{yearLabel(row.year)}</span>
+                <span className="era-year">{yearLabel(row.year)}</span>
                 {jurisdictionLabel(row.jurisdiction) && (
                   <span className="text-sm text-muted">{jurisdictionLabel(row.jurisdiction)}</span>
                 )}
@@ -101,7 +101,7 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
                   </span>
                 )}
               </div>
-              <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
+              <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
                 {shortTitle(row.title, 96)}
                 {ocrUncertain(row.ocr_quality) && <OcrBadge />}
               </p>
@@ -112,7 +112,7 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
               </blockquote>
               <button
                 type="button"
-                className="mt-3 block w-full cursor-pointer border-0 bg-transparent p-0 text-left"
+                className="mt-4 block w-full cursor-pointer border-0 bg-transparent p-0 text-left"
                 onClick={() => onOpen(row)}
                 aria-label={`View the scanned page for ${yearLabel(row.year)}`}
               >
@@ -120,7 +120,7 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
                   src={row.page_image}
                   alt={`Page image, ${shortTitle(row.title)}, leaf ${row.leaf_index}`}
                   loading="lazy"
-                  className="w-full border border-rule bg-paper hover:border-ink"
+                  className="page-artifact"
                 />
               </button>
               <div className="mt-3 flex flex-wrap gap-2">
