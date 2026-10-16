@@ -1,5 +1,6 @@
 import type { Flagged } from "../types";
-import { contextualNote } from "../lib/sensitivity";
+import { contextualNote, needsAttribution } from "../lib/sensitivity";
+import { AttributionNotice } from "./AttributionNotice";
 import { CrisisLines } from "./CrisisLines";
 
 interface Props {
@@ -14,6 +15,7 @@ export function ContextualNote({ flagged }: Props) {
     <aside className="rule-left mt-4" role="note" aria-label="A note on this record">
       <p className="font-sans text-xs uppercase tracking-wide text-muted">A note on this record</p>
       <p className="mt-1 max-w-prose leading-relaxed">{contextualNote(flagged)}</p>
+      {needsAttribution(flagged) && <AttributionNotice />}
       <CrisisLines lines={flagged.crisis_lines} />
     </aside>
   );

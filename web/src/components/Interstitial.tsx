@@ -1,5 +1,6 @@
 import type { Flagged } from "../types";
-import { INTERSTITIAL_COPY, contextualNote } from "../lib/sensitivity";
+import { INTERSTITIAL_COPY, contextualNote, needsAttribution } from "../lib/sensitivity";
+import { AttributionNotice } from "./AttributionNotice";
 import { CrisisLines } from "./CrisisLines";
 
 interface Props {
@@ -22,6 +23,7 @@ export function Interstitial({ flagged, onContinue, onBack }: Props) {
         </h2>
         <p className="mt-3 max-w-prose leading-relaxed">{INTERSTITIAL_COPY.body}</p>
         <p className="mt-3 max-w-prose leading-relaxed">{contextualNote(flagged)}</p>
+        {needsAttribution(flagged) && <AttributionNotice />}
         <CrisisLines lines={flagged.crisis_lines} />
         <div className="mt-4 flex flex-wrap gap-2">
           <button type="button" className="chip chip-primary" onClick={onContinue}>

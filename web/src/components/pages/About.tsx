@@ -55,11 +55,19 @@ export function About({ scope }: { scope?: ScopeInfo | null }) {
       </p>
       <h3>Care and consent</h3>
       <p>
-        Some of this material touches on harm. We keep it searchable and grounded, with every claim supported
-        by a source page, but we keep it out of the featured stories until the consent and governance work is
-        done. We follow the CARE principles for Indigenous data governance (collective benefit, authority to
-        control, responsibility, and ethics) and the First Nations principles of OCAP (ownership, control,
-        access, and possession).
+        Some of this material touches on harm, including harm done to Indigenous communities through the health
+        system. We keep it searchable and grounded, with every claim supported by a source page, but we keep it
+        out of the featured stories until the care and governance work is done.
+      </p>
+      <p>
+        Our handling is aligned with the CARE Principles for Indigenous Data Governance (collective benefit,
+        authority to control, responsibility, and ethics) and is informed by the Local Contexts Notices and the
+        First Nations principles of OCAP. We are honest about what that does and does not mean: this tool is not
+        community-governed, it is not certified under any of these frameworks, and no community has reviewed or
+        endorsed it. Real governance notices are created by the holding institution together with the
+        communities concerned. What this tool adds is its own context, placed alongside a record and never
+        edited into it. The full rationale, and the vocabulary decisions behind it, are in docs/CARE.md in the
+        repository.
       </p>
       <h3>The publications</h3>
       <p>

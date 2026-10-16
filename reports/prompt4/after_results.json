@@ -1,0 +1,66 @@
+[
+  {
+    "scope": "pilot",
+    "q": "health conditions in Indian residential schools",
+    "tag": "pilot_residential",
+    "width": "laptop",
+    "expect_attr": true,
+    "interstitial": true,
+    "attr_on_interstitial": true,
+    "attr_on_result": true,
+    "contextual_note": true,
+    "attr_text": "Attribution incompleteThis record was created about an Indigenous community by the government, without that community's involvement or consent, and the community is not credited in it. Cultural rights and protocols may apply to its content. The page is shown u"
+  },
+  {
+    "scope": "pilot",
+    "q": "health conditions in Indian residential schools",
+    "tag": "pilot_residential",
+    "width": "phone",
+    "expect_attr": true,
+    "interstitial": true,
+    "attr_on_interstitial": true,
+    "attr_on_result": true,
+    "contextual_note": true,
+    "attr_text": "Attribution incompleteThis record was created about an Indigenous community by the government, without that community's involvement or consent, and the community is not credited in it. Cultural rights and protocols may apply to its content. The page is shown u"
+  },
+  {
+    "scope": "microlog",
+    "q": "forced sterilization and the sexual sterilization act",
+    "tag": "ml_sterilization",
+    "width": "laptop",
+    "expect_attr": true,
+    "interstitial": true,
+    "attr_on_interstitial": true,
+    "attr_on_result": false,
+    "contextual_note": false,
+    "attr_text": ""
+  },
+  {
+    "scope": "microlog",
+    "q": "forced sterilization and the sexual sterilization act",
+    "tag": "ml_sterilization",
+    "width": "phone",
+    "expect_attr": true,
+    "interstitial": true,
+    "attr_on_interstitial": true,
+    "attr_on_result": false,
+    "contextual_note": false,
+    "attr_text": ""
+  },
+  {
+    "scope": "microlog",
+    "q": "HIV AIDS prevention programs",
+    "tag": "ml_hiv",
+    "width": "laptop",
+    "expect_attr": false,
+    "interstitial": false,
+    "attr_on_interstitial": false,
+    "attr_on_result": false,
+    "contextual_note": true,
+    "attr_text": ""
+  },
+  {
+    "tag": "compare_crosswalk_off",
+    "crosswalk_leak_today_marker": false
+  }
+]

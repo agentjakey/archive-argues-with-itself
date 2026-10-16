@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useEscape } from "../hooks/useKeyboard";
-import { highlight } from "../lib/highlight";
+import { CrosswalkText } from "./CrosswalkText";
 import { jurisdictionLabel, shortTitle, yearLabel } from "../lib/format";
 import { ocrUncertain } from "../lib/sensitivity";
 import { OcrBadge } from "./OcrBadge";
@@ -106,9 +106,7 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
                 {ocrUncertain(row.ocr_quality) && <OcrBadge />}
               </p>
               <blockquote className="excerpt mt-3 border-l-2 border-rule pl-3">
-                {highlight(excerpt(row.snippet), salientTerms).map((s, j) =>
-                  s.hit ? <mark key={j}>{s.text}</mark> : <span key={j}>{s.text}</span>,
-                )}
+                <CrosswalkText text={excerpt(row.snippet)} salientTerms={salientTerms} />
               </blockquote>
               <button
                 type="button"
