@@ -139,3 +139,47 @@ def test_year_is_earliest_matching_row():
 
 def test_clean_content_returns_none():
     assert flags.detect([row("tobacco taxation and smoking cessation", year=1999)]) is None
+
+
+# --- widened scan surface (prompt 6): the SAME patterns also run over the question + answer ---
+
+BENIGN = [row("tobacco taxation and smoking cessation", year=1999)]   # served rows that alone do NOT flag
+
+
+def test_widened_scan_flags_from_question():
+    # harm content the user explicitly asks about carries the care note even when the served snippets
+    # alone did not trigger it (the p097 / p114 open-input breach).
+    d = flags.detect(BENIGN, question="coerced sterilization of Indigenous women")
+    assert d and "coerced-sterilization-indigenous" in d["topics"]
+    d = flags.detect(BENIGN, question="Red Cross contaminated blood")
+    assert d and "tainted-blood-krever" in d["topics"]
+
+
+def test_widened_scan_flags_from_answer():
+    # harm content the model composed carries the care note.
+    d = flags.detect(BENIGN, answer_text="Forced sterilization programs were imposed on many Native communities.")
+    assert d and "coerced-sterilization-indigenous" in d["topics"]
+    d = flags.detect(BENIGN, answer_text="the right to be free from involuntary sterilization")
+    assert d and "coerced-sterilization-indigenous" in d["topics"]
+
+
+def test_widened_scan_preserves_precision():
+    # a genuinely benign question + answer must NOT start firing (no pattern or term-list change).
+    assert flags.detect(BENIGN, question="how do I fix a flat bike tire",
+                        answer_text="Loosen the valve and patch the tube.") is None
+    # confusables stay benign through the widened surface too
+    assert flags.detect(BENIGN, question="sterilization of surgical instruments",
+                        answer_text="Autoclave the instruments before each use.") is None
+
+
+def test_widened_scan_backward_compatible():
+    # detect(evidence) with no question/answer is byte-identical to before (snippet-only).
+    assert flags.detect(BENIGN) is None
+    d = flags.detect([row("HIV/AIDS report", year=1990)], question="unrelated tobacco question")
+    assert d["topics"] == ["early-hiv-aids"]   # still flags from the row; the question adds nothing here
+
+
+def test_widened_scan_year_from_rows_only():
+    # a topic that fires only from the question/answer has no row-year, so year is None (graceful).
+    d = flags.detect(BENIGN, question="coerced sterilization of Indigenous women")
+    assert d["year"] is None

@@ -103,11 +103,28 @@ def flagged_topics(evidence: list[dict]) -> list[str]:
     return sorted(found)
 
 
-def detect(evidence: list[dict]) -> Optional[dict]:
+def _text_topics(text: str) -> list[str]:
+    """Topics whose signal appears anywhere in a free-text string (the user's question or the model's
+    answer). Uses the SAME compiled patterns as the row scan; only the scanned surface differs, so
+    precision-first is preserved (no pattern or term-list change)."""
+    if not text:
+        return []
+    return [t for t, pats in _COMPILED.items() if any(p.search(text) for p in pats)]
+
+
+def detect(evidence: list[dict], *, question: Optional[str] = None,
+           answer_text: Optional[str] = None) -> Optional[dict]:
     """The `flagged` field for the /ask response, or None. `year` is the earliest year among
     the answer-basis rows that matched a topic, for the client's year-aware contextual note.
     `crisis_lines` is the de-duplicated union of the matched topics' mapped lines. The
-    visitor-facing note text is rendered client-side from topics + year (not baked here)."""
+    visitor-facing note text is rendered client-side from topics + year (not baked here).
+
+    When `question` and/or `answer_text` are supplied (the answer and result paths, never a pure
+    abstention), the SAME care patterns also run over the user's question and the model's written
+    answer, so harm content the model composed or the user asked about carries the care treatment
+    even when the served snippets alone did not trigger it. Only the scanned surface widens; the
+    patterns and term lists are unchanged (precision-first). `year` still comes only from the served
+    answer-basis rows."""
     topics: set[str] = set()
     years: list[int] = []
     for row in _answer_basis(evidence):
@@ -116,6 +133,8 @@ def detect(evidence: list[dict]) -> Optional[dict]:
             topics.update(matched)
             if row.get("year") is not None:
                 years.append(int(row["year"]))
+    for extra in (question, answer_text):
+        topics.update(_text_topics(extra or ""))
     if not topics:
         return None
     ordered = sorted(topics)

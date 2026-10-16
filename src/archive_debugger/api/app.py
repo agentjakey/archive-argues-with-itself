@@ -887,7 +887,10 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                    "degraded": {"reason": reason, "live_url": PUBLIC_URL}}
             out["answer"]["cached"] = None
             _attach_date_method(conn, out["evidence"])
-            out["flagged"] = flags.detect(out["evidence"])
+            # Limited mode shows the retrieved record (a result path), so widen the care scan to the
+            # user's question; an empty or silent result (no rows shown) stays snippet-only so a pure
+            # refusal never surfaces a crisis line.
+            out["flagged"] = flags.detect(out["evidence"], question=clean if pool_rows else None)
             return out
 
         if not clean:
@@ -908,7 +911,15 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     row["offline"] = bool(thumb or image)
                 with b.lock:
                     _attach_date_method(r.conn, served["evidence"])
-                served["flagged"] = flags.detect(served["evidence"])   # on serve, from stored evidence; not cached
+                # Widen the care scan to the question + answer on an answered result; a cached pure
+                # abstention stays snippet-only, so a refusal surfaces no crisis line.
+                sa = served["answer"]
+                answered = not sa.get("abstained")
+                served["flagged"] = flags.detect(
+                    served["evidence"],
+                    question=clean if answered else None,
+                    answer_text=sa.get("text") if answered else None,
+                )   # on serve, from stored evidence + shown text; not cached
                 return served
 
         # Cache miss. Hold one pooled read-only connection for this whole request, so the model call
@@ -965,7 +976,14 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             b.cache.put(key, result)   # flagged + date_method are computed on serve below, never stored (like cached=)
             result["answer"]["cached"] = None
             _attach_date_method(pr.conn, result["evidence"])
-            result["flagged"] = flags.detect(result["evidence"])
+            # Widen the care scan to the question + answer on an answered result; a pure abstention
+            # stays snippet-only, so a refusal surfaces no crisis line.
+            answered = not ans.abstained
+            result["flagged"] = flags.detect(
+                result["evidence"],
+                question=clean if answered else None,
+                answer_text=ans.text if answered else None,
+            )
             _log_timing(b.name, t_ret, time.monotonic() - t_model, "abstain" if ans.abstained else "answer", len(hits))
             return result
 

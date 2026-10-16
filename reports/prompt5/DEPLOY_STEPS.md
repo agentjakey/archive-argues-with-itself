@@ -47,6 +47,8 @@ The source files to commit (the CARE vocabulary/care-layer work plus the earlier
       web/src/hooks/useExamples.ts \
       web/src/test/care.test.tsx \
       src/archive_debugger/flags.py \
+      src/archive_debugger/api/app.py \
+      tests/test_flags.py \
       scripts/open_input_probe.py \
       scripts/open_input_probes.jsonl \
       docs/CARE.md
@@ -63,6 +65,7 @@ Commit (you are on `main`; create a branch first if you prefer):
     - Reparative term crosswalk built but OFF behind a flag
     - Thin-record example chip prefers a verified refuse probe (q039), not q015
     - Care detection adds British sterilis* spelling, precision preserved
+    - Care detection scan surface widened to the question and answer (same patterns), closing the open-input gap
     - No change to retrieval, generation, the abstention rule, the eval, or any audited number
 
     Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
