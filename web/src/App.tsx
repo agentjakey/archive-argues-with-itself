@@ -42,10 +42,15 @@ import { periodOfRow, pickDecadeRows } from "./lib/timeline";
 import { plural } from "./lib/format";
 import type { EvidenceRow, Example, Filters, Flagged, Period, Story } from "./types";
 
+// The verified refuse probes, per scope, used both for the "See it decline" doorway (refuseQid
+// below) and for the "(thin record)" example chip: these reliably abstain, so a thin-tagged chip
+// never returns an answer. The first one present in the active scope's seed is used.
+const REFUSE_PROBE_QIDS = ["q039", "mq41"];
+
 export default function App() {
   const kiosk = useKiosk();
   const offline = useOffline();   // ?offline=1: no ask box, cached questions and stories only
-  const chips = useExamples();
+  const chips = useExamples(6, REFUSE_PROBE_QIDS);
   const { status, elapsed, response, error, run } = useAsk();
 
   const initial = useRef(readState(window.location.search));

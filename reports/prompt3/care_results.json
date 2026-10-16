@@ -1,0 +1,83 @@
+[
+  {
+    "scope": "microlog",
+    "query": "health conditions in Indian residential schools",
+    "expect": "interstitial",
+    "tag": "ml_residential",
+    "ask_json": {
+      "error": "Page.evaluate: TypeError: Failed to fetch\n    at eval (eval at evaluate (:311:30), <anonymous>:1:34)\n    at UtilityScript.evaluate (<anonymous>:318:18"
+    },
+    "ui_interstitial": true,
+    "ui_contextual_note": false,
+    "ui_crisis_visible": true
+  },
+  {
+    "scope": "microlog",
+    "query": "forced sterilization and the sexual sterilization act",
+    "expect": "interstitial",
+    "tag": "ml_sterilization",
+    "ask_json": {
+      "degraded": null,
+      "abstained": true,
+      "topics": [
+        "coerced-sterilization-indigenous"
+      ],
+      "crisis": 3
+    },
+    "ui_interstitial": true,
+    "ui_contextual_note": false,
+    "ui_crisis_visible": true
+  },
+  {
+    "scope": "microlog",
+    "query": "HIV AIDS prevention programs",
+    "expect": "note",
+    "tag": "ml_hiv",
+    "ask_json": {
+      "degraded": "model_unreachable",
+      "abstained": true,
+      "topics": [
+        "early-hiv-aids"
+      ],
+      "crisis": 1
+    },
+    "ui_interstitial": false,
+    "ui_contextual_note": true,
+    "ui_crisis_visible": true
+  },
+  {
+    "scope": "microlog",
+    "query": "the Krever inquiry into tainted blood",
+    "expect": "note",
+    "tag": "ml_tainted",
+    "ask_json": {
+      "degraded": "model_unreachable",
+      "abstained": true,
+      "topics": [
+        "early-hiv-aids",
+        "tainted-blood-krever"
+      ],
+      "crisis": 1
+    },
+    "ui_interstitial": false,
+    "ui_contextual_note": true,
+    "ui_crisis_visible": true
+  },
+  {
+    "scope": "pilot",
+    "query": "health conditions in Indian residential schools",
+    "expect": "either",
+    "tag": "pilot_residential",
+    "ask_json": {
+      "degraded": "model_unreachable",
+      "abstained": true,
+      "topics": [
+        "residential-school-health"
+      ],
+      "crisis": 3
+    },
+    "ui_interstitial": true,
+    "ui_contextual_note": true,
+    "ui_crisis_visible": true
+  }
+]

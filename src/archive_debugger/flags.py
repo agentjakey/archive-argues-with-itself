@@ -45,9 +45,12 @@ TOPIC_SIGNALS: dict[str, list[str]] = {
     # sterilization in this corpus). A document about coerced sterilization that never uses
     # coercion/eugenics language will be missed; that is the deliberate precision-first bias.
     "coerced-sterilization-indigenous": [
-        r"\bsexual steriliz\w*",
-        r"\bsterilization act\b",
-        r"\b(?:forced|coerced|involuntary|compulsory)\s+steriliz\w*",
+        # steril(iz|is) covers both the American and British spellings; the sexual/act/coercion/
+        # eugenic qualifiers still gate every pattern, so bare "sterilization" is still not matched
+        # (precision-first, N8). Added British spelling for care recall on free-text phrasings.
+        r"\bsexual steril(?:iz|is)\w*",
+        r"\bsteril(?:iz|is)ation act\b",
+        r"\b(?:forced|coerced|involuntary|compulsory)\s+steril(?:iz|is)\w*",
         r"\beugenic\w*",
     ],
     "residential-school-health": [
