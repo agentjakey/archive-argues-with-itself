@@ -1,5 +1,6 @@
 import { Page, Source } from "./Page";
 import { CrisisLines } from "../CrisisLines";
+import { GOVERNANCE_STATEMENT } from "../../lib/sensitivity";
 import type { Crisis, ScopeInfo } from "../../types";
 
 /** The concrete "what this record leaves out" hero, before the prose: the window it covers, that it
@@ -102,17 +103,14 @@ export function Gaps({ scope, crisis }: { scope: ScopeInfo | null; crisis: Crisi
           <p>
             Some of this record is about harm done through the health system, including harm to Indigenous
             communities, and some of it names specific communities. That material deserves care, not just a
-            search box. It stays searchable and reachable here, because hiding it would be its own dishonesty.
-            But I am not featuring or promoting Indigenous-identifying health content while I work out how to
-            handle it responsibly, informed by the CARE Principles and the Local Contexts Notices and taking
-            direction, where I can get it, from the communities the record concerns.
+            search box. It stays searchable and reachable here, because hiding it would be its own dishonesty,
+            but it is kept out of the featured stories.
           </p>
+          <p>{GOVERNANCE_STATEMENT}</p>
           <p>
-            Where a result surfaces a record that was created about an Indigenous community by the state without
-            that community's involvement, the tool adds a short attribution note alongside the unaltered page.
-            That note, and this one, are the tool's own: it is not community-governed and no community has
-            endorsed it. The rationale is in docs/CARE.md. If you are sitting with hard material and need
-            support, help is here:
+            Where a result surfaces a record created about an Indigenous community without that community's
+            involvement, the tool adds a short attribution note alongside the unaltered page. The rationale is in
+            docs/CARE.md. If you are sitting with hard material and need support, help is here:
           </p>
           <CrisisLines lines={careLines} />
         </>
@@ -236,12 +234,13 @@ export function Gaps({ scope, crisis }: { scope: ScopeInfo | null; crisis: Crisi
           <p>
             Some of this record is about harm done through the health system, including harm to Indigenous
             communities, and some of it names specific communities. It stays searchable and reachable here,
-            because hiding it would be its own dishonesty, but it is kept out of the featured stories. Our
-            handling is informed by the CARE Principles and the Local Contexts Notices; the tool is not
-            community-governed and no community has endorsed it. Where a result surfaces a record created about
-            an Indigenous community by the state without that community's involvement, the tool adds a short
-            attribution note alongside the unaltered page. The rationale is in docs/CARE.md. If you are sitting
-            with hard material and need support, help is here:
+            because hiding it would be its own dishonesty, but it is kept out of the featured stories.
+          </p>
+          <p>{GOVERNANCE_STATEMENT}</p>
+          <p>
+            Where a result surfaces a record created about an Indigenous community without that community's
+            involvement, the tool adds a short attribution note alongside the unaltered page. The rationale is in
+            docs/CARE.md. If you are sitting with hard material and need support, help is here:
           </p>
           <CrisisLines lines={careLines} />
         </>

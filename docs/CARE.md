@@ -25,6 +25,27 @@ web frontend and in this docs folder; none of the record-bearing data or the ser
 - The tool adds context; it does not speak for any community, and it does not assert a single correct
   term where a term is contested or community-specific.
 
+## Final locked wording (festival)
+
+These two strings are locked. They live in web/src/lib/sensitivity.ts (GOVERNANCE_STATEMENT and
+ATTRIBUTION_NOTICE) and render verbatim: the governance statement in About and in both scopes' Gaps
+care notes; the attribution notice in the care note and the interstitial.
+
+Governance statement (About and Gaps):
+
+  This tool is aligned with the CARE Principles for Indigenous Data Governance, and informed by the
+  Local Contexts Notices and the First Nations principles of OCAP. It is not community-governed, not
+  certified, and has not been reviewed or endorsed by any community. Real governance notices are
+  created by the holding institution together with the communities concerned, through the Local
+  Contexts Hub. This tool only adds context alongside the record. It never changes the record, and it
+  does not speak for any community.
+
+Attribution-incomplete notice (care note and interstitial, for residential-school and coerced
+sterilization records):
+
+  This is a government record about an Indigenous community, created without that community's
+  involvement or consent. It is shown here unaltered. Cultural rights and protocols may apply.
+
 ## CARE Principles (how the tool aligns)
 
 - Collective Benefit: the tool surfaces a public record for public understanding, links every claim to

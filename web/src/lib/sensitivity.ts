@@ -85,11 +85,20 @@ export function needsAttribution(flagged: Flagged | null | undefined): boolean {
 export const ATTRIBUTION_NOTICE = {
   eyebrow: "Attribution incomplete",
   body:
-    "This record was created about an Indigenous community by the government, without that " +
-    "community's involvement or consent, and the community is not credited in it. Cultural rights " +
-    "and protocols may apply to its content. The page is shown unaltered; this note is the tool's " +
-    "own, added alongside the record, not part of it.",
+    "This is a government record about an Indigenous community, created without that community's " +
+    "involvement or consent. It is shown here unaltered. Cultural rights and protocols may apply.",
 };
+
+// Locked governance statement (final festival wording). Used verbatim in About and in both scopes'
+// Gaps care notes, from this one constant so the three can never drift. CARE-aligned and
+// Notices-ready, with the plain non-overclaim disclaimer.
+export const GOVERNANCE_STATEMENT =
+  "This tool is aligned with the CARE Principles for Indigenous Data Governance, and informed by the " +
+  "Local Contexts Notices and the First Nations principles of OCAP. It is not community-governed, not " +
+  "certified, and has not been reviewed or endorsed by any community. Real governance notices are " +
+  "created by the holding institution together with the communities concerned, through the Local " +
+  "Contexts Hub. This tool only adds context alongside the record. It never changes the record, and " +
+  "it does not speak for any community.";
 
 // 6. Reparative term crosswalk (additive, precision-first, OFF by default). When enabled, a displayed
 // EXCERPT containing an unambiguous historical/colonial term may carry a small annotation naming it as

@@ -1,0 +1,61 @@
+{
+  "task3": {
+    "bare_laptop": {
+      "chip": "Federal public health",
+      "featured": "How did Alberta health insurance coverage change between the 1970s and 1990s?",
+      "strip": "About this corpus: 3,477 items, 745,893 passages, 1960 to 2009",
+      "url": "http://127.0.0.1:8000/"
+    },
+    "bare_phone": {
+      "chip": "Federal public health",
+      "featured": "How did Alberta health insurance coverage change between the 1970s and 1990s?",
+      "strip": "About this corpus: 3,477 items, 745,893 passages, 1960 to 2009",
+      "url": "http://127.0.0.1:8000/"
+    },
+    "after_switch": {
+      "chip": "National public health, all provinces",
+      "featured": "What did the Canada Communicable Disease Report describe about notifiable disease trends?",
+      "strip": "About this corpus: 13,539 items, 1,136,827 passages, 1963 to 2018",
+      "url": "http://127.0.0.1:8000/?scope=microlog"
+    }
+  },
+  "manifest": [
+    {
+      "file": "05_compare.png",
+      "shows": "Pilot Alberta 1974 vs 1999 compare, both scanned pages and big era-years",
+      "size": "3800x2000",
+      "padded": true
+    },
+    {
+      "file": "06_provenance.png",
+      "shows": "Page drawer open on a real archive.org scanned page with citation",
+      "size": "3800x2000",
+      "padded": false
+    },
+    {
+      "file": "07_refusal.png",
+      "shows": "See-it-decline refusal: No answer from the record, uncovered terms, coverage",
+      "size": "3800x2000",
+      "padded": false
+    },
+    {
+      "file": "08_silences.png",
+      "shows": "Coverage grid: by-decade (with undated) and by-jurisdiction counts",
+      "size": "3800x2000",
+      "padded": true
+    },
+    {
+      "file": "09_care.png",
+      "shows": "Care: contextual note + attribution-incomplete notice + crisis lines",
+      "size": "3800x2000",
+      "padded": true
+    },
+    {
+      "file": "11_scaling.png",
+      "shows": "Scope switcher: pilot and national, implying a registry of topics",
+      "size": "3800x2000",
+      "padded": false
+    }
+  ],
+  "app_errors": []
+}

@@ -1,4 +1,5 @@
 import { formatInt } from "../../lib/format";
+import { GOVERNANCE_STATEMENT } from "../../lib/sensitivity";
 import type { ScopeInfo } from "../../types";
 import { Page } from "./Page";
 
@@ -59,15 +60,9 @@ export function About({ scope }: { scope?: ScopeInfo | null }) {
         system. We keep it searchable and grounded, with every claim supported by a source page, but we keep it
         out of the featured stories until the care and governance work is done.
       </p>
-      <p>
-        Our handling is aligned with the CARE Principles for Indigenous Data Governance (collective benefit,
-        authority to control, responsibility, and ethics) and is informed by the Local Contexts Notices and the
-        First Nations principles of OCAP. We are honest about what that does and does not mean: this tool is not
-        community-governed, it is not certified under any of these frameworks, and no community has reviewed or
-        endorsed it. Real governance notices are created by the holding institution together with the
-        communities concerned. What this tool adds is its own context, placed alongside a record and never
-        edited into it. The full rationale, and the vocabulary decisions behind it, are in docs/CARE.md in the
-        repository.
+      <p>{GOVERNANCE_STATEMENT}</p>
+      <p className="text-sm text-muted">
+        The full rationale, and the vocabulary decisions behind it, are in docs/CARE.md in the repository.
       </p>
       <h3>The publications</h3>
       <p>
