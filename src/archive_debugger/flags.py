@@ -18,8 +18,8 @@ TIERS below mirrors the mapping for auditability and tests):
   sexual content (especially involving children) that is sensitive but does not warrant crisis
   resources.
 - Tier C, a "not current medical advice" note, NO crisis line: immunization/vaccination schedule
-  and dose guidance, and hepatitis disease-transmission guidance a visitor could mistake for
-  current advice.
+  and dose guidance, hepatitis disease-transmission guidance, and drug dosing / treatment
+  instructions a visitor could mistake for current advice.
 
 Coerced sterilization has two topic keys that differ only in treatment:
 - `coerced-sterilization` (the base, pattern-detected): coercion/eugenics/consent-plus-procedure
@@ -193,6 +193,20 @@ TOPIC_SIGNALS: dict[str, list[str]] = {
         r"\binfected with hepatitis\b",
         r"\bhepatite\s*[abc]\b",                                   # French
     ],
+    # Drug dosing and treatment instructions a visitor could mistake for current medical advice (for
+    # example "the standard dose ... is 80 mg", "give your child 5 mL every 6 hours"). Gated to drug
+    # dosing (a number plus a dose unit, a qualified "dose", "dosage", explicit intervals, or a
+    # take/give/administer instruction with a dose) so administrative or epidemiological health content
+    # (coverage rates, registries, program descriptions, disease rates) does not fire.
+    "dosing-treatment-guidance": [
+        r"\b\d+(?:\.\d+)?\s?(?:mg|mcg|ml|microgram|milligram|millilit|millilitre|milliliter)s?\b",
+        r"\bdosage\b",
+        r"\b(?:standard|recommended|maximum|minimum|usual|single|daily|correct|appropriate|safe|therapeutic|starting|total|divided|per kilogram|per-kilogram) dose\b",
+        r"\bdose (?:of|for|form)\b",
+        r"\b(?:every \d+(?:\s?(?:to|-)\s?\d+)? hours?|\d+ times (?:a day|daily|per day|each day)|twice (?:a day|daily)|once (?:a day|daily))\b",
+        r"\b(?:take|give|administer|apply)\b.{0,25}\b(?:\d+\s?(?:mg|mcg|ml|tablet|teaspoon|drop|dose|pill)|every \d+ hours?)\b",
+        r"\bgive (?:your|the|a|my|her|his) child(?:ren)?\b.{0,40}(?:dose|mg|ml|medicine|medication|drug|tablet|teaspoon|fever|every \d)",
+    ],
 }
 
 # Tier of each topic, for the client's proportionate treatment. crisis.py maps ONLY Tier A topics to
@@ -209,6 +223,7 @@ TIERS: dict[str, str] = {
     "sexual-content-minors": "B",
     "immunization-guidance": "C",
     "hepatitis-transmission": "C",
+    "dosing-treatment-guidance": "C",
 }
 
 _COMPILED = {t: [re.compile(p, re.IGNORECASE) for p in pats] for t, pats in TOPIC_SIGNALS.items()}
@@ -216,14 +231,17 @@ _COMPILED = {t: [re.compile(p, re.IGNORECASE) for p in pats] for t, pats in TOPI
 # Indigenous context, in English and French and including the historical terms the record itself
 # uses. Matched (accent-insensitively) only when coerced-sterilization has fired, to decide the
 # Indigenous upgrade. Word-bounded and precision-first: bare "band"/"reserve" are skipped unless in
-# an Indigenous phrase ("band council", "on reserve"); "native" excludes "native-born".
+# an Indigenous phrase ("band council", "on reserve"); bare "native" is skipped too, because it is
+# ambiguous ("native-born", "native population" = a demographic sense). "native" counts only inside an
+# Indigenous phrase (native people(s), native community/communities, native woman/women, native
+# band(s), native nation(s)); "Native communities" still counts, "native-born" never does.
 _INDIGENOUS_CONTEXT = [re.compile(p, re.IGNORECASE) for p in (
     r"\bindigenous\b",
     r"\bfirst nations?\b",
     r"\bmetis\b",
     r"\binuit\b",
     r"\baboriginal\b",
-    r"\bnative\b(?!-born)",
+    r"\bnative (?:people|peoples|community|communities|woman|women|band|bands|nation|nations)\b",
     r"\bindian\b",
     r"\bindien\w*",
     r"\bamerindien\w*",
@@ -263,6 +281,23 @@ def _haystack(row: dict) -> str:
 def _row_topics(row: dict) -> list[str]:
     hay = _norm(_haystack(row))
     return [t for t, pats in _COMPILED.items() if any(p.search(hay) for p in pats)]
+
+
+# The two lighter crisis topics require a CITED basis on the row scan: a match from a passage that was
+# sent to the model (in_prompt) but never cited by the kept answer is incidental and must NOT fire their
+# note + 9-8-8 line. The question and the answer text still fire them (see _text_topics), and the
+# heavier topics (residential-school, coerced sterilization) are unaffected and fire from any
+# answer-basis row.
+_CITED_BASIS_ONLY = frozenset({"early-hiv-aids", "tainted-blood-krever"})
+
+
+def _basis_row_topics(row: dict) -> list[str]:
+    """Row topics for the answer-basis scan, applying the cited-basis rule: the two lighter crisis
+    topics count only from a cited row; every other topic counts from any answer-basis row."""
+    matched = _row_topics(row)
+    if row.get("cited"):
+        return matched
+    return [t for t in matched if t not in _CITED_BASIS_ONLY]
 
 
 def _answer_basis(evidence: list[dict]) -> list[dict]:
@@ -306,7 +341,7 @@ def flagged_topics(evidence: list[dict]) -> list[str]:
     the Indigenous upgrade uses the evidence rows as its context)."""
     found: set[str] = set()
     for row in _answer_basis(evidence):
-        found.update(_row_topics(row))
+        found.update(_basis_row_topics(row))
     _finalize_coerced(found, evidence, None, None)
     return sorted(found)
 
@@ -335,11 +370,16 @@ def detect(evidence: list[dict], *, question: Optional[str] = None,
     context appears in the question, answer, or shown evidence. A Tier-C hepatitis-transmission
     result that would otherwise carry an incidental early-HIV/AIDS or tainted-blood crisis line
     (from a source title, not the visitor's reading) is demoted when the user-facing text is about
-    hepatitis transmission and names neither HIV/AIDS nor the blood scandal."""
+    hepatitis transmission and names neither HIV/AIDS nor the blood scandal.
+
+    early-hiv-aids and tainted-blood-krever require a cited basis on the row scan (see
+    _basis_row_topics): a match from a passage that was sent to the model but never cited by the kept
+    answer does not fire them; the question and answer text still do. The heavier topics are
+    unaffected."""
     topics: set[str] = set()
     years: list[int] = []
     for row in _answer_basis(evidence):
-        matched = _row_topics(row)
+        matched = _basis_row_topics(row)
         if matched:
             topics.update(matched)
             if row.get("year") is not None:

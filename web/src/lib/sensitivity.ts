@@ -32,6 +32,7 @@ export const TIER_B_TOPICS = new Set<string>([
 export const TIER_C_TOPICS = new Set<string>([
   "immunization-guidance",
   "hepatitis-transmission",
+  "dosing-treatment-guidance",
 ]);
 
 export type CareTier = "A" | "B" | "C";

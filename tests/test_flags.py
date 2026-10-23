@@ -6,9 +6,11 @@ from __future__ import annotations
 from archive_debugger import crisis, flags
 
 
-def row(text, title="", year=None, in_prompt=True, cited=False):
-    """An /ask evidence row. Defaults to an answer-basis row (in_prompt) so a bare
-    flagged_topics(text) call exercises matching; pass in_prompt=False for a pool-tail row."""
+def row(text, title="", year=None, in_prompt=True, cited=True):
+    """An /ask evidence row. Defaults to a shown, CITED answer-basis row so a bare flagged_topics(text)
+    call exercises matching for every topic, including the two cited-basis crisis topics (early-hiv-aids,
+    tainted-blood-krever). Pass in_prompt=False for a pool-tail row, or cited=False for an incidental
+    in_prompt-only snippet (which does not fire the two cited-basis crisis topics)."""
     return {"title": title, "snippet": text, "year": year, "in_prompt": in_prompt, "cited": cited}
 
 
@@ -135,8 +137,9 @@ def test_pool_tail_row_does_not_flag():
 
 
 def test_in_prompt_or_cited_row_flags():
-    assert "early-hiv-aids" in flags.flagged_topics([row("HIV/AIDS clinic services", in_prompt=True, cited=False)])
-    assert "early-hiv-aids" in flags.flagged_topics([row("HIV/AIDS clinic services", in_prompt=False, cited=True)])
+    # a non-cited-only topic flags from an in_prompt-only row, and from a cited row
+    assert "residential-school-health" in flags.flagged_topics([row("Indian residential schools", in_prompt=True, cited=False)])
+    assert "residential-school-health" in flags.flagged_topics([row("Indian residential schools", in_prompt=False, cited=True)])
 
 
 def test_year_is_earliest_matching_row():
@@ -240,6 +243,28 @@ def test_tier_c_hepatitis_transmission():
     d = flags.detect([row("a person can become infected with Hepatitis C through blood transfusions")])
     assert d and "hepatitis-transmission" in d["topics"]
     assert _lines(d) == []   # Tier C: no crisis line
+
+
+def test_tier_c_dosing_treatment():
+    # drug dosing / treatment instructions carry the not-current-medical-advice note (Tier C, no crisis)
+    for t in ["the standard dose for children of acetaminophen is 80 mg per dose form",
+              "give your child 5 mL of ibuprofen every 6 to 8 hours",
+              "the recommended dosage is two tablets",
+              "take 500 mg twice daily"]:
+        d = flags.detect([row(t)])
+        assert d and "dosing-treatment-guidance" in d["topics"], t
+        assert _lines(d) == [], t
+    # the question path also fires (an answered dosing result)
+    d = flags.detect([row("tobacco taxation and smoking cessation", year=1999)],
+                     question="what dose of acetaminophen should I give my child",
+                     answer_text="The standard dose is 80 mg per dose form administered by dropper.")
+    assert d and "dosing-treatment-guidance" in d["topics"]
+    # administrative / epidemiological health content must NOT fire dosing
+    for t in ["immunization coverage rates are between 95 and 97 percent",
+              "the cancer registry recorded incidence and mortality by region",
+              "the mental health board delivers services through community clinics",
+              "tuberculosis rates fell by 40 percent between 1960 and 1990"]:
+        assert "dosing-treatment-guidance" not in flags.flagged_topics([row(t)]), t
 
 
 def test_tiers_map_and_crisis_mapping_consistent():
@@ -387,3 +412,38 @@ def test_accented_french_matches():
     # Indigenous context via an accented historical/French term upgrades coerced-sterilization
     d = flags.detect([row("sterilization")], answer_text="stérilisation forcée des Premières Nations")
     assert d and "coerced-sterilization-indigenous" in d["topics"]
+
+
+# --- Follow-up Fix A: demographic "native" is NOT Indigenous context ---
+
+def test_native_demographic_is_not_indigenous_context():
+    # the "women sterilized without their consent" over-fire: "native" in a demographic sense
+    # ("native-born", "native population", "native Canadians") must NOT upgrade to the Indigenous variant.
+    for ctx in ["native-born women", "the native population", "native Canadians"]:
+        d = flags.detect([row("sterilization")], answer_text=f"sterilization performed without consent on {ctx}")
+        assert d and "coerced-sterilization" in d["topics"], ctx
+        assert "coerced-sterilization-indigenous" not in d["topics"], ctx
+        assert _lines(d) == ["helpline_988"], ctx          # 9-8-8 only; no Hope for Wellness / MMIWG
+    # a genuine Indigenous phrase with "native" still upgrades (full treatment preserved)
+    for ctx in ["Native communities", "native people", "native women"]:
+        d = flags.detect([row("sterilization")], answer_text=f"forced sterilization imposed on {ctx}")
+        assert d and "coerced-sterilization-indigenous" in d["topics"], ctx
+
+
+# --- Follow-up Fix B: the two lighter crisis topics need a cited basis, not an incidental snippet ---
+
+def test_lighter_crisis_topics_need_cited_basis():
+    # an in_prompt-only (not cited) HIV or tainted-blood snippet does NOT fire the note + 9-8-8
+    assert flags.flagged_topics([row("HIV testing and consent", in_prompt=True, cited=False)]) == []
+    assert flags.detect([row("HIV testing and consent", in_prompt=True, cited=False)]) is None
+    assert flags.flagged_topics([row("the Krever tainted blood inquiry", in_prompt=True, cited=False)]) == []
+    # a CITED passage fires them (even snippet-only, no answer text)
+    assert "early-hiv-aids" in flags.flagged_topics([row("HIV testing", in_prompt=True, cited=True)])
+    assert "tainted-blood-krever" in flags.flagged_topics([row("Krever tainted blood", in_prompt=True, cited=True)])
+    # the question or answer text fires them even when no row is cited
+    d = flags.detect([row("tobacco taxation", year=1999, in_prompt=True, cited=False)],
+                     answer_text="people used clinics to learn their HIV status")
+    assert d and "early-hiv-aids" in d["topics"]
+    # the heavier topics are NOT cited-only: an in_prompt-only snippet still fires
+    assert "residential-school-health" in flags.flagged_topics([row("Indian residential schools", in_prompt=True, cited=False)])
+    assert "coerced-sterilization" in flags.flagged_topics([row("forced sterilization of patients", in_prompt=True, cited=False)])

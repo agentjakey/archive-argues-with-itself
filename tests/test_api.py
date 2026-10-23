@@ -18,9 +18,10 @@ CFG = Path("config/pilot.toml")
 TEXT = "vaccination hospital programme"
 
 
-def _retriever(tmp_path, items, *, seed_questions=None, candidates=10):
+def _retriever(tmp_path, items, *, seed_questions=None, candidates=10, text=TEXT):
     """items: [(item_id, year_or_None, jurisdiction)]; two passages each, all matching the query.
-    seed_questions: optional [(qid, gold_or_None)] -> eval_questions (+gold) and a seed file."""
+    seed_questions: optional [(qid, gold_or_None)] -> eval_questions (+gold) and a seed file.
+    text: the passage text for every passage (default TEXT); override to seed care-topic content."""
     civ = tmp_path / "civic.db"
     conn = db.init_db(str(civ))
     for item, year, jur in items:
@@ -31,7 +32,7 @@ def _retriever(tmp_path, items, *, seed_questions=None, candidates=10):
             conn.execute("INSERT INTO pages (page_id, item_id, leaf_index, printed_page, has_text) VALUES (?,?,?,?,1)",
                          (f"{item}#{leaf}", item, leaf, str(leaf + 1)))
             conn.execute("INSERT INTO passages (passage_id, item_id, page_id, leaf_index, char_start, char_end, text, token_count, ocr_quality) VALUES (?,?,?,?,0,30,?,3,'0.95')",
-                         (f"{item}#{leaf}:0", item, f"{item}#{leaf}", leaf, TEXT))
+                         (f"{item}#{leaf}:0", item, f"{item}#{leaf}", leaf, text))
     seed = None
     if seed_questions:
         questions.insert_questions(conn, [{"qid": q, "text": "vaccination hospital", "qtype": "factual", "filters": {}}
@@ -252,6 +253,17 @@ def test_ask_abstention_shape(tmp_path):
     assert a["abstained"] is True and a["abstention_text"].startswith("the record here is thin")
     assert a["coverage"]["uncovered_terms"] == ["covid"] and a["sentences"] == []
     assert body["evidence"] and not any(e["cited"] for e in body["evidence"])
+
+
+def test_ask_abstention_suppresses_all_care(tmp_path):
+    # Fix 1: a pure abstention shows NO care -- even when the nearest-evidence snippets would match a
+    # care topic, flagged is None (no note, no crisis line, and no interstitial on a refusal).
+    r, _ = _retriever(tmp_path, [("a", 1965, "alberta")],
+                      text="indian residential school tuberculosis deaths among children")
+    with TestClient(_app(tmp_path, r)) as c:
+        body = c.post("/ask", json={"question": "indian residential school tuberculosis deaths"}).json()
+    assert body["answer"]["abstained"] is True        # one item -> 2 passages < min_passages: thin, refuses
+    assert body.get("flagged") is None                # nothing on a refusal, though the snippet names a care topic
 
 
 def test_ask_degrades_to_limited_mode_when_no_key(tmp_path, monkeypatch):

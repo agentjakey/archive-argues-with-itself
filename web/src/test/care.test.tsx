@@ -48,7 +48,11 @@ describe("care tiers", () => {
       "tainted-blood-krever",
     ]);
     expect([...TIER_B_TOPICS].sort()).toEqual(["sexual-content-minors", "sterilization-reproductive"]);
-    expect([...TIER_C_TOPICS].sort()).toEqual(["hepatitis-transmission", "immunization-guidance"]);
+    expect([...TIER_C_TOPICS].sort()).toEqual([
+      "dosing-treatment-guidance",
+      "hepatitis-transmission",
+      "immunization-guidance",
+    ]);
   });
 
   it("careTier takes the heaviest tier present (A > B > C), else null", () => {

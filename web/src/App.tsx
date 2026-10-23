@@ -670,7 +670,7 @@ export default function App() {
       {status === "error" && error && <ErrorCard detail={error} />}
 
       {response && (
-        needsInterstitial(resultFlagged) && !flaggedAck ? (
+        needsInterstitial(resultFlagged) && !flaggedAck && !abstentionOnly ? (
           <Interstitial flagged={resultFlagged!} onContinue={() => setFlaggedAck(true)} onBack={goHome} />
         ) : (
         <>

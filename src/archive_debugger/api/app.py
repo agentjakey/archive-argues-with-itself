@@ -962,15 +962,16 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     row["offline"] = bool(thumb or image)
                 with b.lock:
                     _attach_date_method(r.conn, served["evidence"])
-                # Widen the care scan to the question + answer on an answered result; a cached pure
-                # abstention stays snippet-only, so a refusal surfaces no crisis line.
+                # Care fires only when an answer is actually shown. A pure abstention (a refusal) shows
+                # no care at all -- no note, no crisis line, and no interstitial -- so flagged is None;
+                # the attribution notice in particular must never appear when there is no answer.
                 sa = served["answer"]
                 answered = not sa.get("abstained")
                 served["flagged"] = flags.detect(
                     served["evidence"],
-                    question=clean if answered else None,
-                    answer_text=sa.get("text") if answered else None,
-                )   # on serve, from stored evidence + shown text; not cached
+                    question=clean,
+                    answer_text=sa.get("text"),
+                ) if answered else None   # on serve, from stored evidence + shown text; not cached
                 return served
 
         # Cache miss. Hold one pooled read-only connection for this whole request, so the model call
@@ -1027,14 +1028,15 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             b.cache.put(key, result)   # flagged + date_method are computed on serve below, never stored (like cached=)
             result["answer"]["cached"] = None
             _attach_date_method(pr.conn, result["evidence"])
-            # Widen the care scan to the question + answer on an answered result; a pure abstention
-            # stays snippet-only, so a refusal surfaces no crisis line.
+            # Care fires only when an answer is actually shown. A pure abstention (a refusal) shows no
+            # care at all -- no note, no crisis line, and no interstitial -- so flagged is None; the
+            # attribution notice in particular must never appear when there is no answer.
             answered = not ans.abstained
             result["flagged"] = flags.detect(
                 result["evidence"],
-                question=clean if answered else None,
-                answer_text=ans.text if answered else None,
-            )
+                question=clean,
+                answer_text=ans.text,
+            ) if answered else None
             _log_timing(b.name, t_ret, time.monotonic() - t_model, "abstain" if ans.abstained else "answer", len(hits))
             return result
 
@@ -1091,10 +1093,11 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     raise HTTPException(status_code=500, detail=f"story {s['id']}: {exc}") from exc
                 _attach_date_method(r.conn, rows)
                 by_id = {row["passage_id"]: row for row in rows}
-                # The two pins are the shown record for this story, so they are the flagging
-                # basis; mark copies in_prompt for detection only, leaving the returned rows
-                # unchanged. Computed on serve, never stored, exactly like the /ask flagged.
-                flagged = flags.detect([{**row, "in_prompt": True} for row in rows])
+                # The two pins are the shown record for this story, so they are the flagging basis;
+                # mark copies in_prompt AND cited for detection only (the pins are the directly-shown
+                # record, i.e. a cited basis, so the two cited-basis crisis topics still fire here),
+                # leaving the returned rows unchanged. Computed on serve, never stored.
+                flagged = flags.detect([{**row, "in_prompt": True, "cited": True} for row in rows])
                 out.append({"id": s["id"], "question": s["question"], "filters": s.get("filters") or {},
                             "caption": s.get("caption", ""), "pins": [by_id[p] for p in s["pins"]],
                             "flagged": flagged})
@@ -1117,7 +1120,9 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 _attach_date_method(b.retriever.conn, rows)
         except LookupError:
             return {"flagged": None}   # unknown id -> safe empty, never a raw error
-        return {"flagged": flags.detect([{**row, "in_prompt": True} for row in rows])}
+        # The pinned pair is the directly-shown record (a cited basis), so the two cited-basis crisis
+        # topics still fire here; mark the detection copies in_prompt AND cited.
+        return {"flagged": flags.detect([{**row, "in_prompt": True, "cited": True} for row in rows])}
 
     @app.get("/pages/{item_id}/{name}")
     def page_image(item_id: str, name: str):
