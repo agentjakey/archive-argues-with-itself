@@ -292,6 +292,25 @@ export default function App() {
     [scopesInfo, kiosk, offline, view],
   );
 
+  // From the Explore page, "Explore this corpus" ENTERS that corpus: switch scope and land on its
+  // ask/home view, instead of reloading the Explore page (which preserved view=explore and bounced
+  // the viewport to the top without entering the corpus). The cross-scope reset is the same clean
+  // full reload the switcher uses; only the destination differs (view is dropped, not preserved).
+  const enterScopeHome = useCallback(
+    (name: string) => {
+      const def = scopesInfo?.default ?? "";
+      const params = new URLSearchParams();
+      if (name && name !== def) params.set("scope", name);
+      // deliberately omit view: land on the corpus home (the ask screen), not back on Explore
+      if (kiosk) params.set("kiosk", "1");
+      if (offline) params.set("offline", "1");
+      if (idleParam.current) params.set("idle", idleParam.current);
+      const qs = params.toString();
+      window.location.assign(`${window.location.pathname}${qs ? `?${qs}` : ""}`);
+    },
+    [scopesInfo, kiosk, offline],
+  );
+
   // Enter a corpus on a specific question from the explorer: reload into that scope with the
   // question (and its filters) in the URL, so the app runs it there and lands on the cited answer
   // (a warmed seed question returns instantly from cache). The full reload keeps the same clean
@@ -567,7 +586,7 @@ export default function App() {
         <ExplorePage
           scopes={scopesInfo?.scopes ?? null}
           examplesByScope={scopeExamples}
-          onExploreScope={switchScope}
+          onExploreScope={enterScopeHome}
           onEnterQuestion={enterScopeWithQuestion}
         />
       )}

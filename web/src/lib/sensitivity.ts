@@ -13,8 +13,42 @@ export const ENTRY_ADVISORY =
   "outdated, inaccurate, or harmful language and reflect the government's position at the time. " +
   "Reader discretion is advised.";
 
-// 2. Contextual note: year-aware, topic-agnostic by default so it never names a specific group
-// (the sterilization topic can fire on broader eugenics-era content). [year] from flagged.year.
+// 2. Contextual note, in three proportionate care tiers (mirrors src/archive_debugger/flags.py
+// TIERS). The tier decides the note copy AND whether crisis lines show: only Tier A maps to crisis
+// resources (backend crisis.py), so a Tier B/C result renders its note with no crisis line, and
+// neither of those notes references "help below". A result touching more than one tier takes the
+// heaviest (A > B > C). Warn precisely and calmly: crisis lines belong only on the heaviest topics.
+export const TIER_A_TOPICS = new Set<string>([
+  "residential-school-health",
+  "coerced-sterilization",             // generic: interstitial + note + 9-8-8 (no attribution notice)
+  "coerced-sterilization-indigenous",  // upgraded when the record shows Indigenous context: full treatment
+  "tainted-blood-krever",
+  "early-hiv-aids",
+]);
+export const TIER_B_TOPICS = new Set<string>([
+  "sterilization-reproductive",
+  "sexual-content-minors",
+]);
+export const TIER_C_TOPICS = new Set<string>([
+  "immunization-guidance",
+  "hepatitis-transmission",
+]);
+
+export type CareTier = "A" | "B" | "C";
+
+/** The heaviest care tier present among the flagged topics, or null when none is a known tier.
+ *  A crisis topic (A) always outranks a lighter one, so a result that touches both still gets the
+ *  crisis treatment and its crisis lines. */
+export function careTier(flagged: Flagged | null | undefined): CareTier | null {
+  if (!flagged) return null;
+  if (flagged.topics.some((t) => TIER_A_TOPICS.has(t))) return "A";
+  if (flagged.topics.some((t) => TIER_B_TOPICS.has(t))) return "B";
+  if (flagged.topics.some((t) => TIER_C_TOPICS.has(t))) return "C";
+  return null;
+}
+
+// Tier A (crisis care): year-aware, topic-agnostic so it never names a specific group. Its support
+// lines render beneath it (crisis_lines is non-empty for Tier A), so it closes with "help below".
 export function contextualNoteDefault(year: number | null): string {
   const dated = year != null ? ` from ${year}` : "";
   return (
@@ -24,8 +58,29 @@ export function contextualNoteDefault(year: number | null): string {
   );
 }
 
-// Per-topic overrides: add specificity later by mapping a topic key to a note function.
-// Empty by default (topic-agnostic). Example:
+// Tier B (calm historical-content note, no crisis line): sensitive or outdated content that does not
+// warrant crisis resources. No alarm, no reference to support below.
+export function historicalContentNote(year: number | null): string {
+  const dated = year != null ? ` from ${year}` : "";
+  return (
+    `This is a government document${dated}. Its language or framing reflects attitudes of its time, ` +
+    "and some of it is sensitive or outdated. It is shown here unaltered, as part of the record."
+  );
+}
+
+// Tier C (not current medical advice, no crisis line): health guidance a visitor could mistake for
+// current advice. Copy per the project owner's proposed wording (revisable), made year-aware like
+// the others.
+export function medicalAdviceNote(year: number | null): string {
+  const dated = year != null ? ` from ${year}` : "";
+  return (
+    `This is a historical record${dated}, not current medical advice. Health guidance changes over ` +
+    "time, so rely on a current source or a professional for any health decision."
+  );
+}
+
+// Per-topic overrides: add specificity later by mapping a topic key to a note function. Empty by
+// default (topic-agnostic). An override, when present, wins over the tier note. Example:
 //   "residential-school-health": (year) => `...`,
 export const CONTEXTUAL_NOTE_BY_TOPIC: Record<string, (year: number | null) => string> = {};
 
@@ -34,13 +89,17 @@ export function contextualNote(flagged: Flagged): string {
     const override = CONTEXTUAL_NOTE_BY_TOPIC[topic];
     if (override) return override(flagged.year);
   }
-  return contextualNoteDefault(flagged.year);
+  const tier = careTier(flagged);
+  if (tier === "B") return historicalContentNote(flagged.year);
+  if (tier === "C") return medicalAdviceNote(flagged.year);
+  return contextualNoteDefault(flagged.year);   // Tier A, and the defensive null fallback
 }
 
 // 4. Tap-through interstitial: per-topic opt-in. Default ON only for the heaviest topics, so the
 // curated demo flow is not over-interrupted; the others get the inline note only.
 export const INTERSTITIAL_TOPICS = new Set<string>([
   "residential-school-health",
+  "coerced-sterilization",             // both coerced-sterilization variants carry the interstitial
   "coerced-sterilization-indigenous",
 ]);
 
@@ -69,8 +128,14 @@ export function ocrUncertain(ocr: number | null | undefined): boolean {
 
 // 4b. Attribution-incomplete notice (CARE-aligned). Shown ALONGSIDE the existing care note and the
 // interstitial for records that are about an Indigenous community but were created by the state
-// without that community's involvement (residential-school health, coerced sterilization). It is in
-// the spirit of the Local Contexts Attribution Incomplete Notice, but it is the tool's OWN honest
+// without that community's involvement. It is a FACTUAL claim about the record ("a government record
+// about an Indigenous community"), so it is shown only where that is true: residential-school content
+// (inherently about Indigenous communities) and the Indigenous VARIANT of coerced sterilization
+// (coerced-sterilization-indigenous, upgraded in flags.py only when Indigenous context appears in the
+// question, answer, or evidence). The generic "coerced-sterilization" topic is deliberately NOT here,
+// so a non-Indigenous eugenics/sterilization result (e.g. a provincial Sexual Sterilization Act and
+// institution patients) keeps the interstitial, the note, and 9-8-8 but NOT this notice. It is in the
+// spirit of the Local Contexts Attribution Incomplete Notice, but it is the tool's OWN honest
 // acknowledgement, NOT an official Notice: real Notices are generated by the holding institution with
 // the community through the Local Contexts Hub. It is additive and never alters the record.
 export const ATTRIBUTION_TOPICS = new Set<string>([

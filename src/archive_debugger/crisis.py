@@ -50,12 +50,18 @@ RESOURCES: dict[str, dict] = {
 
 # Detection topic key (flags.TOPIC_SIGNALS keys, hyphenated) -> ordered resource keys (the list
 # order is the display order). The author's spec uses underscored topic names; they map to the
-# existing hyphenated detection keys one-to-one.
+# existing hyphenated detection keys one-to-one. ONLY the Tier A (crisis-care) topics appear here;
+# the Tier B (calm historical note) and Tier C (not-current-medical-advice) topics deliberately map
+# to no crisis resource, so a Tier B/C result carries its note with no crisis line (flags.TIERS).
 TOPIC_RESOURCES: dict[str, list[str]] = {
     "residential-school-health": ["irs_crisis_line", "hope_for_wellness", "helpline_988"],
     # mmiwg_crisis_line is included here deliberately (author-decided): the sterilization topic can
-    # surface MMIWG-adjacent harm, so this line is offered alongside Hope for Wellness and 9-8-8.
+    # surface MMIWG-adjacent harm, so this line is offered alongside Hope for Wellness and 9-8-8. The
+    # Indigenous-specific lines belong only on the Indigenous variant (upgraded in flags.py when the
+    # record shows Indigenous context); the generic coerced-sterilization topic gets 9-8-8 only, so a
+    # non-Indigenous eugenics/sterilization result does not surface the Indigenous-specific lines.
     "coerced-sterilization-indigenous": ["hope_for_wellness", "mmiwg_crisis_line", "helpline_988"],
+    "coerced-sterilization": ["helpline_988"],
     "tainted-blood-krever": ["helpline_988"],
     "early-hiv-aids": ["helpline_988"],
 }

@@ -3,8 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   ATTRIBUTION_TOPICS,
   CROSSWALK_ENABLED,
+  careTier,
+  contextualNote,
   crosswalkSegments,
+  medicalAdviceNote,
   needsAttribution,
+  TIER_A_TOPICS,
+  TIER_B_TOPICS,
+  TIER_C_TOPICS,
 } from "../lib/sensitivity";
 import { CrosswalkText } from "../components/CrosswalkText";
 import type { Flagged } from "../types";
@@ -17,6 +23,8 @@ describe("attribution-incomplete notice gating", () => {
   it("fires only for the two state-created-about-Indigenous topics", () => {
     expect(needsAttribution(flagged(["residential-school-health"]))).toBe(true);
     expect(needsAttribution(flagged(["coerced-sterilization-indigenous"]))).toBe(true);
+    // the GENERIC coerced-sterilization topic (no Indigenous context) must NOT show the notice
+    expect(needsAttribution(flagged(["coerced-sterilization"]))).toBe(false);
     expect(needsAttribution(flagged(["early-hiv-aids"]))).toBe(false);
     expect(needsAttribution(flagged(["tainted-blood-krever"]))).toBe(false);
     expect(needsAttribution(flagged([]))).toBe(false);
@@ -25,6 +33,50 @@ describe("attribution-incomplete notice gating", () => {
       "coerced-sterilization-indigenous",
       "residential-school-health",
     ]);
+  });
+});
+
+describe("care tiers", () => {
+  it("tier sets partition the known topics with no overlap", () => {
+    const all = [...TIER_A_TOPICS, ...TIER_B_TOPICS, ...TIER_C_TOPICS];
+    expect(new Set(all).size).toBe(all.length); // no topic in two tiers
+    expect([...TIER_A_TOPICS].sort()).toEqual([
+      "coerced-sterilization",
+      "coerced-sterilization-indigenous",
+      "early-hiv-aids",
+      "residential-school-health",
+      "tainted-blood-krever",
+    ]);
+    expect([...TIER_B_TOPICS].sort()).toEqual(["sexual-content-minors", "sterilization-reproductive"]);
+    expect([...TIER_C_TOPICS].sort()).toEqual(["hepatitis-transmission", "immunization-guidance"]);
+  });
+
+  it("careTier takes the heaviest tier present (A > B > C), else null", () => {
+    expect(careTier(flagged(["early-hiv-aids"]))).toBe("A");
+    // both coerced-sterilization variants are Tier A (crisis treatment)
+    expect(careTier(flagged(["coerced-sterilization"]))).toBe("A");
+    expect(careTier(flagged(["coerced-sterilization-indigenous"]))).toBe("A");
+    expect(careTier(flagged(["sterilization-reproductive"]))).toBe("B");
+    expect(careTier(flagged(["immunization-guidance"]))).toBe("C");
+    // a crisis topic always outranks a lighter one
+    expect(careTier(flagged(["coerced-sterilization-indigenous", "sterilization-reproductive"]))).toBe("A");
+    expect(careTier(flagged(["sterilization-reproductive", "hepatitis-transmission"]))).toBe("B");
+    expect(careTier(flagged([]))).toBe(null);
+    expect(careTier(null)).toBe(null);
+  });
+
+  it("the note copy is tier-appropriate; only Tier A references support below", () => {
+    const a = contextualNote(flagged(["residential-school-health"]));
+    expect(a).toContain("help is available below");
+    const b = contextualNote(flagged(["sterilization-reproductive"]));
+    expect(b).not.toContain("help is available below");
+    expect(b).toContain("shown here unaltered");
+    const c = contextualNote(flagged(["hepatitis-transmission"]));
+    expect(c).not.toContain("help is available below");
+    expect(c).toContain("not current medical advice");
+    // the medical-advice note is year-aware like the others
+    expect(medicalAdviceNote(1979)).toContain("from 1979");
+    expect(medicalAdviceNote(null)).not.toContain("from");
   });
 });
 

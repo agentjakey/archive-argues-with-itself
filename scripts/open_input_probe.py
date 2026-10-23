@@ -32,14 +32,19 @@ from pathlib import Path
 
 PROBES_PATH = Path(__file__).resolve().parent / "open_input_probes.jsonl"
 
-# The two heaviest care topics that must also show the tap-through interstitial (mirrors
-# web/src/lib/sensitivity.ts INTERSTITIAL_TOPICS; kept in sync by hand).
-INTERSTITIAL_TOPICS = {"residential-school-health", "coerced-sterilization-indigenous"}
+# The heaviest care topics that must also show the tap-through interstitial (mirrors
+# web/src/lib/sensitivity.ts INTERSTITIAL_TOPICS; kept in sync by hand). Both coerced-sterilization
+# variants (generic and Indigenous) show it.
+INTERSTITIAL_TOPICS = {"residential-school-health", "coerced-sterilization", "coerced-sterilization-indigenous"}
+# Each care category maps to the acceptable detection topic(s). A coerced-sterilization probe is a
+# care hit on EITHER the generic coerced-sterilization topic or its Indigenous upgrade; the Indigenous
+# upgrade (and the attribution notice / Indigenous-specific lines) only fires when the result shows
+# Indigenous context, which is correct precision, not a miss.
 CARE_TOPICS = {
-    "care_residential": "residential-school-health",
-    "care_sterilization": "coerced-sterilization-indigenous",
-    "care_tainted_blood": "tainted-blood-krever",
-    "care_hiv_aids": "early-hiv-aids",
+    "care_residential": ("residential-school-health",),
+    "care_sterilization": ("coerced-sterilization", "coerced-sterilization-indigenous"),
+    "care_tainted_blood": ("tainted-blood-krever",),
+    "care_hiv_aids": ("early-hiv-aids",),
 }
 
 
@@ -356,8 +361,8 @@ def classify(probe: dict, res: dict) -> dict:
         out["outcome"] = "ANSWER_NO_CITE"
     if probe["category"] in CARE_TOPICS:
         want = CARE_TOPICS[probe["category"]]
-        out["care_expected_topic"] = want
-        out["care_hit"] = want in out["flagged_topics"]
+        out["care_expected_topic"] = "|".join(want)
+        out["care_hit"] = any(w in out["flagged_topics"] for w in want)
     return out
 
 
@@ -380,7 +385,7 @@ def report(rows: list[dict], scope: str) -> dict:
     keyed = any(r["outcome"] in ("ANSWER", "ABSTAIN", "ANSWER_BROKEN_CITE", "ANSWER_NO_CITE") for r in rows)
     care = [r for r in rows if r["category"] in CARE_TOPICS]
     care_miss = [r for r in care if not r.get("care_hit")]
-    interstitial_needed = [r for r in care if CARE_TOPICS[r["category"]] in INTERSTITIAL_TOPICS]
+    interstitial_needed = [r for r in care if any(t in INTERSTITIAL_TOPICS for t in CARE_TOPICS[r["category"]])]
     interstitial_miss = [r for r in interstitial_needed if not r["needs_interstitial"]]
     by_cat: dict = {}
     for r in rows:

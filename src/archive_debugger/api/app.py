@@ -401,6 +401,9 @@ def _mb_or_unknown(n: Optional[int]) -> str:
     return f"{n / 1_000_000:.0f}" if n is not None else "unknown"
 
 
+WARM_QUERY = "public health services"   # a real in-window query to exercise the full retrieve path at boot
+
+
 def _warm(conn: sqlite3.Connection) -> None:
     """Read the dense index and passage text once so the OS page cache holds them: the first
     cache-miss dense scan then runs warm (CPU-bound) instead of cold (paging the whole index off the
@@ -415,6 +418,36 @@ def _warm(conn: sqlite3.Connection) -> None:
             conn.execute(sql).fetchone()
         except sqlite3.Error:
             pass
+
+
+def _dense_backend_label(retr) -> str:
+    """Whether this scope's dense leg is the resident numpy index (fast, tens of ms) or the
+    sqlite-vec per-row cosine scan (slow; the cold-start/timeout cause when the resident load was
+    refused under memory pressure). Read from the live retriever; no external call. The report and
+    the logs use this so a silent fallback is visible, since it also drives the hosting cost."""
+    idx = getattr(retr, "dense_index", None)
+    if idx is not None:
+        return f"numpy-resident (n={getattr(idx, 'n', '?')}, dim={getattr(idx, 'dim', '?')})"
+    return ("sqlite-vec scan (FALLBACK: the slow per-row cosine; the cold-start/timeout cause under "
+            "memory pressure -- give the instance more memory to hold the resident index)")
+
+
+def _prime_model_client() -> None:
+    """Prime the generation client once at boot so the first user query does not pay the Anthropic
+    SDK import and client construction (a lazy cost on the request path today). Guarded: with no key
+    it logs and returns, and any failure is logged and swallowed, so serving always continues. Never
+    makes a billed generation call, and constructing the client issues no network request, so CI
+    stays hermetic (no key -> skip)."""
+    if not _key_available():
+        print("[boot-warm] model client not primed: no ANTHROPIC_API_KEY/AUTH_TOKEN set "
+              "(serving continues; /ask shows the record in limited mode)", flush=True)
+        return
+    try:
+        import anthropic
+        anthropic.Anthropic(max_retries=0)   # construct once: warms the SDK import + client build
+        print("[boot-warm] model client primed (anthropic SDK imported, client constructed)", flush=True)
+    except Exception as exc:  # noqa: BLE001 - priming is best-effort, never fatal to serving
+        print(f"[boot-warm] model client prime skipped ({type(exc).__name__}: {exc}); serving continues", flush=True)
 
 
 class _LockedEmbedder:
@@ -823,8 +856,21 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 try:
                     t0 = time.monotonic()
                     with b.pool.checkout() as wr:
-                        _warm(wr.conn)
-                    print(f"[boot-warm] scope={b.name} warmed in {time.monotonic() - t0:.1f}s", flush=True)
+                        _warm(wr.conn)   # page the dense index + passage text + FTS into the OS cache
+                        # A genuine retrieval through the normal path, so fastembed's ONNX session and
+                        # the whole retrieve/RRF/annotate pipeline are initialized at boot, not lazily
+                        # on the first user query, and a pooled connection is exercised end to end.
+                        # Bounded by the same deadline the request path uses, so a slow (fallback) scan
+                        # cannot hang readiness; a failure is logged and never fatal.
+                        try:
+                            _bounded_retrieve(
+                                wr.conn, RETRIEVAL_DEADLINE_S,
+                                lambda: retrieve_pool(wr, WARM_QUERY, build_filters(None), b.gcfg["top_k"]))
+                            warm_ret = "ok"
+                        except Exception as exc:  # noqa: BLE001 - a slow/interrupted warm scan is not fatal
+                            warm_ret = f"skipped ({type(exc).__name__})"
+                    print(f"[boot-warm] scope={b.name} warmed in {time.monotonic() - t0:.1f}s "
+                          f"dense={_dense_backend_label(b.retriever)} retrieval={warm_ret}", flush=True)
                     # Residency check: after this scope's index is paged in, how much of the container
                     # memory limit the process now holds, so a scope being evicted (RSS not growing to
                     # hold both indexes) is visible in the logs. Read from the local filesystem only.
@@ -833,8 +879,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                           f"limit_mb={_mb_or_unknown(limit)}", flush=True)
                 except Exception:  # noqa: BLE001 - warming is best-effort, never fatal to serving
                     pass
-            app.state.ready.set()   # readiness only after every own scope's index is warm in the OS cache
-        threading.Thread(target=_warm_all, name="boot-warm", daemon=True).start()
+            _prime_model_client()   # prime the generation client once (guarded; no billed call)
+            app.state.ready.set()   # readiness only after every own scope's index + pipeline is warm
+        # Only a real serving process (own retrievers) warms and primes. The injected-retriever path
+        # (tests) is already ready and must stay hermetic -- it never starts the thread, so the
+        # anthropic SDK is not imported there even when a key is present in the environment.
+        if needs_warm:
+            threading.Thread(target=_warm_all, name="boot-warm", daemon=True).start()
         try:
             yield
         finally:

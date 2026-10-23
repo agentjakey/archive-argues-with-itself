@@ -40,11 +40,72 @@ Governance statement (About and Gaps):
   Contexts Hub. This tool only adds context alongside the record. It never changes the record, and it
   does not speak for any community.
 
-Attribution-incomplete notice (care note and interstitial, for residential-school and coerced
-sterilization records):
+Attribution-incomplete notice (shown in the care note and the interstitial for residential-school
+records always, and for coerced-sterilization records only when the record shows Indigenous context;
+see "How the care layer works" below):
 
   This is a government record about an Indigenous community, created without that community's
   involvement or consent. It is shown here unaltered. Cultural rights and protocols may apply.
+
+## How the care layer works (three tiers)
+
+Harm-adjacent content is flagged on serve by a detector (src/archive_debugger/flags.py) and rendered by
+the web frontend (web/src/lib/sensitivity.ts). The treatment is proportionate: crisis lines belong only
+on the heaviest topics, and lighter content gets a calm note and nothing more. Detection is additive --
+it only adds to the response's `flagged` field and the care copy shown alongside the record; it never
+alters the record or the answer. When more than one tier is present, the heaviest wins (A over B over
+C), so a result that touches both a crisis topic and a lighter one gets the crisis treatment.
+
+Tier A -- crisis care (verified crisis lines, from the single source of truth,
+src/archive_debugger/crisis.py):
+
+- Residential-school health: always the full treatment -- the tap-through interstitial, the
+  attribution-incomplete notice, the contextual note, and the Indigenous-specific lines (the National
+  Indian Residential School Crisis Line, Hope for Wellness, and 9-8-8). This content is inherently about
+  Indigenous communities, so it is never gated.
+- Coerced sterilization: the interstitial, the contextual note, and 9-8-8. This covers coerced tubal
+  ligation (coerced / forced / involuntary / compulsory / non-consensual tubal ligation, "tubes tied
+  without consent") and sterilization "without consent" generally, not only the eugenics-era "Sexual
+  Sterilization Act" language; plain voluntary or contraceptive tubal ligation with no coercion stays
+  Tier B. The attribution-incomplete notice and the Indigenous-specific lines (Hope for Wellness and the
+  MMIWG line) are added ONLY when the result shows Indigenous context in the question, the answer, or the
+  shown evidence. Without that context the result still carries the interstitial, the note, and 9-8-8,
+  but makes no claim to be about an Indigenous community. Indigenous context is matched word-bounded, in
+  English and French, including the historical terms the record itself uses (Indigenous, First Nations,
+  Metis, Inuit, Aboriginal, Native, Indian, autochtone, Premieres Nations, treaty, Eskimo, "band
+  council", "on reserve", and so on); bare "band" / "reserve" and "native-born" are excluded as too
+  ambiguous.
+- Tainted blood (the Krever inquiry) and early HIV/AIDS: a contextual note and the 9-8-8 line, but only
+  when the content is about the scandal or the epidemic. A routine disease-transmission answer -- for
+  example how hepatitis C is transmitted -- that only incidentally pulls in an HIV or blood-system
+  mention from a source title is NOT given the crisis line; it is treated as Tier C instead (see below).
+  The line is kept whenever the question or answer is itself about HIV/AIDS or names the blood scandal.
+
+Tier B -- a calm historical-content note, NO crisis line. For sensitive, colonial, or outdated content
+that does not warrant crisis resources: human and reproductive sterilization that is not the Tier A
+coercion case (tubal ligation, vasectomy, contraceptive sterilization, eugenics-era reproductive
+content), and sexual content, especially anything involving children (sexual attitudes, sexual
+counselling, child-sexual material). Routine "sexually transmitted" / "sexual health" public-health
+content is deliberately not flagged.
+
+Tier C -- a "not current medical advice" note, NO crisis line. For dated health guidance a visitor could
+mistake for current advice: immunization and vaccination schedules and doses, and hepatitis
+disease-transmission guidance. Administrative or institutional health content (for example a
+mental-health board's responsibilities) is not flagged.
+
+How detection reads the content:
+
+- It reads the user's question, the model's answer, and the shown evidence (the passages sent to the
+  model or cited), so harm content the visitor asked about or the model composed is caught, not only
+  what a served snippet happens to contain.
+- It matches French accent-insensitively: the text being scanned is normalized (diacritics stripped) for
+  matching only, so accented forms such as "sterilisation forcee", "sang contamine", "Metis", or
+  "Premieres Nations" match the ASCII patterns. The displayed record is never altered -- normalization
+  applies only to the copy being searched.
+- It shows nothing on a refusal: when the tool abstains, with no answer and no record foregrounded, no
+  contextual note and no crisis line appear, so a "the record is silent here" result never puts
+  harm-adjacent content or a crisis line on screen. The content stays fully searchable and reachable.
+- The reparative term crosswalk (below) remains OFF; no displayed excerpt is annotated.
 
 ## CARE Principles (how the tool aligns)
 
@@ -55,9 +116,12 @@ sterilization records):
   list or a Notice can be set by the institution and community rather than asserted by the tool.
 - Responsibility: the tool states its limits (coverage gaps, the undated share, the abstention rule,
   the non-independent judge) and never frames itself as reaching the present or as neutral.
-- Ethics: harm-adjacent material carries a calm contextual note, verified crisis lines, and, on the
-  heaviest topics, a tap-through before the result; a record created about an Indigenous community
-  without its involvement carries an attribution-incomplete acknowledgement.
+- Ethics: harm-adjacent material carries a proportionate treatment in three tiers (see "How the care
+  layer works"): crisis care with verified crisis lines and, on the heaviest topics, a tap-through
+  before the result; a calm historical-content note for sensitive material that does not warrant
+  crisis resources; and a not-current-medical-advice note for dated health guidance. A record created
+  about an Indigenous community without its involvement carries an attribution-incomplete
+  acknowledgement, shown only where the record is actually about an Indigenous community.
 
 ## Local Contexts Notices (how the tool is Notices-ready)
 
@@ -68,7 +132,8 @@ The tool draws on the spirit of three institution-facing Notices, as the tool's 
 - Attribution Incomplete: on records created about an Indigenous community by the state without that
   community's involvement or attribution, the tool shows a short note naming that plainly (see below).
 - Collections Care: sensitive material stays searchable and grounded but is kept out of the featured
-  stories, with a contextual note and support lines wherever it is surfaced.
+  stories, with a proportionate contextual note wherever it is surfaced (and verified support lines on
+  the heaviest topics; see "How the care layer works").
 
 These are the tool's acknowledgements in the spirit of the Notices; they are not official Local
 Contexts Notices, which only the institution and communities can create.
@@ -76,13 +141,21 @@ Contexts Notices, which only the institution and communities can create.
 ## The attribution-incomplete notice
 
 Where a result surfaces a record that is about an Indigenous community but was created by the state
-without that community's involvement, the tool adds a short notice alongside the unaltered page. It
-fires for exactly the two topics the detector already identifies as this kind of record:
-residential-school health and coerced sterilization (the same two topics that already trigger the
-tap-through interstitial). It is additive, calm, and non-performative, sits alongside the existing
-crisis lines without crowding them, and is clearly the tool's own words. The copy is in
-web/src/lib/sensitivity.ts (ATTRIBUTION_NOTICE) and renders in both the contextual note and the
-interstitial, on every path the existing care note fires.
+without that community's involvement, the tool adds a short notice alongside the unaltered page. Because
+the notice makes a factual claim about the record ("a government record about an Indigenous community"),
+it is shown only where that is true:
+
+- Residential-school health content: always. This content is inherently about Indigenous communities.
+- Coerced-sterilization content: only when the result shows Indigenous context (see "How the care layer
+  works" for how that is detected). A coerced-sterilization result with no Indigenous context -- for
+  example a provincial Sexual Sterilization Act and its institution patients -- still carries the
+  interstitial, the contextual note, and the 9-8-8 line, but not this notice and not the
+  Indigenous-specific support lines, because it would be inaccurate to call it a record about an
+  Indigenous community.
+
+It is additive, calm, and non-performative, sits alongside the existing crisis lines without crowding
+them, and is clearly the tool's own words. The copy is in web/src/lib/sensitivity.ts
+(ATTRIBUTION_NOTICE) and renders in both the contextual note and the interstitial.
 
 ## Vocabulary decisions
 
