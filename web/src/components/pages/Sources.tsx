@@ -1,6 +1,8 @@
+import type { ReactNode } from "react";
 import { formatInt, plural, windowNote } from "../../lib/format";
 import { outOfWindowCount } from "../../lib/timeline";
 import type { ScopeInfo, YearWindow } from "../../types";
+import { Term } from "../Term";
 import { Page } from "./Page";
 
 function pct(n: number, total: number): string {
@@ -12,7 +14,7 @@ function spanLabel(w: YearWindow): string {
   return `${w.min_year} to ${w.max_year}`;
 }
 
-function Figure({ value, label }: { value: string; label: string }) {
+function Figure({ value, label }: { value: string; label: ReactNode }) {
   return (
     <div className="flex flex-col">
       <dd className="font-serif text-xl m-0">{value}</dd>
@@ -48,10 +50,11 @@ function ScopeComposition({ scope }: { scope: ScopeInfo }) {
 
       <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-2">
         <Figure value={formatInt(scope.item_count)} label="items" />
-        <Figure value={formatInt(c.passages)} label="passages" />
-        <Figure value={spanLabel(c.dated_span)} label="dated items span" />
-        <Figure value={pct(c.undated.items, scope.item_count)} label="of items undated" />
+        <Figure value={formatInt(c.passages)} label={<Term def="passage">passages</Term>} />
+        <Figure value={spanLabel(c.dated_span)} label={<Term def="dated-span">dated items span</Term>} />
+        <Figure value={pct(c.undated.items, scope.item_count)} label={<span>of items <Term def="undated">undated</Term></span>} />
       </dl>
+      <p className="mt-2 text-sm text-muted">How big this corpus is, how far back it reaches, and how much of it carries no usable date.</p>
       <p className="mt-2 text-sm text-muted">{windowNote(c.window, outOfWindowCount(c.by_period))}</p>
       <p className="mt-1 text-sm text-muted">
         Undated: {formatInt(c.undated.items)} of {formatInt(scope.item_count)} items (
@@ -60,7 +63,8 @@ function ScopeComposition({ scope }: { scope: ScopeInfo }) {
         passage figure is labelled as such and is never the headline.
       </p>
 
-      <h4 className="mt-4 tag">OCR quality, passage-weighted</h4>
+      <h4 className="mt-4 tag"><Term def="ocr-quality">OCR quality</Term>, passage-weighted</h4>
+      <p className="text-sm text-muted">Higher means cleaner scanned text that is easier to search; low-quality pages still appear, just ranked lower.</p>
       <p className="text-sm">
         high {pct(c.ocr.high, ocrTotal)} &middot; medium {pct(c.ocr.medium, ocrTotal)} &middot; low{" "}
         {pct(c.ocr.low, ocrTotal)}
@@ -75,7 +79,8 @@ function ScopeComposition({ scope }: { scope: ScopeInfo }) {
         semantic-correctness measure.
       </p>
 
-      <h4 className="mt-4 tag">Jurisdiction, an issuer proxy and a floor</h4>
+      <h4 className="mt-4 tag"><Term def="jurisdiction">Jurisdiction</Term>, an issuer proxy and a floor</h4>
+      <p className="text-sm text-muted">Which governments are represented, as a minimum; many items name no province, so read it as a floor.</p>
       <ul className="mt-1 text-sm space-y-0.5">
         {c.jurisdictions.map((j) => (
           <li key={j.name}>
@@ -92,6 +97,7 @@ function ScopeComposition({ scope }: { scope: ScopeInfo }) {
       </p>
 
       <h4 className="mt-4 tag">How dates were resolved</h4>
+      <p className="text-sm text-muted">Where each date came from. Nothing here is guessed.</p>
       <p className="text-sm">
         {formatInt(c.date_method.exact ?? 0)} from catalogue metadata, {formatInt(c.date_method.title_extracted ?? 0)}{" "}
         from the document title, {formatInt(c.date_method.unknown ?? 0)} undated. No date here is estimated or
@@ -105,9 +111,9 @@ function ScopeComposition({ scope }: { scope: ScopeInfo }) {
  *  archive.org links. Reads /scopes; renders nothing scope-specific until it loads. */
 export function SourcesPage({ scopes }: { scopes: ScopeInfo[] | null }) {
   return (
-    <Page title="Sources and provenance">
+    <Page title="Sources and provenance" className="spacious">
       <p>
-        Each corpus here is built from existing Internet Archive scans and their OCR. Every figure below is
+        Each corpus here is built from existing Internet Archive scans and their <Term def="ocr">OCR</Term>. Every figure below is
         read live from that corpus's own databases through the app, not hardcoded. Every answer and every
         citation links to the page on archive.org, so you can read the source for yourself.
       </p>

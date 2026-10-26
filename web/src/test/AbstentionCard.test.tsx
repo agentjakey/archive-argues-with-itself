@@ -12,6 +12,12 @@ describe("AbstentionCard", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
   });
+  it("leads with a plain line that the refusal is deliberate and points to the evidence below", () => {
+    render(<AbstentionCard answer={abstention()} />);
+    expect(screen.getByText(/deliberate refusal, not an error/)).toBeInTheDocument();
+    expect(screen.getByText(/nearest evidence it does hold is below/)).toBeInTheDocument();
+  });
+
   it("shows the single source badge when flagged", () => {
     const a = abstention();
     a.coverage.single_source = true;

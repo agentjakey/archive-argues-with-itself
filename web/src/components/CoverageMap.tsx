@@ -5,6 +5,7 @@ import { featurePath, fitConicConformal, isFeatureCollection, type FeatureCollec
 import type { View } from "../lib/urlstate";
 import type { ScopeInfo } from "../types";
 import { Page } from "./pages/Page";
+import { Term } from "./Term";
 
 const MAP_W = 720;
 const MAP_H = 460;
@@ -38,11 +39,12 @@ export function CoverageMap({ scope, onExplore, onNav }: Props) {
     return () => { alive = false; };
   }, []);
   return (
-    <Page title="Coverage map">
+    <Page title="Coverage map" className="spacious">
       <p>
         A rough map of where this record reaches across Canada
-        {scope ? <> (<span className="text-ink">{scope.label}</span>)</> : null}. Jurisdiction is an
-        issuer-derived proxy, so this is orientation, not a scorecard: provinces are shaded in coarse
+        {scope ? <> (<span className="text-ink">{scope.label}</span>)</> : null}.{" "}
+        <Term def="jurisdiction">Jurisdiction</Term> is an issuer-derived proxy, so this is orientation,
+        not a scorecard: provinces are shaded in coarse
         bands, exact counts are never claimed as precise, and the items with no jurisdiction signal are
         shown as a separate figure, never spread across provinces.
       </p>

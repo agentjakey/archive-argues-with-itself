@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 /** Reading-room page: serif headings, one column of prose, rules not boxes. The main is the single
  *  landmark for the view and the skip-link / focus target (id main-content); the heading is made
  *  programmatically focusable (tabIndex -1) so a page change moves focus to it. */
-export function Page({ title, children }: { title: string; children: ReactNode }) {
+export function Page({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <main id="main-content" tabIndex={-1} className="reading" aria-labelledby="page-heading">
+    <main id="main-content" tabIndex={-1} className={className ? `reading ${className}` : "reading"} aria-labelledby="page-heading">
       <h2 id="page-heading" tabIndex={-1} className="screen-title">
         {title}
       </h2>

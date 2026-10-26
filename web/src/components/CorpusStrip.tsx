@@ -1,4 +1,6 @@
+import type { ReactNode } from "react";
 import { formatInt, formatShare, windowLabel } from "../lib/format";
+import { Term } from "./Term";
 import type { ScopeInfo, YearWindow } from "../types";
 
 interface Props {
@@ -19,13 +21,13 @@ export function CorpusStrip({ scope }: Props) {
         <>
           <dl className="flex flex-wrap gap-x-8 gap-y-2" aria-label="Corpus facts">
             <Figure value={formatInt(scope.item_count)} label="items" />
-            <Figure value={formatInt(c.passages)} label="passages" />
+            <Figure value={formatInt(c.passages)} label={<Term def="passage">passages</Term>} />
             <Figure
               value={hasWindow ? windowLabel({ window: cov! }) : windowLabel({ window: c.dated_span })}
               label="coverage window"
             />
-            <Figure value={formatShare(c.undated.item_share)} label="of items undated" />
-            <Figure value={formatShare(c.jurisdiction_unknown_share)} label="jurisdiction unknown" />
+            <Figure value={formatShare(c.undated.item_share)} label={<span>of items <Term def="undated">undated</Term></span>} />
+            <Figure value={formatShare(c.jurisdiction_unknown_share)} label={<span><Term def="jurisdiction">jurisdiction</Term> unknown</span>} />
           </dl>
           {scope.collection && scope.collection_url && (
             <p className="mt-2 text-sm text-muted">
@@ -69,7 +71,7 @@ function spanNote(cov: YearWindow | null, span: YearWindow): string {
   return `Dated items span ${spanStr}. ${base}`;
 }
 
-function Figure({ value, label }: { value: string; label: string }) {
+function Figure({ value, label }: { value: string; label: ReactNode }) {
   return (
     <div className="flex flex-col">
       <dd className="font-serif text-xl m-0">{value}</dd>

@@ -1,4 +1,5 @@
 import { formatInt, formatShare } from "../lib/format";
+import { Term } from "./Term";
 import type { CoverageResponse, ScopeInfo } from "../types";
 
 interface Props {
@@ -72,7 +73,8 @@ export function CoveragePanel({ coverage, undatedShare, explanation, scope }: Pr
         </div>
       )}
       <p className="mt-3 text-sm text-muted max-w-prose">
-        What this cannot tell you: {reach}; {dateClause}; counts are lexical matches, not relevance.
+        What this cannot tell you: {reach}; {dateClause}; counts are{" "}
+        <Term def="lexical-matches">lexical matches</Term>, not relevance.
       </p>
     </section>
   );

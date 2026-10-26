@@ -489,3 +489,23 @@ button:hover .page-artifact {
 .settle-delay {
   animation: settle 440ms ease-out 90ms both;
 }
+
+/* --- item 6: a roomier reading variant for the Sources and Coverage map pages only (set with the
+   Page "spacious" className). Modest extra space between blocks and list rows, and a small-text floor
+   so the dense stat blocks and the map breathe. Scoped to .spacious, so every other reading page is
+   unchanged, and nothing is restructured. --- */
+.reading.spacious .reading-body > * + * {
+  margin-top: 1.15rem;
+}
+
+.reading.spacious .reading-body li + li {
+  margin-top: 0.2rem;
+}
+
+.reading.spacious .reading-body .text-sm {
+  font-size: 0.9375rem;
+}
+
+.reading.spacious .reading-body .text-xs {
+  font-size: 0.8125rem;
+}

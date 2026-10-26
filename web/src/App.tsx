@@ -609,10 +609,10 @@ export default function App() {
         <>
           <section className="my-4" aria-label="What this is">
             <p className="max-w-prose text-base leading-relaxed sm:text-lg">
-              Ask a question of Canada's public health record and you can see how the government's own
-              wording shifted over the decades, instead of one collapsed summary. Every claim links back
-              to the page it came from, so you can check it yourself. When the record is too thin to
-              answer, the tool says so and shows you the gap.
+              The government's own words about public health changed over the decades, and that change is
+              the story. Ask a question and watch the wording shift across the record instead of reading
+              one collapsed summary. Every claim links back to the page it came from, so you can check it
+              yourself. When the record is too thin to answer, the tool says so and shows you the gap.
             </p>
           </section>
           <ThresholdHero featured={stories[0] ?? null} onOpen={openStory} />

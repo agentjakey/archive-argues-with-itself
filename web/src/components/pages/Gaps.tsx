@@ -108,9 +108,12 @@ export function Gaps({ scope, crisis }: { scope: ScopeInfo | null; crisis: Crisi
           </p>
           <p>{GOVERNANCE_STATEMENT}</p>
           <p>
-            Where a result surfaces a record created about an Indigenous community without that community's
-            involvement, the tool adds a short attribution note alongside the unaltered page. The rationale is in
-            docs/CARE.md. If you are sitting with hard material and need support, help is here:
+            The tool adds a short attribution note on two kinds of result: residential-school health content,
+            and coerced-sterilization content that shows Indigenous context. On those it names plainly that
+            this is a government record about an Indigenous community, created without that community's
+            involvement. It does not appear on every record about an Indigenous community; the rationale and
+            the known gap are in docs/CARE.md. If you are sitting with hard material and need support, help is
+            here:
           </p>
           <CrisisLines lines={careLines} />
         </>
@@ -238,9 +241,12 @@ export function Gaps({ scope, crisis }: { scope: ScopeInfo | null; crisis: Crisi
           </p>
           <p>{GOVERNANCE_STATEMENT}</p>
           <p>
-            Where a result surfaces a record created about an Indigenous community without that community's
-            involvement, the tool adds a short attribution note alongside the unaltered page. The rationale is in
-            docs/CARE.md. If you are sitting with hard material and need support, help is here:
+            The tool adds a short attribution note on two kinds of result: residential-school health content,
+            and coerced-sterilization content that shows Indigenous context. On those it names plainly that
+            this is a government record about an Indigenous community, created without that community's
+            involvement. It does not appear on every record about an Indigenous community; the rationale and
+            the known gap are in docs/CARE.md. If you are sitting with hard material and need support, help is
+            here:
           </p>
           <CrisisLines lines={careLines} />
         </>

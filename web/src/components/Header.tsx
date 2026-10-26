@@ -44,6 +44,10 @@ export function Header({ kiosk, view, onView, onAsk, scopes, activeScope, onSwit
         </h1>
         {kiosk && <KioskQr />}
       </div>
+      <p className="mt-1 max-w-prose font-sans text-sm text-muted">
+        See how Canada's public-health record changed over the decades, with every claim linked to the
+        page it came from.
+      </p>
       <nav
         className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-rule pt-2"
         aria-label="Pages"

@@ -22,7 +22,9 @@ describe("CoveragePanel", () => {
     expect(within(baseline).getAllByRole("cell").map((c) => c.textContent)).toEqual(["7", "4"]);
     expect(screen.getByText(/by jurisdiction/)).toBeInTheDocument();
     expect(screen.getByText(/federal/)).toBeInTheDocument();
-    expect(screen.getByText(/45% of passages carry no date; counts are lexical matches, not relevance/)).toBeInTheDocument();
+    expect(screen.getByText(/45% of passages carry no date; counts are/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /lexical matches/ })).toBeInTheDocument();
+    expect(screen.getByText(/, not relevance/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Why the record is thin here" })).toBeInTheDocument();
   });
   it("renders a waiting line before coverage arrives", () => {
