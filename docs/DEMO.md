@@ -49,6 +49,18 @@ the data files in place (README "Run it yourself").
    an example question. Pages should render from `/pages/...` (the evidence rows
    carry `offline: true`), and the answer should say "served from cache".
 
+5. Prove it before doors: with the API running and the Wi-Fi off, run the one
+   self-test command:
+
+   ```powershell
+   .\.venv\Scripts\python.exe scripts\demo_selftest.py
+   ```
+
+   It runs the preflight check, the coverage scan, and the offline walkthrough in
+   order and prints a single `GREEN` or `RED`. Do not go on until it prints GREEN;
+   a RED names its cause (most often the page pack from step 3 is not yet complete,
+   which is the expected state on a fresh machine -- finish step 3 and re-run).
+
 ## Run (at the venue)
 
 ```powershell

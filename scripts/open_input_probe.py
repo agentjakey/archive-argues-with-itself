@@ -5,7 +5,7 @@ set a stranger might actually type, runs each through a running server's /ask (p
 classifies every outcome so the no-crash guarantee, the care layer, and the thin-record honesty
 can be checked against input that was never pre-chosen.
 
-Usage (server already running; see docs/RUNBOOK.md or the multi-bundle boot):
+Usage (server already running; see docs/DEMO.md or the multi-bundle boot):
     python scripts/open_input_probe.py --base http://127.0.0.1:8000 --scope microlog
     python scripts/open_input_probe.py --regen           # rewrite the committed probe set only
     python scripts/open_input_probe.py --base ... --scope pilot --out reports/open_input/pilot.json

@@ -15,7 +15,7 @@ prints one combined result, and exits non-zero if any sub-check is red. Nothing 
 writes to the corpus, the answer cache, or any published number (N5); it only runs the
 three read-only checks.
 
-Prerequisites for an all-GREEN result (see docs/RUNBOOK.md):
+Prerequisites for an all-GREEN result (see docs/DEMO.md):
   - the API is running (python -m uvicorn archive_debugger.api.app:app --port 8000);
   - the Wi-Fi is off (a true offline test); and
   - the offline page pack is built (scripts/offline_pack.py). Without the pack,
@@ -107,11 +107,11 @@ def main(argv=None) -> int:
         print("  python scripts/warm_cache.py http://127.0.0.1:8000")
         print("  python scripts/offline_pack.py --contact you@example.com")
         print("  python scripts/scan_coverage.py        # repeat until GREEN")
-        print("See docs/RUNBOOK.md, 'Build the page pack (network on, once)'.")
+        print("See docs/DEMO.md.")
     else:
         print("At least one failure is NOT the page pack (the API may be down, or a data")
         print("file or the retrieval stack is missing). Read the sub-check output above and")
-        print("docs/RUNBOOK.md, 'What GREEN means and what to do on each RED', before doors.")
+        print("docs/DEMO.md before doors.")
     return 1
 
 
