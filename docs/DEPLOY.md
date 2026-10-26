@@ -8,8 +8,9 @@ already present with the right hash is not re-downloaded, so later boots start i
 seconds. The web app is built inside the image and served at `/`.
 
 Two scopes ship this way: the frozen public_health pilot and the national microlog
-corpus. Both are sourced from R2, and the UI lands on microlog with the pilot in the
-switcher. The pilot's bytes and answers are unchanged (same `civic.db`); only its
+corpus. Both are sourced from R2. The UI lands on the pilot unless CIVIC_DEFAULT_SCOPE
+names another served scope; both stay in the switcher either way. The pilot's bytes and
+answers are unchanged (same `civic.db`); only its
 delivery origin moves to R2, and the GitHub-release path stays available as a
 fallback (see "Both scopes from R2" below).
 
@@ -40,7 +41,7 @@ The steps below use Railway. Nothing deploys automatically from CI.
 | `R2_ACCESS_KEY_ID` | your R2 key id | R2 access key id |
 | `R2_SECRET_ACCESS_KEY` | your R2 secret | R2 secret (set it as a Railway *secret* variable) |
 | `CIVIC_ENABLED_SCOPES` | `pilot,microlog` | scopes to provision and serve (both here); unset serves the pilot only |
-| `CIVIC_DEFAULT_SCOPE` | `microlog` | scope the UI lands on first (default microlog; both stay in the switcher) |
+| `CIVIC_DEFAULT_SCOPE` | (unset) | scope the UI lands on first; unset means the pilot, set it to land on another served scope. Both stay in the switcher. |
 | `DATA_RELEASE_URL` | `https://github.com/<you>/archive-argues-with-itself/releases/download/data-v1` | fallback only: the pilot's GitHub release, used when the R2 vars are absent (its files are under GitHub's 2 GiB cap). microlog has no release fallback. |
 | `ANTHROPIC_API_KEY` | your key | the only external call the server makes at serve time |
 | `ALLOWED_ORIGINS` | (unset) | only for a separately hosted web app; comma-separated origins |
@@ -89,8 +90,9 @@ boot verifies against). To serve both scopes:
 
 3. **Set the R2 and scope variables**: `R2_ENDPOINT`, `R2_BUCKET`,
    `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (a secret variable),
-   `CIVIC_ENABLED_SCOPES=pilot,microlog`, `CIVIC_DEFAULT_SCOPE=microlog`, and
-   `ANTHROPIC_API_KEY`. Size the volume for both scopes: about 10.5 GiB of data, so
+   `CIVIC_ENABLED_SCOPES=pilot,microlog`, and `ANTHROPIC_API_KEY`. Leave
+   `CIVIC_DEFAULT_SCOPE` unset so the UI lands on the pilot (set it to land on another
+   served scope instead). Size the volume for both scopes: about 10.5 GiB of data, so
    ~15 GB gives headroom for the answer cache and a partial download.
 
 4. **Deploy.** The boot log lists each file verified or downloaded, then

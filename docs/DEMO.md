@@ -59,7 +59,7 @@ the data files in place (README "Run it yourself").
    It runs the preflight check, the coverage scan, and the offline walkthrough in
    order and prints a single `GREEN` or `RED`. Do not go on until it prints GREEN;
    a RED names its cause (most often the page pack from step 3 is not yet complete,
-   which is the expected state on a fresh machine -- finish step 3 and re-run).
+   which is the expected state on a fresh machine; finish step 3 and re-run).
 
 ## Run (at the venue)
 

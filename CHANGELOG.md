@@ -163,19 +163,26 @@ under the same floor and window.
 
 Added a second, national scope from the `microlog` collection and audited it:
 13,539 items, 1,136,827 passages, dated 1963-2018. On 47 seed questions the
-configured model kept 304 sentences, each read against its cited page text (N2):
+configured model kept 304 sentences, each read against its cited page text:
 strict support 298/304 (0.980), lenient 304/304 (1.000), and 200 of 200 cited
 passages resolve. Unlike the pilot, this scope reaches into the 2010s: all 4,379
 out-of-window dated items are post-2009, shown with their real dates. Both scopes
 ship from Cloudflare R2, checksum-verified on boot, and the reading interface was
-rebuilt around the scanned pages with microlog as the default scope. A three-tier
-sensitivity layer routes a flagged topic to a crisis line (tier A only), an
-interstitial, or a quiet footer; an attribution-incomplete notice is shown on two
-detected topics only -- residential-school content, and coerced-sterilization
-content with Indigenous context. The dense retrieval leg gained an exact in-memory
+rebuilt around the scanned pages. The site lands on the pilot, with microlog in the
+scope switcher. A three-tier sensitivity layer routes each flagged topic by severity:
+tier A (residential schools, coerced sterilization, tainted blood, early HIV and AIDS)
+gets a contextual note and verified crisis lines, with a tap-through before the
+heaviest results; tier B a calm historical-content note; tier C a
+not-current-medical-advice note. An attribution-incomplete notice is shown on two
+detected topics only: residential-school content, and coerced-sterilization content
+with Indigenous context. The dense retrieval leg gained an exact in-memory
 backend that loads each scope's vectors once at boot and returns the identical
 top-200 candidate set on both indexes; it moves exactly one evaluation number, the
 pilot's nDCG@10, from 0.5082 to 0.5084 on a single tie reorder (q021), recall
 unchanged. An offline exhibit serves cached answers and a local page pack with no
 network, and a one-command self-test runs the preflight, coverage, and
 offline-walkthrough checks and prints a single GREEN or RED before doors.
+
+A pre-festival clarity pass added a one-line tagline on every page, a plain lead line
+on every refusal, plain-language toggletips for the recurring terms, and read-aid lines
+with more spacing on the Sources and Coverage map pages.

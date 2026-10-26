@@ -40,7 +40,12 @@ immigration clear it only with `microlog`, whose OCR quality was unverified. The
 pilot became public health with the curated union (3,477 items), `microlog`
 excluded. Recency within `governmentpublications` for public_health: 1,352
 items 1990-2009, 44 items 2010+, 18 items 2015+. A 25-item OCR spot check found
-100% of sampled items carried usable OCR text; 7 of 25 were undated.
+100% of sampled items carried usable OCR text; 7 of 25 were undated. The dated items
+whose catalogue year falls outside a scope's window are enumerated in two files:
+`reports/pilot_out_of_window_dated_items.csv` lists the pilot's 203 (159 before 1960 and
+44 after 2009) and `reports/microlog_out_of_window_dated_items.csv` lists microlog's
+4,379 (all after 2009); together they are the 4,582 out-of-window items the Explore page
+reports.
 
 ## 2. Harvest, parse, normalize
 
