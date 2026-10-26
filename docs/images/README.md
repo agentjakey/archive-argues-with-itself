@@ -9,6 +9,6 @@ Captured from the running app (cache warm), used by the README and the docs page
 | `sources-timeline.png` | the Sources list and the decade-by-decade evidence trail | README "How it works" |
 | `abstention-covid.png` | the abstention card for a COVID-19 question, with uncovered-term chips | README "How it works" |
 | `abstention-coverage.png` | the coverage grid behind the refusal, and "nearest evidence, not an answer" | README "How it works" |
-| `answer-alberta.png` | the Alberta answer with numbered citations and the Sources list | docs/methods.md, section 5 |
-| `coverage-grid.png` | the coverage grid: passages matching each salient term by decade, with jurisdiction totals | docs/methods.md, section 6 |
-| `stories.png` | the Stories index: four curated question cards, each pairing two pages years apart | docs/demo.md |
+| `answer-alberta.png` | the Alberta answer with numbered citations and the Sources list | docs/METHODS.md, section 5 |
+| `coverage-grid.png` | the coverage grid: passages matching each salient term by decade, with jurisdiction totals | docs/METHODS.md, section 6 |
+| `stories.png` | the Stories index: four curated question cards, each pairing two pages years apart | docs/DEMO.md |

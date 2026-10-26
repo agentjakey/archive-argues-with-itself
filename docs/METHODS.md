@@ -17,7 +17,7 @@ separate scope with its own build and audit; its numbers live under
 
 Source: `reports/coverage_audit/discovery.md`, `reports/coverage_audit/finalist_sizing.md`.
 
-The proposal (`docs/proposal.md`) named housing as an illustrative topic and set
+The proposal (`docs/PROPOSAL.md`) named housing as an illustrative topic and set
 a floor of 2,500 usable items for a pilot corpus. The initial audit sized three candidate
 topics against the Internet Archive's Canadian-government collections using
 `advancedsearch.php` counts (the scrape API returned a canned baseline under

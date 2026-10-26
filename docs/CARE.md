@@ -119,9 +119,10 @@ How detection reads the content:
 - Ethics: harm-adjacent material carries a proportionate treatment in three tiers (see "How the care
   layer works"): crisis care with verified crisis lines and, on the heaviest topics, a tap-through
   before the result; a calm historical-content note for sensitive material that does not warrant
-  crisis resources; and a not-current-medical-advice note for dated health guidance. A record created
-  about an Indigenous community without its involvement carries an attribution-incomplete
-  acknowledgement, shown only where the record is actually about an Indigenous community.
+  crisis resources; and a not-current-medical-advice note for dated health guidance. The
+  attribution-incomplete acknowledgement is shown on only two detected topics -- residential-school
+  content, and coerced-sterilization content that shows Indigenous context -- not on every state
+  record about an Indigenous community (see "The attribution-incomplete notice" and its known gap).
 
 ## Local Contexts Notices (how the tool is Notices-ready)
 
@@ -129,8 +130,11 @@ The tool draws on the spirit of three institution-facing Notices, as the tool's 
 
 - Open to Collaborate: the tool is open source and invites the institution and communities to set the
   care treatment, the term crosswalk, and any formal Notices.
-- Attribution Incomplete: on records created about an Indigenous community by the state without that
-  community's involvement or attribution, the tool shows a short note naming that plainly (see below).
+- Attribution Incomplete: on the two topics the detector identifies as such -- residential-school
+  content, and coerced-sterilization content that shows Indigenous context -- the tool shows a short
+  note naming plainly that this is a state record about an Indigenous community created without its
+  involvement (see "The attribution-incomplete notice"). It does not cover every such record; see the
+  known gap there.
 - Collections Care: sensitive material stays searchable and grounded but is kept out of the featured
   stories, with a proportionate contextual note wherever it is surfaced (and verified support lines on
   the heaviest topics; see "How the care layer works").
@@ -140,10 +144,10 @@ Contexts Notices, which only the institution and communities can create.
 
 ## The attribution-incomplete notice
 
-Where a result surfaces a record that is about an Indigenous community but was created by the state
-without that community's involvement, the tool adds a short notice alongside the unaltered page. Because
-the notice makes a factual claim about the record ("a government record about an Indigenous community"),
-it is shown only where that is true:
+The tool shows this notice on only the two topics its detector marks as a state record about an
+Indigenous community (ATTRIBUTION_TOPICS in web/src/lib/sensitivity.ts, over the topics detected in
+src/archive_debugger/flags.py). Because the notice makes a factual claim about the record ("a
+government record about an Indigenous community"), it is shown only where that is established:
 
 - Residential-school health content: always. This content is inherently about Indigenous communities.
 - Coerced-sterilization content: only when the result shows Indigenous context (see "How the care layer
@@ -152,6 +156,14 @@ it is shown only where that is true:
   interstitial, the contextual note, and the 9-8-8 line, but not this notice and not the
   Indigenous-specific support lines, because it would be inaccurate to call it a record about an
   Indigenous community.
+
+Known gap: a record that is about an Indigenous community but falls outside those two topics carries no
+notice. The clearest example is in the featured Alberta story itself: the 1974 page is a provincial
+inventory of government services to First Nations and Metis people -- a state record about Indigenous
+communities -- yet it is not residential-school or coerced-sterilization content, so no attribution
+notice appears on it. The tool does not try to detect every such record; which records should carry a
+notice, and in what words, is for the holding institution to decide together with the communities
+concerned.
 
 It is additive, calm, and non-performative, sits alongside the existing crisis lines without crowding
 them, and is clearly the tool's own words. The copy is in web/src/lib/sensitivity.ts

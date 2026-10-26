@@ -91,7 +91,7 @@ retrieval fingerprint. Numbered citations and a Sources list; boxes became
 rules.
 
 ## Phase 12: deploy scaffolding
-`docs/deploy.md`
+`docs/DEPLOY.md`
 
 A Docker image that builds the web app inside it and bakes the embedding model;
 data paths overridable by environment; a smoke test wired into CI over a fixture
@@ -112,13 +112,13 @@ nDCG@10 0.4174 versus candidate 0.4581 / 0.5082. The candidate is on in config;
 the correlated-judge disclosure is recorded in the labeling notes.
 
 ## Phase 14: methods and gaps as product
-`docs/methods.md`, `docs/gaps.md`
+`docs/METHODS.md`, `docs/gaps.md`
 
 Methods and gap report written from the phase reports with every number cited;
 "How this works", "Gaps" and "About" views added to the app; this changelog.
 
 ## Phase 15: exhibit
-`docs/demo.md`, `config/stories.json`
+`docs/DEMO.md`, `config/stories.json`
 
 Four stories (question, two pinned pages years apart, caption) on the home
 screen and a kiosk attract loop (60 s idle, one story every 20 s, any touch
@@ -157,3 +157,25 @@ of them dated 1960-2009, against the 2,500 floor; only 1 of 30 sampled BC health
 texts sits in the Canadian-government portal collection the pilot uses, the
 rest in medical-library and microfiche collections. Not a viable second scope
 under the same floor and window.
+
+## Festival build: national scope, care, and the offline exhibit
+`reports/microlog/audit_numbers.json`, `docs/DEPLOY.md`, `docs/CARE.md`, `docs/METHODS.md`, `docs/DEMO.md`
+
+Added a second, national scope from the `microlog` collection and audited it:
+13,539 items, 1,136,827 passages, dated 1963-2018. On 47 seed questions the
+configured model kept 304 sentences, each read against its cited page text (N2):
+strict support 298/304 (0.980), lenient 304/304 (1.000), and 200 of 200 cited
+passages resolve. Unlike the pilot, this scope reaches into the 2010s: all 4,379
+out-of-window dated items are post-2009, shown with their real dates. Both scopes
+ship from Cloudflare R2, checksum-verified on boot, and the reading interface was
+rebuilt around the scanned pages with microlog as the default scope. A three-tier
+sensitivity layer routes a flagged topic to a crisis line (tier A only), an
+interstitial, or a quiet footer; an attribution-incomplete notice is shown on two
+detected topics only -- residential-school content, and coerced-sterilization
+content with Indigenous context. The dense retrieval leg gained an exact in-memory
+backend that loads each scope's vectors once at boot and returns the identical
+top-200 candidate set on both indexes; it moves exactly one evaluation number, the
+pilot's nDCG@10, from 0.5082 to 0.5084 on a single tie reorder (q021), recall
+unchanged. An offline exhibit serves cached answers and a local page pack with no
+network, and a one-command self-test runs the preflight, coverage, and
+offline-walkthrough checks and prints a single GREEN or RED before doors.
