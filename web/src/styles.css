@@ -179,6 +179,32 @@ body.kiosk .chip {
   @apply absolute left-0 top-full z-10 mt-1 w-[min(28rem,80vw)] bg-sheet border border-rule p-3 text-sm;
 }
 
+/* --- term toggletip (components/Term.tsx): an inline definition button. The trigger overrides the
+   global 44px control min-height so it sits inline in running text, marked by a dotted underline that
+   inks in on hover and focus. The bubble is portaled and fixed, clamped to the viewport width, so it
+   is never clipped by an overflow ancestor and never widens the page. --- */
+.term {
+  @apply font-sans text-ink bg-transparent border-0 p-0;
+  min-height: 0;
+  display: inline;
+  cursor: help;
+  border-bottom: 1px dotted theme("colors.muted");
+}
+
+.term:hover,
+.term:focus-visible {
+  border-bottom-color: theme("colors.ink");
+}
+
+.toggletip-bubble {
+  position: fixed;
+  z-index: 50;
+  max-width: min(22rem, calc(100vw - 16px));
+  @apply bg-sheet border border-ink p-3 text-sm text-ink font-sans;
+  line-height: 1.45;
+  box-shadow: 0 2px 4px rgba(28, 26, 23, 0.14), 0 10px 26px rgba(28, 26, 23, 0.1);
+}
+
 /* --- coverage grid --- */
 .grid-table {
   @apply w-full text-sm border-collapse;
