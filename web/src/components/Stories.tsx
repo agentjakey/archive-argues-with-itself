@@ -9,8 +9,8 @@ interface Props {
 
 // One line above the grid, from the final copy.
 const GALLERY_LEAD_IN =
-  "Each one is a single question answered from two pages of the record, years apart. Open one to " +
-  "see the pages and the answer they support.";
+  "Each one pairs two pages of the record, years apart, on a single question. Open one to see the " +
+  "pages, the answer they support, and the limits of the comparison.";
 
 /** The featured-arguments gallery: the active scope's curated stories as one uniform grid of compact
  *  cards (no oversized lead card). Each card is a single button (one action: open the full cited

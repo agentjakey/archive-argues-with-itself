@@ -79,7 +79,7 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
 
       {caption && (
         <div className="mt-4 border-l-2 border-ink pl-4 max-w-prose">
-          <p className="font-sans text-xs uppercase tracking-wide text-muted">What changed</p>
+          <p className="font-sans text-xs uppercase tracking-wide text-muted">How to read these sources</p>
           <p className="lead mt-1 text-ink">{caption}</p>
         </div>
       )}

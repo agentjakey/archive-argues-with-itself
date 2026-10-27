@@ -27,9 +27,11 @@ reports/microlog/.
 Ask how Alberta health insurance coverage changed between the 1970s and the 1990s. The
 tool retrieves the relevant pages, writes a short answer with a numbered citation on
 each sentence, and lets you open the two scans side by side: a 1974 provincial
-inventory describing universal coverage, and a 1998-99 statistical supplement counting
-who was covered under the later plan. The same plan, described two ways, twenty-five
-years apart. That comparison is the tool's center.
+inventory of services for First Nations and Metis people that notes the insurance
+commission's universal coverage, and a 1998-99 statistical supplement counting who was
+enrolled in Alberta Blue Cross non-group coverage. Two Alberta health records
+twenty-five years apart, describing different things: reading them against each other,
+and seeing what they cannot settle, is the tool's center.
 
 I built this because most AI over public records asks you to trust it, and I wanted the
 opposite. A government's wording for the same program shifts from decade to decade, and

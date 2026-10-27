@@ -11,7 +11,7 @@ The public record disagrees with itself across decades. This tool shows you the 
 
 **Live demo:** https://archive-argues-with-itself-production.up.railway.app
 
-![The same Alberta health-insurance plan in 1974 and in 1999, two scanned pages side by side](docs/images/compare-alberta-1974-1999.png)
+![Two Alberta government health records from 1974 and 1998-99, shown beside their original scanned pages](docs/images/compare-alberta-1974-1999.png)
 
 An official answer is not fixed: what a government said caused a problem, or how it
 described a program, changes from one decade's report to the next, and the wording of

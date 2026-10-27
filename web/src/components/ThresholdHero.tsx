@@ -6,8 +6,9 @@ interface Props {
   onOpen: (story: Story) => void;    // the existing story-open path (cached, instant, no model call)
 }
 
-// New microcopy for this moment, in the project voice. FLAGGED FOR APPROVAL (see the report).
-const KICKER = "One disagreement in the record";
+// A neutral label for the featured pair: two real pages from the record, not a claim that the
+// record disagrees or that coverage changed. The caption says what the pages do and do not establish.
+const KICKER = "Two pages from the public record";
 
 /** The threshold: the single focal thing on the landing, shown before the machinery. One real
  *  argument from the record, its two pages years apart sized as artifacts, the big years carrying

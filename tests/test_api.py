@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from archive_debugger.api.app import create_app
+from archive_debugger.api.app import create_app, load_stories
 from archive_debugger.eval import questions, store
 from archive_debugger.generate.llm import CitedSentence, Draft, StubLLM
 from archive_debugger.ingest import db
@@ -157,6 +157,21 @@ def test_get_ask_provider_stub_needs_no_key(tmp_path, monkeypatch):
         assert c.get("/ask", params={"q": "x", "provider": "bogus"}).status_code == 422
 
 
+def test_featured_alberta_story_caption_is_accurate():
+    """Editorial correction (festival, 2026-10): the featured Alberta story must not call the two
+    records the same insurance plan, must keep its exact pinned pages unchanged, and must carry the
+    comparability caveat. The question is the cached-demo key, so it stays byte-for-byte."""
+    stories = load_stories(Path(__file__).resolve().parents[1] / "config" / "stories.json")
+    alberta = next((s for s in stories if s["id"] == "alberta-insurance-1974-1999"), None)
+    assert alberta is not None, "featured Alberta story is missing"
+    assert alberta["pins"] == ["ableg_33398004781505#52:0", "micro_IA40243301_0385#117:0"]
+    assert alberta["question"] == "How did Alberta health insurance coverage change between the 1970s and 1990s?"
+    cap = alberta["caption"].lower()
+    assert "same plan" not in cap and "same insurance plan" not in cap
+    assert "different things" in cap
+    assert "cannot" in cap and "coverage changed" in cap
+
+
 def test_stories_and_offline_pages(tmp_path):
     r, _ = _retriever(tmp_path, [("a", 1974, "alberta"), ("b", 1999, "alberta")])
     stories = tmp_path / "stories.json"
@@ -168,6 +183,7 @@ def test_stories_and_offline_pages(tmp_path):
     with TestClient(_app(tmp_path, r, pages_dir=pages, stories_path=stories)) as c:
         body = c.get("/stories").json()
         assert [s["id"] for s in body] == ["s1"]
+        assert body[0]["caption"] == "then and later"                                # caption passed through verbatim
         pins = body[0]["pins"]
         assert [p["passage_id"] for p in pins] == ["b#1:0", "a#0:0"]                 # pin order kept, not year order
         a0 = pins[1]
