@@ -10,9 +10,9 @@ interface Props {
 // record disagrees or that coverage changed. The caption says what the pages do and do not establish.
 const KICKER = "Two pages from the public record";
 
-/** The threshold: the single focal thing on the landing, shown before the machinery. One real
- *  argument from the record, its two pages years apart sized as artifacts, the big years carrying
- *  the tension. It is one button (one action: open the full cited answer), following the same
+/** The threshold: the single focal thing on the landing, shown before the machinery. One curated
+ *  pair from the record, its two pages years apart sized as artifacts, with the caption and the
+ *  comparability label saying what the pair can and cannot show. It is one button (one action: open the full cited answer), following the same
  *  accessible pattern as the gallery cards (spans inside the button, the question in the aria-label).
  *  With no featured story it renders nothing, so the landing falls back to its framing and the tool. */
 export function ThresholdHero({ featured, onOpen }: Props) {
@@ -58,6 +58,11 @@ export function ThresholdHero({ featured, onOpen }: Props) {
 
         {featured.caption && (
           <span className="lead mt-5 block max-w-prose text-ink">{featured.caption}</span>
+        )}
+        {featured.comparability && (
+          <span className="mt-2 block text-sm">
+            <span className="tag">{featured.comparability.label}</span>
+          </span>
         )}
         <span className="mt-4 inline-block font-sans text-base text-ink underline decoration-transparent underline-offset-4 group-hover:decoration-current">
           See the full answer

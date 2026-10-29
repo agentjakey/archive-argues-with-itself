@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AbstentionCard } from "./components/AbstentionCard";
 import { AnswerCard } from "./components/AnswerCard";
+import { EditorialNotes } from "./components/EditorialNotes";
 import { LimitedModeCard } from "./components/LimitedModeCard";
 import { AskBar } from "./components/AskBar";
 import { StoryGallery } from "./components/Stories";
@@ -40,7 +41,8 @@ import { mergeFlagged, needsInterstitial } from "./lib/sensitivity";
 import { PROVINCE_SLUGS } from "./lib/coverage";
 import { periodOfRow, pickDecadeRows } from "./lib/timeline";
 import { plural } from "./lib/format";
-import type { EvidenceRow, Example, Filters, Flagged, Period, Story } from "./types";
+import type { Comparability, EditorialNote, EvidenceRow, Example, Filters, Flagged, Period, Story } from "./types";
+import { askedQuestion, attractStories, galleryStories, heroStory } from "./lib/stories";
 
 // The verified refuse probes, per scope, used both for the "See it decline" doorway (refuseQid
 // below) and for the "(thin record)" example chip: these reliably abstain, so a thin-tagged chip
@@ -64,6 +66,8 @@ export default function App() {
   const [view, setView] = useState<View | null>(initial.current.view ?? null);
   const [storyRows, setStoryRows] = useState<[EvidenceRow, EvidenceRow] | null>(null);
   const [storyCaption, setStoryCaption] = useState<string | null>(null);
+  // The opened story's comparability block and dated notes, shown with its caption in the compare view.
+  const [storyMeta, setStoryMeta] = useState<{ comparability: Comparability | null; notes: EditorialNote[] } | null>(null);
   const [storyFlagged, setStoryFlagged] = useState<Flagged | null>(null);   // over the story's pins
   const [pinFlagged, setPinFlagged] = useState<Flagged | null>(null);       // over a free user-pinned pair
   const [flaggedAck, setFlaggedAck] = useState(false);   // interstitial acknowledged for the current result
@@ -161,6 +165,7 @@ export default function App() {
     if (s) {
       setStoryRows(s.pins);
       setStoryCaption(s.caption);
+      setStoryMeta({ comparability: s.comparability ?? null, notes: s.notes ?? [] });
       setStoryFlagged(s.flagged ?? null);
       storyRestored.current = true;
     }
@@ -207,6 +212,7 @@ export default function App() {
       setPins([]);
       setStoryRows(null);
       setStoryCaption(null);
+      setStoryMeta(null);
       setStoryFlagged(null);
       setPinFlagged(null);
       setDecadeCompare(null);       // a fresh ask clears any decade comparison...
@@ -228,15 +234,19 @@ export default function App() {
   // the retrieval pool holds.
   const openStory = useCallback(
     (s: Story) => {
+      // A corrected story asks with its original wording so its stored answer serves unedited, beside
+      // the dated notes that explain the correction.
+      const asked = askedQuestion(s);
       setView(null);
-      setQuestion(s.question);
+      setQuestion(asked);
       setFilters(s.filters ?? {});
-      ask(s.question, s.filters ?? {});
+      ask(asked, s.filters ?? {});
       setStoryRows(s.pins);
       setStoryCaption(s.caption);
+      setStoryMeta({ comparability: s.comparability ?? null, notes: s.notes ?? [] });
       setStoryFlagged(s.flagged ?? null);
       // carry the story in the URL so its permalink reproduces the comparison
-      applyState({ q: s.question, filters: s.filters ?? {}, pins: [], kiosk, offline, story: s.id }, "replace");
+      applyState({ q: asked, filters: s.filters ?? {}, pins: [], kiosk, offline, story: s.id }, "replace");
       window.scrollTo({ top: 0 });
     },
     [ask, kiosk, offline],
@@ -271,7 +281,8 @@ export default function App() {
     const v = Number(idleParam.current);
     return Number.isFinite(v) && v > 0 ? v * 1000 : undefined;
   }, []);
-  useAttractLoop({ enabled: kiosk, stories, onShow: openStory, onHome: goHome, idleMs });
+  const attract = useMemo(() => attractStories(stories), [stories]);
+  useAttractLoop({ enabled: kiosk, stories: attract, onShow: openStory, onHome: goHome, idleMs });
 
   // Switch corpora with a full reload into a clean copy of the CURRENT page for the chosen scope:
   // the page (view) is kept so the switch stays where you are, but no q/filters/pins/story carry
@@ -615,8 +626,8 @@ export default function App() {
               yourself. When the record is too thin to answer, the tool says so and shows you the gap.
             </p>
           </section>
-          <ThresholdHero featured={stories[0] ?? null} onOpen={openStory} />
-          <StoryGallery stories={stories.slice(1)} loading={storiesLoading} onOpen={openStory} />
+          <ThresholdHero featured={heroStory(stories)} onOpen={openStory} />
+          <StoryGallery stories={galleryStories(stories)} loading={storiesLoading} onOpen={openStory} />
           {refuseExample && (
             <p className="mt-6 max-w-prose text-sm text-muted">
               <button
@@ -735,11 +746,12 @@ export default function App() {
                 </>
               ) : response.answer.abstained ? (
                 <>
+                  <EditorialNotes notes={response.editorial_notes} className="mb-3" />
                   <AbstentionCard answer={response.answer} />
                   <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation scope={activeScopeInfo} />
                 </>
               ) : (
-                <AnswerCard answer={response.answer} byId={byId} onOpen={setDrawer} />
+                <AnswerCard answer={response.answer} byId={byId} onOpen={setDrawer} notes={response.editorial_notes} />
               )}
 
               {compare && (
@@ -748,9 +760,11 @@ export default function App() {
                   b={compare[1]}
                   salientTerms={salient}
                   caption={storyRows ? storyCaption ?? undefined : undefined}
+                  comparability={storyRows ? storyMeta?.comparability ?? null : null}
+                  notes={storyRows ? storyMeta?.notes ?? null : null}
                   onOpen={setDrawer}
-                  onUnpin={storyRows ? () => { setStoryRows(null); setStoryCaption(null); } : togglePin}
-                  onClose={storyRows ? () => { setStoryRows(null); setStoryCaption(null); } : clearPins}
+                  onUnpin={storyRows ? () => { setStoryRows(null); setStoryCaption(null); setStoryMeta(null); } : togglePin}
+                  onClose={storyRows ? () => { setStoryRows(null); setStoryCaption(null); setStoryMeta(null); } : clearPins}
                 />
               )}
 

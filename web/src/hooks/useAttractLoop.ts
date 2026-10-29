@@ -16,8 +16,8 @@ interface Options {
 
 /** Kiosk attract loop: after idleMs with no input, cycle through the stories every stepMs; any
  *  input while cycling stops the loop and calls onHome. Any input while idle-but-not-cycling just
- *  resets the idle timer. A scope with no stories (microlog, which by design carries no featured
- *  attract stories) does not cycle; instead an idle timeout calls onHome, which resets to the active
+ *  resets the idle timer. The caller passes only the stories marked for the attract surface
+ *  (lib/stories.ts). A scope with none does not cycle; instead an idle timeout calls onHome, which resets to the active
  *  scope's home with the scope preserved. */
 export function useAttractLoop({ enabled, stories, onShow, onHome, idleMs = IDLE_MS, stepMs = STEP_MS }: Options) {
   const looping = useRef(false);
@@ -37,7 +37,7 @@ export function useAttractLoop({ enabled, stories, onShow, onHome, idleMs = IDLE
       index.current += 1;
     };
     const onIdle = () => {
-      // With curated stories (the pilot), cycle them. With none (microlog), do not feature content;
+      // With attract stories, cycle them. With none, do not feature content;
       // reset to the active scope's home so the next visitor starts clean. onHome preserves the
       // scope, so an idle microlog kiosk returns to microlog, not the pilot.
       if (stories.length === 0) {

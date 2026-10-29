@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { numberCitations } from "../lib/citations";
 import { plural, shortTitle, yearLabel } from "../lib/format";
-import type { Answer, EvidenceRow } from "../types";
+import type { Answer, EditorialNote, EvidenceRow } from "../types";
 import { CitationMark } from "./CitationMark";
+import { EditorialNotes } from "./EditorialNotes";
 import { Sources } from "./Sources";
 import { UnsupportedRow } from "./UnsupportedRow";
 
@@ -10,6 +11,7 @@ interface Props {
   answer: Answer;
   byId: Map<string, EvidenceRow>;
   onOpen: (row: EvidenceRow) => void;
+  notes?: EditorialNote[] | null;   // dated notes about this stored answer, shown above it, never in it
 }
 
 function cachedLine(answer: Answer): string | null {
@@ -19,7 +21,7 @@ function cachedLine(answer: Answer): string | null {
 }
 
 /** No box: a left rule, serif heading, marks [n] beside each claim, Sources below. */
-export function AnswerCard({ answer, byId, onOpen }: Props) {
+export function AnswerCard({ answer, byId, onOpen, notes }: Props) {
   const numbered = useMemo(() => numberCitations(answer.sentences), [answer.sentences]);
   const cached = cachedLine(answer);
   const [scanFailed, setScanFailed] = useState(false);
@@ -33,6 +35,7 @@ export function AnswerCard({ answer, byId, onOpen }: Props) {
       <h2 id="answer-heading" className="screen-title">
         Answer from the record
       </h2>
+      <EditorialNotes notes={notes} className="mt-3" />
       <div className="mt-3 max-w-prose leading-relaxed">
         {answer.sentences.map((s, i) => (
           <p key={i} className="mb-3">

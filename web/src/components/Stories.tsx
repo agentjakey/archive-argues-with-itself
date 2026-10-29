@@ -12,7 +12,7 @@ const GALLERY_LEAD_IN =
   "Each one pairs two pages of the record, years apart, on a single question. Open one to see the " +
   "pages, the answer they support, and the limits of the comparison.";
 
-/** The featured-arguments gallery: the active scope's curated stories as one uniform grid of compact
+/** The featured-pairs gallery: the active scope's curated stories as one uniform grid of compact
  *  cards (no oversized lead card). Each card is a single button (one action: open the full cited
  *  answer via the existing story-open path) showing the story's two scanned pages side by side, its
  *  question, and its one-line caption. While /stories loads it holds a stable skeleton; with no
@@ -33,7 +33,7 @@ export function StoryGallery({ stories, loading, onOpen }: Props) {
   return (
     <section className="mt-6" aria-labelledby="gallery-heading">
       <h2 id="gallery-heading" className="sr-only">
-        Featured arguments from the record
+        Featured pairs from the record
       </h2>
       <p className="max-w-prose text-sm text-muted">{GALLERY_LEAD_IN}</p>
       <ul className="mt-4 grid list-none grid-cols-1 gap-x-8 gap-y-6 p-0 sm:grid-cols-2 lg:grid-cols-3">
@@ -77,6 +77,9 @@ function ArgumentCard({ story, onOpen }: { story: Story; onOpen: (s: Story) => v
       </span>
       <span className="mt-1 block font-serif text-base leading-snug">{story.question}</span>
       <span className="mt-1 block line-clamp-2 text-sm text-muted">{story.caption}</span>
+      {story.comparability && (
+        <span className="mt-1 block text-xs text-muted">{story.comparability.label}</span>
+      )}
       <span className="mt-2 block font-sans text-sm text-ink underline decoration-transparent underline-offset-2 group-hover:decoration-current">
         See the full answer
       </span>

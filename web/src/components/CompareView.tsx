@@ -4,13 +4,16 @@ import { CrosswalkText } from "./CrosswalkText";
 import { jurisdictionLabel, shortTitle, yearLabel } from "../lib/format";
 import { ocrUncertain } from "../lib/sensitivity";
 import { OcrBadge } from "./OcrBadge";
-import type { EvidenceRow } from "../types";
+import { EditorialNotes } from "./EditorialNotes";
+import type { Comparability, EditorialNote, EvidenceRow } from "../types";
 
 interface Props {
   a: EvidenceRow;
   b: EvidenceRow;
   salientTerms: string[];
-  caption?: string;                 // a story's "what changed" narrative, when opened from a story
+  caption?: string;                 // a story's reading guidance, when opened from a story
+  comparability?: Comparability | null;   // what the pair can and cannot show (stories only)
+  notes?: EditorialNote[] | null;         // dated corrections to the story
   onOpen: (row: EvidenceRow) => void;   // open the offline-safe PageDrawer for a column
   onUnpin: (row: EvidenceRow) => void;
   onClose: () => void;
@@ -28,14 +31,17 @@ function excerpt(text: string): string {
   return `${(sp > 80 ? cut.slice(0, sp) : cut).trimEnd()}...`;
 }
 
-/** Two eras side by side, the change legible at a glance: big years, a "then / later"
+/** Two pages side by side, read at a glance: big years, a "then / later"
  *  tag, one cited excerpt each with the query terms marked, and the scanned page one tap
  *  away via the existing (offline-safe) PageDrawer. The excerpt is the source text
- *  verbatim; the caption, when present, is the author's framing, not a generated claim. */
-export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onClose }: Props) {
+ *  verbatim; the caption, when present, is the author's framing, not a generated claim. For a story,
+ *  the comparability label and note say what the pair can and cannot show, and any dated editorial
+ *  notes sit below them. The title joins the two years with "and", never "vs": two pages are not
+ *  presented as opponents unless the comparability block says they genuinely disagree. */
+export function CompareView({ a, b, salientTerms, caption, comparability, notes, onOpen, onUnpin, onClose }: Props) {
   useEscape(true, onClose);
   const [copied, setCopied] = useState(false);
-  const title = `${yearLabel(a.year)} vs ${yearLabel(b.year)}`;
+  const title = `${yearLabel(a.year)} and ${yearLabel(b.year)}`;
   const bothDated = a.year != null && b.year != null && a.year !== b.year;
 
   const eraTag = (row: EvidenceRow, other: EvidenceRow): string | null => {
@@ -77,12 +83,24 @@ export function CompareView({ a, b, salientTerms, caption, onOpen, onUnpin, onCl
         </div>
       </div>
 
-      {caption && (
+      {(caption || comparability) && (
         <div className="mt-4 border-l-2 border-ink pl-4 max-w-prose">
           <p className="font-sans text-xs uppercase tracking-wide text-muted">How to read these sources</p>
-          <p className="lead mt-1 text-ink">{caption}</p>
+          {caption && <p className="lead mt-1 text-ink">{caption}</p>}
+          {comparability && (
+            <>
+              <p className="mt-2 flex flex-wrap items-baseline gap-2 text-sm">
+                <span className="tag">{comparability.label}</span>
+                {comparability.differs_on.length > 0 && (
+                  <span className="text-muted">Differs on {comparability.differs_on.join(", ")}</span>
+                )}
+              </p>
+              <p className="mt-1 text-sm text-ink">{comparability.note}</p>
+            </>
+          )}
         </div>
       )}
+      <EditorialNotes notes={notes} className="mt-3" />
 
       <div className="mt-5 grid grid-cols-1 gap-8 sm:grid-cols-2">
         {columns.map((row, i) => {

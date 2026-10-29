@@ -130,11 +130,41 @@ export interface EvidenceRow {
   date_method?: string | null;      // how the item's date was resolved: exact | title_extracted | unknown
 }
 
+/** A dated, visible correction from config/editorial_notes.json. Never part of model output. */
+export interface EditorialNote {
+  id: string;
+  date: string;     // ISO date the note was written
+  text: string;
+  reason: string;
+}
+
+export type ComparisonOutcome =
+  | "comparable_agreeing"
+  | "comparable_disagreeing"
+  | "related_different"
+  | "incompatible"
+  | "missing"
+  | "indeterminate";
+
+/** What a curated pair can and cannot show, set by the author and checked by tests/test_editorial.py. */
+export interface Comparability {
+  outcome: ComparisonOutcome;
+  label: string;           // human label for the outcome
+  differs_on: string[];    // query constraints the two pages differ on
+  note: string;
+}
+
+export type StorySurface = "hero" | "gallery" | "attract";
+
 export interface Story {
   id: string;
-  question: string;
+  question: string;            // the question shown
+  answer_question?: string;    // the question the answer is asked with (differs only for a corrected story)
   filters: Filters;
   caption: string;
+  comparability?: Comparability;
+  surfaces?: StorySurface[];   // where the story may appear; absent means none of the featured surfaces
+  notes?: EditorialNote[];     // dated corrections to this story
   pins: [EvidenceRow, EvidenceRow];
   flagged?: Flagged | null;   // computed on serve over the two pins (the shown basis)
 }
@@ -172,6 +202,7 @@ export interface AskResponse {
   evidence: EvidenceRow[];
   degraded?: Degraded;
   flagged?: Flagged | null;
+  editorial_notes?: EditorialNote[];   // dated notes about a stored answer, shown beside it
 }
 
 export interface Example {
