@@ -23,6 +23,15 @@ import numpy as np
 
 ENV_BACKEND = "CIVIC_DENSE_BACKEND"   # "sqlite" (default) | "numpy"
 _SAFE_FRACTION = 0.90                 # refuse a resident load that would exceed this share of the limit
+# Python-side cost per row of the id list plus the passage_id -> row dict. Measured with tracemalloc on
+# the published databases (2026-10-29): 147.7 bytes/row on the pilot, 138.2 on microlog; rounded up.
+_ID_BYTES_PER_ROW = 160
+
+
+def resident_bytes(n: int, dim: int) -> int:
+    """Peak bytes a resident load adds: the float32 matrix (normalized in place, so held once), the
+    per-row norms, and the id list and lookup dict."""
+    return n * dim * 4 + n * 4 + n * _ID_BYTES_PER_ROW
 
 Log = Callable[[str], None]
 
@@ -94,6 +103,25 @@ def _rss() -> Optional[int]:
     return None
 
 
+_NORM_BLOCK_ROWS = 16384   # rows per block when computing norms (a ~25 MB temporary at dim 384)
+
+
+def normalize_rows(mat: np.ndarray) -> np.ndarray:
+    """L2-normalize each row of a float32 matrix in place and return it. Bit-identical to the earlier
+    (mat / np.linalg.norm(mat, axis=1, keepdims=True)).astype(float32), but without a second full
+    matrix: np.linalg.norm squares its whole input into a temporary, so the norms are computed one
+    block of rows at a time (each row's norm is reduced on its own, so blocking does not change it),
+    and the division writes back into mat. Zero rows stay zero."""
+    n = mat.shape[0]
+    norms = np.empty((n, 1), dtype=mat.dtype)
+    for start in range(0, n, _NORM_BLOCK_ROWS):
+        stop = min(start + _NORM_BLOCK_ROWS, n)
+        norms[start:stop] = np.linalg.norm(mat[start:stop], axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    np.divide(mat, norms, out=mat)
+    return mat
+
+
 def load_if_enabled(conn, *, log: Log = print) -> Optional[DenseIndex]:
     """Build a resident DenseIndex from conn's attached vec.passages_vec when CIVIC_DENSE_BACKEND=numpy
     and it fits under the container memory limit; otherwise None, so the caller keeps the sqlite-vec
@@ -108,7 +136,7 @@ def load_if_enabled(conn, *, log: Log = print) -> Optional[DenseIndex]:
             return None
         first = conn.execute("SELECT embedding FROM vec.passages_vec LIMIT 1").fetchone()
         dim = int(np.frombuffer(first[0], dtype=np.float32).shape[0])
-        est = n * dim * 4   # float32 bytes
+        est = resident_bytes(n, dim)
         limit, rss = _container_limit(), _rss()
         if limit is not None and rss is not None and (rss + est) > _SAFE_FRACTION * limit:
             log(f"[dense] would not fit: est_mb={est / 1e6:.0f} rss_mb={rss / 1e6:.0f} "
@@ -124,9 +152,7 @@ def load_if_enabled(conn, *, log: Log = print) -> Optional[DenseIndex]:
             i += 1
         if i != n:                      # the index changed mid-read; use what we got
             mat, ids = mat[:i], ids[:i]
-        norms = np.linalg.norm(mat, axis=1, keepdims=True)
-        norms[norms == 0] = 1.0
-        mat = (mat / norms).astype(np.float32, copy=False)
+        mat = normalize_rows(mat)
         idx = DenseIndex(mat, ids)
         log(f"[dense] resident index loaded: n={idx.n} dim={idx.dim} float32 "
             f"bytes_mb={mat.nbytes / 1e6:.0f} in {time.monotonic() - t0:.1f}s")
