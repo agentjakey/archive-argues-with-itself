@@ -24,8 +24,8 @@ reports/microlog/.
 
 ## A worked example
 
-Ask how Alberta health insurance coverage changed between the 1970s and the 1990s. The
-tool retrieves the relevant pages, writes a short answer with a numbered citation on
+Ask what Alberta government health records from the 1970s and the 1990s say about
+health insurance coverage. The tool retrieves the relevant pages, writes a short answer with a numbered citation on
 each sentence, and lets you open the two scans side by side: a 1974 provincial
 inventory of services for First Nations and Metis people that notes the insurance
 commission's universal coverage, and a 1998-99 statistical supplement counting who was

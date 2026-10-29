@@ -4,10 +4,11 @@ One laptop, one process, no internet required once prepared. The app shows real
 scanned pages from the offline pack, answers every seed question from its cache,
 and cycles through the stories when nobody is touching it.
 
-Each story pairs two pages from the record, years apart, on one question; the
-attract loop opens them in turn.
-
-![The Stories index: four curated question cards, each pairing two pages years apart](images/stories.png)
+Each story pairs two pages from the record, years apart, on one question, with a
+note on what the pair can and cannot show. The attract loop opens only the stories
+marked for it in the story file (`"surfaces"`). The old screenshot of the stories
+index showed captions that were corrected on 2026-10-27 and 2026-10-29, so it is no
+longer shown here; a new one will be captured from the running app.
 
 ## Prepare (with internet, once)
 
@@ -28,8 +29,9 @@ the data files in place (README "Run it yourself").
    .\.venv\Scripts\python.exe scripts\warm_cache.py http://127.0.0.1:8000
    ```
 
-   The four stories in `config/stories.json` use seed questions, so this also
-   caches them. The script's last line counts cached / answered / abstained /
+   The stories in `config/stories.json` ask seed questions (the Alberta story asks
+   with its original q034 wording, its `answer_question`), so this also caches them.
+   The script warms the pilot only. The script's last line counts cached / answered / abstained /
    failed; failed must be 0.
 
 3. Build the offline pack of page images (thumbnail and medium image for every

@@ -3,6 +3,46 @@
 One entry per phase, in plain English, from the phase reports. Numbers are the
 reports' numbers; each entry names its source.
 
+## Corrections
+
+Dated corrections to what the app or its docs said. Stored model answers are never
+edited; a correction to an answer is a dated note shown beside it. The notes the app
+shows live in `config/editorial_notes.json`.
+
+### 2026-10-29: story questions, captions and placement
+`config/stories.json`, `config/stories.microlog.json`, `config/retired_stories.json`, `config/editorial_notes.json`
+
+- The Alberta story asked "How did Alberta health insurance coverage change between
+  the 1970s and 1990s?". Its two pages describe different programs (the basic
+  provincial plan in 1974, Alberta Blue Cross non-group coverage in 1998-99) and
+  cannot show a change. It now asks what the two records say, keeps the old wording
+  only to serve its stored answer, and shows dated notes on the story and on that
+  answer. The answer cites page 116 of the 1998-99 supplement where the story pins
+  page 117; the answer note says so and what page 116 says. The story is off the
+  landing hero and the kiosk attract loop.
+- The federal aging story is no longer featured: its question is v1 eval question
+  q036, which the v1 gold labels should-abstain and the v1 audit counted off-target.
+  Its pages are kept and described in `docs/v2/DATA_NOTES.md`.
+- The microlog immunization story is no longer featured: neither pinned page is a
+  National Advisory Committee on Immunization statement, and the 2016 page is about
+  detecting measles cases, not schedules.
+- Three microlog captions ("A provincial watch, then a national one", "A case for the
+  law, then a monitoring program running", "A small registry reporting up, a large one
+  reporting out") read pages from different jurisdictions as one succession or one
+  contrast. They now say what each page is.
+- Every story now carries a comparability block (outcome, what the pair differs on, a
+  note) shown in the compare view, and a test fails if a caption, question or label
+  claims more than that block supports.
+- The compare view joins its two years with "and" instead of "vs".
+
+### 2026-10-27: Alberta story caption
+`config/stories.json`, `README.md`, `docs/writeup.md`
+
+The caption called the 1974 and 1998-99 pages records "from the same insurance plan",
+the landing labelled the pair "One disagreement in the record", and the compare view
+headed the caption "What changed". The pages describe different programs. The
+caption, the README alt text, the hero label and the heading were corrected.
+
 ## Week 1: coverage audit and topic choice
 `reports/coverage_audit/discovery.md`, `reports/coverage_audit/finalist_sizing.md`
 

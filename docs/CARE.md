@@ -112,7 +112,7 @@ How detection reads the content:
 - Collective Benefit: the tool surfaces a public record for public understanding, links every claim to
   a source page, and is open source so others can inspect and reuse the method.
 - Authority to Control: the tool defers to the communities a record concerns. It keeps sensitive
-  Indigenous-identifying content out of the featured/attract surfaces, and it is built so that a term
+  Indigenous-identifying content off the landing hero and the kiosk attract loop, and it is built so that a term
   list or a Notice can be set by the institution and community rather than asserted by the tool.
 - Responsibility: the tool states its limits (coverage gaps, the undated share, the abstention rule,
   the non-independent judge) and never frames itself as reaching the present or as neutral.
@@ -158,10 +158,11 @@ government record about an Indigenous community"), it is shown only where that i
   Indigenous community.
 
 Known gap: a record that is about an Indigenous community but falls outside those two topics carries no
-notice. The clearest example is in the featured Alberta story itself: the 1974 page is a provincial
-inventory of government services to First Nations and Metis people, a state record about Indigenous
-communities, yet it is not residential-school or coerced-sterilization content, so no attribution
-notice appears on it. The tool does not try to detect every such record; which records should carry a
+notice. The clearest example is the Alberta story: the 1974 page is a provincial inventory of
+government services to First Nations and Metis people, a state record about Indigenous communities,
+yet it is not residential-school or coerced-sterilization content, so no attribution notice appears
+on it. Since 2026-10-29 that story is shown in the story gallery only, not as the landing hero or in
+the attract loop. The tool does not try to detect every such record; which records should carry a
 notice, and in what words, is for the holding institution to decide together with the communities
 concerned.
 
