@@ -291,3 +291,5 @@ Thumbs.db
 
 scopes.r2.sha256
 showcase/ 
+# v2 phase reports and raw measurement output (not published; docs/v2 carries the numbers).
+reports/v2/
