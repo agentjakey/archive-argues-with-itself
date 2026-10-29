@@ -78,6 +78,7 @@ def main() -> int:
     from fastapi.testclient import TestClient
 
     from archive_debugger.api.app import DEFAULT_CACHE, DEFAULT_STORIES, create_app, load_stories
+    from archive_debugger.editorial import asked_question
     from archive_debugger.eval.questions import load_seed
     from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path
 
@@ -87,7 +88,7 @@ def main() -> int:
     seed = load_seed(REPO / "eval/seed_questions.jsonl")
     stories = load_stories(DEFAULT_STORIES)
     golden = [("seed:" + q["qid"], q["text"], q.get("filters") or {}) for q in seed]
-    golden += [("story:" + s["id"], s["question"], s.get("filters") or {}) for s in stories]
+    golden += [("story:" + s["id"], asked_question(s), s.get("filters") or {}) for s in stories]
 
     long_token = "a" * 5000
     big = "public health policy funding hospital " * 200          # ~7600 chars, truncated to 500

@@ -44,6 +44,7 @@ def collect_targets(cache_db: Path, civic_db: Path, stories: list[dict]) -> tupl
 
 def uncached_stories(cache_db: Path, stories: list[dict], config_path: Path) -> list[str]:
     from archive_debugger.api.app import answer_cache_key
+    from archive_debugger.editorial import asked_question
     from archive_debugger.api.cache import retrieval_fingerprint
     from archive_debugger.generate.cli import load_generate_config
     from archive_debugger.retrieve.config import load_retrieve_config
@@ -56,7 +57,7 @@ def uncached_stories(cache_db: Path, stories: list[dict], config_path: Path) -> 
     conn.close()
     out = []
     for s in stories:
-        key = answer_cache_key(gcfg, gcfg["provider"], gcfg["model"], s["question"], s.get("filters") or {}, sha)
+        key = answer_cache_key(gcfg, gcfg["provider"], gcfg["model"], asked_question(s), s.get("filters") or {}, sha)
         if key not in keys:
             out.append(s["id"])
     return out

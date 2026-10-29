@@ -113,6 +113,7 @@ def main(argv=None) -> int:
     from archive_debugger.api.app import (DEFAULT_CACHE, DEFAULT_PAGES, DEFAULT_STORIES, ENV_PAGES_DIR,
                                           answer_cache_key, load_stories)
     from archive_debugger.api.cache import retrieval_fingerprint
+    from archive_debugger.editorial import asked_question
     from archive_debugger.generate.cli import load_generate_config
     from archive_debugger.harvest.pages import page_file
     from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path, resolve_db_path
@@ -160,9 +161,9 @@ def main(argv=None) -> int:
                              retrieval_fingerprint(rcfg))
         want.append(("seed " + q["qid"], q["text"], q.get("filters") or {}, k))
     for s in stories:
-        k = answer_cache_key(gcfg, gcfg["provider"], gcfg["model"], s["question"], s.get("filters") or {},
+        k = answer_cache_key(gcfg, gcfg["provider"], gcfg["model"], asked_question(s), s.get("filters") or {},
                              retrieval_fingerprint(rcfg))
-        want.append(("story " + s["id"], s["question"], s.get("filters") or {}, k))
+        want.append(("story " + s["id"], asked_question(s), s.get("filters") or {}, k))
     missing_cache = [name for name, _text, _filt, k in want if k not in keys]
     check(not missing_cache,
           f"answer cache covers all {len(want)} seed questions and stories",

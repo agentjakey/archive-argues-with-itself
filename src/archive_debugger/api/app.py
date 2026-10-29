@@ -28,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from archive_debugger import crisis, flags, scopes
+from archive_debugger import crisis, editorial, flags, scopes
 from archive_debugger.scopes import parse_enabled_scopes
 from archive_debugger.api.cache import AnswerCache, cache_key, retrieval_fingerprint
 from archive_debugger.api.coverage import coverage as compute_coverage
@@ -214,13 +214,8 @@ def evidence_rows(hits: list[dict], verified: list[dict], prompt_ids: Optional[s
 
 
 def load_stories(path: Path) -> list[dict]:
-    if not Path(path).exists():
-        return []
-    stories = json.loads(Path(path).read_text(encoding="utf-8"))
-    for s in stories:
-        if not (isinstance(s.get("pins"), list) and len(s["pins"]) == 2 and s.get("question") and s.get("id")):
-            raise ValueError(f"story {s.get('id')!r} needs id, question, and exactly two pins")
-    return stories
+    """Stories with their comparability blocks validated (archive_debugger.editorial)."""
+    return editorial.load_stories(path)
 
 
 def corpus_facts(conn, pilot_window: dict) -> dict:
@@ -715,10 +710,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                stories_path: Path = DEFAULT_STORIES, scope: Optional[str] = None,
                serve_scopes: Optional[list[str]] = None,
                enabled_scopes: Optional[list[str]] = None,
-               default_scope: Optional[str] = None) -> FastAPI:
+               default_scope: Optional[str] = None,
+               notes_path: Path = editorial.DEFAULT_NOTES) -> FastAPI:
     if load_env:
         from dotenv import load_dotenv
         load_dotenv()
+    # Dated editorial notes (corrections), loaded once; malformed notes fail the start, never serve.
+    notes = editorial.load_notes(notes_path)
     # Scope layer (additive): with no scope and no serve_scopes this serves the pilot exactly
     # as before. A named scope serves that scope's config + registry databases. serve_scopes
     # serves several scopes from one process, routed per request by a `scope` parameter, with
@@ -972,6 +970,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     question=clean,
                     answer_text=sa.get("text"),
                 ) if answered else None   # on serve, from stored evidence + shown text; not cached
+                # Dated editorial notes about this stored answer, beside it and never in it.
+                served["editorial_notes"] = editorial.notes_for_answer(notes, b.name, question, cached=True)
                 return served
 
         # Cache miss. Hold one pooled read-only connection for this whole request, so the model call
@@ -1037,6 +1037,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 question=clean,
                 answer_text=ans.text,
             ) if answered else None
+            result["editorial_notes"] = editorial.notes_for_answer(notes, b.name, question, cached=False)
             _log_timing(b.name, t_ret, time.monotonic() - t_model, "abstain" if ans.abstained else "answer", len(hits))
             return result
 
@@ -1098,10 +1099,21 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 # record, i.e. a cited basis, so the two cited-basis crisis topics still fire here),
                 # leaving the returned rows unchanged. Computed on serve, never stored.
                 flagged = flags.detect([{**row, "in_prompt": True, "cited": True} for row in rows])
-                out.append({"id": s["id"], "question": s["question"], "filters": s.get("filters") or {},
-                            "caption": s.get("caption", ""), "pins": [by_id[p] for p in s["pins"]],
+                out.append({"id": s["id"], "question": s["question"],
+                            "answer_question": editorial.asked_question(s),
+                            "filters": s.get("filters") or {},
+                            "caption": s.get("caption", ""),
+                            "comparability": editorial.comparability_view(s),
+                            "surfaces": list(s["surfaces"]),
+                            "notes": editorial.notes_for_story(notes, b.name, s["id"]),
+                            "pins": [by_id[p] for p in s["pins"]],
                             "flagged": flagged})
         return out
+
+    @app.get("/editorial-notes")
+    def editorial_notes_view() -> dict:
+        """The whole versioned editorial-notes file, as the static build reads it."""
+        return notes
 
     @app.get("/flag")
     def flag_view(pins: str = Query(""), scope: Optional[str] = None):

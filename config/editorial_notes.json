@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "notes": [
+    {
+      "id": "alberta-insurance-caption-2026-10-27",
+      "target": {"kind": "story", "scope": "pilot", "story_id": "alberta-insurance-1974-1999"},
+      "date": "2026-10-27",
+      "text": "Corrected. Until October 27, 2026 this caption called the two pages records of the same insurance plan. They are not: the 1974 page describes the basic provincial plan, and the 1998-99 page describes Alberta Blue Cross non-group coverage, a separate supplementary program.",
+      "reason": "The caption asserted a continuity between two programs that the pages do not support."
+    },
+    {
+      "id": "alberta-insurance-question-2026-10-29",
+      "target": {"kind": "story", "scope": "pilot", "story_id": "alberta-insurance-1974-1999"},
+      "date": "2026-10-29",
+      "text": "Corrected. Until October 29, 2026 this story asked \"How did Alberta health insurance coverage change between the 1970s and 1990s?\", a question that assumes a change these two records cannot show. The question above is new. The answer shown with this story was generated for the earlier wording and has not been edited.",
+      "reason": "The story question presupposed a change in coverage; the two records are not comparable on program, population or measure."
+    },
+    {
+      "id": "alberta-insurance-answer-2026-10-29",
+      "target": {"kind": "answer", "scope": "pilot", "question": "How did Alberta health insurance coverage change between the 1970s and 1990s?", "cached_only": true},
+      "date": "2026-10-29",
+      "text": "This answer was generated for a story question that assumed a change in coverage, and it is shown unedited. Its second and third sentences cite page 116 of the 1998-99 statistical supplement, not page 117, the page the story pins. Page 116 is the summary of Alberta Blue Cross non-group coverage: free for seniors 65 and over, their spouses and dependents, and some widows and widowers, available to residents under 65 as supplementary insurance, and covering items such as private or semi-private hospital accommodation, some prescription drugs and ambulance services. Page 117 counts who was enrolled in that program in 1998-99. Neither page describes the basic provincial plan the 1974 record refers to, so the answer's two halves do not describe the same program.",
+      "reason": "The cached answer pairs two different programs as if they were one, and cites a different page from the one the story pins."
+    },
+    {
+      "id": "federal-aging-retired-2026-10-29",
+      "target": {"kind": "story", "scope": "pilot", "story_id": "federal-aging-1995-2000"},
+      "date": "2026-10-29",
+      "text": "Removed from the featured stories. Its question is one the v1 evaluation labels as should-abstain, and the v1 audit counted its answer as off-target. The two pages are kept and described in docs/v2/DATA_NOTES.md.",
+      "reason": "A featured story must not rest on an answer the v1 audit marked off-target."
+    },
+    {
+      "id": "microlog-immunization-retired-2026-10-29",
+      "target": {"kind": "story", "scope": "microlog", "story_id": "microlog-immunization-1984-2016"},
+      "date": "2026-10-29",
+      "text": "Removed from the featured stories. Its question asks about National Advisory Committee on Immunization statements on schedules; neither pinned page is one, and the 2016 page is about detecting measles cases, not schedules.",
+      "reason": "The pinned pages do not answer the story question, and the caption linked them with a narrative neither page states."
+    },
+    {
+      "id": "microlog-captions-2026-10-29",
+      "target": {"kind": "story", "scope": "microlog", "story_id": "microlog-communicable-disease-1987-2009"},
+      "date": "2026-10-29",
+      "text": "Corrected. Until October 29, 2026 this caption ended \"A provincial watch, then a national one\", which read one province's program and a later national plan as a single succession. The two pages describe different programs in different jurisdictions.",
+      "reason": "The caption invented continuity across jurisdictions."
+    },
+    {
+      "id": "microlog-water-caption-2026-10-29",
+      "target": {"kind": "story", "scope": "microlog", "story_id": "microlog-drinking-water-1984-2012"},
+      "date": "2026-10-29",
+      "text": "Corrected. Until October 29, 2026 this caption ended \"A case for the law, then a monitoring program running\", which implied the 1984 proposal led to British Columbia's program. Neither page says so.",
+      "reason": "The caption invented continuity between a national proposal and one province's program."
+    },
+    {
+      "id": "microlog-cancer-caption-2026-10-29",
+      "target": {"kind": "story", "scope": "microlog", "story_id": "microlog-cancer-registry-1990-2006"},
+      "date": "2026-10-29",
+      "text": "Corrected. Until October 29, 2026 this caption ended \"A small registry reporting up, a large one reporting out\", a contrast drawn across two provinces that the pages do not make.",
+      "reason": "The caption framed two provinces' registries as a single contrast."
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "id": "federal-aging-1995-2000",
+    "scope": "pilot",
+    "retired": "2026-10-29",
+    "question": "How did federal policy on aging change between the 1980s and 2000s?",
+    "filters": {"jurisdiction": "federal"},
+    "pins": ["31761115571101#9:0", "micro_IA40243301_0469#9:0"],
+    "caption": "1995: the National Advisory Council on Aging, created in 1980, states its position on community health services for seniors. 2000: a seniors' guide describes the Division of Aging and Seniors as the federal focal point. An advisory voice, then an administrative one.",
+    "comparability": {
+      "outcome": "related_different",
+      "differs_on": ["program", "measure"],
+      "note": "The 1995 page introduces an advisory council's position paper on community health services for seniors; the 2000 page is a directory entry describing what a federal division does. Neither states a federal policy on aging at a point in time, so the pair cannot show a policy change. The story question is eval question q036, which the v1 gold labels as should-abstain and the v1 audit counted among the off-target answers."
+    }
+  },
+  {
+    "id": "microlog-immunization-1984-2016",
+    "scope": "microlog",
+    "retired": "2026-10-29",
+    "question": "What did National Advisory Committee on Immunization statements recommend about immunization schedules?",
+    "filters": {},
+    "pins": ["micro_IA40243513_0439#13:1", "micro_IA40242402_2632#11:2"],
+    "caption": "1984: the federal Guide to Immunization sets the routine, measles, mumps and rubella given together and repeated when an immune globulin got in the way. 2016: a Canada Communicable Disease Report works through a measles outbreak, asking for earlier and repeated contact with primary care and emergency departments to catch what the routine missed. Writing the schedule, then chasing what slipped past it.",
+    "comparability": {
+      "outcome": "related_different",
+      "differs_on": ["program", "measure"],
+      "note": "Neither page is presented as a National Advisory Committee on Immunization statement. The 1984 passage is a short OCR fragment about repeating the MMR vaccine after immune globulin; the 2016 page is a Toronto outbreak investigation about detecting measles cases, not about schedules. The pair does not answer its question, and the caption's link between them is not on either page."
+    }
+  }
+]

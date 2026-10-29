@@ -1,30 +1,42 @@
 [
   {
-    "id": "alberta-insurance-1974-1999",
-    "question": "How did Alberta health insurance coverage change between the 1970s and 1990s?",
+    "id": "alberta-mental-health-1988-1993",
+    "question": "How did Alberta's mental health policy change between 1980 and 2000?",
     "filters": {"jurisdiction": "alberta"},
-    "pins": ["ableg_33398004781505#52:0", "micro_IA40243301_0385#117:0"],
-    "caption": "1974: an Alberta inventory describes government services for First Nations and Metis people, including health coverage. 1998-99: a health-insurance statistical supplement reports enrollment in Alberta Blue Cross non-group coverage. These records describe different things; they cannot, by themselves, establish how coverage changed."
+    "pins": ["mentalhealthserv00albe_0#8:0", "workinginpartner00albe#3:0"],
+    "caption": "1988: a review of mental health services opens with the 1967 study that shaped them. 1993: a partnership report records that Future Directions for Mental Health Services was approved as government policy in April 1992. Background, then decision.",
+    "comparability": {
+      "outcome": "comparable_agreeing",
+      "differs_on": [],
+      "note": "Both pages are Alberta government accounts of provincial mental health policy. The 1988 review traces the policy from the 1967 Blair Report through the 1972 and 1988 Mental Health Acts; the 1993 report records that Future Directions was approved as the province's mental health policy in April 1992. Together they document a policy decision, not its results."
+    },
+    "surfaces": ["hero", "gallery", "attract"]
   },
   {
     "id": "ontario-tobacco-1992-1999",
     "question": "What did Ontario public health authorities recommend about controlling tobacco smoking?",
     "filters": {"jurisdiction": "ontario"},
     "pins": ["31761118924968#4:1", "31761118938901#43:0"],
-    "caption": "1992: a report on alcohol and tobacco taxes treats price as a public-health measure. 1999: the expert panel renewing the Ontario Tobacco Strategy places cessation inside a comprehensive program. The same goal, argued from two directions."
+    "caption": "1992: a report on alcohol and tobacco taxes treats price as a public-health measure. 1999: the expert panel renewing the Ontario Tobacco Strategy places cessation inside a comprehensive program. The same goal, argued from two directions.",
+    "comparability": {
+      "outcome": "comparable_agreeing",
+      "differs_on": [],
+      "note": "Both pages are Ontario recommendations on tobacco control. The 1992 report credits tax increases within a comprehensive strategy with large decreases in smoking; the 1999 panel says cessation must be part of a comprehensive program and lists higher cigarette prices among the measures that help smokers quit. They agree; neither measures what the other proposed."
+    },
+    "surfaces": ["gallery", "attract"]
   },
   {
-    "id": "alberta-mental-health-1988-1993",
-    "question": "How did Alberta's mental health policy change between 1980 and 2000?",
+    "id": "alberta-insurance-1974-1999",
+    "question": "What do two Alberta government health records, from 1974 and 1998-99, say about health insurance coverage?",
+    "answer_question": "How did Alberta health insurance coverage change between the 1970s and 1990s?",
     "filters": {"jurisdiction": "alberta"},
-    "pins": ["mentalhealthserv00albe_0#8:0", "workinginpartner00albe#3:0"],
-    "caption": "1988: a review of mental health services opens with the 1967 study that shaped them. 1993: a partnership report records that Future Directions for Mental Health Services was approved as government policy in April 1992. Background, then decision."
-  },
-  {
-    "id": "federal-aging-1995-2000",
-    "question": "How did federal policy on aging change between the 1980s and 2000s?",
-    "filters": {"jurisdiction": "federal"},
-    "pins": ["31761115571101#9:0", "micro_IA40243301_0469#9:0"],
-    "caption": "1995: the National Advisory Council on Aging, created in 1980, states its position on community health services for seniors. 2000: a seniors' guide describes the Division of Aging and Seniors as the federal focal point. An advisory voice, then an administrative one."
+    "pins": ["ableg_33398004781505#52:0", "micro_IA40243301_0385#117:0"],
+    "caption": "Two Alberta government health records, twenty-five years apart. 1974: an inventory of provincial services for First Nations and Metis people describes the basic health insurance plan and who paid its premiums. 1998-99: a statistical supplement counts enrollment in Alberta Blue Cross non-group coverage, a separate supplementary program. They describe different things and cannot, on their own, show how coverage changed.",
+    "comparability": {
+      "outcome": "incompatible",
+      "differs_on": ["program", "population", "measure"],
+      "note": "The 1974 page is one entry in an inventory of provincial services for First Nations and Metis people: it says the Alberta Health Care Insurance Commission covers basic and optional services, that the federal health department pays premiums for most First Nations people with registered status, and that Albertans over 65 have had premium-free coverage since 1972. The 1998-99 page counts the 450,556 people enrolled in Alberta Blue Cross non-group coverage, a separate supplementary program whose spending was mostly drugs and ambulance services. Different program, population and measure."
+    },
+    "surfaces": ["gallery"]
   }
 ]

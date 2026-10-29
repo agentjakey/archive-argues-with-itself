@@ -1,30 +1,41 @@
 [
   {
-    "id": "microlog-communicable-disease-1987-2009",
-    "question": "What did the Canada Communicable Disease Report describe about notifiable disease trends?",
+    "id": "microlog-cancer-registry-1990-2006",
+    "question": "What did reports describe about cancer incidence or cancer registry data?",
     "filters": {},
-    "pins": ["micro_IA40243213_0884#13:0", "micro_IA40244215_3271#11:1"],
-    "caption": "1987: an Alberta annual report describes the province monitoring notifiable diseases and advising local health units, hospitals, and physicians under a new Public Health Act. 2009: a Canada Communicable Disease Report supplement sets out how the Public Health Agency of Canada pools case data across jurisdictions and publishes national surveillance summaries. A provincial watch, then a national one."
+    "pins": ["micro_IA40242803_0845#48:0", "micro_IA40243316_0548#40:0"],
+    "caption": "1989-90: Prince Edward Island's health department describes its provincial tumour registry, fed by pathology reports from two hospitals and sending incidence data to Statistics Canada. 2006: an Alberta cancer report describes the Alberta Cancer Board's registry of all new primary cancers and cancer deaths in the province. Two provinces' registries, each in its own report; not one registry over time.",
+    "comparability": {
+      "outcome": "related_different",
+      "differs_on": ["jurisdiction", "period"],
+      "note": "Both pages answer the question: each describes where a provincial cancer registry's data comes from. They are different registries in different provinces, sixteen years apart, so the pair shows two ways of keeping a registry, not a change in either one."
+    },
+    "surfaces": ["hero", "gallery", "attract"]
   },
   {
     "id": "microlog-drinking-water-1984-2012",
     "question": "What did drinking-water quality guidelines recommend about contaminants?",
     "filters": {},
     "pins": ["micro_IA40243512_0687#300:0", "micro_IA24402414_0343#53:0"],
-    "caption": "1984: a federal report on drinking water warns that conventional treatment cannot remove some contaminants, and presses for a safe drinking water act. 2011: British Columbia's progress report describes water quality already measured by routine sampling at the treatment plant and through the distribution system. A case for the law, then a monitoring program running."
+    "caption": "1984: the proceedings of a national conference on drinking water quality warn that conventional treatment cannot remove some contaminants and call for a safe drinking water act with enforceable standards. 2011: British Columbia's Provincial Health Officer reports how drinking water is sampled and tested in that province (catalogued 2012). A national proposal and one province's monitoring report.",
+    "comparability": {
+      "outcome": "related_different",
+      "differs_on": ["jurisdiction", "program", "measure"],
+      "note": "The 1984 page is a proposal made at a national conference; the 2011 page describes monitoring in one province and refers to the Guidelines for Canadian Drinking Water Quality. Neither page is itself the guidelines, and neither shows whether the proposed act was passed or what led to BC's program."
+    },
+    "surfaces": ["gallery", "attract"]
   },
   {
-    "id": "microlog-immunization-1984-2016",
-    "question": "What did National Advisory Committee on Immunization statements recommend about immunization schedules?",
+    "id": "microlog-communicable-disease-1987-2009",
+    "question": "What did the Canada Communicable Disease Report describe about notifiable disease trends?",
     "filters": {},
-    "pins": ["micro_IA40243513_0439#13:1", "micro_IA40242402_2632#11:2"],
-    "caption": "1984: the federal Guide to Immunization sets the routine, measles, mumps and rubella given together and repeated when an immune globulin got in the way. 2016: a Canada Communicable Disease Report works through a measles outbreak, asking for earlier and repeated contact with primary care and emergency departments to catch what the routine missed. Writing the schedule, then chasing what slipped past it."
-  },
-  {
-    "id": "microlog-cancer-registry-1990-2006",
-    "question": "What did reports describe about cancer incidence or cancer registry data?",
-    "filters": {},
-    "pins": ["micro_IA40242803_0845#48:0", "micro_IA40243316_0548#40:0"],
-    "caption": "1990: Prince Edward Island's health annual report describes a provincial tumour registry sending cancer incidence data to Statistics Canada from two hospitals' pathology labs. 2006: the Alberta Cancer Board publishes a regional cancer picture from its own registry of every new cancer and cancer death in the province. A small registry reporting up, a large one reporting out."
+    "pins": ["micro_IA40243213_0884#13:0", "micro_IA40244215_3271#11:1"],
+    "caption": "1985-86: an Alberta annual report (catalogued 1987) describes the province's notifiable-disease program: required case reports, advice to local health authorities, hospitals and physicians, and data sent on to Statistics Canada. 2009: a Canada Communicable Disease Report supplement says the Public Health Agency of Canada will publish annual national surveillance summaries. A provincial program and a national reporting plan, described in different years.",
+    "comparability": {
+      "outcome": "related_different",
+      "differs_on": ["jurisdiction", "program"],
+      "note": "Only the 2009 page is from the Canada Communicable Disease Report; the 1985-86 page is an Alberta annual report. One describes a provincial program, the other a national reporting plan, so the pair cannot show how notifiable-disease reporting developed."
+    },
+    "surfaces": ["gallery", "attract"]
   }
 ]

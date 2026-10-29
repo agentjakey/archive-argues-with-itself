@@ -157,26 +157,85 @@ def test_get_ask_provider_stub_needs_no_key(tmp_path, monkeypatch):
         assert c.get("/ask", params={"q": "x", "provider": "bogus"}).status_code == 422
 
 
-def test_featured_alberta_story_caption_is_accurate():
-    """Editorial correction (festival, 2026-10): the featured Alberta story must not call the two
-    records the same insurance plan, must keep its exact pinned pages unchanged, and must carry the
-    comparability caveat. The question is the cached-demo key, so it stays byte-for-byte."""
+ALBERTA_V1_QUESTION = "How did Alberta health insurance coverage change between the 1970s and 1990s?"
+
+
+def test_alberta_story_is_corrected_not_rewritten():
+    """Editorial corrections (2026-10-27 caption, 2026-10-29 question and placement): the Alberta
+    pair keeps its exact pins, shows a question that does not presuppose a change, still asks its
+    answer with the original q034 wording (so the stored answer serves unedited), is marked
+    incompatible, and is off the hero and the attract loop."""
     stories = load_stories(Path(__file__).resolve().parents[1] / "config" / "stories.json")
     alberta = next((s for s in stories if s["id"] == "alberta-insurance-1974-1999"), None)
-    assert alberta is not None, "featured Alberta story is missing"
+    assert alberta is not None, "Alberta story is missing"
     assert alberta["pins"] == ["ableg_33398004781505#52:0", "micro_IA40243301_0385#117:0"]
-    assert alberta["question"] == "How did Alberta health insurance coverage change between the 1970s and 1990s?"
+    assert alberta["answer_question"] == ALBERTA_V1_QUESTION
+    assert alberta["question"] != ALBERTA_V1_QUESTION and "chang" not in alberta["question"].lower()
+    assert alberta["comparability"]["outcome"] == "incompatible"
+    assert set(alberta["comparability"]["differs_on"]) == {"program", "population", "measure"}
+    assert alberta["surfaces"] == ["gallery"]
+    assert stories[0]["id"] != "alberta-insurance-1974-1999"
     cap = alberta["caption"].lower()
     assert "same plan" not in cap and "same insurance plan" not in cap
-    assert "different things" in cap
-    assert "cannot" in cap and "coverage changed" in cap
+    assert "different things" in cap and "cannot" in cap
+
+
+def _story(**over):
+    s = {"id": "s1", "question": "vaccination hospital", "filters": {"jurisdiction": "alberta"},
+         "pins": ["b#1:0", "a#0:0"], "caption": "then and later",
+         "comparability": {"outcome": "comparable_agreeing", "differs_on": [], "note": "Same program, two years."},
+         "surfaces": ["hero", "gallery"]}
+    s.update(over)
+    return s
+
+
+def test_stories_serve_comparability_and_dated_notes(tmp_path):
+    r, _ = _retriever(tmp_path, [("a", 1974, "alberta"), ("b", 1999, "alberta")])
+    stories = tmp_path / "stories.json"
+    stories.write_text(json.dumps([_story(question="Two records on vaccination hospital",
+                                          answer_question="vaccination hospital",
+                                          comparability={"outcome": "incompatible", "differs_on": ["measure"],
+                                                         "note": "Different measures."},
+                                          surfaces=["gallery"])]), encoding="utf-8")
+    notes = tmp_path / "notes.json"
+    notes.write_text(json.dumps({"version": 1, "notes": [
+        {"id": "n-story", "target": {"kind": "story", "scope": "pilot", "story_id": "s1"}, "date": "2026-10-29",
+         "text": "Question corrected.", "reason": "It presupposed a change."},
+        {"id": "n-answer", "target": {"kind": "answer", "scope": "pilot", "question": "vaccination hospital",
+                                      "cached_only": True},
+         "date": "2026-10-29", "text": "Generated for the earlier wording.", "reason": "Old question."}]}),
+        encoding="utf-8")
+    hits = r.search("vaccination hospital", top_k=12)
+    llm = StubLLM(Draft(sentences=[CitedSentence(text="A programme ran.", cited_ids=[hits[0]["passage_id"]])]))
+    cache_db = tmp_path / "cache" / "answers.db"
+    with TestClient(_app(tmp_path, r, llm=llm, stories_path=stories, notes_path=notes)) as c:
+        s = c.get("/stories").json()[0]
+        assert s["question"] == "Two records on vaccination hospital"
+        assert s["answer_question"] == "vaccination hospital"
+        assert s["comparability"] == {"outcome": "incompatible", "label": "Incompatible",
+                                      "differs_on": ["measure"], "note": "Different measures."}
+        assert s["surfaces"] == ["gallery"]
+        assert [n["id"] for n in s["notes"]] == ["n-story"] and s["notes"][0]["date"] == "2026-10-29"
+        fresh = c.post("/ask", json={"question": "vaccination hospital"}).json()
+        assert fresh["answer"]["cached"] is None and fresh["editorial_notes"] == []   # cached_only: not on a new answer
+        import sqlite3
+        stored_before = sqlite3.connect(cache_db).execute("SELECT response_json FROM answers").fetchall()
+        hit = c.post("/ask", json={"question": "vaccination hospital"}).json()
+        assert hit["answer"]["cached"] is not None
+        assert [n["id"] for n in hit["editorial_notes"]] == ["n-answer"]
+        assert hit["answer"]["text"] == fresh["answer"]["text"]                      # the answer itself is untouched
+        other = c.post("/ask", json={"question": "vaccination hospital", "filters": {"jurisdiction": "alberta"}}).json()
+        assert other["answer"]["cached"] is None and other["editorial_notes"] == []   # other filters: a different answer
+        assert c.get("/editorial-notes").json()["version"] == 1
+    stored_after = sqlite3.connect(cache_db).execute("SELECT response_json FROM answers").fetchall()
+    assert stored_before[0] in stored_after                                          # the note is never written into the cache
+    assert all("editorial_notes" not in row[0] for row in stored_after)
 
 
 def test_stories_and_offline_pages(tmp_path):
     r, _ = _retriever(tmp_path, [("a", 1974, "alberta"), ("b", 1999, "alberta")])
     stories = tmp_path / "stories.json"
-    stories.write_text(json.dumps([{"id": "s1", "question": "vaccination hospital", "filters": {"jurisdiction": "alberta"},
-                                    "pins": ["b#1:0", "a#0:0"], "caption": "then and later"}]), encoding="utf-8")
+    stories.write_text(json.dumps([_story()]), encoding="utf-8")
     pages = tmp_path / "pages"
     (pages / "a").mkdir(parents=True)
     (pages / "a" / "n0_thumb.jpg").write_bytes(b"\xff\xd8\xff\xe0 fake jpeg")
