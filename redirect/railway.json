@@ -1,5 +1,5 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
-  "build": { "builder": "DOCKERFILE", "dockerfilePath": "redirect/Dockerfile" },
+  "build": { "builder": "DOCKERFILE", "dockerfilePath": "Dockerfile", "watchPatterns": ["/redirect/**"] },
   "deploy": { "numReplicas": 1, "healthcheckPath": "/__redirect_health", "restartPolicyType": "ON_FAILURE", "restartPolicyMaxRetries": 10 }
 }
