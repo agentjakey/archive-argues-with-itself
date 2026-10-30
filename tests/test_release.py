@@ -87,6 +87,10 @@ def test_secrets_size_and_unlisted_missing_answers_are_refused(release, tmp_path
     mod, out = release
     (out / "assets" / "leak.js").write_text("const key = 'sk-ant-api03-" + "x" * 40 + "';", encoding="utf-8")
     (out / "assets" / "huge.bin").write_bytes(b"\0" * (mod.MAX_FILE_BYTES + 1))
+    index_path = out / "data" / "microlog" / "answers" / "index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["answers"][0]["file"] = None                                     # a curated question with no answer
+    index_path.write_text(json.dumps(index), encoding="utf-8")
     _remanifest(mod, out)
     strict = tmp_path / "allow_none.json"
     strict.write_text("{}", encoding="utf-8")
