@@ -140,3 +140,15 @@ def test_environment_wins_over_dotenv_and_values_are_never_logged(tmp_path, monk
     assert sources["R2_ACCESS_KEY_ID"] == "unset"
     assert len(lines) == 1 and "secret" not in lines[0].replace("secrets present", "")
     os.environ.pop("CIVIC_CACHE_TOKEN", None)          # set by the .env load above, not by monkeypatch
+
+
+def test_spent_daily_budget_shows_the_record_without_a_model_call(tmp_path, monkeypatch):
+    """The engine Worker marks a forwarded request once the D1 daily budget is spent: the engine
+    returns the record in limited mode and never constructs a model client."""
+    import sys
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-used")
+    monkeypatch.setitem(sys.modules, "anthropic", None)                  # importing it would fail the test
+    r, _ = _retriever(tmp_path, [("a", 1990, "alberta"), ("b", 1995, "alberta")])
+    with TestClient(_app(tmp_path, r, provider="anthropic")) as c:
+        j = c.post("/ask", json={"question": "vaccination hospital"}, headers={"x-civic-model-budget": "exhausted"}).json()
+    assert j["degraded"]["reason"] == "daily_budget" and len(j["evidence"]) > 0

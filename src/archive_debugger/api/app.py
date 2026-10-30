@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -99,6 +99,8 @@ _DEGRADE_MSG = {
     "budget": "one moment: this question ran long, so here is the record below rather than keep you waiting.",
     "retrieval_slow": "this search ran long and stopped before it finished. Try it again, or pick an example or story below.",
     "empty": "type a question to search the record.",
+    "daily_budget": "today's budget for new answers is spent, so here is the record below. Stored answers and "
+                    "the stories still work; new answers resume tomorrow.",
     "starting": "the archive engine is starting up. Ask again in a moment, or open a story below while it loads.",
     "index_unavailable": "this collection's search index did not load, so here is no answer rather than a partial one. "
                          "Pick a story below, or try the other collection.",
@@ -907,6 +909,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         except Exception:  # noqa: BLE001 - a bad extra scope is skipped, never fatal to the base serve
             return None
 
+    def _scopes_to_provision() -> list[str]:
+        """This process's scopes: its base scope (CIVIC_SCOPE, else the registry default) and the
+        enabled extra scopes. A container that serves only microlog never downloads the pilot."""
+        enabled = (set(enabled_scopes) if enabled_scopes is not None
+                   else parse_enabled_scopes(os.environ.get(ENV_ENABLED_SCOPES)))
+        return [base_name] + scopes_to_build(base_name, serve_scopes, enabled)
+
     def _build_all() -> dict:
         """Open every served scope: the base, then each enabled extra scope whose data is present."""
         base = _build_bundle(base_name, cfg_path=base_config, retr=retriever, cache_p=base_cache_path,
@@ -988,9 +997,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         progress = app.state.progress
         try:
             if os.environ.get(provision.ENV_PROVISION):
-                from archive_debugger import boot
-                names = boot.enabled_for_boot(scopes.load_registry(), os.environ.get(ENV_ENABLED_SCOPES))
-                provision.provision(names, progress, stop=app.state.stopping)
+                provision.provision(_scopes_to_provision(), progress, stop=app.state.stopping)
             if app.state.stopping.is_set():
                 return
             progress.set_stage("loading")
@@ -1081,7 +1088,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         return b
 
     def answer(b: Bundle, question: str, filters: Optional[dict], req_provider: Optional[str],
-               req_model: Optional[str], nocache: bool):
+               req_model: Optional[str], nocache: bool, budget: Optional[str] = None):
         r = b.retriever
         gcfg = b.gcfg
         kind = req_provider or b.provider or gcfg["provider"]
@@ -1196,6 +1203,11 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             if kind == "anthropic" and b.llm is None and not app.state.model_ratelimit.allow():
                 _log_timing(b.name, t_ret, 0.0, "degraded:rate_limited", len(hits))
                 return degraded("rate_limited", pool_rows, hits, pr.conn)
+            # The engine Worker keeps the daily model budget (D1) and marks a request it forwards
+            # after the budget is spent; the record is still shown, without a model call.
+            if kind == "anthropic" and b.llm is None and budget == "exhausted":
+                _log_timing(b.name, t_ret, 0.0, "degraded:daily_budget", len(hits))
+                return degraded("daily_budget", pool_rows, hits, pr.conn)
 
             # The model gets only the budget left after retrieval, never more than the flat cap.
             model_budget = min(GEN_TIMEOUT_S, BUDGET_S - t_ret - MODEL_MARGIN_S)
@@ -1363,22 +1375,26 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         return out
 
     @app.post("/ask")
-    def ask_post(req: AskRequest, scope: Optional[str] = None):
+    def ask_post(req: AskRequest, scope: Optional[str] = None,
+                 x_civic_model_budget: Optional[str] = Header(default=None)):
         if not app.state.ready.is_set():
             return starting_answer(req.question)
-        return answer(_bundle(scope), req.question, req.filters, req.provider, req.model, req.nocache)
+        return answer(_bundle(scope), req.question, req.filters, req.provider, req.model, req.nocache,
+                      x_civic_model_budget)
 
     @app.get("/ask")
     def ask_get(q: str = Query(..., min_length=1), period: Optional[str] = None,
                 jurisdiction: Optional[str] = None, doc_type: Optional[str] = None, nocache: int = 0,
-                provider: Optional[str] = None, scope: Optional[str] = None):
+                provider: Optional[str] = None, scope: Optional[str] = None,
+                x_civic_model_budget: Optional[str] = Header(default=None)):
         """Permalink form: same handler as POST, filters from query params. `provider=stub`
         exercises retrieval and the response shape without a model call (smoke tests)."""
         if provider is not None and provider not in ("stub", "anthropic"):
             raise HTTPException(status_code=422, detail="provider must be 'stub' or 'anthropic'")
         if not app.state.ready.is_set():
             return starting_answer(q)
-        return answer(_bundle(scope), q, _clean_filters(period, jurisdiction, doc_type), provider, None, bool(nocache))
+        return answer(_bundle(scope), q, _clean_filters(period, jurisdiction, doc_type), provider, None, bool(nocache),
+                      x_civic_model_budget)
 
     if Path(web_dist).is_dir():
         dist = Path(web_dist)
