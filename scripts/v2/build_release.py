@@ -266,7 +266,7 @@ def gate(release: Path, allow_missing_path: Path) -> list[str]:
 
 def wrangler(args: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(["npx", "wrangler", *args], cwd=SITE_WORKER, capture_output=True, text=True,
-                          shell=sys.platform == "win32")
+                          encoding="utf-8", errors="replace", shell=sys.platform == "win32")
 
 
 def publish(release: Path, env: str, allow_missing: Path) -> int:
@@ -278,12 +278,19 @@ def publish(release: Path, env: str, allow_missing: Path) -> int:
         return 1
     manifest = json.loads((release / MANIFEST).read_text(encoding="utf-8"))
     current = SITE_WORKER / "release"
-    if current.exists():
-        shutil.rmtree(current)
-    shutil.copytree(release, current)
-    upload = wrangler(["versions", "upload", "--env", env, "--tag", manifest["release_id"],
-                       "--message", f"release {manifest['release_id']} ({manifest['git_commit'][:12]})"])
+    empty_folder(current)
+    shutil.copytree(release, current, dirs_exist_ok=True)
+    message = f"release {manifest['release_id']} ({manifest['git_commit'][:12]})"
+    upload = wrangler(["versions", "upload", "--env", env, "--tag", manifest["release_id"], "--message", message])
     print(upload.stdout)
+    if upload.returncode != 0 and "does not yet exist" in upload.stdout + upload.stderr:
+        # The first release of an environment: versions upload needs an existing Worker, so the
+        # first one is a plain deploy. Every later release goes through upload and deploy.
+        first = wrangler(["deploy", "--env", env, "--message", message])
+        print(first.stdout)
+        if first.returncode != 0:
+            print(first.stderr, file=sys.stderr)
+        return first.returncode
     if upload.returncode != 0:
         print(upload.stderr, file=sys.stderr)
         return upload.returncode
@@ -311,6 +318,9 @@ def rollback(env: str, version: str | None) -> int:
 
 
 def main(argv=None) -> int:
+    # wrangler prints symbols a Windows console code page cannot show; replace them, never crash
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(errors="replace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     a = sub.add_parser("assemble")

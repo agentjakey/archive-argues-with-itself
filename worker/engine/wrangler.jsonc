@@ -47,11 +47,11 @@
         "SLEEP_AFTER_MINUTES": "15",
         "PROVISION_MODE": "r2-binding",
         "DENSE_BACKEND": "numpy",
-        "ALLOWED_ORIGINS": "https://archive-argues-site-staging.SET-ME-subdomain.workers.dev,http://localhost:5173",
+        "ALLOWED_ORIGINS": "https://archive-argues-site-staging.jakemyguy.workers.dev,http://localhost:5173",
         "DAILY_MODEL_CALLS": "100",
         "TURNSTILE_REQUIRED": "true",
         "KEEP_WARM_WINDOWS": "",
-        "PUBLIC_URL": "https://archive-argues-site-staging.SET-ME-subdomain.workers.dev"
+        "PUBLIC_URL": "https://archive-argues-site-staging.jakemyguy.workers.dev"
       }
     },
 
