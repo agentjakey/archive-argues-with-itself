@@ -19,9 +19,9 @@ export async function checkTurnstile(request: Request, env: Env, fetcher: typeof
   if (!flag(env.TURNSTILE_REQUIRED, true)) return { ok: true };
   const token = request.headers.get(TURNSTILE_HEADER);
   if (!token || token.length > 2048) return { ok: false, status: 403, reason: "turnstile_missing" };
-  if (!env.TURNSTILE_SECRET) return { ok: false, status: 503, reason: "turnstile_not_configured" };
+  if (!env.TURNSTILE_SECRET_KEY) return { ok: false, status: 503, reason: "turnstile_not_configured" };
   const body = new FormData();
-  body.append("secret", env.TURNSTILE_SECRET);
+  body.append("secret", env.TURNSTILE_SECRET_KEY);
   body.append("response", token);
   const ip = request.headers.get("cf-connecting-ip");
   if (ip) body.append("remoteip", ip);

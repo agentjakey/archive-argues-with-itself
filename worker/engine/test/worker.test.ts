@@ -87,7 +87,7 @@ describe("reading an /ask request", () => {
 
 describe("guards", () => {
   it("requires a Turnstile token that siteverify accepts", async () => {
-    const env = fakeEnv({ TURNSTILE_SECRET: "1x0000000000000000000000000000000AA" });
+    const env = fakeEnv({ TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA" });
     const without = new Request("https://api.test/ask", { method: "POST" });
     expect((await checkTurnstile(without, env)).reason).toBe("turnstile_missing");
     const withToken = new Request("https://api.test/ask", { method: "POST", headers: { [TURNSTILE_HEADER]: "XXXX.DUMMY.TOKEN.XXXX" } });
@@ -95,7 +95,7 @@ describe("guards", () => {
     const fail = (async () => Response.json({ success: false })) as unknown as typeof fetch;
     expect((await checkTurnstile(withToken, env, pass)).ok).toBe(true);
     expect((await checkTurnstile(withToken, env, fail)).reason).toBe("turnstile_failed");
-    expect((await checkTurnstile(withToken, fakeEnv({ TURNSTILE_SECRET: undefined }), pass)).reason).toBe("turnstile_not_configured");
+    expect((await checkTurnstile(withToken, fakeEnv({ TURNSTILE_SECRET_KEY: undefined }), pass)).reason).toBe("turnstile_not_configured");
     expect((await checkTurnstile(without, fakeEnv({ TURNSTILE_REQUIRED: "false" }))).ok).toBe(true);
   });
 

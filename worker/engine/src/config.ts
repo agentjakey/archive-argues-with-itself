@@ -25,7 +25,7 @@ export interface Env {
   PUBLIC_URL: string;
   // Secrets (wrangler secret put)
   ANTHROPIC_API_KEY?: string;
-  TURNSTILE_SECRET?: string;
+  TURNSTILE_SECRET_KEY?: string;
 }
 
 export interface ScopeConfig {

@@ -101,7 +101,7 @@ test("a live question waits for the waking engine, keeps the question, and answe
   await shot(page, "waking", page.getByRole("status").filter({ hasText: "Waking the archive engine" }));
   await expect(page.getByRole("heading", { name: "Answer from the record" })).toBeVisible({ timeout: 30_000 });
   expect(asks).toBe(2);
-  expect(wakes.length).toBeGreaterThanOrEqual(1);       // pre-wake on page load or question focus
+  expect(wakes.length).toBe(1);                           // pre-wake on question focus, never on page load
 });
 
 test("when the engine stays down, the site says so and points to the stories", async ({ page }) => {
