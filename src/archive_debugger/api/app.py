@@ -540,6 +540,25 @@ class ConnPool:
                 pass
 
 
+@contextmanager
+def _dense_loading_off(active: bool):
+    """While active, CIVIC_DENSE_BACKEND reads sqlite, so a Retriever opened inside never loads a
+    resident index of its own. Scopes open one at a time in one startup thread, so nothing else
+    reads the variable meanwhile."""
+    if not active:
+        yield
+        return
+    saved = os.environ.get(dense.ENV_BACKEND)
+    os.environ[dense.ENV_BACKEND] = "sqlite"
+    try:
+        yield
+    finally:
+        if saved is None:
+            os.environ.pop(dense.ENV_BACKEND, None)
+        else:
+            os.environ[dense.ENV_BACKEND] = saved
+
+
 def _close_bundles(bundles: dict) -> None:
     for b in bundles.values():
         try:
@@ -863,13 +882,17 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             if own:
                 locked = _LockedEmbedder(r.embedder)   # shared across the pool; guards the ~35ms embed
                 pool_rs = []
-                for _ in range(POOL_SIZE):
-                    # Share the base's resident dense index (A4) across every pooled connection, so the
-                    # ~1-2 GB array is held once per scope, not POOL_SIZE times. None when the numpy
-                    # backend is off, so the pool keeps the sqlite-vec leg exactly as before.
-                    pr = Retriever(cfg_path, embedder=locked, cfg=r.cfg, dense_index=r.dense_index)
-                    _enable_mmap(pr.conn)
-                    pool_rs.append(pr)
+                # When the base did not load a resident index (the backend is sqlite, or the guard
+                # refused it), the pooled connections must not try again: the frozen Retriever loads
+                # one whenever it is handed None, and a later attempt that passed could hold a second,
+                # private copy of the matrix. They keep the base's choice instead.
+                with _dense_loading_off(r.dense_index is None):
+                    for _ in range(POOL_SIZE):
+                        # Share the base's resident dense index (A4) across every pooled connection, so
+                        # the ~1-2 GB array is held once per scope, not POOL_SIZE times.
+                        pr = Retriever(cfg_path, embedder=locked, cfg=r.cfg, dense_index=r.dense_index)
+                        _enable_mmap(pr.conn)
+                        pool_rs.append(pr)
                 pool = ConnPool(pool_rs)
             else:
                 pool = ConnPool([r])   # tests: reuse the injected retriever as the pool

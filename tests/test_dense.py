@@ -165,3 +165,31 @@ def test_pool_shares_one_resident_index(tmp_path, monkeypatch):
         assert len(pooled) == POOL_SIZE
         assert all(r.dense_index is base for r in pooled)                    # one resident array per scope
         assert all(r.dense_index._m is base._m for r in pooled)
+
+
+def test_a_refused_load_is_not_retried_by_the_pool(tmp_path, monkeypatch):
+    """When the guard refuses the base's resident index, the pooled connections keep that choice:
+    no second attempt, so no private copy of the matrix can appear later."""
+    data = _fixture_dbs(tmp_path)
+    monkeypatch.setenv("CIVIC_DB_PATH", str(data / "civic.db"))
+    monkeypatch.setenv("CIVIC_INDEX_PATH", str(data / "vectors.db"))
+    monkeypatch.setenv("CIVIC_EMBEDDER", "stub")
+    monkeypatch.setenv(dense.ENV_BACKEND, "numpy")
+    monkeypatch.setattr(dense, "_container_limit", lambda: 1)            # nothing fits
+    monkeypatch.setattr(dense, "_anon_bytes", lambda: 0)
+    attempts = []
+    real = dense.load_if_enabled
+    monkeypatch.setattr(dense, "load_if_enabled",
+                        lambda conn, log=print: attempts.append(dense.backend_is_numpy()) or real(conn, log=lambda _m: None))
+    from archive_debugger.api import app as app_module
+    from archive_debugger.api.app import POOL_SIZE, create_app
+    monkeypatch.setattr(app_module, "_prime_model_client", lambda: None)
+    app = create_app(REPO / "config" / "pilot.toml", provider="stub", load_env=False,
+                     web_dist=tmp_path / "nodist", cache_path=tmp_path / "cache" / "answers.db")
+    with TestClient(app):
+        assert app.state.ready.wait(timeout=120)
+        bundle = app.state.bundles["pilot"]
+        assert bundle.retriever.dense_index is None
+        assert all(r.dense_index is None for r in bundle.pool._all) and len(bundle.pool._all) == POOL_SIZE
+    assert attempts.count(True) == 1                                     # the base tried; the pool did not
+    assert dense.backend_is_numpy()                                      # the setting is restored afterwards
