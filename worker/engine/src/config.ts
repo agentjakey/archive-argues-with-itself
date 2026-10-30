@@ -17,6 +17,7 @@ export interface Env {
   INSTANCE_TYPE_MICROLOG: string;
   SLEEP_AFTER_MINUTES: string;
   PROVISION_MODE: string;        // "r2-binding" | "snapshot" | "image"
+  SNAPSHOT_VERIFY?: string;      // "full" (default) | "trust": hash a restored disk again or not
   DENSE_BACKEND: string;         // "numpy" | "sqlite"
   ALLOWED_ORIGINS: string;       // comma-separated
   DAILY_MODEL_CALLS: string;
@@ -65,4 +66,13 @@ export function flag(value: string | undefined, fallback: boolean): boolean {
 export function whole(value: string | undefined, fallback: number): number {
   const n = Number.parseInt(value ?? "", 10);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/** How the engine checks data files already on its disk. Image layers are verified by digest on
+ *  pull. A restored snapshot was taken only after a wake of the same release verified every file,
+ *  so SNAPSHOT_VERIFY=trust skips hashing it again; anything else hashes in full. */
+export function verifyPolicy(mode: string, restoredFromSnapshot: boolean, snapshotVerify: string | undefined): string {
+  if (mode === "image") return "trust-image";
+  if (restoredFromSnapshot && (snapshotVerify || "").trim() === "trust") return "trust-snapshot";
+  return "full";
 }

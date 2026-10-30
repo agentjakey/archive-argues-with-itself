@@ -177,6 +177,13 @@ def test_provision_downloads_then_verifies_present_files(tmp_path, monkeypatch):
     monkeypatch.setenv(provision.ENV_VERIFY_PRESENT, "trust-image")
     provision.provision(["pilot"], provision.Progress(), stop=threading.Event(), registry=registry, source=source,
                         mode="present", log=lambda _m: None)                  # image data: trusted by digest
+    monkeypatch.setenv(provision.ENV_VERIFY_PRESENT, "trust-snapshot")
+    provision.provision(["pilot"], provision.Progress(), stop=threading.Event(), registry=registry, source=source,
+                        mode="present", log=lambda _m: None)                  # restored disk: verified when snapshotted
+    monkeypatch.setenv(provision.ENV_VERIFY_PRESENT, "trust-anything")
+    with pytest.raises(provision.ProvisionError, match="unknown"):
+        provision.provision(["pilot"], provision.Progress(), stop=threading.Event(), registry=registry,
+                            source=source, mode="present", log=lambda _m: None)
 
 
 def test_numpy_backend_fetches_artifacts_and_writes_a_stand_in_index(tmp_path, monkeypatch):

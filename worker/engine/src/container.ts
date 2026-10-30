@@ -5,7 +5,7 @@
 // lets it sleep after SLEEP_AFTER_MINUTES of inactivity, and records how long every wake took.
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import { readRow, writeRow, isKey, type CacheRow } from "./cache";
-import { ENGINE_CONFIG, type Env, whole } from "./config";
+import { ENGINE_CONFIG, type Env, verifyPolicy, whole } from "./config";
 import { parseRange } from "./ranges";
 
 const PORT = 8080;
@@ -85,7 +85,7 @@ export class EngineContainer extends DurableObject<Env> {
       PORT: String(PORT),
       CIVIC_RELEASE_ID: this.env.RELEASE_ID,
       CIVIC_PROVISION: present ? "present" : "r2-binding",
-      CIVIC_VERIFY_PRESENT: mode === "image" ? "trust-image" : "full",
+      CIVIC_VERIFY_PRESENT: verifyPolicy(mode, restoredFromSnapshot, this.env.SNAPSHOT_VERIFY),
       CIVIC_R2_PROXY_URL: `http://${R2_HOST}`,
       CIVIC_CACHE_URL: `http://${CACHE_HOST}`,
       CIVIC_CACHE_TOKEN: this.cacheToken,

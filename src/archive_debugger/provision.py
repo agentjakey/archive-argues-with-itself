@@ -27,7 +27,9 @@ provisioning fails: the server never serves a scope from an unverified file.
 
 Files already present: CIVIC_VERIFY_PRESENT=full (default) hashes them; trust-image skips the hash
 for files that are part of the container image, whose layers the registry verifies by digest on
-pull (docs/SELF_HOSTING.md, "Design choices").
+pull; trust-snapshot skips it for a disk restored from a snapshot, which is taken only after the
+same files were verified in full on an earlier wake of the same release (docs/SELF_HOSTING.md,
+"Design choices").
 
 One retry rule for every network read: timeouts, connection errors, 5xx, 408 and 429 are retried
 with backoff; any other 4xx fails at once.
@@ -53,6 +55,7 @@ ENV_PROXY_URL = "CIVIC_R2_PROXY_URL"
 ENV_VERIFY_PRESENT = "CIVIC_VERIFY_PRESENT"
 ENV_WORKERS = "CIVIC_PROVISION_WORKERS"
 ENV_PART_MB = "CIVIC_PROVISION_PART_MB"
+TRUSTED_POLICIES = {"trust-image": "trusted (image)", "trust-snapshot": "trusted (snapshot)"}
 DEFAULT_PROXY_URL = "http://r2.internal"
 DEFAULT_WORKERS = 16
 DEFAULT_PART_MB = 32
@@ -448,8 +451,8 @@ def _verify_present(jobs: list, progress: Progress, stop: threading.Event, polic
         name = f"{job.scope}/{job.kind}"
         progress.add_file(name, job.dest.stat().st_size)
         progress.advance(name, downloaded=job.dest.stat().st_size, state="present")
-        if policy == "trust-image":
-            progress.advance(name, state="trusted (image)")
+        if policy in TRUSTED_POLICIES:
+            progress.advance(name, state=TRUSTED_POLICIES[policy])
             continue
         got = hash_file(job.dest, progress, name, stop)
         if got != job.sha256:
@@ -477,8 +480,8 @@ def provision(scope_names: list, progress: Progress, *, stop: threading.Event, l
     """Provision and verify every file the given scopes need. Raises ProvisionError (or Stopped)."""
     mode = mode or os.environ.get(ENV_PROVISION, "present").strip().lower()
     policy = os.environ.get(ENV_VERIFY_PRESENT, "full").strip().lower()
-    if policy not in ("full", "trust-image"):
-        raise ProvisionError(f"unknown {ENV_VERIFY_PRESENT}={policy!r} (full or trust-image)")
+    if policy != "full" and policy not in TRUSTED_POLICIES:
+        raise ProvisionError(f"unknown {ENV_VERIFY_PRESENT}={policy!r} (full, trust-image or trust-snapshot)")
     reg = registry if registry is not None else scopes.load_registry()
     numpy_backend = dense_backend_numpy()
     jobs, stubs = [], []
