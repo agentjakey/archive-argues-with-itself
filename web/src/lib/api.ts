@@ -2,6 +2,7 @@ import type {
   AskRequest,
   AskResponse,
   CoverageResponse,
+  EngineStatus,
   Example,
   Filters,
   Flagged,
@@ -9,9 +10,14 @@ import type {
   ScopesResponse,
   Story,
 } from "../types";
+import { API_BASE, staticMode } from "./config";
+import * as shards from "./staticData";
+import { turnstileToken } from "./turnstile";
 
-// Empty VITE_API_BASE means same-origin (the FastAPI app serves web/dist).
-const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+// Empty API_BASE means same-origin (the FastAPI app serves web/dist). In a static release the
+// reading room comes from the release's shards (staticData.ts) and only live questions reach the
+// engine Worker.
+const BASE = API_BASE;
 
 // Hard client timeout, longer than the server's generation timeout so the server's
 // own graceful limited-mode fallback arrives first; only a truly unreachable server
@@ -31,6 +37,17 @@ export class ApiError extends Error {
     this.name = "ApiError";
     this.status = status;
     this.detail = detail;
+  }
+}
+
+/** The engine was asleep or is still waking: the request was not lost, it can be retried once the
+ *  engine is ready. Carries the engine's reported state for the waking screen. */
+export class EngineWaking extends ApiError {
+  engine: EngineStatus;
+  constructor(engine: EngineStatus) {
+    super(503, "The archive engine is waking up.");
+    this.name = "EngineWaking";
+    this.engine = engine;
   }
 }
 
@@ -56,6 +73,13 @@ function withQuery(path: string, params: URLSearchParams): string {
   return qs ? `${path}?${qs}` : path;
 }
 
+/** The scope a static lookup uses: the URL's, else the release's landing scope. */
+async function staticScope(): Promise<string> {
+  const s = activeScope();
+  if (s) return s;
+  return (await shards.scopes()).default;
+}
+
 /** The server's own words, verbatim: our {"error"} shape, FastAPI's {"detail"}
  *  (string or validation list), else a sentence that still names the status. */
 export function errorDetail(status: number, body: unknown): string {
@@ -73,14 +97,27 @@ export function errorDetail(status: number, body: unknown): string {
   return `The server returned an error (status ${status}) with no detail.`;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** True when a 503 body is the engine Worker's waking state rather than an error. */
+function wakingState(body: unknown): EngineStatus | null {
+  if (!body || typeof body !== "object") return null;
+  const b = body as Record<string, unknown>;
+  if (typeof b.status === "string" && ["asleep", "waking", "failed"].includes(b.status)) return b as unknown as EngineStatus;
+  return null;
+}
+
+async function request<T>(path: string, init?: RequestInit & { guarded?: boolean }): Promise<T> {
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (init?.guarded) {
+    const token = await turnstileToken();
+    if (token) headers["x-turnstile-token"] = token;
+  }
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
-      headers: { "content-type": "application/json" },
       ...init,
+      headers,
       signal: ctrl.signal,
     });
   } catch (e) {
@@ -98,40 +135,68 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       body = null;
     }
+    const waking = res.status === 503 ? wakingState(body) : null;
+    if (waking) throw new EngineWaking(waking);
     throw new ApiError(res.status, errorDetail(res.status, body));
   }
   return (await res.json()) as T;
 }
 
-export function ask(body: AskRequest): Promise<AskResponse> {
+export async function ask(body: AskRequest): Promise<AskResponse> {
+  if (staticMode() && !body.provider && !body.nocache) {
+    const recorded = await shards.recordedAnswer(await staticScope(), body.question, body.filters);
+    if (recorded) return recorded;
+  }
   return request<AskResponse>(withQuery("/ask", scoped(new URLSearchParams())), {
     method: "POST",
     body: JSON.stringify(body),
+    guarded: true,
   });
 }
 
-export function examples(): Promise<Example[]> {
+export async function examples(): Promise<Example[]> {
+  if (staticMode()) return shards.examples(await staticScope());
   return request<Example[]>(withQuery("/examples", scoped(new URLSearchParams())));
 }
 
 /** Seed questions for a named scope (the explorer lists several scopes at once, so it asks for
  *  each scope's own examples explicitly rather than the active-scope default). */
 export function examplesForScope(scope: string): Promise<Example[]> {
+  if (staticMode()) return shards.examples(scope);
   const p = new URLSearchParams();
   if (scope) p.set("scope", scope);
   return request<Example[]>(withQuery("/examples", p));
 }
 
-export function health(): Promise<Health> {
+export async function health(): Promise<Health> {
+  if (staticMode()) return shards.health(await staticScope());
   return request<Health>(withQuery("/health", scoped(new URLSearchParams())));
+}
+
+/** The engine's state from the engine Worker (asleep, waking with its stage, ready, failed). Never
+ *  wakes it. Only meaningful in a static release. */
+export function engineStatus(): Promise<EngineStatus> {
+  return request<EngineStatus>("/health");
+}
+
+/** Ask the engine Worker to start the engine ahead of a question (page load, question focus).
+ *  Best effort: any failure is ignored. */
+export async function wake(): Promise<void> {
+  try {
+    await request<unknown>(withQuery("/wake", scoped(new URLSearchParams())), { method: "POST", guarded: true });
+  } catch {
+    // a refused or failed pre-wake changes nothing for the visitor
+  }
 }
 
 /** The corpora this server exposes, for the switcher. Never scoped (it lists all of them). */
 export function scopes(): Promise<ScopesResponse> {
+  if (staticMode()) return shards.scopes();
   return request<ScopesResponse>("/scopes");
 }
 
-export function stories(): Promise<Story[]> {
+export async function stories(): Promise<Story[]> {
+  if (staticMode()) return shards.stories(await staticScope());
   return request<Story[]>(withQuery("/stories", scoped(new URLSearchParams())));
 }
 
@@ -143,7 +208,11 @@ export function flag(pins: string[]): Promise<{ flagged: Flagged | null }> {
   return request<{ flagged: Flagged | null }>(withQuery("/flag", p));
 }
 
-export function coverage(q: string, filters: Filters): Promise<CoverageResponse> {
+export async function coverage(q: string, filters: Filters): Promise<CoverageResponse> {
+  if (staticMode()) {
+    const recorded = await shards.recordedCoverage(await staticScope(), q, filters);
+    if (recorded) return recorded;
+  }
   const p = new URLSearchParams({ q });
   for (const k of ["period", "jurisdiction", "doc_type"] as const) {
     const v = filters[k];

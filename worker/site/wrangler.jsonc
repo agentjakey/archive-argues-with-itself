@@ -1,0 +1,30 @@
+// The static site: the reading room, the exhibit shell and the data shards, served as Workers static
+// assets (no Worker code runs, so every request is a free static request). A release is assembled
+// and gated by scripts/v2/build_release.py, which copies it into ./release and uploads it as a new
+// version; going live moves the deployment to that version, and rollback moves it back.
+{
+  "$schema": "../engine/node_modules/wrangler/config-schema.json",
+  "name": "archive-argues-site",
+  "compatibility_date": "2026-10-15",
+  "assets": {
+    "directory": "./release",
+    "not_found_handling": "single-page-application",
+    "html_handling": "auto-trailing-slash"
+  },
+  "env": {
+    "staging": {
+      "name": "archive-argues-site-staging",
+      "workers_dev": true,
+      "preview_urls": false
+    },
+    "production": {
+      "name": "archive-argues-site",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [
+        { "pattern": "archiveargues.org", "custom_domain": true },
+        { "pattern": "www.archiveargues.org", "custom_domain": true }
+      ]
+    }
+  }
+}

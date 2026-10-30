@@ -1,3 +1,4 @@
+import { recordedLine } from "../lib/recorded";
 import type { Answer } from "../types";
 import { Term } from "./Term";
 import { UnsupportedRow } from "./UnsupportedRow";
@@ -34,7 +35,7 @@ export function AbstentionCard({ answer }: Props) {
         <Term def="undated">undated</Term>
         {answer.coverage.single_source && <span className="tag ml-2">single source</span>}
       </p>
-      {answer.cached && <p className="mt-1 text-sm text-muted">served from cache, generated {answer.cached.created_at.slice(0, 10)}</p>}
+      {answer.cached && <p className="mt-1 text-sm text-muted">{recordedLine(answer)}</p>}
       <UnsupportedRow items={answer.unsupported} />
     </article>
   );

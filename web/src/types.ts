@@ -236,6 +236,30 @@ export interface Health {
   corpus: CorpusFacts;
 }
 
+/** Where a waking engine is: its boot stage and, while it fetches the archive, the bytes so far. */
+export interface EngineStage {
+  stage: string;                 // starting | checking | downloading | provisioned | loading | ready | failed
+  error?: string | null;
+  files?: number;
+  bytes_total?: number;
+  bytes_downloaded?: number;
+  bytes_verified?: number;
+  seconds?: number;
+}
+
+export type EngineState = "asleep" | "waking" | "ready" | "failed";
+
+/** The engine Worker's report on the engine (GET /health there, and the 503 body of a request
+ *  that reached a waking engine). Never contains a question. */
+export interface EngineStatus {
+  status: EngineState;
+  name?: string;
+  stage?: EngineStage | null;
+  error?: string | null;
+  retry_after_seconds?: number;
+  engines?: { name: string; status: EngineState; stage: EngineStage | null; error: string | null }[];
+}
+
 export interface DecadeCoverage {
   decade: string;
   items: number;

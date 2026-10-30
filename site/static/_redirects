@@ -1,0 +1,5 @@
+# Old paths that changed when the site moved off the single FastAPI app. The question permalinks
+# were API URLs (/ask?q=...); they now open the same question in the reading room. Query strings
+# are kept.
+/ask      /       301
+/health   https://api.archiveargues.org/health   302

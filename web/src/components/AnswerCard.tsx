@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { numberCitations } from "../lib/citations";
 import { plural, shortTitle, yearLabel } from "../lib/format";
+import { recordedLine } from "../lib/recorded";
 import type { Answer, EditorialNote, EvidenceRow } from "../types";
 import { CitationMark } from "./CitationMark";
 import { EditorialNotes } from "./EditorialNotes";
@@ -14,16 +15,10 @@ interface Props {
   notes?: EditorialNote[] | null;   // dated notes about this stored answer, shown above it, never in it
 }
 
-function cachedLine(answer: Answer): string | null {
-  if (!answer.cached) return null;
-  const d = new Date(answer.cached.created_at);
-  return `served from cache, generated ${isNaN(d.getTime()) ? answer.cached.created_at : d.toLocaleDateString("en-CA")}`;
-}
-
 /** No box: a left rule, serif heading, marks [n] beside each claim, Sources below. */
 export function AnswerCard({ answer, byId, onOpen, notes }: Props) {
   const numbered = useMemo(() => numberCitations(answer.sentences), [answer.sentences]);
-  const cached = cachedLine(answer);
+  const cached = recordedLine(answer);
   const [scanFailed, setScanFailed] = useState(false);
   // The top cited page, surfaced under the answer so the scanned proof is visible without scrolling
   // to the trail. One already-loaded image, no extra network; opens the existing drawer on click.

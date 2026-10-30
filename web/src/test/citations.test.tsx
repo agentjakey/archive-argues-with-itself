@@ -12,7 +12,7 @@ describe("citation numbering", () => {
     expect(cardId("item#12:0")).toBe("card-item-12-0");
   });
 
-  it("renders marks and a Sources list, plus the cache line when served from cache", () => {
+  it("renders marks and a Sources list, plus the recorded line for a stored answer", () => {
     const a: Answer = {
       ...abstention(),
       abstained: false,
@@ -38,6 +38,6 @@ describe("citation numbering", () => {
     const sources = screen.getByRole("heading", { name: "Sources" }).closest("section");
     expect(sources).toHaveTextContent("1. Report of the Ontario Tobacco Strategy Steering Committee (1985), p. 10 (leaf 29), archive.org");
     expect(sources).toHaveTextContent("2. Clinic report (1999), leaf 3, archive.org");
-    expect(screen.getByText(/served from cache, generated/)).toBeInTheDocument();
+    expect(screen.getByText(/Recorded answer, generated .* Shown as it was generated\./)).toBeInTheDocument();
   });
 });

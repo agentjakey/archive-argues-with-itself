@@ -20,6 +20,8 @@ import { Header } from "./components/Header";
 import { PageDrawer } from "./components/PageDrawer";
 import { AnswerSkeleton, SkeletonBody } from "./components/AnswerSkeleton";
 import { useAsk } from "./hooks/useAsk";
+import { usePreWake } from "./hooks/usePreWake";
+import { WakingCard } from "./components/WakingCard";
 import { useCoverage } from "./hooks/useCoverage";
 import { useExamples } from "./hooks/useExamples";
 import { useKiosk, useOffline } from "./hooks/useKiosk";
@@ -53,7 +55,10 @@ export default function App() {
   const kiosk = useKiosk();
   const offline = useOffline();   // ?offline=1: no ask box, cached questions and stories only
   const chips = useExamples(6, REFUSE_PROBE_QIDS);
-  const { status, elapsed, response, error, run } = useAsk();
+  const { status, elapsed, response, error, run, retry, wake } = useAsk();
+  // In a static release the engine sleeps when idle: start it when the page loads and when the
+  // question box gets focus, so a live question rarely waits for it.
+  const preWake = usePreWake(!offline);
 
   const initial = useRef(readState(window.location.search));
   const [question, setQuestion] = useState(initial.current.q);
@@ -656,6 +661,7 @@ export default function App() {
             onQuestion={setQuestion}
             onFilters={setFilters}
             onAsk={onAsk}
+            onFocusQuestion={preWake}
           />
         </div>
       )}
@@ -679,6 +685,12 @@ export default function App() {
       )}
 
       {status === "error" && error && <ErrorCard detail={error} />}
+      {status === "waking" && wake && (
+        <>
+          <WakingCard wake={wake} question={asked} onRetry={retry} />
+          <StoryGallery stories={galleryStories(stories)} loading={storiesLoading} onOpen={openStory} />
+        </>
+      )}
 
       {response && (
         needsInterstitial(resultFlagged) && !flaggedAck && !abstentionOnly ? (

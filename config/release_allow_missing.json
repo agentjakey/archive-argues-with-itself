@@ -1,0 +1,18 @@
+{
+  "microlog": {
+    "date": "2026-10-30",
+    "reason": "BLOCKED on budget: these microlog seed and story questions never had a stored answer, and making one needs a paid model call (the Phase 1 budget is $0). They are answered live by the engine until a run is approved.",
+    "labels": [
+      "seed:mq02",
+      "seed:mq04",
+      "seed:mq08",
+      "seed:mq10",
+      "seed:mq13",
+      "seed:mq22",
+      "seed:mq40",
+      "story:microlog-cancer-registry-1990-2006",
+      "story:microlog-communicable-disease-1987-2009",
+      "story:microlog-drinking-water-1984-2012"
+    ]
+  }
+}

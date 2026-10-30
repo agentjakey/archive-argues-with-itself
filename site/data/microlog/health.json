@@ -1,0 +1,1 @@
+{"corpus":{"items":13539,"items_out_of_window":4379,"items_undated":427,"passages":1136827,"passages_undated":46435,"pilot_window":{"max_year":2009,"min_year":1960},"undated_item_share":0.0315,"undated_share":0.0408,"window":{"max_year":2018,"min_year":1963}},"model":"claude-haiku-4-5-20251001","provider":"anthropic"}

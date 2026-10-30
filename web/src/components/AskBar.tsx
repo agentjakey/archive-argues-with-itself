@@ -39,11 +39,12 @@ interface Props {
   onQuestion: (q: string) => void;
   onFilters: (f: Filters) => void;
   onAsk: () => void;
+  onFocusQuestion?: () => void;   // the question box got focus: a good moment to start the engine
 }
 
 /** Controlled by App so the URL can restore it. Selects sized to content, one row,
  *  stacking below 700px. Filters are hidden in kiosk mode. */
-export function AskBar({ question, filters, busy, kiosk, scope, onQuestion, onFilters, onAsk }: Props) {
+export function AskBar({ question, filters, busy, kiosk, scope, onQuestion, onFilters, onAsk, onFocusQuestion }: Props) {
   const cw = scope?.coverage_window;
   // The placeholder reads the active scope's coverage window (pilot 1960-2009, microlog 1963-2018),
   // never a hardcoded one; before the scope loads it drops the years rather than guess.
@@ -76,6 +77,7 @@ export function AskBar({ question, filters, busy, kiosk, scope, onQuestion, onFi
             placeholder={placeholder}
             value={question}
             onChange={(e) => onQuestion(e.target.value)}
+            onFocus={onFocusQuestion}
             disabled={busy}
             autoComplete="off"
             maxLength={300}
