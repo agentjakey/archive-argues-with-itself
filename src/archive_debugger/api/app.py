@@ -31,7 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from archive_debugger import crisis, editorial, flags, scopes
+from archive_debugger import crisis, editorial, flags, provision, scopes
 from archive_debugger.scopes import parse_enabled_scopes
 from archive_debugger.api import cache as answer_cache
 from archive_debugger.api.coverage import coverage as compute_coverage
@@ -41,7 +41,7 @@ from archive_debugger.generate.answer import Answer, compose, coverage_of, gener
 from archive_debugger.generate.cli import build_filters, load_generate_config, retrieve_pool, sent_temperature
 from archive_debugger.generate.llm import LLM, AnthropicLLM, make_llm
 from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path
-from archive_debugger.retrieve import citation
+from archive_debugger.retrieve import citation, dense
 from archive_debugger.retrieve.config import load_retrieve_config
 from archive_debugger.retrieve.search import Retriever
 
@@ -87,6 +87,7 @@ MODEL_FLOOR_S = 2.0                  # below this remaining, skip the model and 
 # retrieval to actually finish in time (the warm/readiness work and, if needed, the A4 in-memory path).
 RETRIEVAL_DEADLINE_S = BUDGET_S - MODEL_FLOOR_S - MODEL_MARGIN_S   # hard cap on the dense scan (< budget)
 POOL_SIZE = 8                        # read-only connections per scope, so concurrent asks do not serialize
+SHUTDOWN_JOIN_S = 20.0               # how long shutdown waits for startup and warm work to stop
 MAX_QUESTION_CHARS = 500             # server-side defense in depth; the web input caps lower
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://archive-argues-with-itself-production.up.railway.app")
 RATE_BURST, RATE_REFILL = 5, 0.5     # token bucket on model-calling requests (this process)
@@ -98,6 +99,9 @@ _DEGRADE_MSG = {
     "budget": "one moment: this question ran long, so here is the record below rather than keep you waiting.",
     "retrieval_slow": "this search ran long and stopped before it finished. Try it again, or pick an example or story below.",
     "empty": "type a question to search the record.",
+    "starting": "the archive engine is starting up. Ask again in a moment, or open a story below while it loads.",
+    "index_unavailable": "this collection's search index did not load, so here is no answer rather than a partial one. "
+                         "Pick a story below, or try the other collection.",
 }
 
 
@@ -429,16 +433,20 @@ def _mb_or_unknown(n: Optional[int]) -> str:
 WARM_QUERY = "public health services"   # a real in-window query to exercise the full retrieve path at boot
 
 
-def _warm(conn: sqlite3.Connection) -> None:
+def _warm(conn: sqlite3.Connection, *, vectors: bool = True) -> None:
     """Read the dense index and passage text once so the OS page cache holds them: the first
     cache-miss dense scan then runs warm (CPU-bound) instead of cold (paging the whole index off the
-    volume). Read-only, byte-identical, best-effort; any failure is ignored. Warming one connection
+    volume). vectors=False skips the vector blobs, which only the sqlite-vec scan reads: with the
+    resident numpy index they would fill the page cache for nothing. Read-only, byte-identical,
+    best-effort; any failure (including an interrupt at shutdown) is ignored. Warming one connection
     warms the shared OS cache for every connection to the same files."""
-    for sql in (
-        "SELECT SUM(LENGTH(embedding)) FROM vec.passages_vec",   # the dominant cost: the vector blobs
+    statements = [
         "SELECT SUM(LENGTH(text)) FROM passages",                # passage text (provenance + snippets)
         "SELECT COUNT(*) FROM passages_fts WHERE passages_fts MATCH 'health'",   # the FTS pages
-    ):
+    ]
+    if vectors:
+        statements.insert(0, "SELECT SUM(LENGTH(embedding)) FROM vec.passages_vec")   # the vector blobs
+    for sql in statements:
         try:
             conn.execute(sql).fetchone()
         except sqlite3.Error:
@@ -514,12 +522,28 @@ class ConnPool:
         finally:
             self._q.put(r)
 
+    def interrupt(self) -> None:
+        """Abort any statement running on a pooled connection (sqlite3 allows this from any thread)."""
+        for r in self._all:
+            try:
+                r.conn.interrupt()
+            except Exception:  # noqa: BLE001 - an already-closed connection has nothing to interrupt
+                pass
+
     def close(self) -> None:
         for r in self._all:
             try:
                 r.close()
             except Exception:  # noqa: BLE001 - closing a read-only connection must never fail shutdown
                 pass
+
+
+def _close_bundles(bundles: dict) -> None:
+    for b in bundles.values():
+        try:
+            b.close()
+        except Exception:  # noqa: BLE001 - one scope failing to close must not stop the others
+            pass
 
 
 def _registry_entry(name: str) -> dict:
@@ -745,6 +769,29 @@ class Bundle:
         # (/coverage, /examples, /stories, /flag) and the cached-answer serve path. The slow
         # /ask miss path uses the pool instead, so it never holds this lock across a model call.
         self.lock = threading.Lock()
+        # With the numpy backend the boot can put a small stand-in where the vectors database would
+        # be (provision.write_stub_index); the dense leg must then come from the resident artifacts.
+        # If they did not load, retrieval would silently run on BM25 alone, so this scope answers in
+        # limited mode instead.
+        index_file = Path(retriever.cfg.index_path)
+        self.stub_index = own_retriever and dense.stub_target(index_file) is not None
+        self.answers_allowed = not (self.stub_index and retriever.dense_index is None)
+
+    def interrupt(self) -> None:
+        """Abort any statement running on this scope's connections (shutdown; any thread)."""
+        if not self.own_retriever:
+            return
+        self.pool.interrupt()
+        try:
+            self.retriever.conn.interrupt()
+        except Exception:  # noqa: BLE001 - an already-closed connection has nothing to interrupt
+            pass
+
+    def close(self) -> None:
+        self.cache.close()
+        if self.own_retriever:
+            self.pool.close()
+            self.retriever.close()
 
     def context(self, kind: str, model_id: str) -> str:
         """The cache context for one provider and model, computed once."""
@@ -860,8 +907,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         except Exception:  # noqa: BLE001 - a bad extra scope is skipped, never fatal to the base serve
             return None
 
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    def _build_all() -> dict:
+        """Open every served scope: the base, then each enabled extra scope whose data is present."""
         base = _build_bundle(base_name, cfg_path=base_config, retr=retriever, cache_p=base_cache_path,
                              seed_p=seed_path, stories_list=base_stories, llm_obj=llm)
         bundles = {base.name: base}
@@ -876,24 +923,18 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             extra = _extra_bundle(name)
             if extra is not None:
                 bundles[extra.name] = extra
-        app.state.bundles = bundles
+        return bundles
+
+    def _publish(app: FastAPI, bundles: dict) -> None:
+        """Make the opened scopes visible to requests, then mark the server ready to answer."""
+        base = bundles[base_name] if base_name in bundles else next(iter(bundles.values()))
         # Routing default (no-scope requests + the back-compat aliases below): always the base, so
         # the pilot request path stays byte-identical.
         app.state.default_scope = base.name
         # UI landing scope (GET /scopes 'default'): CIVIC_DEFAULT_SCOPE when that scope is actually
-        # built here, else the base. Lets the deploy land on microlog while a pilot-only box lands on
-        # the pilot, both scopes in the switcher. Separate from routing so no-scope calls stay on the base.
+        # built here, else the base. Separate from routing so no-scope calls stay on the base.
         requested_landing = default_scope or os.environ.get(ENV_DEFAULT_SCOPE) or DEFAULT_LANDING
         app.state.landing_scope = resolve_landing_scope(requested_landing, list(bundles), base.name)
-        app.state.model_ratelimit = RateLimiter(RATE_BURST, RATE_REFILL)   # one process-wide model budget
-        # Readiness gate: /health reports "warming" (503) until every own-retriever scope's first _warm
-        # completes, so a redeploy/restart does not route an uncached ask into the cold window where the
-        # first dense scan pages the whole index off the volume. With no own retrievers to warm (tests,
-        # an injected retriever) readiness is immediate, so the hermetic API tests still see /health 200.
-        app.state.ready = threading.Event()
-        needs_warm = any(b.own_retriever for b in bundles.values())
-        if not needs_warm:
-            app.state.ready.set()
         # Back-compat aliases: the pilot request path and offline_walkthrough (which patches
         # app.state.cache.put) see the default bundle exactly as the single-scope app did.
         app.state.retriever = base.retriever
@@ -901,64 +942,138 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         app.state.cache = base.cache
         app.state.coverage_cache = base.coverage_cache
         app.state.corpus = base.corpus
-        # Warm each real scope's index into the OS page cache in the background, so the first
-        # cache-miss dense scan runs warm (CPU-bound) instead of paging the whole index off the
-        # volume. Off the request path (a pooled connection, never the base lock); /health answers
-        # immediately, and the [boot-warm] log line records how long each scope took.
-        def _warm_all():
-            for b in bundles.values():
-                if not b.own_retriever:
-                    continue
-                try:
-                    t0 = time.monotonic()
-                    with b.pool.checkout() as wr:
-                        _warm(wr.conn)   # page the dense index + passage text + FTS into the OS cache
-                        # A genuine retrieval through the normal path, so fastembed's ONNX session and
-                        # the whole retrieve/RRF/annotate pipeline are initialized at boot, not lazily
-                        # on the first user query, and a pooled connection is exercised end to end.
-                        # Bounded by the same deadline the request path uses, so a slow (fallback) scan
-                        # cannot hang readiness; a failure is logged and never fatal.
-                        try:
-                            _bounded_retrieve(
-                                wr.conn, RETRIEVAL_DEADLINE_S,
-                                lambda: retrieve_pool(wr, WARM_QUERY, build_filters(None), b.gcfg["top_k"]))
-                            warm_ret = "ok"
-                        except Exception as exc:  # noqa: BLE001 - a slow/interrupted warm scan is not fatal
-                            warm_ret = f"skipped ({type(exc).__name__})"
-                    print(f"[boot-warm] scope={b.name} warmed in {time.monotonic() - t0:.1f}s "
-                          f"dense={_dense_backend_label(b.retriever)} retrieval={warm_ret}", flush=True)
-                    # Residency check: after this scope's index is paged in, how much of the container
-                    # memory limit the process now holds, so a scope being evicted (RSS not growing to
-                    # hold both indexes) is visible in the logs. Read from the local filesystem only.
-                    rss, limit = _mem_snapshot()
-                    print(f"[mem] scope={b.name} rss_mb={_mb_or_unknown(rss)} "
-                          f"limit_mb={_mb_or_unknown(limit)}", flush=True)
-                except Exception:  # noqa: BLE001 - warming is best-effort, never fatal to serving
-                    pass
+        app.state.bundles = bundles
+        app.state.ready.set()
+
+    def _warm_all(app: FastAPI, bundles: dict) -> None:
+        """Warm each real scope in the background after the server is ready: page the passage text
+        and full-text index (and the vectors, when the sqlite-vec scan is the dense leg) into the OS
+        cache, and run one bounded retrieval so the embedding model and the whole pipeline are
+        initialized before the first visitor. Never gates readiness; stops when the server stops."""
+        stopping = app.state.stopping
+        for b in bundles.values():
+            if stopping.is_set():
+                return
+            if not b.own_retriever:
+                continue
+            try:
+                t0 = time.monotonic()
+                with b.pool.checkout() as wr:
+                    _warm(wr.conn, vectors=b.retriever.dense_index is None)
+                    if stopping.is_set():
+                        return
+                    try:
+                        _bounded_retrieve(
+                            wr.conn, RETRIEVAL_DEADLINE_S,
+                            lambda: retrieve_pool(wr, WARM_QUERY, build_filters(None), b.gcfg["top_k"]))
+                        warm_ret = "ok"
+                    except Exception as exc:  # noqa: BLE001 - a slow/interrupted warm scan is not fatal
+                        warm_ret = f"skipped ({type(exc).__name__})"
+                print(f"[boot-warm] scope={b.name} warmed in {time.monotonic() - t0:.1f}s "
+                      f"dense={_dense_backend_label(b.retriever)} retrieval={warm_ret}", flush=True)
+                rss, limit = _mem_snapshot()
+                print(f"[mem] scope={b.name} rss_mb={_mb_or_unknown(rss)} "
+                      f"limit_mb={_mb_or_unknown(limit)}", flush=True)
+            except Exception:  # noqa: BLE001 - warming is best-effort, never fatal to serving
+                pass
+        if not stopping.is_set():
             _prime_model_client()   # prime the generation client once (guarded; no billed call)
-            app.state.ready.set()   # readiness only after every own scope's index + pipeline is warm
-        # Only a real serving process (own retrievers) warms and primes. The injected-retriever path
-        # (tests) is already ready and must stay hermetic -- it never starts the thread, so the
-        # anthropic SDK is not imported there even when a key is present in the environment.
-        if needs_warm:
-            threading.Thread(target=_warm_all, name="boot-warm", daemon=True).start()
+            app.state.warmed.set()
+
+    def _start_in_background(app: FastAPI) -> None:
+        """The serving path for a real process: provision the data (when CIVIC_PROVISION is set),
+        open the scopes, mark ready, then warm. Runs in its own thread so the port answers from the
+        first second and /health reports each stage. A failure is reported on /health and in the
+        log; it never kills the process."""
+        progress = app.state.progress
+        try:
+            if os.environ.get(provision.ENV_PROVISION):
+                from archive_debugger import boot
+                names = boot.enabled_for_boot(scopes.load_registry(), os.environ.get(ENV_ENABLED_SCOPES))
+                provision.provision(names, progress, stop=app.state.stopping)
+            if app.state.stopping.is_set():
+                return
+            progress.set_stage("loading")
+            t0 = time.monotonic()
+            bundles = _build_all()
+            if app.state.stopping.is_set():
+                _close_bundles(bundles)
+                return
+            _publish(app, bundles)
+            progress.set_stage("ready")
+            print(f"[startup] ready: scopes {sorted(bundles)} opened in {time.monotonic() - t0:.1f}s; "
+                  f"{progress.snapshot()}", flush=True)
+            _warm_all(app, bundles)
+        except provision.Stopped:
+            return
+        except Exception as exc:  # noqa: BLE001 - reported on /health, never a crash loop
+            app.state.startup_error = f"{type(exc).__name__}: {exc}"
+            progress.fail(app.state.startup_error)
+            print(f"[startup] FAILED: {app.state.startup_error}", flush=True)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        app.state.ready = threading.Event()      # the scopes are open: answers are served
+        app.state.warmed = threading.Event()     # page cache warmed, model client primed (never gates ready)
+        app.state.stopping = threading.Event()
+        app.state.startup_error = None
+        app.state.progress = provision.Progress()
+        app.state.bundles = {}
+        app.state.default_scope = base_name
+        app.state.landing_scope = base_name
+        app.state.model_ratelimit = RateLimiter(RATE_BURST, RATE_REFILL)   # one process-wide model budget
+        threads = []
+        if retriever is not None:
+            # Tests and other injected retrievers: open inline and serve at once. An extra scope this
+            # opens with its own data is warmed in the background, as on the real serving path.
+            bundles = _build_all()
+            _publish(app, bundles)
+            app.state.progress.set_stage("ready")
+            if any(b.own_retriever for b in bundles.values()):
+                threads.append(threading.Thread(target=_warm_all, args=(app, bundles), name="boot-warm", daemon=True))
+            else:
+                app.state.warmed.set()
+        else:
+            threads.append(threading.Thread(target=_start_in_background, args=(app,), name="startup", daemon=True))
+        for t in threads:
+            t.start()
         try:
             yield
         finally:
-            for b in bundles.values():
-                b.cache.close()
-                if b.own_retriever:
-                    b.pool.close()
-                    b.retriever.close()
+            # Clean shutdown at any point (a container is stopped on every sleep): tell the startup
+            # and warm work to stop, interrupt any SQLite statement they are running, and wait for
+            # them before closing a single connection. Closing a connection another thread was still
+            # using crashed the process (known error 8).
+            app.state.stopping.set()
+            for b in list(app.state.bundles.values()):
+                b.interrupt()
+            for t in threads:
+                t.join(timeout=SHUTDOWN_JOIN_S)
+            if any(t.is_alive() for t in threads):
+                print("[shutdown] background work did not stop in time; leaving its connections open "
+                      "for the process exit", flush=True)
+            else:
+                _close_bundles(app.state.bundles)
+                print("[shutdown] stopped cleanly", flush=True)
 
     app = FastAPI(title="archive-argues-with-itself", lifespan=lifespan)
     origins = _allowed_origins()
     if origins:
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["GET", "POST"], allow_headers=["*"])
 
+    def _starting_payload() -> dict:
+        """What the server says while it is provisioning or opening its scopes (or after a failed
+        start): the stage, the download and verification progress, and any error."""
+        failed = app.state.startup_error is not None
+        return {"status": "failed" if failed else "starting", "ready": False,
+                "stage": app.state.progress.snapshot(), "error": app.state.startup_error}
+
     def _bundle(scope_param: Optional[str]) -> Bundle:
         """The bundle for a request. No scope (or the default name) returns the base bundle,
-        so the no-scope path is byte-identical to the single-scope app. An unserved scope 404s."""
+        so the no-scope path is byte-identical to the single-scope app. An unserved scope 404s.
+        Before the scopes are open, a 503 carrying the startup stage (never a bare error page)."""
+        if not app.state.ready.is_set():
+            raise HTTPException(status_code=503, detail=_starting_payload())
         name = scope_param or app.state.default_scope
         b = app.state.bundles.get(name)
         if b is None:
@@ -1024,6 +1139,9 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         if not clean:
             with b.lock:
                 return degraded("empty", [], [], r.conn)
+        if not b.answers_allowed:
+            with b.lock:
+                return degraded("index_unavailable", [], [], r.conn)
         if not nocache:
             hit = b.cache.get(key)
             served = copy.deepcopy(hit["response"]) if hit is not None else None
@@ -1112,16 +1230,16 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
 
     @app.get("/health")
     def health(scope: Optional[str] = None):
-        """Readiness-gated: while any own-retriever scope's index is still warming this returns a 503
-        with status 'warming', so the deploy platform does not cut traffic over to a cold instance
-        where the first uncached scan would page the whole index off the volume. Once warm it is the
-        same 200 corpus-facts payload as before (plus a 'ready' flag)."""
+        """Readiness: 200 once every served scope is open and its dense index is loaded (answers are
+        served from then on; warming continues in the background and is reported as 'warmed').
+        Before that, a 503 whose body names the stage (checking, downloading, loading) with byte
+        counts, or 'failed' with the error, so the engine Worker and the site can show progress."""
+        if not app.state.ready.is_set():
+            return JSONResponse(_starting_payload(), status_code=503)
         b = _bundle(scope)
-        ready = app.state.ready.is_set()
-        payload = {"status": "ok" if ready else "warming", "ready": ready,
-                   "provider": b.provider or b.gcfg["provider"], "model": b.gcfg["model"],
-                   "corpus": b.corpus}
-        return payload if ready else JSONResponse(payload, status_code=503)
+        return {"status": "ok", "ready": True, "warmed": app.state.warmed.is_set(),
+                "provider": b.provider or b.gcfg["provider"], "model": b.gcfg["model"],
+                "corpus": b.corpus, "answers": b.answers_allowed, "stage": app.state.progress.snapshot()}
 
     @app.get("/scopes")
     def scopes_view() -> dict:
@@ -1232,8 +1350,22 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         b.coverage_cache[ck] = result
         return result
 
+    def starting_answer(question: str) -> dict:
+        """/ask before the scopes are open: the designed limited-mode shape with no record, so a
+        question asked during a cold start gets a 200 the site can show, never an error page."""
+        msg = _DEGRADE_MSG["starting"]
+        clean = clean_question(question)
+        ans = Answer(text=msg, sentences=[], verified_citations=[], unsupported=[], abstained=True,
+                     coverage=coverage_of(clean, []), abstention_text=msg, generation={})
+        out = {"answer": ans.to_dict(), "evidence": [], "flagged": None, "editorial_notes": [],
+               "degraded": {"reason": "starting", "live_url": PUBLIC_URL, "stage": _starting_payload()}}
+        out["answer"]["cached"] = None
+        return out
+
     @app.post("/ask")
     def ask_post(req: AskRequest, scope: Optional[str] = None):
+        if not app.state.ready.is_set():
+            return starting_answer(req.question)
         return answer(_bundle(scope), req.question, req.filters, req.provider, req.model, req.nocache)
 
     @app.get("/ask")
@@ -1244,6 +1376,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         exercises retrieval and the response shape without a model call (smoke tests)."""
         if provider is not None and provider not in ("stub", "anthropic"):
             raise HTTPException(status_code=422, detail="provider must be 'stub' or 'anthropic'")
+        if not app.state.ready.is_set():
+            return starting_answer(q)
         return answer(_bundle(scope), q, _clean_filters(period, jurisdiction, doc_type), provider, None, bool(nocache))
 
     if Path(web_dist).is_dir():

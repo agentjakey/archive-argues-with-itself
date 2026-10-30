@@ -128,6 +128,10 @@ def main() -> int:
     # A server-side exception becomes a 500 response instead of raising, so an unhandled
     # exception shows up here as a red (status != 200), never as a crashed harness.
     with TestClient(app, raise_server_exceptions=False) as c:
+        # The scopes open in the background (the port answers first); wait until they are open.
+        if not app.state.ready.wait(600):
+            print(f"[{RED}] server never became ready: {app.state.startup_error}")
+            return 1
         # Keep the run strictly read-only across every served scope: intercept every cache write (a
         # gate abstention on a novel query would otherwise be cached) so no real cache is touched.
         for _b in app.state.bundles.values():

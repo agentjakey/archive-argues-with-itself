@@ -6,6 +6,15 @@
 # 100 MB. See docs/deploy.md.
 set -eu
 
+# Cloudflare Containers (CIVIC_PROVISION set): start serving at once. The server provisions and
+# verifies the data in the background (archive_debugger.provision) and reports each stage on
+# /health, so the port answers within seconds of a cold start. exec makes uvicorn PID 1, so the
+# SIGTERM sent when the container sleeps reaches it and it shuts down cleanly.
+if [ -n "${CIVIC_PROVISION:-}" ]; then
+    mkdir -p "$(dirname "$CIVIC_CACHE_PATH")"
+    exec uvicorn archive_debugger.api.app:app --host 0.0.0.0 --port "${PORT:-8080}" --timeout-graceful-shutdown 20
+fi
+
 python -m archive_debugger.boot
 
 # Optional index residency: copy the read-only data off the (slow) network volume into a faster

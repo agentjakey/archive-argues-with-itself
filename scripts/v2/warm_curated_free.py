@@ -38,6 +38,9 @@ def main(argv=None) -> int:
     totals = {"already_stored": 0, "stored_abstention": 0, "needs_model": 0, "other": 0}
     rows = []
     with TestClient(app, raise_server_exceptions=False) as client:
+        if not app.state.ready.wait(600):                  # the scopes open in the background
+            print(f"server never became ready: {app.state.startup_error}")
+            return 1
         for scope in wanted:
             if scope not in app.state.bundles:
                 print(f"scope {scope} is not served here (no data); skipped")

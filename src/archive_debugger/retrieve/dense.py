@@ -182,6 +182,22 @@ def artifact_paths(index_file: Path) -> dict:
             "manifest": folder / f"{stem}.dense.json"}
 
 
+def stub_sidecar(index_file: Path) -> Path:
+    return Path(str(index_file) + ".stub.json")
+
+
+def stub_target(index_file: Path) -> Optional[str]:
+    """For a stand-in index written by the boot (provision.write_stub_index): the sha256 of the
+    published index it replaces. None for a real index."""
+    sidecar = stub_sidecar(index_file)
+    if not sidecar.exists():
+        return None
+    try:
+        return json.loads(sidecar.read_text(encoding="utf-8")).get("stands_in_for_index_sha256")
+    except (OSError, ValueError):
+        return None
+
+
 def _attached_index_file(conn) -> Optional[Path]:
     """The vectors database attached to a Retriever's connection as 'vec'."""
     for _seq, name, file in conn.execute("PRAGMA database_list"):
@@ -240,8 +256,10 @@ def _load_npy(path: Path) -> np.ndarray:
 
 
 def usable_artifacts(index_file: Optional[Path]) -> Optional[dict]:
-    """The artifact manifest when all three files are present and the manifest describes this index
-    (same file name and size). The boot checks every downloaded file's sha256 against the release."""
+    """The artifact manifest when all three files are present and the manifest describes this index:
+    the same file name and size for a real index, or, for the boot's stand-in index, the published
+    index sha256 that its sidecar names. The boot checks every downloaded file's sha256 against the
+    release."""
     if index_file is None:
         return None
     paths = artifact_paths(index_file)
@@ -251,11 +269,12 @@ def usable_artifacts(index_file: Optional[Path]) -> Optional[dict]:
         manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if (manifest.get("artifact_version") != ARTIFACT_VERSION
-            or manifest.get("index_file") != Path(index_file).name
-            or manifest.get("index_bytes") != Path(index_file).stat().st_size):
+    if manifest.get("artifact_version") != ARTIFACT_VERSION or manifest.get("index_file") != Path(index_file).name:
         return None
-    return manifest
+    stands_in_for = stub_target(Path(index_file))
+    if stands_in_for is not None:
+        return manifest if stands_in_for == manifest.get("index_sha256") else None
+    return manifest if manifest.get("index_bytes") == Path(index_file).stat().st_size else None
 
 
 def load_artifacts(index_file: Path, manifest: dict) -> tuple[np.ndarray, list]:
