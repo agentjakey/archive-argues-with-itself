@@ -13,8 +13,7 @@ export interface Env {
   RELEASE_ID: string;
   ENGINE_LAYOUT: string;         // "single" | "split"
   INSTANCE_TYPE: string;         // instance for the single container: a named type or JSON {vcpu,memoryMib,diskMb}
-  INSTANCE_TYPE_PILOT: string;   // split layout
-  INSTANCE_TYPE_MICROLOG: string;
+  INSTANCE_TYPES: string;        // split layout: JSON {scope: instance}; a scope not named uses INSTANCE_TYPE
   SLEEP_AFTER_MINUTES: string;
   PROVISION_MODE: string;        // "r2-binding" | "snapshot" | "image"
   SNAPSHOT_VERIFY?: string;      // "full" (default) | "trust": hash a restored disk again or not
@@ -75,4 +74,18 @@ export function verifyPolicy(mode: string, restoredFromSnapshot: boolean, snapsh
   if (mode === "image") return "trust-image";
   if (restoredFromSnapshot && (snapshotVerify || "").trim() === "trust") return "trust-snapshot";
   return "full";
+}
+
+/** The instance for one engine: its entry in INSTANCE_TYPES (split layout) or INSTANCE_TYPE. A
+ *  malformed INSTANCE_TYPES is ignored rather than stopping every wake. */
+export function instanceFor(engineName: string, instanceTypes: string | undefined, fallback: string): string {
+  try {
+    const map = JSON.parse(instanceTypes || "{}") as Record<string, unknown>;
+    const chosen = map[engineName];
+    if (typeof chosen === "string" && chosen.trim()) return chosen;
+    if (chosen && typeof chosen === "object") return JSON.stringify(chosen);
+  } catch {
+    // fall through to the default size
+  }
+  return fallback;
 }

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { readAsk } from "../src/ask";
 import { benchCacheStores, summarize } from "../src/bench";
 import { notesForAnswer, purgeExpired, readRow, servedHit, writeRow, type CacheRow } from "../src/cache";
-import { ENGINE_CONFIG, verifyPolicy } from "../src/config";
+import { ENGINE_CONFIG, instanceFor, verifyPolicy } from "../src/config";
 import { checkTurnstile, clientKey, corsHeaders, takeModelBudget, TURNSTILE_HEADER } from "../src/guard";
 import { contentKey } from "../src/key";
 import { parseRange } from "../src/ranges";
@@ -197,5 +197,16 @@ describe("the idle rule", () => {
   it("otherwise looks again when the period would be up", () => {
     expect(idleCheck(1 * minute, 0, 2 * minute)).toEqual({ stop: false, nextCheckMs: 2 * minute });
     expect(idleCheck(2 * minute - 10, 0, 2 * minute).nextCheckMs).toBe(2 * minute + 990);   // never sooner than a second
+  });
+});
+
+describe("instance size per engine", () => {
+  it("takes the engine's entry, else the default, and never fails on a bad map", () => {
+    const map = JSON.stringify({ pilot: "standard-2", big: { vcpu: 4, memoryMib: 12288, diskMb: 20000 } });
+    expect(instanceFor("pilot", map, "standard-3")).toBe("standard-2");
+    expect(instanceFor("big", map, "standard-3")).toBe('{"vcpu":4,"memoryMib":12288,"diskMb":20000}');
+    expect(instanceFor("engine", map, "standard-3")).toBe("standard-3");
+    expect(instanceFor("pilot", "not json", "standard-3")).toBe("standard-3");
+    expect(instanceFor("pilot", "", "standard-3")).toBe("standard-3");
   });
 });

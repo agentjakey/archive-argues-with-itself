@@ -6,7 +6,7 @@
 // platform timeout), and records how long every wake took.
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import { readRow, writeRow, isKey, type CacheRow } from "./cache";
-import { ENGINE_CONFIG, type Env, verifyPolicy, whole } from "./config";
+import { ENGINE_CONFIG, type Env, instanceFor, verifyPolicy, whole } from "./config";
 import { parseRange } from "./ranges";
 import { idleCheck } from "./schedule";
 
@@ -121,9 +121,7 @@ export class EngineContainer extends DurableObject<Env> {
   }
 
   private instanceSetting(): string {
-    if (this.engineName === "pilot") return this.env.INSTANCE_TYPE_PILOT || this.env.INSTANCE_TYPE;
-    if (this.engineName === "microlog") return this.env.INSTANCE_TYPE_MICROLOG || this.env.INSTANCE_TYPE;
-    return this.env.INSTANCE_TYPE;
+    return instanceFor(this.engineName, this.env.INSTANCE_TYPES, this.env.INSTANCE_TYPE);
   }
 
   private containerEnv(restoredFromSnapshot: boolean): Record<string, string> {

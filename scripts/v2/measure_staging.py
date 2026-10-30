@@ -27,6 +27,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 DUMMY_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"     # accepted only by Turnstile's test secrets
@@ -98,6 +99,16 @@ def ask(api: str, question: str, *, stub: bool, scope: str | None = None, filter
     return call(api, "POST", path, body, timeout=120, headers=headers)
 
 
+def started_during(wake: dict, run_started: float) -> bool:
+    """Whether a wake record began after this run started (its started_at is an ISO time with
+    milliseconds, so compare instants, not strings)."""
+    try:
+        started = datetime.fromisoformat(wake.get("started_at", "").replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return False
+    return started >= run_started
+
+
 def stored_question(data: Path) -> tuple[str, str, dict]:
     """A seed or story question with a recorded answer in the committed site data: the Worker
     serves it from D1 without waking the engine."""
@@ -124,6 +135,7 @@ def main(argv=None) -> int:
     if not wait_asleep(api, args.wait_asleep):
         print("the engine did not fall asleep; set a short SLEEP_AFTER_MINUTES on staging", file=sys.stderr)
         return 2
+    run_started = time.time() - 1.0
     record: dict = {"label": args.label, "api": api, "measured_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     t0 = time.monotonic()
     status, body, _ = call(api, "POST", "/wake")
@@ -182,12 +194,11 @@ def main(argv=None) -> int:
     _, health, _ = call(api, "GET", "/health?wakes=1")
     wakes = health.get("wakes") or []
     # every wake this run started (one per engine in the split layout), and the one before each
-    record["wake_log"] = [w for w in wakes if w.get("started_at", "") >= record["measured_utc"]] or wakes[-3:]
+    record["wake_log"] = [w for w in wakes if started_during(w, run_started)] or wakes[-3:]
     record["release"] = health.get("release")
     # an exit other than the idle sleep during this run (an out-of-memory kill shows here)
     record["exits_during_run"] = [w for w in record["wake_log"]
-                                  if w.get("exit") and w.get("exit") != "slept: idle"
-                                  and w.get("started_at", "") >= record["measured_utc"]]
+                                  if w.get("exit") and w.get("exit") != "slept: idle" and started_during(w, run_started)]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(record, indent=1), encoding="utf-8")
     print(json.dumps({k: record.get(k) for k in ("label", "outcome", "wake_to_ready_seconds", "first_live_answer",
