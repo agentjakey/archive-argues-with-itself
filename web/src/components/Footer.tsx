@@ -7,7 +7,7 @@ export function Footer({ onAbout }: Props) {
     <footer className="mt-12 border-t border-rule pt-4 text-sm text-muted">
       <p>
         Built during the AI Builders Fellowship of the BC + AI Ecosystem, with Internet Archive Canada.{" "}
-        <a className="linkish" href="https://archive-argues-with-itself-production.up.railway.app" target="_blank" rel="noopener noreferrer">
+        <a className="linkish" href="https://archiveargues.org" target="_blank" rel="noopener noreferrer">
           Live demo
         </a>
         {", "}

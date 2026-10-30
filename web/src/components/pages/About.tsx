@@ -72,8 +72,8 @@ export function About({ scope }: { scope?: ScopeInfo | null }) {
       <h3>Source and live site</h3>
       <p>
         The live demo is at{" "}
-        <a className="linkish" href="https://archive-argues-with-itself-production.up.railway.app" target="_blank" rel="noopener noreferrer">
-          archive-argues-with-itself-production.up.railway.app
+        <a className="linkish" href="https://archiveargues.org" target="_blank" rel="noopener noreferrer">
+          archiveargues.org
         </a>
         . The code, the evaluation questions, the human labels, and the reports are open source under the MIT
         licence at{" "}

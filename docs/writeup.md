@@ -2,7 +2,7 @@
 
 The numbers below are the current audited values from the repo. Author: Jacob Ortiz.
 
-Live: https://archive-argues-with-itself-production.up.railway.app
+Live: https://archiveargues.org
 Repo: https://github.com/agentjakey/archive-argues-with-itself
 
 ## What it is
@@ -103,6 +103,6 @@ is the tradeoff I chose for a public exhibit.
 ## Where to see it
 
 The live demo is at
-https://archive-argues-with-itself-production.up.railway.app and the source is open at
+https://archiveargues.org and the source is open at
 https://github.com/agentjakey/archive-argues-with-itself. The evaluation gold, the
 reports, and the scripts that recompute every number are in the repository.

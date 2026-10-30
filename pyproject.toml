@@ -34,7 +34,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://archive-argues-with-itself-production.up.railway.app"
+Homepage = "https://archiveargues.org"
 Source = "https://github.com/agentjakey/archive-argues-with-itself"
 
 [tool.setuptools.packages.find]

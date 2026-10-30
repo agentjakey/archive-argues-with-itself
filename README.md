@@ -6,10 +6,10 @@ The public record disagrees with itself across decades. This tool shows you the 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](pyproject.toml)
 [![Node 20](https://img.shields.io/badge/node-20-blue.svg)](web/.nvmrc)
-[![Live demo](https://img.shields.io/badge/live-demo-2a7ae2.svg)](https://archive-argues-with-itself-production.up.railway.app)
+[![Live demo](https://img.shields.io/badge/live-demo-2a7ae2.svg)](https://archiveargues.org)
 [![Data release](https://img.shields.io/github/v/release/agentjakey/archive-argues-with-itself?filter=data-*&label=data%20release)](https://github.com/agentjakey/archive-argues-with-itself/releases)
 
-**Live demo:** https://archive-argues-with-itself-production.up.railway.app
+**Live demo:** https://archiveargues.org
 
 ![Two Alberta government health records from 1974 and 1998-99, shown beside their original scanned pages](docs/images/compare-alberta-1974-1999.png)
 
