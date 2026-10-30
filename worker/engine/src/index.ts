@@ -9,7 +9,7 @@
 //
 // Logs carry the route, the outcome and timings, never a question or an address.
 import { readAsk, engineFor, engineNames } from "./ask";
-import { servedHit, purgeExpired } from "./cache";
+import { servedHit, purgeExpired, storedAnswerResponse } from "./cache";
 import { ENGINE_CONFIG, type Env } from "./config";
 import { checkRate, checkTurnstile, clientKey, corsHeaders, takeModelBudget, type GuardResult } from "./guard";
 import { keepWarmNow } from "./schedule";
@@ -52,7 +52,7 @@ async function handleAsk(request: Request, env: Env, cors: Record<string, string
     const hit = await servedHit(env.DB, input);
     if (hit) {
       log({ route: "/ask", scope: input.scope, outcome: "stored", ms: Date.now() - t0 });
-      return json(hit, 200, { ...cors, "x-answer-source": "stored" });
+      return storedAnswerResponse(request, hit, cors);
     }
   }
   const checked = await guard(request, env, env.RL_ASK);

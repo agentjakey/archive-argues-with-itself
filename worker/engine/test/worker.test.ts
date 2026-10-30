@@ -143,3 +143,23 @@ describe("range reads for the container", () => {
     expect(parseRange("bytes=9-3")).toBe("invalid");
   });
 });
+
+describe("stored answers carry an ETag", () => {
+  it("answers 200 with a strong ETag, then 304 for the same ETag, and a new ETag when the body changes", async () => {
+    const { storedAnswerResponse } = await import("../src/cache");
+    const hit = { answer: { text: "Stored.", cached: { created_at: "2026-10-16T12:00:00+00:00" } }, evidence: [] };
+    const first = await storedAnswerResponse(new Request("https://api.test/ask?q=x"), hit, {});
+    const etag = first.headers.get("etag") ?? "";
+    expect(first.status).toBe(200);
+    expect(etag).toMatch(/^"[0-9a-f]{32}"$/);
+    expect(first.headers.get("cache-control")).toBe("public, max-age=0, must-revalidate");
+    expect(await first.json()).toEqual(hit);
+    const again = await storedAnswerResponse(new Request("https://api.test/ask?q=x", { headers: { "if-none-match": etag } }), hit, {});
+    expect(again.status).toBe(304);
+    expect(await again.text()).toBe("");
+    const changed = await storedAnswerResponse(new Request("https://api.test/ask?q=x", { headers: { "if-none-match": etag } }),
+      { ...hit, editorial_notes: [{ id: "n" }] }, {});
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get("etag")).not.toBe(etag);
+  });
+});

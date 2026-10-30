@@ -25,11 +25,17 @@ def release(tmp_path):
     mod = _module()
     web = tmp_path / "web"
     (web / "assets").mkdir(parents=True)
-    (web / "index.html").write_text("<!doctype html><title>Archive Argues With Itself</title>", encoding="utf-8")
+    (web / "index.html").write_text("<!doctype html><html><head><title>Archive Argues With Itself</title></head>"
+                                    "<body></body></html>", encoding="utf-8")
     (web / "assets" / "index.js").write_text("console.log('reading room');", encoding="utf-8")
     out = tmp_path / "release"
     mod.assemble("test-release", web, REPO / "site" / "data", REPO / "site" / "static", out, "https://api.archiveargues.org")
     return mod, out
+
+
+def _data(mod, out: Path) -> Path:
+    """The release's data folder, named by the hash of its content (from the manifest)."""
+    return out / "data" / json.loads((out / mod.MANIFEST).read_text(encoding="utf-8"))["data_version"]
 
 
 def _remanifest(mod, out: Path) -> None:
@@ -53,11 +59,11 @@ def test_a_changed_file_is_refused(release):
 
 def test_a_lost_note_and_a_recorded_limited_mode_are_refused(release):
     mod, out = release
-    notes = json.loads((out / "data" / "editorial_notes.json").read_text(encoding="utf-8"))
+    notes = json.loads((_data(mod, out) / "editorial_notes.json").read_text(encoding="utf-8"))
     answer_note = next(n for n in notes["notes"] if n["target"]["kind"] == "answer")
-    index = json.loads((out / "data" / "pilot" / "answers" / "index.json").read_text(encoding="utf-8"))
+    index = json.loads((_data(mod, out) / "pilot" / "answers" / "index.json").read_text(encoding="utf-8"))
     entry = next(e for e in index["answers"] if e["question"] == answer_note["target"]["question"])
-    path = out / "data" / "pilot" / entry["file"]
+    path = _data(mod, out) / "pilot" / entry["file"]
     body = json.loads(path.read_text(encoding="utf-8"))
     body["editorial_notes"] = []
     body["degraded"] = {"reason": "model_unreachable", "live_url": "https://archiveargues.org"}
@@ -70,9 +76,9 @@ def test_a_lost_note_and_a_recorded_limited_mode_are_refused(release):
 
 def test_a_citation_without_its_page_is_refused(release):
     mod, out = release
-    index = json.loads((out / "data" / "pilot" / "answers" / "index.json").read_text(encoding="utf-8"))
+    index = json.loads((_data(mod, out) / "pilot" / "answers" / "index.json").read_text(encoding="utf-8"))
     for entry in index["answers"]:
-        path = out / "data" / "pilot" / entry["file"]
+        path = _data(mod, out) / "pilot" / entry["file"]
         body = json.loads(path.read_text(encoding="utf-8"))
         if body["answer"]["verified_citations"]:
             body["evidence"] = [r for r in body["evidence"]
@@ -87,7 +93,7 @@ def test_secrets_size_and_unlisted_missing_answers_are_refused(release, tmp_path
     mod, out = release
     (out / "assets" / "leak.js").write_text("const key = 'sk-ant-api03-" + "x" * 40 + "';", encoding="utf-8")
     (out / "assets" / "huge.bin").write_bytes(b"\0" * (mod.MAX_FILE_BYTES + 1))
-    index_path = out / "data" / "microlog" / "answers" / "index.json"
+    index_path = _data(mod, out) / "microlog" / "answers" / "index.json"
     index = json.loads(index_path.read_text(encoding="utf-8"))
     index["answers"][0]["file"] = None                                     # a curated question with no answer
     index_path.write_text(json.dumps(index), encoding="utf-8")
@@ -107,3 +113,24 @@ def test_publish_refuses_a_failing_release_before_any_upload(release, monkeypatc
     monkeypatch.setattr(mod, "wrangler", lambda args: calls.append(args))
     assert mod.publish(out, "staging", REPO / "config" / "release_allow_missing.json") == 1
     assert calls == []
+
+
+def test_caching_headers_and_the_versioned_data_folder(release):
+    mod, out = release
+    version = json.loads((out / mod.MANIFEST).read_text(encoding="utf-8"))["data_version"]
+    assert len(version) == 16 and (out / "data" / version / "scopes.json").exists()
+    assert f'<meta name="archive-data" content="/data/{version}" />' in (out / "index.html").read_text(encoding="utf-8")
+    assert version == mod.data_version(REPO / "site" / "data")                  # the same data, the same folder
+    rules = {}
+    current = None
+    for line in (out / "_headers").read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith((" ", "#")):
+            current = line.strip()
+            rules[current] = []
+        elif line.startswith("  ") and current:
+            rules[current].append(line.strip())
+    assert "Cache-Control: public, max-age=31536000, immutable" in rules["/assets/*"]
+    assert "Cache-Control: public, max-age=31536000, immutable" in rules["/data/*"]
+    for path in ("/", "/index.html", "/release-manifest.json"):
+        assert "Cache-Control: no-cache" in rules[path]
+    assert not any(r.startswith("Cache-Control") for r in rules["/*"])        # no rule that would merge into others

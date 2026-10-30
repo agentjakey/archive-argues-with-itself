@@ -7,12 +7,22 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   Cross-Origin-Opener-Policy: same-origin
 
+# Caching. Vite names every built asset by its content hash, and the data shards sit in a folder
+# named by the hash of their content, so both are cached for a year and never revalidated. The HTML
+# (which names the current data folder) and the release manifest are always revalidated, so a new
+# release is seen on the next visit.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
 /data/*
-  Cache-Control: public, max-age=300
+  Cache-Control: public, max-age=31536000, immutable
   Access-Control-Allow-Origin: *
+
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
 
 /release-manifest.json
   Cache-Control: no-cache

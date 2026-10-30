@@ -1,7 +1,7 @@
-// The answer cache in D1 (format v2, docs/v2/formats/answer_cache.md): the Worker reads it before
+// The answer cache in D1 (format v2, docs/formats/answer_cache.md): the Worker reads it before
 // waking the engine, and the engine reads and writes it through the CacheProxy entrypoint.
 import { ENGINE_CONFIG, STOPWORDS, type AnswerNote } from "./config";
-import { cleanQuestion, contentKey, restoreTerms, salientTerms, type Filters } from "./key";
+import { cleanQuestion, contentKey, restoreTerms, salientTerms, sha256Hex, type Filters } from "./key";
 
 export const COLUMNS = [
   "key", "scope", "curated", "question", "response_json", "extras_version", "model",
@@ -82,4 +82,27 @@ export async function servedHit(db: D1Database, input: AskInput): Promise<Record
   response.answer = { ...response.answer, cached: { created_at: row.created_at } };
   response.editorial_notes = notesForAnswer(input.scope, input.question, true);
   return response;
+}
+
+/** The response for a stored answer: the exact body, a strong ETag over it, and revalidation on
+ *  every use (max-age=0, must-revalidate), so a repeat request for an unchanged answer costs a 304.
+ *  The body changes, and so does the ETag, whenever the stored row or its dated notes change. */
+export async function storedAnswerResponse(
+  request: Request,
+  hit: Record<string, unknown>,
+  extraHeaders: Record<string, string>,
+): Promise<Response> {
+  const body = JSON.stringify(hit);
+  const etag = `"${(await sha256Hex(body)).slice(0, 32)}"`;
+  const headers: Record<string, string> = {
+    ...extraHeaders,
+    etag,
+    "cache-control": "public, max-age=0, must-revalidate",
+    "x-answer-source": "stored",
+  };
+  const asked = request.headers.get("if-none-match");
+  if (asked && asked.split(",").map((t) => t.trim()).includes(etag)) {
+    return new Response(null, { status: 304, headers });
+  }
+  return new Response(body, { status: 200, headers: { ...headers, "content-type": "application/json" } });
 }

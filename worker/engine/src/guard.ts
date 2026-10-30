@@ -68,8 +68,9 @@ export function corsHeaders(request: Request, env: Env): Record<string, string> 
   return {
     "access-control-allow-origin": origin,
     "access-control-allow-methods": "GET, POST, OPTIONS",
-    "access-control-allow-headers": `content-type, ${TURNSTILE_HEADER}`,
+    "access-control-allow-headers": `content-type, if-none-match, ${TURNSTILE_HEADER}`,
     "access-control-max-age": "600",
+    "access-control-expose-headers": "etag, x-answer-source",
     vary: "Origin",
   };
 }

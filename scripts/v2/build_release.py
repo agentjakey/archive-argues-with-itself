@@ -1,4 +1,4 @@
-"""Assemble, gate, publish and roll back a static site release (docs/v2/HOSTING.md, "Releases").
+"""Assemble, gate, publish and roll back a static site release (docs/SELF_HOSTING.md, "Releases").
 
   assemble  copy the built web app (web/dist, built in static mode) and the data shards (site/data)
             into one release folder, add the security headers and redirects, and write
@@ -75,6 +75,16 @@ def file_table(root: Path) -> dict:
 
 # --- assemble -------------------------------------------------------------------------------------
 
+DATA_META_NAME = "archive-data"
+
+
+def data_version(data: Path) -> str:
+    """A short hash of the shards' paths and contents: the same data always gets the same folder."""
+    digest = hashlib.sha256()
+    for path in sorted(p for p in data.rglob("*") if p.is_file()):
+        digest.update(path.relative_to(data).as_posix().encode("utf-8") + b"\0" + sha256_file(path).encode("ascii") + b"\n")
+    return digest.hexdigest()[:16]
+
 def empty_folder(folder: Path) -> None:
     """Remove everything inside folder (creating it when missing). The folder itself is kept: on a
     synced Windows folder, deleting the directory can be refused while its contents are not."""
@@ -92,7 +102,18 @@ def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, ap
         raise SystemExit(f"{data} has no export.json: run scripts/v2/export_site_data.py first")
     empty_folder(out)
     shutil.copytree(web, out, dirs_exist_ok=True)
-    shutil.copytree(data, out / "data", dirs_exist_ok=True)
+    # The shards go under a folder named by their content hash, so they can be cached for a year;
+    # index.html (never cached) names the folder in a meta tag, which the web app reads.
+    version = data_version(data)
+    shutil.copytree(data, out / "data" / version, dirs_exist_ok=True)
+    index = out / "index.html"
+    html = index.read_text(encoding="utf-8")
+    if "</head>" not in html:
+        raise SystemExit(f"{web / 'index.html'} has no </head> to name the data folder in")
+    if DATA_META_NAME in html:
+        raise SystemExit(f"{web / 'index.html'} already names a data folder; rebuild the web app")
+    meta = f'<meta name="{DATA_META_NAME}" content="/data/{version}" />'
+    index.write_text(html.replace("</head>", f"    {meta}\n  </head>", 1), encoding="utf-8")
     if not re.fullmatch(r"https://[a-z0-9.-]+", api_origin):
         raise SystemExit(f"--api-origin must be an https origin with no path, got {api_origin!r}")
     headers = (static / "_headers.template").read_text(encoding="utf-8").replace("{api_origin}", api_origin)
@@ -104,6 +125,7 @@ def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, ap
         "git_commit": git_commit(),
         "built_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "data_export": export,
+        "data_version": version,
         "api_origin": api_origin,
         "files": file_table(out),
     }
@@ -162,7 +184,13 @@ def gate(release: Path, allow_missing_path: Path) -> list[str]:
         if "dangerouslySetInnerHTML" in path.read_text(encoding="utf-8"):
             problems.append(f"{path.relative_to(REPO).as_posix()}: renders raw HTML")
 
-    data = release / "data"
+    version = manifest.get("data_version") or ""
+    data = release / "data" / version
+    meta = f'<meta name="{DATA_META_NAME}" content="/data/{version}" />'
+    if not version or not data.is_dir():
+        return problems + [f"the data folder named by the manifest (data/{version}) is missing"]
+    if meta not in (release / "index.html").read_text(encoding="utf-8"):
+        problems.append("index.html does not name the release's data folder")
     notes = json.loads((data / "editorial_notes.json").read_text(encoding="utf-8"))
     retired = {s["id"] for s in editorial.load_retired(REPO / editorial.DEFAULT_RETIRED)}
     allow = json.loads(allow_missing_path.read_text(encoding="utf-8")) if allow_missing_path.exists() else {}
