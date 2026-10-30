@@ -32,7 +32,7 @@ from pathlib import Path
 DUMMY_TOKEN = "XXXX.DUMMY.TOKEN.XXXX"     # accepted only by Turnstile's test secrets
 USER_AGENT = "archive-argues-measure/1.0 (staging measurement)"
 LIVE_QUESTION = "What did annual reports say about rural nursing stations and outpost care?"
-STORED_QUESTION = "How did tobacco control policy change in Ontario in the 1990s?"
+REPO = Path(__file__).resolve().parent.parent.parent
 LOAD_QUESTIONS = [
     "What did reports say about immunization clinics in schools?",
     "How were tuberculosis sanatoriums described in provincial reports?",
@@ -49,7 +49,8 @@ LOAD_QUESTIONS = [
 ]
 
 
-def call(api: str, method: str, path: str, body: dict | None = None, timeout: float = 60.0) -> tuple[int, dict, float]:
+def call(api: str, method: str, path: str, body: dict | None = None, timeout: float = 60.0,
+         headers: dict | None = None) -> tuple[int, dict, float]:
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(f"{api}{path}", data=data, method=method,
                                  headers={"content-type": "application/json", "user-agent": USER_AGENT,
@@ -58,6 +59,8 @@ def call(api: str, method: str, path: str, body: dict | None = None, timeout: fl
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read().decode("utf-8") or "{}")
+            if headers is not None:
+                headers.update({k.lower(): v for k, v in resp.headers.items()})
             return resp.status, payload, time.monotonic() - t0
     except urllib.error.HTTPError as exc:
         try:
@@ -84,11 +87,26 @@ def wait_asleep(api: str, limit_s: float) -> bool:
     return False
 
 
-def ask(api: str, question: str, *, stub: bool) -> tuple[int, dict, float]:
-    body = {"question": question}
+def ask(api: str, question: str, *, stub: bool, scope: str | None = None, filters: dict | None = None,
+        headers: dict | None = None) -> tuple[int, dict, float]:
+    body: dict = {"question": question}
+    if filters:
+        body["filters"] = filters
     if stub:
         body.update({"provider": "stub", "nocache": True})
-    return call(api, "POST", "/ask", body, timeout=120)
+    path = "/ask?" + urllib.parse.urlencode({"scope": scope}) if scope else "/ask"   # the scope is a query parameter
+    return call(api, "POST", path, body, timeout=120, headers=headers)
+
+
+def stored_question(data: Path) -> tuple[str, str, dict]:
+    """A seed or story question with a recorded answer in the committed site data: the Worker
+    serves it from D1 without waking the engine."""
+    for index in sorted(data.glob("*/answers/index.json")):
+        payload = json.loads(index.read_text(encoding="utf-8"))
+        for entry in payload["answers"]:
+            if entry.get("file"):
+                return payload["scope"], entry["question"], entry.get("filters") or {}
+    raise SystemExit(f"no recorded answer under {data}")
 
 
 def main(argv=None) -> int:
@@ -99,6 +117,7 @@ def main(argv=None) -> int:
     parser.add_argument("--load", type=int, default=0, help="concurrent uncached questions once awake")
     parser.add_argument("--wait-asleep", type=float, default=1800.0)
     parser.add_argument("--timeout", type=float, default=1200.0, help="give up on the wake after this many seconds")
+    parser.add_argument("--data", type=Path, default=REPO / "site" / "data", help="committed site data (for a stored question)")
     args = parser.parse_args(argv)
     api = args.api.rstrip("/")
 
@@ -134,9 +153,11 @@ def main(argv=None) -> int:
         record["first_live_answer"] = {"status": code, "seconds": round(seconds, 2),
                                        "degraded": (answer.get("degraded") or {}).get("reason"),
                                        "since_wake_seconds": round(time.monotonic() - t0, 1)}
-        code, answer, seconds = ask(api, STORED_QUESTION, stub=False)
+        scope, question, filters = stored_question(args.data)
+        seen: dict = {}
+        code, answer, seconds = ask(api, question, stub=False, scope=scope, filters=filters, headers=seen)
         record["stored_answer"] = {"status": code, "seconds": round(seconds, 2),
-                                   "stored": bool((answer.get("answer") or {}).get("cached"))}
+                                   "source": seen.get("x-answer-source")}
         if args.load:
             results: list = []
 

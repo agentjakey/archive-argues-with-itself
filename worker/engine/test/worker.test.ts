@@ -1,8 +1,9 @@
 // Serving stored answers from D1, the guards, the budget, keep-warm windows and range parsing.
 import { describe, expect, it } from "vitest";
 import { readAsk } from "../src/ask";
+import { benchCacheStores, summarize } from "../src/bench";
 import { notesForAnswer, purgeExpired, readRow, servedHit, writeRow, type CacheRow } from "../src/cache";
-import { ENGINE_CONFIG } from "../src/config";
+import { ENGINE_CONFIG, verifyPolicy } from "../src/config";
 import { checkTurnstile, clientKey, corsHeaders, takeModelBudget, TURNSTILE_HEADER } from "../src/guard";
 import { contentKey } from "../src/key";
 import { parseRange } from "../src/ranges";
@@ -161,5 +162,27 @@ describe("stored answers carry an ETag", () => {
       { ...hit, editorial_notes: [{ id: "n" }] }, {});
     expect(changed.status).toBe(200);
     expect(changed.headers.get("etag")).not.toBe(etag);
+  });
+});
+
+describe("checking data already on the container disk", () => {
+  it("trusts image layers, trusts a restored snapshot only when told to, and hashes everything else", () => {
+    expect(verifyPolicy("image", false, undefined)).toBe("trust-image");
+    expect(verifyPolicy("snapshot", true, "trust")).toBe("trust-snapshot");
+    expect(verifyPolicy("snapshot", true, "full")).toBe("full");
+    expect(verifyPolicy("snapshot", true, undefined)).toBe("full");
+    expect(verifyPolicy("snapshot", false, "trust")).toBe("full");      // the first wake downloads and hashes
+    expect(verifyPolicy("r2-binding", false, "trust")).toBe("full");
+  });
+});
+
+describe("the staging cache bench", () => {
+  it("summarizes read times", () => {
+    const s = summarize([9, 1, 2, 3, 4, 5, 6, 7, 8, 10], 120);
+    expect(s).toMatchObject({ reads: 10, first_ms: 9, p50_ms: 5, p95_ms: 10, max_ms: 10, bytes: 120 });
+  });
+
+  it("does nothing where the bench bindings are absent (production)", async () => {
+    expect(await benchCacheStores(fakeEnv(), "0".repeat(64), 5)).toBeNull();
   });
 });

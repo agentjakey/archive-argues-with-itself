@@ -6,10 +6,12 @@
 //                     rate limit and the daily model budget, then the engine (woken if asleep)
 //   GET  /coverage    forwarded only while the engine is awake
 //   GET  /flag        forwarded only while the engine is awake
+//   GET  /__bench/cache?key=K&reads=N   staging only (needs the BENCH_* bindings): D1, KV and R2 read times
 //
 // Logs carry the route, the outcome and timings, never a question or an address.
 import { readAsk, engineFor, engineNames } from "./ask";
 import { servedHit, purgeExpired, storedAnswerResponse } from "./cache";
+import { benchCacheStores, type BenchBindings } from "./bench";
 import { ENGINE_CONFIG, type Env } from "./config";
 import { checkRate, checkTurnstile, clientKey, corsHeaders, takeModelBudget, type GuardResult } from "./guard";
 import { keepWarmNow } from "./schedule";
@@ -101,6 +103,13 @@ export default {
       if (url.pathname === "/wake" && request.method === "POST") return await handleWake(request, env, cors);
       if (url.pathname === "/ask" && (request.method === "GET" || request.method === "POST")) {
         return await handleAsk(request, env, cors);
+      }
+      if (url.pathname === "/__bench/cache" && request.method === "GET") {
+        const limited = await checkRate(env.RL_WAKE, await clientKey(request, env));
+        if (!limited.ok) return json({ error: limited.reason }, limited.status ?? 429, cors);
+        const result = await benchCacheStores(env as Env & BenchBindings, url.searchParams.get("key") ?? "",
+                                              Number(url.searchParams.get("reads") ?? "20"));
+        return result ? json({ ...result, colo: (request as any).cf?.colo ?? null }, 200, cors) : json({ error: "not found" }, 404, cors);
       }
       if ((url.pathname === "/coverage" || url.pathname === "/flag") && request.method === "GET") {
         const scope = url.searchParams.get("scope") || ENGINE_CONFIG.default_scope;

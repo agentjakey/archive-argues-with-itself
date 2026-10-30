@@ -32,7 +32,12 @@
       "d1_databases": [
         { "binding": "DB", "database_name": "archive-argues-cache-staging", "database_id": "dbc5e356-bb61-4516-950c-d8ac8a04a511", "migrations_dir": "migrations" }
       ],
-      "r2_buckets": [{ "binding": "DATA", "bucket_name": "archive-argues-data" }],
+      "r2_buckets": [
+        { "binding": "DATA", "bucket_name": "archive-argues-data" },
+        { "binding": "BENCH_R2", "bucket_name": "archive-argues-bench-staging" }
+      ],
+      // staging only: the cache-store bench (src/bench.ts); production has no BENCH_* bindings
+      "kv_namespaces": [{ "binding": "BENCH_KV", "id": "6eedf42d9da5473db1d68bfea8253c10" }],
       "ratelimits": [
         { "name": "RL_ASK", "namespace_id": "2001", "simple": { "limit": 6, "period": 60 } },
         { "name": "RL_WAKE", "namespace_id": "2002", "simple": { "limit": 10, "period": 60 } }
@@ -46,6 +51,7 @@
         "INSTANCE_TYPE_MICROLOG": "",
         "SLEEP_AFTER_MINUTES": "15",
         "PROVISION_MODE": "r2-binding",
+        "SNAPSHOT_VERIFY": "full",
         "DENSE_BACKEND": "numpy",
         "ALLOWED_ORIGINS": "https://archive-argues-site-staging.jakemyguy.workers.dev,http://localhost:5173",
         "DAILY_MODEL_CALLS": "100",
@@ -89,6 +95,7 @@
         "INSTANCE_TYPE_MICROLOG": "",
         "SLEEP_AFTER_MINUTES": "15",
         "PROVISION_MODE": "r2-binding",
+        "SNAPSHOT_VERIFY": "full",
         "DENSE_BACKEND": "numpy",
         "ALLOWED_ORIGINS": "https://archiveargues.org,https://www.archiveargues.org",
         "DAILY_MODEL_CALLS": "300",
