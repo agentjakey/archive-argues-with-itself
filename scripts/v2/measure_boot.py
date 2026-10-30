@@ -236,6 +236,15 @@ def load_seed(scope: str, limit: int) -> list[dict]:
     return rows[:limit]
 
 
+def latency_summary(row: dict) -> dict:
+    """Median, max and the raw list of one scope's ask latencies, with any limited-mode reasons."""
+    values = sorted(row["latencies"])
+    row["median"] = values[len(values) // 2] if values else None
+    row["max"] = values[-1] if values else None
+    row["degraded"] = len(row["degraded_reasons"])
+    return row
+
+
 def http_get(url: str, timeout: float = 60.0):
     with urllib.request.urlopen(url, timeout=timeout) as resp:
         return resp.status, resp.read()
@@ -247,6 +256,10 @@ def run_server(args, steps: Steps, sampler: Sampler, scopes: list[str]) -> dict:
     env = dict(os.environ)
     env["CIVIC_DENSE_BACKEND"] = args.dense
     env["CIVIC_ENABLED_SCOPES"] = ",".join(scopes)
+    if args.guard == "anon":
+        override = str(Path(__file__).resolve().parent / "guard_anon")
+        existing = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = override + os.pathsep + existing if existing else override
     if scopes == ["microlog"]:
         env["CIVIC_SCOPE"] = "microlog"
     for key in ("R2_ENDPOINT", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"):
@@ -296,21 +309,28 @@ def run_server(args, steps: Steps, sampler: Sampler, scopes: list[str]) -> dict:
         latencies = []
         failures = 0
         degraded = 0     # a 200 in limited mode (e.g. retrieval past its deadline) is not a served answer
+        by_scope = {}
         for scope in scopes:
+            scope_row = {"latencies": [], "degraded_reasons": []}
             for q in load_seed(scope, args.asks):
                 params = urllib.parse.urlencode({"q": q["text"], "provider": "stub", "nocache": 1, "scope": scope})
                 t = time.monotonic()
                 try:
                     code, body = http_get(f"{base}/ask?{params}", timeout=60)
-                    if code == 200 and json.loads(body).get("degraded"):
+                    reason = json.loads(body).get("degraded") if code == 200 else None
+                    if reason:
                         degraded += 1
+                        scope_row["degraded_reasons"].append(reason.get("reason") if isinstance(reason, dict) else str(reason))
                 except Exception:  # noqa: BLE001 - a failed ask is counted, not fatal to the measurement
                     code = None
-                latencies.append(round(time.monotonic() - t, 3))
+                latency = round(time.monotonic() - t, 3)
+                latencies.append(latency)
+                scope_row["latencies"].append(latency)
                 failures += code != 200
+            by_scope[scope] = latency_summary(scope_row)
         steps.end(asks=len(latencies), failures=failures, degraded=degraded,
                   latency_median=sorted(latencies)[len(latencies) // 2] if latencies else None,
-                  latency_max=max(latencies) if latencies else None)
+                  latency_max=max(latencies) if latencies else None, by_scope=by_scope)
         steps.begin("steady")
         time.sleep(args.steady)
         steps.end()
@@ -389,14 +409,19 @@ def run_inprocess(args, steps: Steps, scopes: list[str]) -> dict:
         steps.end()
     steps.begin("asks")
     latencies = []
+    by_scope = {}
     for scope in scopes:
         base, pool, gcfg = built[scope]
+        scope_row = {"latencies": [], "degraded_reasons": []}
         for q in load_seed(scope, args.asks):
             t = time.monotonic()
             retrieve_pool(pool[0], q["text"], build_filters(q.get("filters")), gcfg["top_k"])
-            latencies.append(round(time.monotonic() - t, 3))
+            latency = round(time.monotonic() - t, 3)
+            latencies.append(latency)
+            scope_row["latencies"].append(latency)
+        by_scope[scope] = latency_summary(scope_row)
     steps.end(asks=len(latencies), latency_median=sorted(latencies)[len(latencies) // 2] if latencies else None,
-              latency_max=max(latencies) if latencies else None)
+              latency_max=max(latencies) if latencies else None, by_scope=by_scope)
     steps.begin("steady")
     time.sleep(args.steady)
     steps.end()
@@ -409,6 +434,8 @@ def main(argv=None) -> int:
     parser.add_argument("--scopes", choices=["pilot", "microlog", "both"], required=True)
     parser.add_argument("--dense", choices=["sqlite", "numpy"], required=True)
     parser.add_argument("--mmap", choices=["on", "off"], default="on", help="inprocess mode only")
+    parser.add_argument("--guard", choices=["rss", "anon"], default="rss",
+                        help="server mode: anon loads scripts/v2/guard_anon (measurement-only guard override)")
     parser.add_argument("--src", default="/src")
     parser.add_argument("--asks", type=int, default=10, help="seed questions per scope after warm")
     parser.add_argument("--steady", type=float, default=15.0, help="quiet seconds sampled at the end")
@@ -425,6 +452,7 @@ def main(argv=None) -> int:
     t0 = time.monotonic()
     steps = Steps(sampler, t0)
     record = {"label": args.label, "mode": args.mode, "scopes": scopes, "dense": args.dense, "mmap": args.mmap,
+              "guard": args.guard,
               "memory_max": read_int(CGROUP / "memory.max"), "cpus": os.cpu_count(),
               "kernel": platform.release(), "python": platform.python_version(),
               "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}

@@ -2,7 +2,12 @@
 # The Phase 0 cold-boot measurements, one fresh container and empty volume each, run in sequence.
 # Results: reports/v2/raw/boot/*.json, one line per run in reports/v2/raw/boot/runs.log.
 #
-#   scripts/v2/run_boot_campaign.sh BASELINE_IMAGE V2_IMAGE baseline|limits|all
+#   scripts/v2/run_boot_campaign.sh BASELINE_IMAGE V2_IMAGE baseline|limits|all|caps
+#
+# "caps": the two candidate Cloudflare sizes, 6g (standard-2) and 8g (standard-3), both scopes, each
+# dense backend, server and in-process (mmap on and off), plus a search below 6g for the smallest
+# safe limit per backend and the pre-fix image's numpy boot at 6g. The runs that need the least host
+# memory go first and the 8g runs last.
 #
 # "baseline": every scope and dense backend at 12g (the standard-4 size), the pre-fix image's numpy
 # boot for comparison, and the in-process breakdown with the mmap setting on and off.
@@ -23,6 +28,26 @@ if [ "$WHICH" = "baseline" ] || [ "$WHICH" = "all" ]; then
     for mmap in on off; do
       bash "$RUN" "$V2" 12g inprocess both "$dense" "v2-inproc-both-$dense-mmap$mmap-12g" --mmap "$mmap"
     done
+  done
+fi
+
+if [ "$WHICH" = "caps" ]; then
+  for mem in 1536m 2g 3g 4g; do
+    bash "$RUN" "$V2" "$mem" server both sqlite "caps-server-both-sqlite-$mem"
+  done
+  for mem in 4g 5g; do
+    bash "$RUN" "$V2" "$mem" server both numpy "caps-server-both-numpy-$mem"
+  done
+  for mem in 6g 8g; do
+    for dense in sqlite numpy; do
+      bash "$RUN" "$V2" "$mem" server both "$dense" "caps-server-both-$dense-$mem"
+      for mmap in on off; do
+        bash "$RUN" "$V2" "$mem" inprocess both "$dense" "caps-inproc-both-$dense-mmap$mmap-$mem" --mmap "$mmap"
+      done
+    done
+    if [ "$mem" = "6g" ]; then
+      bash "$RUN" "$BASE" 6g server both numpy "caps-base-server-both-numpy-6g"
+    fi
   done
 fi
 

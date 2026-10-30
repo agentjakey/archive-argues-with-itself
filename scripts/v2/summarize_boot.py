@@ -74,7 +74,41 @@ def main(argv=None) -> int:
         disk = run.get("disk", {})
         print(f"| {run.get('label')} | {mib(end.get('anon'))} | {mib(end.get('current'))} | {mib(end.get('VmRSS'))} | "
               f"{disk.get('data_files_bytes', '')} | {disk.get('volume_used_bytes', '')} | {run.get('error', '')} |")
+    print()
+    print("| run | scope | uncached asks | retrieval ms median | retrieval ms max | outcomes | dense backend at warm |")
+    print("| --- | --- | ---: | ---: | ---: | --- | --- |")
+    for run in runs:
+        log_path = Path(args.dir) / f"{run.get('label')}.server.log"
+        for scope, row in ask_timings(log_path).items():
+            values = sorted(row["retrieval_ms"])
+            outcomes = ", ".join(f"{name} {count}" for name, count in sorted(row["outcomes"].items()))
+            print(f"| {run.get('label')} | {scope} | {len(values)} | {values[len(values) // 2]} | {values[-1]} | "
+                  f"{outcomes} | {row['dense']} |")
     return 0
+
+
+def ask_timings(log_path: Path) -> dict:
+    """Per scope, from the server's own log: the retrieval time and outcome of every /ask (the
+    harness asks with the stub provider and nocache, so each one runs retrieval), and which dense
+    backend the boot warm reported."""
+    out: dict = {}
+    try:
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
+        scope = fields.get("scope")
+        if not scope:
+            continue
+        row = out.setdefault(scope, {"retrieval_ms": [], "outcomes": {}, "dense": ""})
+        if line.startswith("[ask-timing]"):
+            row["retrieval_ms"].append(int(fields.get("retrieval_ms", 0)))
+            outcome = fields.get("outcome", "")
+            row["outcomes"][outcome] = row["outcomes"].get(outcome, 0) + 1
+        elif line.startswith("[boot-warm]") and "dense=" in line:
+            row["dense"] = "numpy" if "dense=numpy" in line else "sqlite-vec"
+    return {scope: row for scope, row in out.items() if row["retrieval_ms"]}
 
 
 if __name__ == "__main__":
