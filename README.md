@@ -11,7 +11,7 @@ The public record disagrees with itself across decades. This tool shows you the 
 
 **Live demo:** https://archiveargues.org
 
-![Two Alberta government health records from 1974 and 1998-99, shown beside their original scanned pages](docs/images/compare-alberta-1974-1999.png)
+![Two Alberta government records on mental health policy, from 1988 and 1993, marked comparable and agreeing, with the note on how to read them and both scanned pages](docs/images/v2/story-laptop.png)
 
 An official answer is not fixed: what a government said caused a problem, or how it
 described a program, changes from one decade's report to the next, and the wording of
@@ -23,8 +23,10 @@ answer instead of guessing.
 It serves two corpora from one app, switchable in the interface: a clean federal pilot
 (Government of Canada publications, federal plus Ontario and Alberta, roughly 1960-2009)
 and the national microlog microfiche corpus (federal, provincial, and municipal
-issuers, 1963-2018). The data is hosted on Cloudflare R2 and cached to the deploy's disk
-on boot; the pilot is also mirrored on a GitHub Release as a fallback. Neither corpus
+issuers, 1963-2018). The site is a static release on Cloudflare, so the stories and the
+recorded answers to the example questions work even when the engine is asleep; the engine
+runs in a Cloudflare container that wakes when someone asks a new question and fetches its
+data from Cloudflare R2 (the pilot is also mirrored on a GitHub Release). Neither corpus
 reaches the present: scanned government OCR runs out in the 2010s, and there is no 2020s
 material in this archive.
 
@@ -156,10 +158,9 @@ cd web; npm ci; npm run build; cd ..
 
 Open `http://127.0.0.1:8000/`. Append `?kiosk=1` for the exhibit mode; see
 [`docs/DEMO.md`](docs/DEMO.md) for the unattended, offline setup and
-[`docs/DEPLOY.md`](docs/DEPLOY.md) to host both scopes (one Docker image that, on boot,
-downloads each enabled scope's data from Cloudflare R2 -- the pilot also mirrored on a
-GitHub Release as a fallback -- verifies the checksums, and caches them to a volume;
-Railway steps; any Docker host).
+[`docs/v2/HOSTING.md`](docs/v2/HOSTING.md) for the Cloudflare hosting (the static site,
+the engine Worker and its container, releases and rollback). [`docs/DEPLOY.md`](docs/DEPLOY.md)
+describes the earlier single-image deployment, which still runs on any Docker host.
 
 **Reproducible path: rebuild from the manifest.** The item set is fixed by
 [`data/manifest/`](data/manifest/); the rebuild yields the same corpus, and the dense
