@@ -1,4 +1,4 @@
-"""Compile the static site's data shards from the engine itself (format: docs/v2/formats/site_data.md).
+"""Compile the static site's data shards from the engine itself (format: docs/formats/site_data.md).
 
 Compile, don't query: everything the site shows that does not depend on a visitor's own question
 is computed here, once, and published as versioned files: each scope's facts, seed examples,

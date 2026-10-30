@@ -1,7 +1,7 @@
 """Write the SQL that seeds the D1 answer cache with the curated rows of local v2 caches.
 
 Only rows marked curated (seed and story questions) are written; visitor rows never leave this
-machine and the old v1 files are deleted with the Railway volume (docs/v2/PRIVACY.md). The output
+machine and the old v1 files are deleted with the Railway volume (docs/PRIVACY.md). The output
 is applied by the account owner:
 
     python scripts/v2/export_cache_sql.py --cache data/cache/answers.db \

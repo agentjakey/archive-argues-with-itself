@@ -1,6 +1,6 @@
 """Upload the derived release files (dense artifacts, corpus facts) to the private R2 bucket. OPERATOR-RUN.
 
-Reaches Cloudflare R2, so the account owner runs it (docs/v2/HOSTING.md, step 2). Each file is
+Reaches Cloudflare R2, so the account owner runs it (docs/SELF_HOSTING.md, "Data on R2"). Each file is
 checked against the sha256 recorded in config/scopes.toml before it is uploaded, and its size is
 checked on R2 afterwards. An object already on R2 with the right size is skipped. Credentials come
 only from the environment (R2_ENDPOINT, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY: a token

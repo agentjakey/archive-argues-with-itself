@@ -26,7 +26,7 @@
       "id": "federal-aging-retired-2026-10-29",
       "target": {"kind": "story", "scope": "pilot", "story_id": "federal-aging-1995-2000"},
       "date": "2026-10-29",
-      "text": "Removed from the featured stories. Its question is one the v1 evaluation labels as should-abstain, and the v1 audit counted its answer as off-target. The two pages are kept and described in docs/v2/DATA_NOTES.md.",
+      "text": "Removed from the featured stories. Its question is one the v1 evaluation labels as should-abstain, and the v1 audit counted its answer as off-target. The two pages are kept, with their question and caption, in config/retired_stories.json.",
       "reason": "A featured story must not rest on an answer the v1 audit marked off-target."
     },
     {

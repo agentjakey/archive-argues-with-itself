@@ -1,4 +1,4 @@
--- The answer cache (format v2, docs/v2/formats/answer_cache.md) and the daily model budget.
+-- The answer cache (format v2, docs/formats/answer_cache.md) and the daily model budget.
 -- Same columns as the engine's local cache (src/archive_debugger/api/cache.py SCHEMA).
 CREATE TABLE IF NOT EXISTS answers_v2 (
     key            TEXT PRIMARY KEY,

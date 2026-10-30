@@ -158,7 +158,7 @@ cd web; npm ci; npm run build; cd ..
 
 Open `http://127.0.0.1:8000/`. Append `?kiosk=1` for the exhibit mode; see
 [`docs/DEMO.md`](docs/DEMO.md) for the unattended, offline setup and
-[`docs/v2/HOSTING.md`](docs/v2/HOSTING.md) for the Cloudflare hosting (the static site,
+[`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) for the Cloudflare hosting (the static site,
 the engine Worker and its container, releases and rollback). [`docs/DEPLOY.md`](docs/DEPLOY.md)
 describes the earlier single-image deployment, which still runs on any Docker host.
 

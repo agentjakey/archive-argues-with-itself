@@ -1,5 +1,5 @@
 // The engine container, run by a Durable Object under the durable_object scheduling policy
-// (public beta since 2026-09-30; docs/v2/DECISIONS.md, "Containers scheduling policy"). The
+// (public beta since 2026-09-30; docs/SELF_HOSTING.md, "Design choices"). The
 // Durable Object starts the container on demand, gives it its secrets and its two private routes
 // (R2 reads and the answer cache, through Worker entrypoints, so the container holds no R2 key),
 // lets it sleep after SLEEP_AFTER_MINUTES of inactivity, and records how long every wake took.

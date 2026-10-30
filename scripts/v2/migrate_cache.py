@@ -2,7 +2,7 @@
 
 Only seed questions and story questions move. Every other row is a visitor's question; those rows
 are never copied, printed or inspected beyond the fields this matching needs, and they stay in
-the old file until it is deleted with the Railway volume (docs/v2/PRIVACY.md).
+the old file until it is deleted with the Railway volume (docs/PRIVACY.md).
 
 A v1 row's key cannot be recomputed (it hashed file paths, sizes and mtimes that no longer exist),
 and a row does not hold its question. So each curated question is matched by what it retrieves:

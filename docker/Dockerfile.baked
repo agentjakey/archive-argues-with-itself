@@ -1,5 +1,5 @@
 # The engine image with the release's data baked in (provisioning option "image",
-# docs/v2/DECISIONS.md "Data provisioning"). Built by scripts/v2/build_baked_image.py from the
+# docs/SELF_HOSTING.md, "Design choices"). Built by scripts/v2/build_baked_image.py from the
 # serving image and a staging folder that holds only files verified against config/scopes.toml,
 # passed as the named build context "data". With CIVIC_PROVISION=present and
 # CIVIC_VERIFY_PRESENT=trust-image the container serves these files without hashing them again:

@@ -1,4 +1,4 @@
-// The release's data shards (docs/v2/formats/site_data.md): fetched on demand, once, and cached for
+// The release's data shards (docs/formats/site_data.md): fetched on demand, once, and cached for
 // the page's lifetime. They hold everything that does not depend on a visitor's own question, so
 // the reading room works with the engine asleep or down.
 import type { AskResponse, CoverageResponse, Example, Filters, Health, ScopesResponse, Story } from "../types";

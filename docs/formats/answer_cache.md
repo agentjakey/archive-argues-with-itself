@@ -50,6 +50,13 @@ Add `answer.cached = {created_at}` and the dated editorial notes for that scope 
 `extras_version` is the current one; otherwise the engine recomputes the date methods and care flags
 and rewrites the row under its original `created_at`.
 
+## Over HTTP
+
+The engine Worker serves a stored answer with a strong `ETag` (the first 32 hex characters of the
+sha256 of the exact body, notes included) and `Cache-Control: public, max-age=0, must-revalidate`; a
+request whose `If-None-Match` carries that ETag gets `304 Not Modified` and no body. An answer the
+engine has just written is served with `Cache-Control: no-store`.
+
 ## Expiry
 
 Rows with `expires_at` in the past are never served, and a daily job deletes them (the Worker's

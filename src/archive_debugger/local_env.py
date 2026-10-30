@@ -5,7 +5,7 @@ a local .env file. In production nothing is read from a file: Cloudflare passes 
 secrets (ANTHROPIC_API_KEY, CIVIC_CACHE_TOKEN, and the R2 key pair when it is used) as environment
 variables from wrangler secrets, and the image holds no .env. On a development machine .env fills
 in only what the shell has not set. So a stale key exported in a shell profile shadows the .env
-key; the fix is to unset it in the shell (docs/v2/HOSTING.md, "Secrets").
+key; the fix is to unset it in the shell.
 
 Secret values are never printed. The startup log says, for each secret name, only whether it is
 set and where it came from.

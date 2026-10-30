@@ -27,7 +27,7 @@ provisioning fails: the server never serves a scope from an unverified file.
 
 Files already present: CIVIC_VERIFY_PRESENT=full (default) hashes them; trust-image skips the hash
 for files that are part of the container image, whose layers the registry verifies by digest on
-pull (docs/v2/DECISIONS.md, "Integrity of baked data").
+pull (docs/SELF_HOSTING.md, "Design choices").
 
 One retry rule for every network read: timeouts, connection errors, 5xx, 408 and 429 are retried
 with backoff; any other 4xx fails at once.

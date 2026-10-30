@@ -169,7 +169,7 @@ venv.bak/
 .ropeproject
 
 # mkdocs documentation: not used here. /site holds the static site's data shards and headers,
-# which are committed (docs/v2/formats/site_data.md).
+# which are committed (docs/formats/site_data.md).
 
 # mypy
 .mypy_cache/
@@ -291,7 +291,7 @@ Thumbs.db
 
 scopes.r2.sha256
 showcase/ 
-# v2 phase reports and raw measurement output (not published; docs/v2 carries the numbers).
+# v2 phase reports and raw measurement output (not published).
 reports/v2/
 
 # Phase 1 build output (assembled releases are rebuilt from site/data and web/dist).
@@ -300,3 +300,6 @@ worker/site/release/
 
 # The end-to-end build settings hold no secrets.
 !web/.env.e2e
+
+# Private working notes for v2 (baseline, decisions, runbooks): kept locally, never published.
+docs/v2/

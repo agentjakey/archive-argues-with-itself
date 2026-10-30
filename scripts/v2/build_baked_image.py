@@ -10,7 +10,7 @@
 The vectors databases are not included: with the numpy backend the boot writes a small stand-in
 index and the dense leg comes from the artifacts (retrieve/dense.py, provision.py).
 
-Pushing the image to Cloudflare's registry is an account step (docs/v2/HOSTING.md):
+Pushing the image to Cloudflare's registry is an account step (docs/SELF_HOSTING.md):
     npx wrangler containers push archive-engine-baked:<tag>
 
     python scripts/v2/build_baked_image.py --src C:/civic-measure/src --tag 2026-10-30.1

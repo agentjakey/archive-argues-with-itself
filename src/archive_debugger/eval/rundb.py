@@ -1,7 +1,7 @@
 """Where evaluation runs are recorded: a separate SQLite file, never a served data file.
 
 On 2026-10-08 an evaluation report wrote eval_runs and eval_results rows into the serving
-civic.db, so that file no longer matched its published sha256 (docs/v2/DATA_NOTES.md). The
+civic.db, so that file no longer matched its published sha256. The
 evaluation code now reads labels from the corpus database through a read-only connection and
 writes its runs here: CIVIC_EVAL_DB, or data/eval/eval_runs.db.
 """

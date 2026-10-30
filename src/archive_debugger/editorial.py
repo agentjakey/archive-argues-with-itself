@@ -1,7 +1,7 @@
 """Curated stories and editorial notes: the data rules both the API and the static build follow.
 
 A story is a question plus two pinned pages and an author's caption. Every story carries a
-comparability block naming one of the six comparison outcomes (docs/v2/VERDICTS.md vocabulary),
+comparability block naming one of the six comparison outcomes (COMPARISON_OUTCOMES below),
 the query constraints the two pages differ on, and a plain note. The caption, the question and the
 labels around them must not claim more than that block supports: a pair that is not comparable is
 never framed as a change, a continuity, or a disagreement.

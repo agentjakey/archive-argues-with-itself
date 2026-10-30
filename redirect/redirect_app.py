@@ -1,6 +1,6 @@
 """The Railway redirect: every request to the old *.up.railway.app address gets a 301 to the same
 path and query on the new domain. Railway cannot redirect its own domain, so a running service
-has to answer (docs/v2/HOSTING.md, "Railway redirect").
+has to answer (docs/SELF_HOSTING.md, "Moving from another host").
 
 Standard library only, no volume, a few MB of memory. A path that moved is mapped first
 (PATH_MAP: old API permalinks open the reading room), everything else keeps its path. Nothing

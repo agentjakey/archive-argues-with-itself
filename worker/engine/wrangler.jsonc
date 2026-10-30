@@ -1,4 +1,4 @@
-// The engine Worker and its container (docs/v2/HOSTING.md). Deploy with
+// The engine Worker and its container (docs/SELF_HOSTING.md). Deploy with
 //   npx wrangler deploy --env staging      (workers.dev, first)
 //   npx wrangler deploy --env production   (api.archiveargues.org, after Gate 1)
 // Account-specific values marked SET-ME are filled in by the account owner from the runbook

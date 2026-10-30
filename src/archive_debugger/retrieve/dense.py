@@ -106,7 +106,7 @@ def _anon_bytes() -> Optional[int]:
     """The process's anonymous resident memory (RssAnon): memory it owns and the kernel cannot drop.
     VmRSS is not used: it also counts the pages of every memory-mapped data file, which are page
     cache the kernel reclaims under pressure, and counting them refused a matrix that fit (known
-    error 14, docs/v2/BASELINE_AUDIT.md). None where /proc is not available."""
+    error 14 in the v1 baseline). None where /proc is not available."""
     try:
         with open("/proc/self/status", "r", encoding="utf-8") as fh:
             for line in fh:

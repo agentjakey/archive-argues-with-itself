@@ -22,7 +22,7 @@ shows live in `config/editorial_notes.json`.
   landing hero and the kiosk attract loop.
 - The federal aging story is no longer featured: its question is v1 eval question
   q036, which the v1 gold labels should-abstain and the v1 audit counted off-target.
-  Its pages are kept and described in `docs/v2/DATA_NOTES.md`.
+  Its pages, question and caption are kept in `config/retired_stories.json`.
 - The microlog immunization story is no longer featured: neither pinned page is a
   National Advisory Committee on Immunization statement, and the 2016 page is about
   detecting measles cases, not schedules.
@@ -233,7 +233,7 @@ The Alberta story and two other featured pairs were corrected (see Corrections),
 now carries a comparability block that a test holds its caption to, and the cost baseline for the
 move to Cloudflare was measured: data sizes, the cold boot at the candidate memory limits, the
 token cost of an uncached answer, and the R2 download from a home network
-(`docs/v2/COST_BASELINE.md`). The dense load now normalizes in place, byte-identical to before.
+The dense load now normalizes in place, byte-identical to before.
 
 ## v2 Phase 1: everything on Cloudflare (unreleased, awaiting staging)
 
@@ -247,11 +247,11 @@ keeps the question, shows how far the engine has got, and answers without a relo
 
 The answer cache is keyed on content (the published data hashes, the settings and the question),
 so it survives a fresh disk; visitors' questions are no longer stored as text and their answers
-expire after 180 days (`docs/v2/PRIVACY.md`). The engine opens its port at once and reports its
+expire after 180 days (`docs/PRIVACY.md`). The engine opens its port at once and reports its
 stages, fetches its data as parallel ranged reads hashed while they arrive, loads precomputed
 dense matrices that are byte-identical to the old ones and skips the 3.9 GB of vectors databases,
 and stops cleanly on SIGTERM at any stage. Evaluation runs write to their own database. Answer
 parity: the seed and story questions retrieve identical pools under the old and new layouts, and
 every migrated stored answer is unchanged. The old Railway address redirects to
 https://archiveargues.org with path and query kept (`redirect/`). Hosting runbook:
-`docs/v2/HOSTING.md`; decisions: `docs/v2/DECISIONS.md`.
+`docs/SELF_HOSTING.md`; accuracy: `docs/ACCURACY.md`.

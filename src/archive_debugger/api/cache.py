@@ -13,7 +13,7 @@ The engine Worker computes the same key in TypeScript from the question, the fil
 context string published with each release, so it can serve a stored answer without waking the
 engine. Both sides are tested against the shared vectors in config/cache_key_vectors.json.
 
-Privacy rule (docs/v2/PRIVACY.md): a row keeps its question text only when the question is a
+Privacy rule (docs/PRIVACY.md): a row keeps its question text only when the question is a
 curated one (a seed question or a story's asked question). Any other row stores the key hash,
 the answer and its metadata, no question, and expires RETENTION_DAYS after it was written.
 

@@ -23,7 +23,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
 PRICE_PER_MTOK = {"claude-haiku-4-5-20251001": (1.00, 5.00)}
-WORST_INPUT_TOKENS = 12_000          # the measured maximum was 6,652 (docs/v2/COST_BASELINE.md, section 3)
+WORST_INPUT_TOKENS = 12_000          # the largest prompt measured on the seed questions was 6,652 tokens
 
 
 class Ledger:

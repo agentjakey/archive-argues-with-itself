@@ -5,7 +5,7 @@ name: deploy
 # gates first. Credentials come from GitHub Actions secrets (CLOUDFLARE_API_TOKEN,
 # CLOUDFLARE_ACCOUNT_ID); per-environment build settings from repository variables. The engine's
 # own secrets (ANTHROPIC_API_KEY, TURNSTILE_SECRET) are set once with `wrangler secret put` and are
-# never handled here. See docs/v2/HOSTING.md.
+# never handled here. See docs/SELF_HOSTING.md.
 on:
   workflow_dispatch:
     inputs:

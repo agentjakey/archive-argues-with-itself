@@ -5,7 +5,7 @@ Captured from the running app (cache warm), used by the README and the docs page
 | file | shows | used in |
 | --- | --- | --- |
 | `v2/story-laptop.png` | the compare view of the pilot hero: Alberta mental health records from 1988 and 1993, comparable and agreeing, with both scans (Playwright, `web/e2e`) | README hero |
-| `v2/*-laptop.png`, `v2/*-phone.png` | the static release at 1440 px and on a Pixel 7: home, a story, a recorded answer, the waking screen, the down state (`SCREENSHOTS=1 npm run e2e`) | docs/v2, Gate 1 |
+| `v2/*-laptop.png`, `v2/*-phone.png` | the static release at 1440 px and on a Pixel 7: home, a story, a recorded answer, the waking screen, the down state (`SCREENSHOTS=1 npm run e2e`) | docs/SELF_HOSTING.md, Gate 1 |
 | `compare-alberta-1974-1999.png` | the pre-correction hero: the 1974 and 1998-99 Alberta records, which describe different programs. Kept only as the record of the 2026-10 correction (CHANGELOG, Corrections); not shown by the site or the README | none |
 | `answer-tobacco.png` | header, corpus strip, and an answered Ontario tobacco question | README "How it works" |
 | `sources-timeline.png` | the Sources list and the decade-by-decade evidence trail | README "How it works" |
