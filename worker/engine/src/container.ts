@@ -2,16 +2,19 @@
 // (public beta since 2026-09-30; docs/SELF_HOSTING.md, "Design choices"). The
 // Durable Object starts the container on demand, gives it its secrets and its two private routes
 // (R2 reads and the answer cache, through Worker entrypoints, so the container holds no R2 key),
-// lets it sleep after SLEEP_AFTER_MINUTES of inactivity, and records how long every wake took.
+// stops it after SLEEP_AFTER_MINUTES without a question or a wake (its own alarm, not only the
+// platform timeout), and records how long every wake took.
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import { readRow, writeRow, isKey, type CacheRow } from "./cache";
 import { ENGINE_CONFIG, type Env, verifyPolicy, whole } from "./config";
 import { parseRange } from "./ranges";
+import { idleCheck } from "./schedule";
 
 const PORT = 8080;
 const PROBE_TIMEOUT_MS = 2000;
 const PROBE_EVERY_MS = 1000;
 const WAKE_LOG_KEY = "wakes";
+const LAST_ACTIVITY_KEY = "last_activity";
 const WAKE_LOG_LIMIT = 50;
 export const R2_HOST = "r2.internal";
 export const CACHE_HOST = "cache.internal";
@@ -61,6 +64,51 @@ export class EngineContainer extends DurableObject<Env> {
   private ready = false;
   private lastStage: Stage | null = null;
   private lastError: string | null = null;
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    // A Durable Object restarted while its container runs (evicted when idle, or a deploy) does not
+    // keep the inactivity timeout, and without it the container would never sleep. Set it again,
+    // and pick the current wake record back up so /health still reports it.
+    ctx.blockConcurrencyWhile(async () => {
+      if (!ctx.container?.running) return;
+      const log = (await ctx.storage.get<WakeRecord[]>(WAKE_LOG_KEY)) ?? [];
+      this.wake = log.length ? log[log.length - 1] : null;
+      this.startedMs = this.wake ? Date.parse(this.wake.started_at) : Date.now();
+      // The idle check runs from the alarm; make sure one is pending for a container that is up.
+      if ((await ctx.storage.getAlarm()) === null) await ctx.storage.setAlarm(Date.now() + PROBE_EVERY_MS);
+    });
+  }
+
+  private sleepAfterMs(): number {
+    return whole(this.env.SLEEP_AFTER_MINUTES, 15) * 60 * 1000;
+  }
+
+  /** A request that uses the engine (a question, a wake, a forwarded page); /health is not one. */
+  private async markActivity(): Promise<void> {
+    await this.ctx.storage.put(LAST_ACTIVITY_KEY, Date.now());
+  }
+
+  /** Stop the engine when it has been idle for SLEEP_AFTER_MINUTES, else look again later. */
+  private async checkIdle(): Promise<void> {
+    const last = (await this.ctx.storage.get<number>(LAST_ACTIVITY_KEY)) ?? this.startedMs;
+    const decision = idleCheck(Date.now(), last, this.sleepAfterMs());
+    if (!decision.stop) {
+      await this.ctx.storage.setAlarm(decision.nextCheckMs);
+      return;
+    }
+    this.ready = false;
+    if (this.wake && !this.wake.exit) {
+      this.wake.exit = "slept: idle";
+      await this.saveWake();
+    }
+    await this.container.destroy();
+    console.log(JSON.stringify({ event: "slept", name: this.engineName, idle_minutes: whole(this.env.SLEEP_AFTER_MINUTES, 15) }));
+  }
+
+  private async applySleepAfter(): Promise<void> {
+    await this.container.setInactivityTimeout(this.sleepAfterMs());   // a backstop; checkIdle decides
+  }
 
   /** Which engine this is: "engine" (both scopes) or a scope name (split layout). */
   private get engineName(): string {
@@ -124,7 +172,8 @@ export class EngineContainer extends DurableObject<Env> {
     }
     await this.container.interceptOutboundHttp(R2_HOST, this.ctx.exports.R2Proxy({ props: {} }));
     await this.container.interceptOutboundHttp(CACHE_HOST, this.ctx.exports.CacheProxy({ props: { token: this.cacheToken } }));
-    await this.container.setInactivityTimeout(whole(this.env.SLEEP_AFTER_MINUTES, 15) * 60 * 1000);
+    await this.applySleepAfter();
+    await this.markActivity();
     this.wake = {
       release: this.env.RELEASE_ID,
       name: this.engineName,
@@ -147,7 +196,7 @@ export class EngineContainer extends DurableObject<Env> {
 
   private async recordExit(reason: string): Promise<void> {
     this.ready = false;
-    if (this.wake) {
+    if (this.wake && !this.wake.exit) {
       this.wake.exit = reason;
       await this.saveWake();
     }
@@ -186,7 +235,8 @@ export class EngineContainer extends DurableObject<Env> {
     this.lastError = (seen.body.error as string) ?? null;
     if (seen.status === 200 && !this.ready) {
       this.ready = true;
-      if (this.wake) {
+      if (this.wake && this.wake.ready_seconds === null) {   // not again after a restart of this object
+        await this.markActivity();                            // the idle clock starts at ready, not at start
         this.wake.ready_seconds = Math.round(elapsed * 10) / 10;
         this.wake.provision = this.lastStage;
         await this.saveWake();
@@ -205,6 +255,7 @@ export class EngineContainer extends DurableObject<Env> {
       const snap = await this.container.snapshotContainer({ name: `${this.env.RELEASE_ID}-${this.engineName}` });
       await this.ctx.storage.put(key, snap.id);
       console.log(JSON.stringify({ event: "snapshot", name: this.engineName, bytes: snap.size }));
+      await this.applySleepAfter();   // the idle clock must keep running after a snapshot
     } catch (err) {
       console.log(JSON.stringify({ event: "snapshot_failed", name: this.engineName, error: String(err) }));
     }
@@ -212,9 +263,13 @@ export class EngineContainer extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     await this.refresh();
-    if (this.container.running && !this.ready && !(this.lastStage && this.lastStage.stage === "failed")) {
-      await this.ctx.storage.setAlarm(Date.now() + PROBE_EVERY_MS);
+    if (!this.container.running) return;
+    const failed = Boolean(this.lastStage && this.lastStage.stage === "failed");
+    if (!this.ready && !failed) {
+      await this.ctx.storage.setAlarm(Date.now() + PROBE_EVERY_MS);   // still waking: probe again
+      return;
     }
+    await this.checkIdle();
   }
 
   private currentStatus(): EngineStatus {
@@ -233,6 +288,7 @@ export class EngineContainer extends DurableObject<Env> {
   /** Start the engine if it is asleep (pre-wake), and report its state. */
   async wakeUp(): Promise<EngineStatus> {
     await this.ensureStarted();
+    await this.markActivity();
     await this.refresh();
     return this.currentStatus();
   }
@@ -249,6 +305,7 @@ export class EngineContainer extends DurableObject<Env> {
     if (!this.ready) {
       return Response.json({ ...this.currentStatus(), retry_after_seconds: 3 }, { status: 503, headers: { "retry-after": "3" } });
     }
+    await this.markActivity();
     const url = new URL(request.url);
     const inner = new Request(`http://container${url.pathname}${url.search}`, request);
     try {

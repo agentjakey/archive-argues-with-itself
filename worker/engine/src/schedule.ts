@@ -61,3 +61,13 @@ export function keepWarmNow(spec: string | undefined, now: Date): boolean {
   const minute = now.getUTCHours() * 60 + now.getUTCMinutes();
   return windows.some((w) => w.days.has(day) && minute >= w.startMinute && minute < w.endMinute);
 }
+
+/** The idle rule the Durable Object enforces itself: stop the engine once nothing has used it for
+ *  sleepAfterMs; otherwise look again when that time would be up. The platform's inactivity timeout
+ *  is set as well, but on staging it did not stop a container whose Durable Object had restarted
+ *  (docs/SELF_HOSTING.md, "Design choices"), so this check is the one that counts. */
+export function idleCheck(nowMs: number, lastActivityMs: number, sleepAfterMs: number): { stop: boolean; nextCheckMs: number } {
+  const due = lastActivityMs + sleepAfterMs;
+  if (nowMs >= due) return { stop: true, nextCheckMs: nowMs };
+  return { stop: false, nextCheckMs: Math.max(due, nowMs + 1000) };
+}

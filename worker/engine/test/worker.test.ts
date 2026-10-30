@@ -7,7 +7,7 @@ import { ENGINE_CONFIG, verifyPolicy } from "../src/config";
 import { checkTurnstile, clientKey, corsHeaders, takeModelBudget, TURNSTILE_HEADER } from "../src/guard";
 import { contentKey } from "../src/key";
 import { parseRange } from "../src/ranges";
-import { keepWarmNow, parseWindows } from "../src/schedule";
+import { idleCheck, keepWarmNow, parseWindows } from "../src/schedule";
 import { FakeD1, fakeEnv } from "./fakes";
 
 const PILOT = ENGINE_CONFIG.scopes.pilot;
@@ -184,5 +184,18 @@ describe("the staging cache bench", () => {
 
   it("does nothing where the bench bindings are absent (production)", async () => {
     expect(await benchCacheStores(fakeEnv(), "0".repeat(64), 5)).toBeNull();
+  });
+});
+
+describe("the idle rule", () => {
+  const minute = 60_000;
+  it("stops the engine once nothing has used it for the sleep period", () => {
+    expect(idleCheck(10 * minute, 0, 2 * minute)).toEqual({ stop: true, nextCheckMs: 10 * minute });
+    expect(idleCheck(2 * minute, 0, 2 * minute).stop).toBe(true);
+  });
+
+  it("otherwise looks again when the period would be up", () => {
+    expect(idleCheck(1 * minute, 0, 2 * minute)).toEqual({ stop: false, nextCheckMs: 2 * minute });
+    expect(idleCheck(2 * minute - 10, 0, 2 * minute).nextCheckMs).toBe(2 * minute + 990);   // never sooner than a second
   });
 });

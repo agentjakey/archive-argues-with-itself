@@ -181,8 +181,10 @@ def main(argv=None) -> int:
             }
     _, health, _ = call(api, "GET", "/health?wakes=1")
     record["wake_log"] = (health.get("wakes") or [])[-3:]
+    # an exit other than the idle sleep during this run (an out-of-memory kill shows here)
     record["exits_during_run"] = [w for w in record["wake_log"]
-                                  if w.get("exit") and w.get("started_at", "") >= record["measured_utc"]]
+                                  if w.get("exit") and w.get("exit") != "slept: idle"
+                                  and w.get("started_at", "") >= record["measured_utc"]]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(record, indent=1), encoding="utf-8")
     print(json.dumps({k: record.get(k) for k in ("label", "outcome", "wake_to_ready_seconds", "first_live_answer",
