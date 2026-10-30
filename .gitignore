@@ -297,3 +297,6 @@ reports/v2/
 # Phase 1 build output (assembled releases are rebuilt from site/data and web/dist).
 build/
 worker/site/release/
+
+# The end-to-end build settings hold no secrets.
+!web/.env.e2e

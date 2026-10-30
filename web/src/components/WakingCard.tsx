@@ -76,7 +76,7 @@ export function WakingCard({ wake, question, onRetry }: Props) {
           <p className="mt-3 text-sm">{stageLine(wake.stage)}</p>
           {downloading && (
             <progress
-              className="mt-2 w-full max-w-md"
+              className="waking-progress mt-2 w-full max-w-md"
               max={wake.stage!.bytes_total}
               value={wake.stage!.bytes_downloaded ?? 0}
               aria-label="Archive files fetched so far"

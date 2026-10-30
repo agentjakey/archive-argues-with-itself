@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as api from "../lib/api";
+import { staticMode } from "../lib/config";
 import { plural } from "../lib/format";
 import { EngineDown, waitForEngine, type WakeProgress } from "../lib/waking";
 import type { AskRequest, AskResponse } from "../types";
@@ -58,10 +59,14 @@ export function useAsk() {
           setStatus("done");
           return;
         } catch (e) {
-          if (!(e instanceof api.EngineWaking)) throw e;
+          // In a static release an engine Worker that cannot be reached is treated like an engine
+          // that is asleep: wait, and end in the plain "down" state if it never answers.
+          const unreachable = staticMode() && e instanceof api.ApiError && e.status === 0;
+          if (!(e instanceof api.EngineWaking) && !unreachable) throw e;
           phase.current = "waking";
           setStatus("waking");
-          setWake({ phase: "waking", elapsed: Math.round((Date.now() - t0) / 1000), stage: e.engine.stage ?? null });
+          const stage = e instanceof api.EngineWaking ? e.engine.stage ?? null : null;
+          setWake({ phase: "waking", elapsed: Math.round((Date.now() - t0) / 1000), stage });
           await waitForEngine(t0, { status: api.engineStatus, sleep, now: Date.now }, (p) => {
             if (!abort.signal.aborted) setWake(p);
           }, abort.signal);

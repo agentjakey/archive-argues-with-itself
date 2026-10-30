@@ -509,3 +509,24 @@ button:hover .page-artifact {
 .reading.spacious .reading-body .text-xs {
   font-size: 0.8125rem;
 }
+
+/* The waking screen's progress bar: ink on paper, like the rest of the reading room, in every
+   browser (the native bar is a system colour). */
+.waking-progress {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 0.5rem;
+  border: 1px solid #1c1a17;
+  border-radius: 2px;
+  background: #fcfaf4;
+  color: #1c1a17;
+}
+.waking-progress::-webkit-progress-bar {
+  background: #fcfaf4;
+}
+.waking-progress::-webkit-progress-value {
+  background: #1c1a17;
+}
+.waking-progress::-moz-progress-bar {
+  background: #1c1a17;
+}

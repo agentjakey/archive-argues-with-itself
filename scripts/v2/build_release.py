@@ -75,15 +75,24 @@ def file_table(root: Path) -> dict:
 
 # --- assemble -------------------------------------------------------------------------------------
 
+def empty_folder(folder: Path) -> None:
+    """Remove everything inside folder (creating it when missing). The folder itself is kept: on a
+    synced Windows folder, deleting the directory can be refused while its contents are not."""
+    folder.mkdir(parents=True, exist_ok=True)
+    for child in folder.iterdir():
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
 def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, api_origin: str) -> Path:
     if not (web / "index.html").exists():
         raise SystemExit(f"{web} has no index.html: build the web app first (npm run build:static)")
     if not (data / "export.json").exists():
         raise SystemExit(f"{data} has no export.json: run scripts/v2/export_site_data.py first")
-    if out.exists():
-        shutil.rmtree(out)
-    shutil.copytree(web, out)
-    shutil.copytree(data, out / "data")
+    empty_folder(out)
+    shutil.copytree(web, out, dirs_exist_ok=True)
+    shutil.copytree(data, out / "data", dirs_exist_ok=True)
     if not re.fullmatch(r"https://[a-z0-9.-]+", api_origin):
         raise SystemExit(f"--api-origin must be an https origin with no path, got {api_origin!r}")
     headers = (static / "_headers.template").read_text(encoding="utf-8").replace("{api_origin}", api_origin)
