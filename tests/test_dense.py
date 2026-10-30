@@ -62,33 +62,83 @@ def _fixture_dbs(tmp_path) -> Path:
     return tmp_path / "data"
 
 
-def test_guard_counts_ids_and_norms(tmp_path, monkeypatch):
-    """A load whose matrix alone fits under the safe fraction but whose ids, dict and norms do not is
-    refused, so the guard no longer under-budgets by the Python-side cost."""
+def _open_fixture(data: Path):
     import sqlite3
     import sqlite_vec
-    data = _fixture_dbs(tmp_path)
     conn = sqlite3.connect(f"file:{data / 'civic.db'}?mode=ro", uri=True)
     conn.enable_load_extension(True)
     sqlite_vec.load(conn)
-    conn.execute("ATTACH DATABASE ? AS vec", (f"file:{data / 'vectors.db'}?mode=ro",))
+    conn.execute("ATTACH DATABASE ? AS vec", (f"file:{(data / 'vectors.db').as_posix()}?mode=ro",))
+    return conn
+
+
+def test_guard_counts_anonymous_memory_ids_norms_and_headroom(tmp_path, monkeypatch):
+    """A load whose matrix alone fits but whose ids, dict, norms and the headroom do not is refused;
+    the guard counts anonymous memory, never memory-mapped page cache."""
+    data = _fixture_dbs(tmp_path)
+    conn = _open_fixture(data)
     n = conn.execute("SELECT COUNT(*) FROM vec.passages_vec").fetchone()[0]
     dim = np.frombuffer(conn.execute("SELECT embedding FROM vec.passages_vec LIMIT 1").fetchone()[0],
                         dtype=np.float32).shape[0]
     matrix_only = n * dim * 4
     full = dense.resident_bytes(n, dim)
     assert full > matrix_only
-    rss = 1000
-    limit = int((rss + (matrix_only + full) / 2) / dense._SAFE_FRACTION)   # between the two budgets
+    anon, headroom = 1000, 4096
     monkeypatch.setenv(dense.ENV_BACKEND, "numpy")
-    monkeypatch.setattr(dense, "_container_limit", lambda: limit)
-    monkeypatch.setattr(dense, "_rss", lambda: rss)
+    monkeypatch.setenv(dense.ENV_HEADROOM_MB, "0")
+    monkeypatch.setattr(dense, "headroom_bytes", lambda: headroom)
+    monkeypatch.setattr(dense, "_anon_bytes", lambda: anon)
+    monkeypatch.setattr(dense, "_container_limit", lambda: anon + matrix_only + headroom)
     logs: list[str] = []
     assert dense.load_if_enabled(conn, log=logs.append) is None
-    assert "would not fit" in logs[0]
-    monkeypatch.setattr(dense, "_container_limit", lambda: int((rss + full) / dense._SAFE_FRACTION) + 1)
+    assert "would not fit" in logs[0] and "headroom_mb" in logs[0]
+    monkeypatch.setattr(dense, "_container_limit", lambda: anon + full + headroom)
     idx = dense.load_if_enabled(conn, log=logs.append)
     assert idx is not None and idx.n == n
+    conn.close()
+
+
+def test_fits_rule():
+    assert dense.fits(10, limit=100, anon=50, headroom=40)
+    assert not dense.fits(11, limit=100, anon=50, headroom=40)
+    assert dense.fits(10 ** 12, limit=None, anon=50, headroom=40)           # no container limit
+    assert dense.fits(10 ** 12, limit=100, anon=None, headroom=40)          # no /proc (not Linux)
+
+
+def test_artifacts_are_byte_identical_and_preferred(tmp_path, monkeypatch):
+    """The .npy artifacts hold exactly the matrix and ids the row-by-row load builds, and the loader
+    uses them when they describe the attached index."""
+    data = _fixture_dbs(tmp_path)
+    conn = _open_fixture(data)
+    want_mat, want_ids = dense.read_rows(conn)
+    manifest = dense.build_artifacts(conn, data / "vectors.db", log=lambda _m: None)
+    assert manifest["rows"] == want_mat.shape[0] and manifest["index_sha256"] == dense.file_sha256(data / "vectors.db")
+    got_mat, got_ids = dense.load_artifacts(data / "vectors.db", manifest)
+    assert np.array_equal(got_mat, want_mat) and got_mat.tobytes() == want_mat.tobytes()
+    assert got_ids == want_ids
+    monkeypatch.setenv(dense.ENV_BACKEND, "numpy")
+    monkeypatch.setattr(dense, "_container_limit", lambda: None)
+    logs: list[str] = []
+    idx = dense.load_if_enabled(conn, log=logs.append)
+    assert idx is not None and "from artifacts" in logs[-1]
+    assert idx._m.tobytes() == want_mat.tobytes() and idx._ids == want_ids
+    conn.close()
+
+
+def test_artifacts_for_another_index_are_ignored(tmp_path, monkeypatch):
+    import json
+    data = _fixture_dbs(tmp_path)
+    conn = _open_fixture(data)
+    dense.build_artifacts(conn, data / "vectors.db", log=lambda _m: None)
+    manifest_path = dense.artifact_paths(data / "vectors.db")["manifest"]
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["index_bytes"] += 1
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    assert dense.usable_artifacts(data / "vectors.db") is None
+    monkeypatch.setenv(dense.ENV_BACKEND, "numpy")
+    monkeypatch.setattr(dense, "_container_limit", lambda: None)
+    logs: list[str] = []
+    assert dense.load_if_enabled(conn, log=logs.append) is not None and "from sqlite rows" in logs[-1]
     conn.close()
 
 

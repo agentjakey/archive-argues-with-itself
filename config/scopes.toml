@@ -55,6 +55,17 @@ index_key = "pilot/vectors.db"
 db_sha256 = "00a8fffb007ff9b5eefc95a782ce371bfead6db3f7b0a9f8d177fe31943152c5"
 index_sha256 = "0fcabe77cb7764f23e10114de5a11c5bb09747b53d4d2ca320cc553ddb9b211e"
 
+[scopes.pilot.dense]
+# Precomputed dense artifacts (retrieve/dense.py, built and gated byte-identical to the
+# row-by-row matrix by scripts/v2/build_dense_artifacts.py). Optional: the boot fetches them
+# when the numpy backend is on, and the server falls back to reading the index row by row.
+matrix_key = "pilot/dense/vectors.matrix.npy"
+ids_key = "pilot/dense/vectors.ids.npy"
+manifest_key = "pilot/dense/vectors.dense.json"
+matrix_sha256 = "353cd7f9864d2b43a9dc43817b9f4f2617d0a9847c6b22de38a426c553a2fd2e"
+ids_sha256 = "ee47449630234a4a2ddda12b52bd83f63ab2a0424b74be1943c0354131312ca0"
+manifest_sha256 = "465c84cbb9a9f616f364613d14ed502d48a75bf9ee117b6253b342ca19a1133c"
+
 [scopes.pilot.github_release]
 # Selectable fallback: the existing GitHub release. Used when source = "github_release", and
 # also when source = "r2" but the R2 vars are absent, so the pilot still boots the old way with
@@ -94,3 +105,14 @@ db_key = "microlog/civic_microlog.db"
 index_key = "microlog/vectors_microlog.db"
 db_sha256 = "6b6cd30e0f22532df0a23e3ba0f986136bbb0360efef7af30689fbd927a861fe"
 index_sha256 = "83913570df5d2387513f578645fb09b936d7ba708581b458dbbd8b1e6fd4ef50"
+
+[scopes.microlog.dense]
+# Precomputed dense artifacts (retrieve/dense.py, built and gated byte-identical to the
+# row-by-row matrix by scripts/v2/build_dense_artifacts.py). Optional: the boot fetches them
+# when the numpy backend is on, and the server falls back to reading the index row by row.
+matrix_key = "microlog/dense/vectors_microlog.matrix.npy"
+ids_key = "microlog/dense/vectors_microlog.ids.npy"
+manifest_key = "microlog/dense/vectors_microlog.dense.json"
+matrix_sha256 = "eac89f0e9800ec7415d2995deb19d18148c1cef8c45f22192bb9078a7aa0a53a"
+ids_sha256 = "6796388dbe622ba9827027172fde9c0c856af9299146c9ec41be015e7978f3cf"
+manifest_sha256 = "c305f8799c08f7e6aa46c347a872100218857b765da37176427e3a2b561d740a"
