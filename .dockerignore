@@ -19,3 +19,13 @@ docs/
 # The web app is built inside the image (node stage); a laptop build must not leak in.
 web/node_modules/
 web/dist/
+# Phase 1: the Workers, the static release and other working folders never go into the engine image.
+worker/
+site/
+build/
+eval/*
+!eval/seed_questions.jsonl
+design-review/
+showcase/
+*.npy
+scopes.r2.sha256
