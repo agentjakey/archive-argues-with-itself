@@ -57,6 +57,55 @@ jobs:
           python scripts/smoke.py http://127.0.0.1:8000 || { cat "$RUNNER_TEMP/uvicorn.log"; exit 1; }
           kill %1
 
+  engine-worker:
+    # The engine Worker: typecheck, the shared cache-key vectors and the serving logic, and a check
+    # that its generated config still matches what the engine's own code exports.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: worker/engine/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: python scripts/v2/export_worker_config.py --check
+      - run: npm ci
+        working-directory: worker/engine
+      - run: npm run typecheck
+        working-directory: worker/engine
+      - run: npm test
+        working-directory: worker/engine
+
+  e2e:
+    # The static release as visitors meet it, at phone and laptop width, with the engine Worker
+    # replaced by test routes: the engine off, a story, a recorded answer, a waking engine, and an
+    # engine that stays down.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: web
+      - run: npm run build:e2e
+        working-directory: web
+      - run: python scripts/v2/build_release.py assemble --release-id e2e --api-origin https://engine.example.test
+      - run: npm run e2e
+        working-directory: web
+
   clean-clone:
     # Build from a fresh clone that contains only committed files, so a source file
     # that is tracked-but-missing (for example hidden by a stray .gitignore rule)
