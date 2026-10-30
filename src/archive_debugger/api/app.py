@@ -770,8 +770,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                default_scope: Optional[str] = None,
                notes_path: Path = editorial.DEFAULT_NOTES) -> FastAPI:
     if load_env:
-        from dotenv import load_dotenv
-        load_dotenv()
+        from archive_debugger.local_env import load_local_env
+        load_local_env()   # environment wins over .env; secret values are never logged
     # Dated editorial notes (corrections), loaded once; malformed notes fail the start, never serve.
     notes = editorial.load_notes(notes_path)
     # Scope layer (additive): with no scope and no serve_scopes this serves the pilot exactly

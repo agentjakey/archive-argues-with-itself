@@ -263,8 +263,8 @@ def _dry_run(specs_by_scope: dict, log: Log) -> int:
 
 
 def main(argv=None) -> int:
-    from dotenv import load_dotenv
-    load_dotenv()   # match the serve layer: CIVIC_* + R2_* from .env, never overriding real env vars
+    from archive_debugger.local_env import load_local_env
+    load_local_env()   # match the serve layer: the environment wins over .env; values never logged
 
     args = list(sys.argv[1:] if argv is None else argv)
     dry_run = "--dry-run" in args

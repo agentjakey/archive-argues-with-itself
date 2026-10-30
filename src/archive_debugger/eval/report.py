@@ -17,7 +17,7 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
-from archive_debugger.eval import metrics, store
+from archive_debugger.eval import metrics, rundb, store
 from archive_debugger.eval.label import filters_from
 from archive_debugger.ingest import db
 
@@ -101,16 +101,20 @@ def run(config_path) -> dict:
     min_relevant = int(ecfg.get("abstention_min_relevant", 1))
     top_n = int(ecfg.get("label_top_n", 30))
 
-    conn = db.init_db(db.resolve_db_path(config_path))
+    # Labels are read from the corpus database read-only; the run is written to the separate
+    # evaluation database (eval/rundb.py), never into a served data file.
+    conn = rundb.open_corpus_read_only(db.resolve_db_path(config_path))
+    eval_conn = rundb.open_eval_db()
     from archive_debugger.retrieve.search import Retriever  # lazy
     retriever = Retriever(config_path)
     try:
         report = evaluate(conn, retriever, recall_ks=recall_ks, ndcg_k=ndcg_k,
                           min_relevant=min_relevant, top_n=top_n)
-        _persist(conn, report, json.dumps(ecfg, ensure_ascii=False))
+        _persist(eval_conn, report, json.dumps(ecfg, ensure_ascii=False))
     finally:
         retriever.close()
         conn.close()
+        eval_conn.close()
 
     # Record which dense retrieval backend produced these numbers (A4): sqlite = the per-row
     # sqlite-vec scan; numpy = the resident in-memory exact cosine. The backend is a serve/eval

@@ -122,3 +122,21 @@ def test_only_curated_questions_are_stored_with_text(tmp_path):
     assert rows[1] == (1, "vaccination hospital", None)
     stored = sqlite3.connect(cache_db).execute("SELECT response_json FROM answers_v2").fetchall()
     assert all("a visitor asks" not in body for (body,) in stored)
+
+
+def test_environment_wins_over_dotenv_and_values_are_never_logged(tmp_path, monkeypatch):
+    from archive_debugger.local_env import load_local_env
+    env_file = tmp_path / ".env"
+    env_file.write_text("ANTHROPIC_API_KEY=from-file-secret\nCIVIC_CACHE_TOKEN=file-token-secret\n", encoding="utf-8")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "from-shell-secret")
+    monkeypatch.delenv("CIVIC_CACHE_TOKEN", raising=False)
+    monkeypatch.delenv("R2_ACCESS_KEY_ID", raising=False)
+    lines = []
+    sources = load_local_env(env_file, log=lines.append)
+    import os
+    assert os.environ["ANTHROPIC_API_KEY"] == "from-shell-secret"
+    assert os.environ["CIVIC_CACHE_TOKEN"] == "file-token-secret"
+    assert sources["ANTHROPIC_API_KEY"] == "environment" and sources["CIVIC_CACHE_TOKEN"] == ".env"
+    assert sources["R2_ACCESS_KEY_ID"] == "unset"
+    assert len(lines) == 1 and "secret" not in lines[0].replace("secrets present", "")
+    os.environ.pop("CIVIC_CACHE_TOKEN", None)          # set by the .env load above, not by monkeypatch

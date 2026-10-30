@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from archive_debugger.eval import report
+from archive_debugger.eval import report, rundb
 from archive_debugger.generate import cli as gen_cli
 from archive_debugger.ingest import db
 from archive_debugger.retrieve.config import load_retrieve_config
@@ -100,7 +100,8 @@ class DenseMemo:
 
 def run(config_path: Path, *, seed_path: Path = Path("eval/seed_questions.jsonl"), out_dir: Path = OUT_DIR,
         embedder=None, conn=None, states: Optional[list] = None, only: Optional[list[str]] = None,
-        resume: bool = True, dense_memo: bool = True, gold: str = "phase7", progress=print) -> dict:
+        resume: bool = True, dense_memo: bool = True, gold: str = "phase7", progress=print,
+        eval_db: Optional[Path] = None) -> dict:
     """Evaluate each state, checkpointing one JSON per state under out_dir/states so an
     interrupted sweep resumes; `only` restricts this call to named states; the report is
     assembled from every checkpoint present. `gold` names the label set scored against
@@ -117,7 +118,8 @@ def run(config_path: Path, *, seed_path: Path = Path("eval/seed_questions.jsonl"
         db_path = db.resolve_db_path(config_path)
         if not Path(db_path).exists():
             raise FileNotFoundError(f"civic.db not found at {db_path}; set CIVIC_DB_PATH or fix [index].db_path")
-        conn = db.init_db(db_path)     # writes eval_runs / eval_results only
+        conn = rundb.open_corpus_read_only(db_path)     # labels are read; nothing is written here
+    eval_conn = rundb.open_eval_db(eval_db)               # runs are recorded in the evaluation database
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     section_rows = conn.execute("SELECT COUNT(section_class) FROM pages").fetchone()[0]
     out_dir = Path(out_dir)
@@ -140,7 +142,7 @@ def run(config_path: Path, *, seed_path: Path = Path("eval/seed_questions.jsonl"
             try:
                 rep = report.evaluate(conn, r, recall_ks=recall_ks, ndcg_k=ndcg_k,
                                       min_relevant=int(ecfg.get("abstention_min_relevant", 1)), top_n=top_n)
-                run_id = report._persist(conn, rep, json.dumps(
+                run_id = report._persist(eval_conn, rep, json.dumps(
                     {"phase": 13, "state": name, "gold": gold, "retrieve": cfg.switches(), "eval": ecfg},
                     ensure_ascii=False), run_id=f"p13-{name}-{ts}")
                 state = {"name": name, "ts": ts, "run_id": run_id, "gold": gold, "switches": cfg.switches(),
@@ -162,6 +164,7 @@ def run(config_path: Path, *, seed_path: Path = Path("eval/seed_questions.jsonl"
     finally:
         if own_conn:
             conn.close()
+        eval_conn.close()
     return assemble(out_dir, states=states)
 
 

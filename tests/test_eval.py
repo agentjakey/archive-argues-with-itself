@@ -233,24 +233,29 @@ def test_retrieval_sweep_states_and_report(tmp_path):
     seed.write_text(json.dumps({"qid": "q001", "text": "vaccination hospital", "qtype": "factual", "filters": {}}) + "\n",
                     encoding="utf-8")
     quiet = lambda _m: None  # noqa: E731
+    eval_db = tmp_path / "eval_runs.db"
+    civ_before = civ.read_bytes()
     partial = retrieval_sweep.run(cfg, seed_path=seed, out_dir=tmp_path / "out", embedder=StubEmbedder(dim=64),
-                                  only=["baseline", "cap3"], progress=quiet)
+                                  only=["baseline", "cap3"], progress=quiet, eval_db=eval_db)
     assert list(partial["states"]) == ["baseline", "cap3"]                       # checkpoints assemble in canonical order
     assert (tmp_path / "out" / "states" / "cap3.json").exists()
-    out = retrieval_sweep.run(cfg, seed_path=seed, out_dir=tmp_path / "out", embedder=StubEmbedder(dim=64), progress=quiet)
+    out = retrieval_sweep.run(cfg, seed_path=seed, out_dir=tmp_path / "out", embedder=StubEmbedder(dim=64), progress=quiet,
+                              eval_db=eval_db)
     names = [n for n, _ in retrieval_sweep.STATES]
     assert list(out["states"]) == names and len(names) == 10 and names[-1] == "candidate"
     memo = json.loads((tmp_path / "out" / "states" / "dense_memo.json").read_text(encoding="utf-8"))
     assert len(memo) >= 1                                                        # dense leg memoized across states
     nomemo = retrieval_sweep.run(cfg, seed_path=seed, out_dir=tmp_path / "nomemo", embedder=StubEmbedder(dim=64),
-                                 only=["cap5"], dense_memo=False, progress=quiet)
+                                 only=["cap5"], dense_memo=False, progress=quiet, eval_db=eval_db)
     assert nomemo["states"]["cap5"]["aggregate"] == out["states"]["cap5"]["aggregate"]   # memo changes nothing
     assert retrieval_sweep.assemble(tmp_path / "out")["states"].keys() == out["states"].keys()
     for st in out["states"].values():
         assert {"recall@5", "recall@10", "recall@20", "ndcg@10", "unjudged@10", "unjudged@20"} <= set(st["aggregate"])
     assert out["states"]["baseline"]["aggregate"]["unjudged@10"] == 0.8          # 10 retrieved, 2 judged
     assert set(out["sweeps"]) == set(retrieval_sweep.SWEEP_STATES)
-    conn = db.init_db(str(civ))
+    assert civ.read_bytes() == civ_before                                         # the corpus database is never written
+    from archive_debugger.eval import rundb
+    conn = rundb.open_eval_db(eval_db)
     rows = conn.execute("SELECT run_id, config_json FROM eval_runs WHERE run_id LIKE 'p13-%'").fetchall()
     conn.close()
     assert all(json.loads(r["config_json"])["phase"] == 13 for r in rows)
