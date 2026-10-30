@@ -7,7 +7,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from archive_debugger.api.cache import AnswerCache
+from archive_debugger.api.cache import LocalCache, make_record
 from archive_debugger.harvest import pages
 from archive_debugger.ingest import db
 
@@ -41,8 +41,10 @@ def test_collect_targets_from_cache_and_stories(tmp_path):
     spec = importlib.util.spec_from_file_location("offline_pack", Path("scripts/offline_pack.py"))
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    cache = AnswerCache(tmp_path / "answers.db")
-    cache.put("k1", {"answer": {}, "evidence": [{"item_id": "x", "leaf_index": 4}, {"item_id": "y", "leaf_index": 0}]})
+    cache = LocalCache(tmp_path / "answers.db")
+    cache.put(make_record(key="k1", scope="pilot", context="c", extras_version="e", curated_question="q",
+                          response={"answer": {}, "evidence": [{"item_id": "x", "leaf_index": 4},
+                                                               {"item_id": "y", "leaf_index": 0}]}))
     cache.close()
     civ = tmp_path / "civic.db"
     conn = db.init_db(str(civ))

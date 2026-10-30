@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import copy
 import functools
+import hashlib
+import inspect
 import json
 import os
 import queue
@@ -20,6 +22,7 @@ import threading
 import time
 import tomllib
 from contextlib import asynccontextmanager, contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -30,15 +33,16 @@ from pydantic import BaseModel
 
 from archive_debugger import crisis, editorial, flags, scopes
 from archive_debugger.scopes import parse_enabled_scopes
-from archive_debugger.api.cache import AnswerCache, cache_key, retrieval_fingerprint
+from archive_debugger.api import cache as answer_cache
 from archive_debugger.api.coverage import coverage as compute_coverage
 from archive_debugger.eval import store
 from archive_debugger.eval.questions import load_seed
-from archive_debugger.generate.answer import Answer, compose, coverage_of, generation_meta
+from archive_debugger.generate.answer import Answer, compose, coverage_of, generation_meta, salient_terms
 from archive_debugger.generate.cli import build_filters, load_generate_config, retrieve_pool, sent_temperature
 from archive_debugger.generate.llm import LLM, AnthropicLLM, make_llm
 from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path
 from archive_debugger.retrieve import citation
+from archive_debugger.retrieve.config import load_retrieve_config
 from archive_debugger.retrieve.search import Retriever
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -51,6 +55,8 @@ ENV_PAGES_DIR = "CIVIC_PAGES_DIR"
 ENV_SERVE_SCOPES = "CIVIC_SERVE_SCOPES"   # local multi-scope opt-in: "pilot,microlog". Unset = single base scope.
 ENV_ENABLED_SCOPES = "CIVIC_ENABLED_SCOPES"   # deploy gate: only these scopes are built/exposed. Unset = all.
 ENV_DEFAULT_SCOPE = "CIVIC_DEFAULT_SCOPE"     # UI landing scope (GET /scopes 'default'); falls back if not built.
+ENV_CACHE_URL = "CIVIC_CACHE_URL"             # the engine Worker's internal cache route; unset = local SQLite file
+ENV_CACHE_TOKEN = "CIVIC_CACHE_TOKEN"         # shared secret for that route (a wrangler secret)
 DEFAULT_LANDING = "pilot"                     # landing when CIVIC_DEFAULT_SCOPE is unset (falls back to the base scope)
 SNIPPET = 300
 _PAGE_FILE = re.compile(r"^n(\d+)_(thumb|medium)\.jpg$")
@@ -162,15 +168,39 @@ def local_page(pages_dir: Optional[Path], item_id: str, leaf: int, kind: str) ->
     return f"/pages/{item_id}/{name}" if (Path(pages_dir) / item_id / name).is_file() else None
 
 
-def answer_cache_key(gcfg: dict, kind: str, model_id: str, question: str, filters: Optional[dict],
-                     retrieval_sha256: str) -> str:
-    """The exact key /ask uses, shared with scripts that need to know what is cached."""
+def cache_context(scope: str, data_sha256: dict, retrieve: dict, gcfg: dict, kind: str, model_id: str) -> str:
+    """The cache context of one scope under one provider and model (api/cache.py): the published
+    data hashes, the retrieve settings without host paths, and the generation settings."""
     temp = sent_temperature(kind, gcfg)
     gen = generation_meta(provider=kind, model=model_id, temperature=temp,
                           max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
-    return cache_key(question=question, filters=filters, provider=kind, model=model_id,
-                     prompt_sha256=gen["prompt_sha256"], top_k=gcfg["top_k"], temperature=temp,
-                     retrieval_sha256=retrieval_sha256)
+    return answer_cache.context_hash(scope=scope, data_sha256=data_sha256, retrieve=retrieve,
+                                     provider=kind, model=model_id, prompt_sha256=gen["prompt_sha256"],
+                                     top_k=gcfg["top_k"], temperature=temp)
+
+
+def scope_cache_context(scope: str, *, kind: Optional[str] = None, model_id: Optional[str] = None,
+                        registry: Optional[dict] = None) -> str:
+    """The cache context a scope's /ask uses with its configured (or the given) provider and model,
+    for scripts and the release build. Reads config files only, never the data."""
+    resolved = scopes.resolve_scope(scope)
+    active = None if resolved.inherit else resolved
+    with scopes.activate(active):
+        rcfg = load_retrieve_config(Path(resolved.config_path))
+        gcfg = load_generate_config(Path(resolved.config_path))
+    return cache_context(scope, answer_cache.canonical_data_sha256(scope, registry), answer_cache.retrieve_settings(rcfg),
+                         gcfg, kind or gcfg["provider"], model_id or gcfg["model"])
+
+
+def answer_cache_key(context: str, question: str, filters: Optional[dict]) -> str:
+    """The exact key /ask uses, shared with scripts that need to know what is cached."""
+    return answer_cache.content_key(context, question, filters)
+
+
+def curated_identity(question: str, filters: Optional[dict]) -> str:
+    """How a curated question is recognized: its normalized text and canonical filters."""
+    return answer_cache.canonical_json({"q": answer_cache.normalize_question(question),
+                                        "f": answer_cache.canonical_filters(filters)})
 
 
 class AskRequest(BaseModel):
@@ -671,6 +701,13 @@ def _attach_date_method(conn, rows) -> None:
         r["date_method"] = dm.get(r.get("item_id"))
 
 
+# The serve-time additions stored with an answer (date methods and the care flags) are recomputed
+# whenever the code that makes them changes. A stored row whose extras_version differs is served
+# only after they are recomputed, and the engine Worker serves only rows with the current version.
+EXTRAS_VERSION = hashlib.sha256((inspect.getsource(flags) + inspect.getsource(crisis)
+                                 + inspect.getsource(_attach_date_method)).encode("utf-8")).hexdigest()[:16]
+
+
 class Bundle:
     """Everything one served scope needs, isolated per scope: its own Retriever (read-only
     connections to only its own databases), lock, answer cache, coverage cache, generation
@@ -679,7 +716,7 @@ class Bundle:
     only ever read its own DBs. The base (default) scope's fields are aliased onto app.state
     so the pilot request path and offline_walkthrough see it exactly as before."""
 
-    def __init__(self, *, name, retriever, pool, gcfg, pilot_window, cache, retrieval_sha256,
+    def __init__(self, *, name, retriever, pool, gcfg, pilot_window, cache, data_sha256, retrieve_settings,
                  corpus, facts, stories, seed_path, pages_dir, provider, llm, own_retriever):
         self.name = name
         self.retriever = retriever
@@ -688,7 +725,14 @@ class Bundle:
         self.pilot_window = pilot_window
         self.cache = cache
         self.coverage_cache: dict = {}
-        self.retrieval_sha256 = retrieval_sha256
+        self.data_sha256 = data_sha256              # published hashes of the scope's two data files
+        self.retrieve_settings = retrieve_settings  # retrieve config without host paths
+        self._contexts: dict = {}
+        self.curated = set()                        # curated_identity() of every seed and story question
+        for q in (load_seed(seed_path) if seed_path and Path(seed_path).exists() else []):
+            self.curated.add(curated_identity(q["text"], q.get("filters")))
+        for s in stories:
+            self.curated.add(curated_identity(editorial.asked_question(s), s.get("filters")))
         self.corpus = corpus
         self.facts = facts
         self.stories = stories
@@ -701,6 +745,19 @@ class Bundle:
         # (/coverage, /examples, /stories, /flag) and the cached-answer serve path. The slow
         # /ask miss path uses the pool instead, so it never holds this lock across a model call.
         self.lock = threading.Lock()
+
+    def context(self, kind: str, model_id: str) -> str:
+        """The cache context for one provider and model, computed once."""
+        if (kind, model_id) not in self._contexts:
+            self._contexts[(kind, model_id)] = cache_context(self.name, self.data_sha256, self.retrieve_settings,
+                                                             self.gcfg, kind, model_id)
+        return self._contexts[(kind, model_id)]
+
+    def curated_question(self, question: str, filters: Optional[dict]) -> Optional[str]:
+        """The normalized question text when it is a curated one, else None (never stored)."""
+        if curated_identity(question, filters) in self.curated:
+            return answer_cache.normalize_question(question)
+        return None
 
 
 def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Optional[Retriever] = None,
@@ -769,12 +826,14 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 pool = ConnPool([r])   # tests: reuse the injected retriever as the pool
             gcfg = load_generate_config(cfg_path)
             pilot_window = _pilot_window(cfg_path)
-            sha = retrieval_fingerprint(r.cfg)
+            settings = answer_cache.retrieve_settings(r.cfg)
             corpus = corpus_facts(r.conn, pilot_window)
             facts = scope_facts(name, cfg_path, corpus)
             facts["composition"] = scope_composition(r.conn, corpus)   # real numbers for the sources view
         return Bundle(name=name, retriever=r, pool=pool, gcfg=gcfg, pilot_window=pilot_window,
-                      cache=AnswerCache(cache_p), retrieval_sha256=sha, corpus=corpus,
+                      cache=answer_cache.open_store(cache_p, remote_url=os.environ.get(ENV_CACHE_URL),
+                                                    remote_token=os.environ.get(ENV_CACHE_TOKEN)),
+                      data_sha256=answer_cache.canonical_data_sha256(name), retrieve_settings=settings, corpus=corpus,
                       facts=facts, stories=stories_list,
                       seed_path=seed_p, pages_dir=pages_dir, provider=provider, llm=llm_obj,
                       own_retriever=own)
@@ -841,7 +900,6 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         app.state.lock = base.lock
         app.state.cache = base.cache
         app.state.coverage_cache = base.coverage_cache
-        app.state.retrieval_sha256 = base.retrieval_sha256
         app.state.corpus = base.corpus
         # Warm each real scope's index into the OS page cache in the background, so the first
         # cache-miss dense scan runs warm (CPU-bound) instead of paging the whole index off the
@@ -916,11 +974,32 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         temp = sent_temperature(kind, gcfg)
         gen = generation_meta(provider=kind, model=model_id, temperature=temp,
                               max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
-        # Key on the ORIGINAL text so every warmed answer keeps hitting; sanitize only
-        # the text handed to retrieval and the model. The retrieval fingerprint is the
-        # scope's own (its db/index paths + size/mtime), so no answer crosses scopes.
-        key = answer_cache_key(gcfg, kind, model_id, question, filters, b.retrieval_sha256)
+        # The key is content-addressed (api/cache.py): the scope's published data hashes, its
+        # retrieve and generation settings, and the normalized question and filters. No path, size
+        # or mtime, so a fresh download on an empty disk still hits; no answer crosses scopes.
+        context = b.context(kind, model_id)
+        key = answer_cache_key(context, question, filters)
         clean = clean_question(question)
+
+        def store(served: dict, created: Optional[datetime] = None) -> str:
+            """Store the served form (date methods and flags included, cached and editorial notes
+            left out). A question that is not curated is stored without its text."""
+            body = {k: v for k, v in served.items() if k not in ("editorial_notes",)}
+            body["answer"] = {k: v for k, v in body["answer"].items() if k != "cached"}
+            record = answer_cache.make_record(key=key, scope=b.name, context=context, response=body,
+                                              extras_version=EXTRAS_VERSION,
+                                              curated_question=b.curated_question(question, filters), now=created)
+            return b.cache.put(record)
+
+        def add_extras(served: dict, conn) -> None:
+            """Date methods and care flags, from the stored evidence and the shown text."""
+            _attach_date_method(conn, served["evidence"])
+            # Care fires only when an answer is actually shown. A pure abstention (a refusal) shows
+            # no care at all -- no note, no crisis line, and no interstitial -- so flagged is None;
+            # the attribution notice in particular must never appear when there is no answer.
+            sa = served["answer"]
+            served["flagged"] = flags.detect(served["evidence"], question=clean,
+                                             answer_text=sa.get("text")) if not sa.get("abstained") else None
 
         def degraded(reason: str, pool_rows: list, hits: list, conn) -> dict:
             """A 200 limited-mode response: the record, a designed message, no model paragraph, no
@@ -947,8 +1026,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 return degraded("empty", [], [], r.conn)
         if not nocache:
             hit = b.cache.get(key)
-            if hit is not None:
-                served = copy.deepcopy(hit["response"])
+            served = copy.deepcopy(hit["response"]) if hit is not None else None
+            # A visitor's row holds no words of the question; put them back from this request's own
+            # question. The count always matches here (same function, same text), but if it ever does
+            # not, the row is treated as a miss rather than shown with the wrong terms.
+            if served is not None and not answer_cache.restore_terms(served, salient_terms(clean)):
+                served = None
+            if served is not None:
                 served["answer"]["cached"] = {"created_at": hit["created_at"]}
                 for row in served["evidence"]:   # the offline pack may have grown since the answer was cached
                     thumb = local_page(b.pages_dir, row["item_id"], row["leaf_index"], "thumb")
@@ -958,18 +1042,12 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     if image:
                         row["page_image"] = image
                     row["offline"] = bool(thumb or image)
-                with b.lock:
-                    _attach_date_method(r.conn, served["evidence"])
-                # Care fires only when an answer is actually shown. A pure abstention (a refusal) shows
-                # no care at all -- no note, no crisis line, and no interstitial -- so flagged is None;
-                # the attribution notice in particular must never appear when there is no answer.
-                sa = served["answer"]
-                answered = not sa.get("abstained")
-                served["flagged"] = flags.detect(
-                    served["evidence"],
-                    question=clean,
-                    answer_text=sa.get("text"),
-                ) if answered else None   # on serve, from stored evidence + shown text; not cached
+                if hit["extras_version"] != EXTRAS_VERSION or "flagged" not in served:
+                    # Stored before the current date-method or care code: recompute them, and store
+                    # the refreshed row under its original creation time.
+                    with b.lock:
+                        add_extras(served, r.conn)
+                    store(served, datetime.fromisoformat(hit["created_at"]))
                 # Dated editorial notes about this stored answer, beside it and never in it.
                 served["editorial_notes"] = editorial.notes_for_answer(notes, b.name, question, cached=True)
                 return served
@@ -1025,18 +1103,9 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
 
             result = {"answer": ans.to_dict(),
                       "evidence": evidence_rows(pool_rows, ans.verified_citations, {h["passage_id"] for h in hits}, b.pages_dir)}
-            b.cache.put(key, result)   # flagged + date_method are computed on serve below, never stored (like cached=)
+            add_extras(result, pr.conn)
+            store(result)
             result["answer"]["cached"] = None
-            _attach_date_method(pr.conn, result["evidence"])
-            # Care fires only when an answer is actually shown. A pure abstention (a refusal) shows no
-            # care at all -- no note, no crisis line, and no interstitial -- so flagged is None; the
-            # attribution notice in particular must never appear when there is no answer.
-            answered = not ans.abstained
-            result["flagged"] = flags.detect(
-                result["evidence"],
-                question=clean,
-                answer_text=ans.text,
-            ) if answered else None
             result["editorial_notes"] = editorial.notes_for_answer(notes, b.name, question, cached=False)
             _log_timing(b.name, t_ret, time.monotonic() - t_model, "abstain" if ans.abstained else "answer", len(hits))
             return result

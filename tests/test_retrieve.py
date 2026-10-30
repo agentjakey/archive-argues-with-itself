@@ -254,18 +254,24 @@ def test_later_years_flag(tmp_path):
     assert on["item1#0:0"] is None
 
 
-def test_retrieval_fingerprint_tracks_config_and_files(tmp_path):
+def test_cache_context_tracks_config_not_files(tmp_path):
+    """The cache context moves with the retrieve settings, never with a data file's path, size or
+    mtime: a fresh copy of the same data on an empty disk keeps every stored answer."""
+    import shutil
     from dataclasses import replace
-    from archive_debugger.api.cache import cache_key, retrieval_fingerprint
+    from archive_debugger.api.cache import context_hash, retrieve_settings
     cfg = _many(tmp_path)
-    a = retrieval_fingerprint(cfg)
-    assert a == retrieval_fingerprint(cfg)
-    assert a != retrieval_fingerprint(replace(cfg, per_item_cap=3))
-    with open(cfg.index_path, "ab") as fh:
-        fh.write(b"\0")
-    assert a != retrieval_fingerprint(cfg)                                 # size/mtime changed
-    common = dict(question="q", filters=None, provider="stub", model="m", prompt_sha256="p", top_k=12, temperature=None)
-    assert cache_key(**common, retrieval_sha256="x") != cache_key(**common, retrieval_sha256="y")
+    hashes = {"db": "a" * 64, "index": "b" * 64}
+    common = dict(scope="pilot", data_sha256=hashes, provider="stub", model="m", prompt_sha256="p", top_k=12, temperature=None)
+    a = context_hash(retrieve=retrieve_settings(cfg), **common)
+    assert a != context_hash(retrieve=retrieve_settings(replace(cfg, per_item_cap=3)), **common)
+    moved = tmp_path / "elsewhere"
+    moved.mkdir()
+    shutil.copyfile(cfg.index_path, moved / "vectors.db")
+    with open(moved / "vectors.db", "ab") as fh:
+        fh.write(b"extra bytes")
+    assert a == context_hash(retrieve=retrieve_settings(replace(cfg, index_path=moved / "vectors.db")), **common)
+    assert a != context_hash(retrieve=retrieve_settings(cfg), **{**common, "data_sha256": {"db": "a" * 64, "index": "c" * 64}})
 
 
 # ---- env path overrides (deployments mount data outside the repo) ---------

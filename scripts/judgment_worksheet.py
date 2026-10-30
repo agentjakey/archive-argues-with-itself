@@ -47,20 +47,18 @@ def passage_details(conn: sqlite3.Connection, pids: list[str]) -> dict:
 
 
 def build(seed: list[dict], cache_db: Path, civic_db: Path, config_path: Path) -> tuple[list[dict], dict]:
-    from archive_debugger.api.app import answer_cache_key
-    from archive_debugger.api.cache import retrieval_fingerprint
+    from archive_debugger.api.app import answer_cache_key, scope_cache_context
     from archive_debugger.generate.cli import load_generate_config
-    from archive_debugger.retrieve.config import load_retrieve_config
     gcfg = load_generate_config(config_path)
-    sha = retrieval_fingerprint(load_retrieve_config(config_path))
+    context = scope_cache_context("pilot")
     cache = sqlite3.connect(f"file:{cache_db}?mode=ro", uri=True)
     civic = sqlite3.connect(f"file:{civic_db}?mode=ro", uri=True)
     records: list[dict] = []
     summary = {"questions": len(seed), "cached": 0, "missing": [], "answered": 0, "abstained": 0,
                "sentences": 0, "unsupported_sentences": 0, "model": gcfg["model"], "provider": gcfg["provider"]}
     for q in seed:
-        key = answer_cache_key(gcfg, gcfg["provider"], gcfg["model"], q["text"], q.get("filters") or {}, sha)
-        row = cache.execute("SELECT response_json, created_at FROM answers WHERE key = ?", (key,)).fetchone()
+        key = answer_cache_key(context, q["text"], q.get("filters") or {})
+        row = cache.execute("SELECT response_json, created_at FROM answers_v2 WHERE key = ?", (key,)).fetchone()
         if row is None:
             summary["missing"].append(q["qid"])
             continue

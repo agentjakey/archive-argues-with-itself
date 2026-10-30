@@ -65,7 +65,7 @@ def cache_responses(cache_db: Path) -> dict:
         return out
     conn = sqlite3.connect(f"file:{cache_db}?mode=ro", uri=True)
     try:
-        for key, body in conn.execute("SELECT key, response_json FROM answers"):
+        for key, body in conn.execute("SELECT key, response_json FROM answers_v2 WHERE curated = 1"):
             out[key] = json.loads(body)
     finally:
         conn.close()
@@ -111,8 +111,7 @@ def main(argv=None) -> int:
     from dotenv import load_dotenv  # CLI only
     load_dotenv(".env")
     from archive_debugger.api.app import (DEFAULT_CACHE, DEFAULT_PAGES, DEFAULT_STORIES, ENV_PAGES_DIR,
-                                          answer_cache_key, load_stories)
-    from archive_debugger.api.cache import retrieval_fingerprint
+                                          answer_cache_key, load_stories, scope_cache_context)
     from archive_debugger.editorial import asked_question
     from archive_debugger.generate.cli import load_generate_config
     from archive_debugger.harvest.pages import page_file
@@ -156,13 +155,12 @@ def main(argv=None) -> int:
     keys = set(responses)
     # (label, text, filters, cache_key) for each exhibit question
     want = []
+    context = scope_cache_context("pilot")
     for q in seed:
-        k = answer_cache_key(gcfg, gcfg["provider"], gcfg["model"], q["text"], q.get("filters") or {},
-                             retrieval_fingerprint(rcfg))
+        k = answer_cache_key(context, q["text"], q.get("filters") or {})
         want.append(("seed " + q["qid"], q["text"], q.get("filters") or {}, k))
     for s in stories:
-        k = answer_cache_key(gcfg, gcfg["provider"], gcfg["model"], asked_question(s), s.get("filters") or {},
-                             retrieval_fingerprint(rcfg))
+        k = answer_cache_key(context, asked_question(s), s.get("filters") or {})
         want.append(("story " + s["id"], asked_question(s), s.get("filters") or {}, k))
     missing_cache = [name for name, _text, _filt, k in want if k not in keys]
     check(not missing_cache,

@@ -49,7 +49,7 @@ def cached_evidence(cache_db: Path) -> dict:
         return out
     conn = sqlite3.connect(f"file:{cache_db}?mode=ro", uri=True)
     try:
-        rows = conn.execute("SELECT response_json FROM answers").fetchall()
+        rows = conn.execute("SELECT response_json FROM answers_v2 WHERE curated = 1").fetchall()
     finally:
         conn.close()
     for (body,) in rows:

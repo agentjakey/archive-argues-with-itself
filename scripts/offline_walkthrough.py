@@ -5,7 +5,8 @@ It forces the offline path by pointing the Anthropic base URL at an unroutable h
 the real generation call fails and /ask must degrade. Then, in-process (TestClient, the
 real app, the real civic.db / vectors.db / warmed answer cache), it POSTs /ask for:
 
-  - all 54 exhibit questions (50 seed + 4 stories, read from config). Each MUST serve its
+  - every exhibit question (the seed and story questions of each served scope, read from
+    config). Each MUST serve its
     cached answer (a real answer with verified citations, or a real cached abstention) and
     MUST NOT degrade, even though the model is unreachable, because the cache is hit before
     any model call.
@@ -45,7 +46,7 @@ def cache_row_count(cache_db: Path) -> int:
         return 0
     conn = sqlite3.connect(f"file:{cache_db}?mode=ro", uri=True)
     try:
-        return conn.execute("SELECT COUNT(*) FROM answers").fetchone()[0]
+        return conn.execute("SELECT COUNT(*) FROM answers_v2").fetchone()[0]
     finally:
         conn.close()
 
@@ -87,8 +88,8 @@ def main() -> int:
 
     seed = load_seed(REPO / "eval/seed_questions.jsonl")
     stories = load_stories(DEFAULT_STORIES)
-    golden = [("seed:" + q["qid"], q["text"], q.get("filters") or {}) for q in seed]
-    golden += [("story:" + s["id"], asked_question(s), s.get("filters") or {}) for s in stories]
+    golden = [("seed:" + q["qid"], q["text"], q.get("filters") or {}, None) for q in seed]
+    golden += [("story:" + s["id"], asked_question(s), s.get("filters") or {}, None) for s in stories]
 
     long_token = "a" * 5000
     big = "public health policy funding hospital " * 200          # ~7600 chars, truncated to 500
@@ -130,11 +131,19 @@ def main() -> int:
         # Keep the run strictly read-only across every served scope: intercept every cache write (a
         # gate abstention on a novel query would otherwise be cached) so no real cache is touched.
         for _b in app.state.bundles.values():
-            _b.cache.put = lambda key, response: intercepted.append(key)  # type: ignore[assignment]
+            _b.cache.put = lambda record: intercepted.append(record["key"])  # type: ignore[assignment]
 
-        print("== 54 EXHIBIT QUESTIONS (must serve from cache, must NOT degrade) ==")
-        for label, text, filt in golden:
-            r = c.post("/ask", json={"question": text, "filters": filt})
+        # The microlog scope's seed and story questions, where microlog is served here.
+        if "microlog" in app.state.bundles:
+            from archive_debugger.editorial import load_stories as _load_stories
+            for q in load_seed(REPO / "config/seed_questions.microlog.jsonl"):
+                golden.append(("microlog:seed:" + q["qid"], q["text"], q.get("filters") or {}, "microlog"))
+            for s in _load_stories(REPO / "config/stories.microlog.json"):
+                golden.append(("microlog:story:" + s["id"], asked_question(s), s.get("filters") or {}, "microlog"))
+
+        print(f"== {len(golden)} EXHIBIT QUESTIONS (must serve from cache, must NOT degrade) ==")
+        for label, text, filt, scope in golden:
+            r = c.post("/ask" + (f"?scope={scope}" if scope else ""), json={"question": text, "filters": filt})
             j = r.json() if r.status_code == 200 else {}
             a = j.get("answer", {}) if isinstance(j, dict) else {}
             cached = a.get("cached") is not None

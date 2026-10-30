@@ -21,7 +21,7 @@ def collect_targets(cache_db: Path, civic_db: Path, stories: list[dict]) -> tupl
     targets: set[tuple[str, int]] = set()
     if cache_db.exists():
         conn = sqlite3.connect(f"file:{cache_db}?mode=ro", uri=True)
-        for (body,) in conn.execute("SELECT response_json FROM answers"):
+        for (body,) in conn.execute("SELECT response_json FROM answers_v2 WHERE curated = 1"):   # curated rows only
             for row in json.loads(body).get("evidence", []):
                 targets.add((row["item_id"], int(row["leaf_index"])))
         conn.close()
@@ -42,22 +42,18 @@ def collect_targets(cache_db: Path, civic_db: Path, stories: list[dict]) -> tupl
     return targets, missing
 
 
-def uncached_stories(cache_db: Path, stories: list[dict], config_path: Path) -> list[str]:
-    from archive_debugger.api.app import answer_cache_key
+def uncached_stories(cache_db: Path, stories: list[dict], scope: str) -> list[str]:
+    from archive_debugger.api.app import answer_cache_key, scope_cache_context
     from archive_debugger.editorial import asked_question
-    from archive_debugger.api.cache import retrieval_fingerprint
-    from archive_debugger.generate.cli import load_generate_config
-    from archive_debugger.retrieve.config import load_retrieve_config
-    gcfg = load_generate_config(config_path)
-    sha = retrieval_fingerprint(load_retrieve_config(config_path))
+    context = scope_cache_context(scope)
     if not cache_db.exists():
         return [s["id"] for s in stories]
     conn = sqlite3.connect(f"file:{cache_db}?mode=ro", uri=True)
-    keys = {k for (k,) in conn.execute("SELECT key FROM answers")}
+    keys = {k for (k,) in conn.execute("SELECT key FROM answers_v2")}
     conn.close()
     out = []
     for s in stories:
-        key = answer_cache_key(gcfg, gcfg["provider"], gcfg["model"], asked_question(s), s.get("filters") or {}, sha)
+        key = answer_cache_key(context, asked_question(s), s.get("filters") or {})
         if key not in keys:
             out.append(s["id"])
     return out
@@ -93,7 +89,7 @@ def main(argv=None) -> int:
         t, miss = collect_targets(Path(s["cache_db"]), Path(s["civic_db"]), stories)
         targets |= t
         missing_pins += [f"{s['name']}:{m}" for m in miss]
-        uncached += [f"{s['name']}:{u}" for u in uncached_stories(Path(s["cache_db"]), stories, Path(s["config"]))]
+        uncached += [f"{s['name']}:{u}" for u in uncached_stories(Path(s["cache_db"]), stories, s["name"])]
 
     print(f"scopes: {', '.join(s['name'] for s in served)}")
     print(f"pages to hold: {len(targets)} (thumb + medium each) under {pages_dir}")

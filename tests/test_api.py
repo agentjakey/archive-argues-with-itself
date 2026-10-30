@@ -219,7 +219,7 @@ def test_stories_serve_comparability_and_dated_notes(tmp_path):
         fresh = c.post("/ask", json={"question": "vaccination hospital"}).json()
         assert fresh["answer"]["cached"] is None and fresh["editorial_notes"] == []   # cached_only: not on a new answer
         import sqlite3
-        stored_before = sqlite3.connect(cache_db).execute("SELECT response_json FROM answers").fetchall()
+        stored_before = sqlite3.connect(cache_db).execute("SELECT response_json FROM answers_v2").fetchall()
         hit = c.post("/ask", json={"question": "vaccination hospital"}).json()
         assert hit["answer"]["cached"] is not None
         assert [n["id"] for n in hit["editorial_notes"]] == ["n-answer"]
@@ -227,7 +227,7 @@ def test_stories_serve_comparability_and_dated_notes(tmp_path):
         other = c.post("/ask", json={"question": "vaccination hospital", "filters": {"jurisdiction": "alberta"}}).json()
         assert other["answer"]["cached"] is None and other["editorial_notes"] == []   # other filters: a different answer
         assert c.get("/editorial-notes").json()["version"] == 1
-    stored_after = sqlite3.connect(cache_db).execute("SELECT response_json FROM answers").fetchall()
+    stored_after = sqlite3.connect(cache_db).execute("SELECT response_json FROM answers_v2").fetchall()
     assert stored_before[0] in stored_after                                          # the note is never written into the cache
     assert all("editorial_notes" not in row[0] for row in stored_after)
 

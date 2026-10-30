@@ -352,7 +352,7 @@ def run_inprocess(args, steps: Steps, scopes: list[str]) -> dict:
     os.environ["CIVIC_DENSE_BACKEND"] = "sqlite"     # open without the resident load; "dense" does it
     from archive_debugger import scopes as scope_mod
     from archive_debugger.api import app as app_mod
-    from archive_debugger.api.cache import retrieval_fingerprint
+    from archive_debugger.api.cache import retrieve_settings
     from archive_debugger.generate.cli import build_filters, load_generate_config, retrieve_pool
     from archive_debugger.retrieve import dense
     from archive_debugger.retrieve.config import load_retrieve_config
@@ -395,7 +395,7 @@ def run_inprocess(args, steps: Steps, scopes: list[str]) -> dict:
                       shared_dense=all(r.dense_index is base.dense_index for r in pool))
             steps.begin(f"facts:{scope}")
             gcfg = load_generate_config(cfg_path)
-            retrieval_fingerprint(base.cfg)
+            retrieve_settings(base.cfg)
             corpus = app_mod.corpus_facts(base.conn, app_mod._pilot_window(cfg_path))
             app_mod.scope_facts(scope, cfg_path, corpus)
             app_mod.scope_composition(base.conn, corpus)

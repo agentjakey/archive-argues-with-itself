@@ -1,0 +1,363 @@
+{
+ "key_version": 2,
+ "context": "df10d4aacd93d46e63899e4b693eb278671e186c8c4bf2274e6d5d1c95db8f59",
+ "vectors": [
+  {
+   "name": "plain",
+   "question": "How did tobacco control policy change in Ontario?",
+   "filters": {},
+   "normalized_question": "How did tobacco control policy change in Ontario?",
+   "canonical_filters": {},
+   "key": "37d165e038a7fba0e865c398b6a0a8aa7806ed3ae6725419da8281099c7fd3c1",
+   "clean_question": "How did tobacco control policy change in Ontario?",
+   "salient_terms": [
+    "tobacco",
+    "control",
+    "policy",
+    "ontario"
+   ]
+  },
+  {
+   "name": "filters",
+   "question": "What did Alberta reports say about mental health services?",
+   "filters": {
+    "jurisdiction": "alberta"
+   },
+   "normalized_question": "What did Alberta reports say about mental health services?",
+   "canonical_filters": {
+    "jurisdiction": "alberta"
+   },
+   "key": "80ecaec381538da5d62340b19d330f2028fc093f02724a9ed571bed6afa02bd9",
+   "clean_question": "What did Alberta reports say about mental health services?",
+   "salient_terms": [
+    "alberta",
+    "reports",
+    "mental",
+    "health",
+    "services"
+   ]
+  },
+  {
+   "name": "filter order and blanks",
+   "question": "q",
+   "filters": {
+    "period": " 1980s ",
+    "jurisdiction": "ontario",
+    "doc_type": ""
+   },
+   "normalized_question": "q",
+   "canonical_filters": {
+    "period": "1980s",
+    "jurisdiction": "ontario"
+   },
+   "key": "28b8a1e3ce4cbee7312345e9a0e1064ccc1026ae4b7b26031a057bcbbdc11d71",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "min_ocr number",
+   "question": "q",
+   "filters": {
+    "min_ocr": 0.5
+   },
+   "normalized_question": "q",
+   "canonical_filters": {
+    "min_ocr": "0.5000"
+   },
+   "key": "be7c196dc69315215dab69dfb02af8d0d2fdc8747542f6335a3a3d331154f365",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "min_ocr integer",
+   "question": "q",
+   "filters": {
+    "min_ocr": 1
+   },
+   "normalized_question": "q",
+   "canonical_filters": {
+    "min_ocr": "1.0000"
+   },
+   "key": "9a40e86cdc3bd4622f5c1beb1827ba6e8507866d7f5e54ccdc0eb54665b450a9",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "min_ocr zero dropped",
+   "question": "q",
+   "filters": {
+    "min_ocr": 0
+   },
+   "normalized_question": "q",
+   "canonical_filters": {},
+   "key": "00928aed8f3d20cfe7531de51165753842bd7cbe14dc1d0a79dfc921cd520226",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "min_ocr string",
+   "question": "q",
+   "filters": {
+    "min_ocr": "0.25"
+   },
+   "normalized_question": "q",
+   "canonical_filters": {
+    "min_ocr": "0.2500"
+   },
+   "key": "360143f3e548c98123f1b30d07b5ebf5c0b83afc4974a89a2b08c584f0df6e9c",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "unknown filter ignored",
+   "question": "q",
+   "filters": {
+    "colour": "red"
+   },
+   "normalized_question": "q",
+   "canonical_filters": {},
+   "key": "00928aed8f3d20cfe7531de51165753842bd7cbe14dc1d0a79dfc921cd520226",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "none filters",
+   "question": "q",
+   "filters": null,
+   "normalized_question": "q",
+   "canonical_filters": {},
+   "key": "00928aed8f3d20cfe7531de51165753842bd7cbe14dc1d0a79dfc921cd520226",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "spaces collapse",
+   "question": "  vaccination   hospital  ",
+   "filters": {},
+   "normalized_question": "vaccination hospital",
+   "canonical_filters": {},
+   "key": "2f9686b8ccab7286e082f9ec28a95cd3e2f2be891122f458ca0e3a952d08343c",
+   "clean_question": "vaccination hospital",
+   "salient_terms": [
+    "vaccination",
+    "hospital"
+   ]
+  },
+  {
+   "name": "tabs and newlines become spaces",
+   "question": "vaccination\thospital\nfunding\r\n",
+   "filters": {},
+   "normalized_question": "vaccination hospital funding",
+   "canonical_filters": {},
+   "key": "1cd97b226189d3a34f6b30c0f7c1cb2b71f479507ff7ac94ffd494c2b729b851",
+   "clean_question": "vaccination hospital funding",
+   "salient_terms": [
+    "vaccination",
+    "hospital",
+    "funding"
+   ]
+  },
+  {
+   "name": "control characters",
+   "question": "vaccination\u0000\u0007\u001fhospital\u007f",
+   "filters": {},
+   "normalized_question": "vaccination hospital",
+   "canonical_filters": {},
+   "key": "2f9686b8ccab7286e082f9ec28a95cd3e2f2be891122f458ca0e3a952d08343c",
+   "clean_question": "vaccination hospital",
+   "salient_terms": [
+    "vaccination",
+    "hospital"
+   ]
+  },
+  {
+   "name": "case kept",
+   "question": "Vaccination Hospital",
+   "filters": {},
+   "normalized_question": "Vaccination Hospital",
+   "canonical_filters": {},
+   "key": "984dac992270cab4fbcb335f83d52ace82dbf765c6c33557ac5a2dfcdec603a0",
+   "clean_question": "Vaccination Hospital",
+   "salient_terms": [
+    "vaccination",
+    "hospital"
+   ]
+  },
+  {
+   "name": "NFD becomes NFC",
+   "question": "Que\u0301bec sante\u0301 publique",
+   "filters": {},
+   "normalized_question": "Qu\u00e9bec sant\u00e9 publique",
+   "canonical_filters": {},
+   "key": "b84904257e35844972b90744cf8096a8d4461e03b80caacdbc291ec501ac8fb4",
+   "clean_question": "Que\u0301bec sante\u0301 publique",
+   "salient_terms": [
+    "que",
+    "bec",
+    "sante",
+    "publique"
+   ]
+  },
+  {
+   "name": "NFC unchanged",
+   "question": "Qu\u00e9bec sant\u00e9 publique",
+   "filters": {},
+   "normalized_question": "Qu\u00e9bec sant\u00e9 publique",
+   "canonical_filters": {},
+   "key": "b84904257e35844972b90744cf8096a8d4461e03b80caacdbc291ec501ac8fb4",
+   "clean_question": "Qu\u00e9bec sant\u00e9 publique",
+   "salient_terms": [
+    "qu\u00e9bec",
+    "sant\u00e9",
+    "publique"
+   ]
+  },
+  {
+   "name": "non-breaking space kept",
+   "question": "public\u00a0health",
+   "filters": {},
+   "normalized_question": "public\u00a0health",
+   "canonical_filters": {},
+   "key": "57eb43b08fb973305a77ce9b42fae0fb6fdac9b26ec563b562b2f171f5d75629",
+   "clean_question": "public health",
+   "salient_terms": [
+    "public",
+    "health"
+   ]
+  },
+  {
+   "name": "emoji",
+   "question": "\ud83d\ude00 public health",
+   "filters": {},
+   "normalized_question": "\ud83d\ude00 public health",
+   "canonical_filters": {},
+   "key": "23abb9ec2a19d39c6361c7a978de0472c64a8cb0481db39d06340d8c4822afd8",
+   "clean_question": "\ud83d\ude00 public health",
+   "salient_terms": [
+    "public",
+    "health"
+   ]
+  },
+  {
+   "name": "lone surrogate replaced",
+   "question": "public \ud800 health",
+   "filters": {},
+   "normalized_question": "public \ufffd health",
+   "canonical_filters": {},
+   "key": "ddba82e4de971fca013d4756f22c0f4c6d67f8d76fdb052f279ca7dbb048b369",
+   "clean_question": "public \ud800 health",
+   "salient_terms": [
+    "public",
+    "health"
+   ]
+  },
+  {
+   "name": "quotes and backslash",
+   "question": "say \"hello\" \\ goodbye",
+   "filters": {},
+   "normalized_question": "say \"hello\" \\ goodbye",
+   "canonical_filters": {},
+   "key": "d2cba5ec6bc2092d0b71646d2617ef2df53c35313739d5ef8c174c9a3b690833",
+   "clean_question": "say \"hello\" \\ goodbye",
+   "salient_terms": [
+    "hello",
+    "goodbye"
+   ]
+  },
+  {
+   "name": "empty",
+   "question": "",
+   "filters": {},
+   "normalized_question": "",
+   "canonical_filters": {},
+   "key": "32ce5e926cd035a79ca35aeebed15d6d504a8a55d3252b0fb6d12a78a8b049d9",
+   "clean_question": "",
+   "salient_terms": []
+  },
+  {
+   "name": "only control and spaces",
+   "question": " \u0001 \t ",
+   "filters": {},
+   "normalized_question": "",
+   "canonical_filters": {},
+   "key": "32ce5e926cd035a79ca35aeebed15d6d504a8a55d3252b0fb6d12a78a8b049d9",
+   "clean_question": "",
+   "salient_terms": []
+  },
+  {
+   "name": "long",
+   "question": "public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital ",
+   "filters": {},
+   "normalized_question": "public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital",
+   "canonical_filters": {},
+   "key": "512e49ce695fecf89c88508d7d2a8dd398353b3f8afaea4aac01fdf3a0448c93",
+   "clean_question": "public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public health policy funding hospital public",
+   "salient_terms": [
+    "public",
+    "health",
+    "policy",
+    "funding",
+    "hospital"
+   ]
+  },
+  {
+   "name": "terms with years and decades",
+   "question": "What changed in Ontario tobacco policy between 1985 and the 1990s?",
+   "filters": {},
+   "normalized_question": "What changed in Ontario tobacco policy between 1985 and the 1990s?",
+   "canonical_filters": {},
+   "key": "596b66ce509c93b0ce1a38b2a8fd3971eccfbd08fd509138b72c5e059506d70d",
+   "clean_question": "What changed in Ontario tobacco policy between 1985 and the 1990s?",
+   "salient_terms": [
+    "ontario",
+    "tobacco",
+    "policy",
+    "1985",
+    "1990s"
+   ]
+  },
+  {
+   "name": "terms with stopwords and repeats",
+   "question": "What did the reports say, and what did the reports not say?",
+   "filters": {},
+   "normalized_question": "What did the reports say, and what did the reports not say?",
+   "canonical_filters": {},
+   "key": "c2313b5b1abdf131d66a97bc9f9c1430ae7314302be2c262f66d09ab687adbf4",
+   "clean_question": "What did the reports say, and what did the reports not say?",
+   "salient_terms": [
+    "reports"
+   ]
+  },
+  {
+   "name": "terms with accents and digits",
+   "question": "Sant\u00e9 publique au Qu\u00e9bec 1972 3 vaccins",
+   "filters": {},
+   "normalized_question": "Sant\u00e9 publique au Qu\u00e9bec 1972 3 vaccins",
+   "canonical_filters": {},
+   "key": "51d021aeafc170898374500439fa641b2b7c8f15245bd1bad67cba0c3de740e5",
+   "clean_question": "Sant\u00e9 publique au Qu\u00e9bec 1972 3 vaccins",
+   "salient_terms": [
+    "sant\u00e9",
+    "publique",
+    "qu\u00e9bec",
+    "1972",
+    "vaccins"
+   ]
+  },
+  {
+   "name": "terms with underscore and hyphen",
+   "question": "co-operative health_care plans",
+   "filters": {},
+   "normalized_question": "co-operative health_care plans",
+   "canonical_filters": {},
+   "key": "8bca6bcd04e99e556ee3e24cc3cadaedd1f7b2848c2ff8f23afb3392f33c3658",
+   "clean_question": "co-operative health_care plans",
+   "salient_terms": [
+    "operative",
+    "health",
+    "care",
+    "plans"
+   ]
+  }
+ ]
+}
