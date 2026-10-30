@@ -1,5 +1,5 @@
 // Staging only: how fast the Worker can read one stored answer from D1, KV and R2, so the answer
-// cache's home is chosen from measurements (docs/v2/DECISIONS.md). The route exists only where the
+// cache's home is chosen from measurements. The route exists only where the
 // BENCH_KV and BENCH_R2 bindings do (the staging environment); production has neither and answers
 // 404. It copies one curated row's stored body into KV and R2 under the same key, then times
 // sequential reads of that one key from each store inside the Worker, where a visitor's request

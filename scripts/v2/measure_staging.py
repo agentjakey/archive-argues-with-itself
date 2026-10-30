@@ -180,7 +180,10 @@ def main(argv=None) -> int:
                 "slowest_seconds": round(max(s for _, _, s in results), 2),
             }
     _, health, _ = call(api, "GET", "/health?wakes=1")
-    record["wake_log"] = (health.get("wakes") or [])[-3:]
+    wakes = health.get("wakes") or []
+    # every wake this run started (one per engine in the split layout), and the one before each
+    record["wake_log"] = [w for w in wakes if w.get("started_at", "") >= record["measured_utc"]] or wakes[-3:]
+    record["release"] = health.get("release")
     # an exit other than the idle sleep during this run (an out-of-memory kill shows here)
     record["exits_during_run"] = [w for w in record["wake_log"]
                                   if w.get("exit") and w.get("exit") != "slept: idle"

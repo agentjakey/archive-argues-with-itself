@@ -100,9 +100,16 @@ collection that has not been audited shows that, never another collection's numb
   hashes each while it arrives, so there is no second verification pass, and stops cleanly on SIGTERM
   at any stage.
 - **Every file is checked before anything is served from it**, against the sha256 in
-  `config/scopes.toml`: while downloading, or by a full hash when files are restored from a snapshot.
-  Data baked into the image is the one exception: the registry addresses each image layer by its
-  digest and verifies it on pull, and the bake script checked every file first.
+  `config/scopes.toml`: while downloading; when files are restored from a snapshot, by a full hash
+  or (`SNAPSHOT_VERIFY=trust`) by the wake the snapshot was taken from, since a snapshot is taken
+  only after a wake of the same release verified every file and is keyed by release; and for data
+  baked into the image by the registry, which addresses each layer by its digest and verifies it on
+  pull, after the bake script checked every file.
+- **The engine stops itself when idle.** The Durable Object records the last real use (a question,
+  a wake, the moment the engine became ready; never `/health`) and its alarm stops the container
+  once that is `SLEEP_AFTER_MINUTES` old. The platform's inactivity timeout is set too, but it is not
+  kept when the Durable Object restarts while its container runs, and on staging a container
+  outlived it by half an hour.
 - **The vectors database stays on R2.** With the in-memory dense backend the engine loads the
   precomputed matrix and writes a small stand-in for the vectors database that names the published
   index it replaces. If the matrix cannot load, the collection answers in limited mode rather than
