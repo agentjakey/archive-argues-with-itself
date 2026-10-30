@@ -72,7 +72,7 @@ export function CoverageMapView({
   const international = counts["international"] ?? 0;
   const unknown = counts["unknown"] ?? 0;
   const unknownPct = Math.round(comp.jurisdiction_unknown_share * 100);
-  const national = scope.name !== "pilot";   // the pilot (federal + Ontario + Alberta) is not national
+  const national = !!scope.national;   // from the scope registry: covers every province and territory
   const [active, setActive] = useState<string | null>(null);
 
   const rows = useMemo(() => PROVINCES.map((p) => ({ ...p, count: counts[p.slug] ?? 0 })), [counts]);

@@ -44,12 +44,6 @@ import urllib.request
 from pathlib import Path
 
 CGROUP = Path("/sys/fs/cgroup")
-SRC_LAYOUT = {
-    "pilot": [("db", "civic.db", "CIVIC_DB_PATH"), ("index", "index/vectors.db", "CIVIC_INDEX_PATH")],
-    "microlog": [("db", "microlog/civic_microlog.db", "MICROLOG_DB_PATH"),
-                 ("index", "microlog/index/vectors_microlog.db", "MICROLOG_INDEX_PATH")],
-}
-SEED_FILES = {"pilot": "eval/seed_questions.jsonl", "microlog": "config/seed_questions.microlog.jsonl"}
 PORT = 8080
 
 
@@ -181,13 +175,19 @@ class Steps:
 
 
 def scope_list(arg: str) -> list[str]:
-    return ["pilot", "microlog"] if arg == "both" else [arg]
+    """'both' (or 'all') means every scope in config/scopes.toml."""
+    from archive_debugger import release_files
+    return release_files.scope_names() if arg in ("both", "all") else [arg]
 
 
 def dest_paths(scope: str) -> list[tuple[str, Path, Path]]:
+    """(kind, path under --src, destination from the scope's path variable) for its two databases."""
+    from archive_debugger import release_files
+    env_names = dict(zip(("db", "index"), release_files.path_env_names(scope)))
     out = []
-    for kind, rel, env in SRC_LAYOUT[scope]:
-        out.append((kind, Path(rel), Path(os.environ[env])))
+    for f in release_files.scope_files(scope):
+        if f.kind in env_names:
+            out.append((f.kind, Path(f.relative), Path(os.environ[env_names[f.kind]])))
     return out
 
 
@@ -230,7 +230,9 @@ def data_disk() -> dict:
 
 def load_seed(scope: str, limit: int) -> list[dict]:
     rows = []
-    for line in Path(SEED_FILES[scope]).read_text(encoding="utf-8").splitlines():
+    from archive_debugger import release_files
+    seed_file, _stories = release_files.curated_files(scope)
+    for line in Path(seed_file).read_text(encoding="utf-8").splitlines():
         if line.strip() and not line.startswith("#"):
             rows.append(json.loads(line))
     return rows[:limit]
@@ -431,7 +433,7 @@ def run_inprocess(args, steps: Steps, scopes: list[str]) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--mode", choices=["server", "inprocess"], required=True)
-    parser.add_argument("--scopes", choices=["pilot", "microlog", "both"], required=True)
+    parser.add_argument("--scopes", required=True, help="a scope in config/scopes.toml, or both (all of them)")
     parser.add_argument("--dense", choices=["sqlite", "numpy"], required=True)
     parser.add_argument("--mmap", choices=["on", "off"], default="on", help="inprocess mode only")
     parser.add_argument("--guard", choices=["rss", "anon"], default="rss",

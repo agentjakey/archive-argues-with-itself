@@ -7,14 +7,16 @@ import { readState, writeState } from "../lib/urlstate";
 import type { Crisis, ScopeInfo } from "../types";
 
 const PILOT_SCOPE: ScopeInfo = {
-  name: "pilot", label: "Federal public health", blurb: "", collection: "governmentpublications",
+  name: "pilot", audit: "pilot", national: false, jurisdiction_phrase: "Canadian federal, Ontario and Alberta",
+  label: "Federal public health", blurb: "", collection: "governmentpublications",
   collection_url: null, collections: ["governmentpublications"], item_count: 3477,
   window: { min_year: 1960, max_year: 2009 }, coverage_window: { min_year: 1960, max_year: 2009 },
   harvested_count: 3477,
 };
 
 const MICROLOG_SCOPE: ScopeInfo = {
-  name: "microlog", label: "National public health, all provinces", blurb: "", collection: "microlog",
+  name: "microlog", audit: "microlog", national: true, jurisdiction_phrase: "Canadian federal, provincial, and municipal",
+  label: "National public health, all provinces", blurb: "", collection: "microlog",
   collection_url: null, collections: ["microlog"], item_count: 13539,
   window: { min_year: 1960, max_year: 2009 }, coverage_window: { min_year: 1963, max_year: 2018 },
   harvested_count: 13544,

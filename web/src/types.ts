@@ -310,6 +310,10 @@ export interface Composition {
 // One served corpus for the scope switcher, from GET /scopes. Mirrors api/app.py scope_facts.
 export interface ScopeInfo {
   name: string;
+  refuse_probe?: string | null;   // a seed question the record cannot answer (scope registry)
+  jurisdiction_phrase?: string | null;   // who published the collection, in words (scope registry)
+  national?: boolean;             // covers every province and territory (scope registry)
+  audit?: string | null;          // which audit's published results describe this collection; null when not audited
   label: string;
   blurb: string;
   collection: string | null;

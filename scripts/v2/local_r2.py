@@ -29,20 +29,8 @@ CHUNK = 1024 * 1024
 def key_layout() -> dict:
     """R2 key -> path under the root, from config/scopes.toml."""
     sys.path.insert(0, str(REPO / "src"))
-    from archive_debugger import scopes
-    registry = scopes.load_registry()
-    layout = {}
-    prefix = {"pilot": "", "microlog": "microlog/"}
-    index_dir = {"pilot": "index/", "microlog": "microlog/index/"}
-    for name, entry in registry["scopes"].items():
-        r2, dense = entry.get("r2") or {}, entry.get("dense") or {}
-        if r2:
-            layout[r2["db_key"]] = prefix[name] + Path(r2["db_key"]).name
-            layout[r2["index_key"]] = index_dir[name] + Path(r2["index_key"]).name
-        for field in ("matrix_key", "ids_key", "manifest_key"):
-            if field in dense:
-                layout[dense[field]] = index_dir[name] + "dense/" + Path(dense[field]).name
-    return layout
+    from archive_debugger import release_files
+    return {f.key: f.relative for f in release_files.all_files()}
 
 
 class Handler(BaseHTTPRequestHandler):

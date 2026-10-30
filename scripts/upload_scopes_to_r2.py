@@ -99,13 +99,16 @@ def resolve_targets() -> list[dict]:
         die(f"could not import archive_debugger from {SRC} ({exc}); run from the repo with its venv")
 
     targets: list[dict] = []
-    for name in ("pilot", "microlog"):
+    registry = scopes.load_registry()
+    for name, entry in (registry.get("scopes") or {}).items():
         try:
             scope = scopes.resolve_scope(name)
         except Exception as exc:
             die(f"could not resolve scope {name!r} from config/scopes.toml: {exc}")
-        for kind, path in (("db", Path(scope.db_path)), ("index", Path(scope.index_path))):
-            targets.append({"scope": name, "kind": kind, "path": path, "key": f"{name}/{path.name}"})
+        r2 = entry.get("r2") or {}
+        for kind, path, key in (("db", Path(scope.db_path), r2.get("db_key")),
+                                ("index", Path(scope.index_path), r2.get("index_key"))):
+            targets.append({"scope": name, "kind": kind, "path": path, "key": key or f"{name}/{path.name}"})
 
     print("Resolved scope files (from config/scopes.toml):")
     missing: list[dict] = []

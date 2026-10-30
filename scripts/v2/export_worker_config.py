@@ -23,13 +23,12 @@ import sys
 from pathlib import Path
 
 OUT = Path("worker/engine/src/generated/engine_config.json")
-SCOPES = ("pilot", "microlog")
 
 
 def build() -> dict:
     if os.environ.get("CIVIC_EMBEDDER"):
         raise SystemExit("unset CIVIC_EMBEDDER: the exported contexts must match the production embedder")
-    from archive_debugger import editorial, scopes
+    from archive_debugger import editorial, release_files, scopes
     from archive_debugger.api import cache as answer_cache
     from archive_debugger.api.app import EXTRAS_VERSION, scope_cache_context
     from archive_debugger.generate.cli import load_generate_config
@@ -37,16 +36,12 @@ def build() -> dict:
 
     registry = scopes.load_registry()
     scope_rows = {}
-    keys = []
-    for name in SCOPES:
+    for name in release_files.scope_names(registry):
         resolved = scopes.resolve_scope(name)
         gcfg = load_generate_config(Path(resolved.config_path))
         scope_rows[name] = {"context": scope_cache_context(name, registry=registry),
                             "provider": gcfg["provider"], "model": gcfg["model"]}
-        entry = registry["scopes"][name]
-        keys += [entry["r2"]["db_key"], entry["r2"]["index_key"]]
-        dense = entry.get("dense") or {}
-        keys += [dense[k] for k in ("matrix_key", "ids_key", "manifest_key") if k in dense]
+    keys = [f.key for f in release_files.all_files(registry)]
     notes = editorial.load_notes(editorial.DEFAULT_NOTES)
     answer_notes = []
     for n in notes["notes"]:

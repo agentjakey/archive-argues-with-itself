@@ -27,45 +27,30 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
 
-# Each file: (path under --src, path inside /data, scopes.toml scope, field holding its sha256).
-LAYOUT = [
-    ("civic.db", "civic.db", "pilot", ("r2", "db_sha256")),
-    ("index/dense/vectors.matrix.npy", "index/dense/vectors.matrix.npy", "pilot", ("dense", "matrix_sha256")),
-    ("index/dense/vectors.ids.npy", "index/dense/vectors.ids.npy", "pilot", ("dense", "ids_sha256")),
-    ("index/dense/vectors.dense.json", "index/dense/vectors.dense.json", "pilot", ("dense", "manifest_sha256")),
-    ("microlog/civic_microlog.db", "microlog/civic_microlog.db", "microlog", ("r2", "db_sha256")),
-    ("microlog/index/dense/vectors_microlog.matrix.npy", "microlog/index/dense/vectors_microlog.matrix.npy", "microlog",
-     ("dense", "matrix_sha256")),
-    ("microlog/index/dense/vectors_microlog.ids.npy", "microlog/index/dense/vectors_microlog.ids.npy", "microlog",
-     ("dense", "ids_sha256")),
-    ("microlog/index/dense/vectors_microlog.dense.json", "microlog/index/dense/vectors_microlog.dense.json", "microlog",
-     ("dense", "manifest_sha256")),
-]
-
-
 def run(cmd: list[str]) -> None:
     print("+ " + " ".join(cmd), flush=True)
     subprocess.run(cmd, check=True, cwd=REPO)
 
 
 def stage(src: Path, dest: Path) -> None:
+    """Every release file except the vectors databases (the numpy backend uses the artifacts), from
+    the scope registry, linked into dest in the /data layout and checked against its sha256."""
     sys.path.insert(0, str(REPO / "src"))
-    from archive_debugger import scopes
+    from archive_debugger import release_files
     from archive_debugger.retrieve.dense import file_sha256
-    registry = scopes.load_registry()
-    for rel_src, rel_dest, scope, (block, field) in LAYOUT:
-        source = src / rel_src
-        target = dest / rel_dest
+    for f in release_files.all_files():
+        if f.kind == "index":
+            continue
+        source, target = f.path(src), f.path(dest)
         target.parent.mkdir(parents=True, exist_ok=True)
         try:
             os.link(source, target)
         except OSError:
             shutil.copyfile(source, target)
-        expected = registry["scopes"][scope][block][field].lower()
         actual = file_sha256(target)
-        if actual != expected:
-            raise SystemExit(f"{rel_src}: sha256 {actual[:16]}... is not the published {expected[:16]}...; not building")
-        print(f"verified {rel_dest}", flush=True)
+        if actual != f.sha256:
+            raise SystemExit(f"{f.relative}: sha256 {actual[:16]}... is not the published {f.sha256[:16]}...; not building")
+        print(f"verified {f.relative}", flush=True)
 
 
 def main(argv=None) -> int:

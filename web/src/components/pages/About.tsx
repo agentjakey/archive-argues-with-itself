@@ -3,13 +3,10 @@ import { GOVERNANCE_STATEMENT } from "../../lib/sensitivity";
 import type { ScopeInfo } from "../../types";
 import { Page } from "./Page";
 
-/** The jurisdiction description of the active corpus's publications. Per scope, never a
- *  hardcoded single-scope claim: the pilot is federal/Ontario/Alberta; the microlog scope is
- *  national (federal, provincial, and municipal); with no active scope, a neutral phrasing. */
+/** The jurisdiction description of the active corpus's publications, from the scope registry;
+ *  with no active scope or none recorded, a neutral phrasing. */
 function jurisdictionPhrase(scope: ScopeInfo | null | undefined): string {
-  if (scope?.name === "microlog") return "Canadian federal, provincial, and municipal";
-  if (scope?.name === "pilot") return "Canadian federal, Ontario and Alberta";
-  return "Canadian";
+  return scope?.jurisdiction_phrase || "Canadian";
 }
 
 export function About({ scope }: { scope?: ScopeInfo | null }) {

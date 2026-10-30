@@ -23,9 +23,10 @@ os.environ["ANTHROPIC_BASE_URL"] = "http://offline.invalid"   # before anything 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--scopes", default="pilot,microlog")
+    parser.add_argument("--scopes", default="", help="comma-separated scopes; default: every scope in config/scopes.toml")
     args = parser.parse_args(argv)
-    wanted = [s.strip() for s in args.scopes.split(",") if s.strip()]
+    from archive_debugger import release_files
+    wanted = [s.strip() for s in args.scopes.split(",") if s.strip()] or release_files.scope_names()
 
     from fastapi.testclient import TestClient
 
@@ -34,7 +35,10 @@ def main(argv=None) -> int:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from migrate_cache import curated_questions
 
-    app = create_app(Path("config/pilot.toml"), load_env=True, serve_scopes=[s for s in wanted if s != "pilot"])
+    from archive_debugger import scopes as _scopes
+    _default = _scopes.load_registry().get("default")
+    _base_config = Path(_scopes.resolve_scope(_default).config_path)
+    app = create_app(_base_config, load_env=True, serve_scopes=[s for s in wanted if s != _default])
     totals = {"already_stored": 0, "stored_abstention": 0, "needs_model": 0, "other": 0}
     rows = []
     with TestClient(app, raise_server_exceptions=False) as client:

@@ -11,6 +11,7 @@ function scope(
 ): ScopeInfo {
   return {
     name, label, blurb: "", collection: name, collection_url: `https://archive.org/details/${name}`,
+    national: name !== "pilot",   // as the scope registry records it for these two collections
     collections: [name], item_count: jurisdictions.reduce((n, j) => n + j.items, 0),
     window: { min_year: 1960, max_year: 2009 },
     composition: {

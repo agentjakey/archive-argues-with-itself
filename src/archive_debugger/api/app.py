@@ -31,7 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from archive_debugger import crisis, editorial, flags, provision, scopes
+from archive_debugger import crisis, editorial, flags, provision, release_files, scopes
 from archive_debugger.scopes import parse_enabled_scopes
 from archive_debugger.api import cache as answer_cache
 from archive_debugger.api.coverage import coverage as compute_coverage
@@ -346,43 +346,44 @@ def resolve_landing_scope(requested: Optional[str], built: list, base_name: str)
 
 
 def offline_scopes() -> list[dict]:
-    """Every scope this box can serve offline, for the page-pack tooling (scan_coverage, offline_pack).
-    The base pilot (via config + CIVIC_* env, exactly like the deploy) plus any registered non-inherit
-    scope whose built database is present. Each entry names the paths the shared, item-id-keyed page
-    pack (data/cache/pages) must cover for that scope: its answer cache, its civic.db, and its optional
-    stories file. A scope whose database is absent (e.g. microlog on the pilot-only festival volume) is
-    skipped, so the pilot box is unaffected."""
+    """Every scope this box can serve offline, for the page-pack tooling (scan_coverage, offline_pack):
+    the registry's default scope (via its config and the CIVIC_* env, exactly like the deploy) plus
+    every other registered scope whose built database is present. Each entry names the paths the
+    shared, item-id-keyed page pack (data/cache/pages) must cover for that scope: its answer cache,
+    its database, and its stories file (from the registry)."""
     from archive_debugger.ingest.db import resolve_db_path
-    out: list[dict] = [{
-        "name": "pilot",
-        "config": Path("config/pilot.toml"),
-        "cache_db": env_path(ENV_CACHE_PATH, DEFAULT_CACHE),
-        "civic_db": Path(resolve_db_path("config/pilot.toml")),
-        "stories": DEFAULT_STORIES,
-    }]
     try:
         reg = scopes.load_registry()
     except scopes.ScopeError:
-        return out
+        reg = {"default": "pilot", "scopes": {}}
     default = reg.get("default", "pilot")
-    for name in reg.get("scopes", {}):
-        if name == default:
-            continue
+    out: list[dict] = []
+    for name in [default] + [n for n in reg.get("scopes", {}) if n != default]:
         try:
             rs = scopes.resolve_scope(name)
         except scopes.ScopeError:
             continue
+        _seed, stories = _curated_paths(name)
+        if name == default:
+            out.append({"name": name, "config": Path(rs.config_path),
+                        "cache_db": env_path(ENV_CACHE_PATH, DEFAULT_CACHE),
+                        "civic_db": Path(resolve_db_path(rs.config_path)),
+                        "stories": stories or DEFAULT_STORIES})
+            continue
         if rs.inherit or not Path(rs.db_path).exists():
             continue
         root = Path(rs.db_path).parent
-        out.append({
-            "name": name,
-            "config": rs.config_path,
-            "cache_db": root / "cache" / "answers.db",
-            "civic_db": Path(rs.db_path),
-            "stories": root / "stories.json",
-        })
+        out.append({"name": name, "config": rs.config_path, "cache_db": root / "cache" / "answers.db",
+                    "civic_db": Path(rs.db_path), "stories": stories or root / "stories.json"})
     return out
+
+
+def _curated_paths(name: str) -> tuple[Optional[Path], Optional[Path]]:
+    """A scope's seed and stories files from the registry, or (None, None) when it has none."""
+    try:
+        return release_files.curated_files(name)
+    except (scopes.ScopeError, release_files.ReleaseError):
+        return None, None
 
 
 def _enable_mmap(conn: sqlite3.Connection) -> None:
@@ -642,6 +643,10 @@ def scope_facts(name: str, config_path, corpus: dict) -> dict:
         "coverage_window": _coverage_window(corpus["pilot_window"], corpus["window"],
                                             bool(entry.get("coverage_unclamped"))),
         "harvested_count": _harvested_count(entry),
+        "refuse_probe": entry.get("refuse_probe") or None,
+        "jurisdiction_phrase": entry.get("jurisdiction_phrase") or None,
+        "national": bool(entry.get("national", False)),
+        "audit": entry.get("audit") or None,
     }
 
 
@@ -729,6 +734,43 @@ def scope_composition(conn, corpus: dict) -> dict:
         # the timeline's undated bar and this view's undated count come from one basis.
         "by_period": _period_distribution(conn),
     }
+
+
+def compute_data_facts(conn, pilot_window: dict) -> dict:
+    """The corpus figures and composition a scope shows, from its database: the aggregate queries
+    that dominate the time to open a scope (about 11 s for the pilot)."""
+    corpus = corpus_facts(conn, pilot_window)
+    return {"corpus": corpus, "composition": scope_composition(conn, corpus)}
+
+
+# The facts a release precomputes are used only with the code that computes them: a change to any
+# of these functions changes the version, and an older facts file is then ignored.
+FACTS_VERSION = hashlib.sha256("".join(inspect.getsource(fn) for fn in (
+    corpus_facts, scope_composition, _ocr_distribution, _jurisdiction_distribution,
+    _date_method_distribution, _period_distribution)).encode("utf-8") + _PERIOD_CASE.encode("utf-8")).hexdigest()[:16]
+
+
+def facts_document(scope: str, conn, db_sha256: str, pilot_window: dict) -> dict:
+    """The precomputed facts file for a scope (scripts/v2/build_scope_facts.py writes it)."""
+    return {"facts_version": FACTS_VERSION, "scope": scope, "db_sha256": db_sha256,
+            "pilot_window": pilot_window, **compute_data_facts(conn, pilot_window)}
+
+
+def load_or_compute_data_facts(scope: str, conn, db_file: Path, pilot_window: dict) -> dict:
+    """The scope's facts from its precomputed release file when that file describes this exact
+    published database (its sha256 from config/scopes.toml), this facts code and this config window;
+    otherwise computed from the database. The boot verified the database against the same sha256."""
+    path = release_files.facts_path(db_file)
+    if path.exists():
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+            published = answer_cache.canonical_data_sha256(scope)["db"]
+            if (doc.get("facts_version") == FACTS_VERSION and doc.get("db_sha256") == published
+                    and doc.get("pilot_window") == pilot_window):
+                return {"corpus": doc["corpus"], "composition": doc["composition"]}
+        except (OSError, ValueError, KeyError):
+            pass
+    return compute_data_facts(conn, pilot_window)
 
 
 def _attach_date_method(conn, rows) -> None:
@@ -865,6 +907,14 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             base_name = "pilot"
     base_cache_path = cache_path or env_path(ENV_CACHE_PATH, DEFAULT_CACHE)
     pages_dir = pages_dir or env_path(ENV_PAGES_DIR, DEFAULT_PAGES)
+    # The base scope's curated files come from its registry entry (so a container whose base is
+    # another collection never shows the default collection's stories), unless the caller passed
+    # its own (tests, scripts).
+    reg_seed, reg_stories = _curated_paths(base_name)
+    if seed_path == DEFAULT_SEED and reg_seed is not None:
+        seed_path = reg_seed
+    if stories_path == DEFAULT_STORIES and reg_stories is not None:
+        stories_path = reg_stories
     base_stories = load_stories(stories_path)
 
     def _build_bundle(name, *, cfg_path, retr, cache_p, seed_p, stories_list, llm_obj) -> Bundle:
@@ -899,9 +949,10 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             gcfg = load_generate_config(cfg_path)
             pilot_window = _pilot_window(cfg_path)
             settings = answer_cache.retrieve_settings(r.cfg)
-            corpus = corpus_facts(r.conn, pilot_window)
+            data = load_or_compute_data_facts(name, r.conn, Path(r.cfg.db_path), pilot_window)
+            corpus = data["corpus"]
             facts = scope_facts(name, cfg_path, corpus)
-            facts["composition"] = scope_composition(r.conn, corpus)   # real numbers for the sources view
+            facts["composition"] = data["composition"]   # real numbers for the sources view
         return Bundle(name=name, retriever=r, pool=pool, gcfg=gcfg, pilot_window=pilot_window,
                       cache=answer_cache.open_store(cache_p, remote_url=os.environ.get(ENV_CACHE_URL),
                                                     remote_token=os.environ.get(ENV_CACHE_TOKEN)),
@@ -923,9 +974,10 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             if not (Path(rs.db_path).exists() and Path(rs.index_path).exists()):
                 return None
             cache_p = Path(rs.db_path).parent / "cache" / "answers.db"     # isolated, never the pilot's cache
-            repo_stories = Path("config") / f"stories.{name}.json"
+            reg_seed, reg_stories = _curated_paths(name)
+            repo_stories = reg_stories or Path("config") / f"stories.{name}.json"
             story_file = repo_stories if repo_stories.exists() else Path(rs.db_path).parent / "stories.json"
-            repo_seed = Path("config") / f"seed_questions.{name}.jsonl"
+            repo_seed = reg_seed or Path("config") / f"seed_questions.{name}.jsonl"
             seed_p = repo_seed if repo_seed.exists() else None
             return _build_bundle(name, cfg_path=rs.config_path, retr=None, cache_p=cache_p,
                                  seed_p=seed_p, stories_list=load_stories(story_file), llm_obj=None)

@@ -229,24 +229,30 @@ def dense_backend_numpy() -> bool:
 
 
 def plan_scope(name: str, registry: dict, *, numpy_backend: bool) -> Plan:
-    """The files one scope needs, from config/scopes.toml and the scope's resolved paths."""
+    """The files one scope needs: its release files (archive_debugger.release_files, from the scope
+    registry alone) placed on the scope's resolved paths. With the numpy backend and published dense
+    artifacts, the artifacts replace the vectors database, which gets a stand-in."""
+    from archive_debugger import release_files
     from archive_debugger.retrieve import dense
-    entry = (registry.get("scopes") or {}).get(name) or {}
-    r2 = entry.get("r2") or {}
-    dense_cfg = entry.get("dense") or {}
+    try:
+        files = {f.kind: f for f in release_files.scope_files(name, registry)}
+    except release_files.ReleaseError as exc:
+        raise ProvisionError(str(exc)) from exc
     resolved = scopes.resolve_scope(name)
     db_path, index_path = Path(resolved.db_path), Path(resolved.index_path)
-    for field_name in ("db_key", "db_sha256", "index_key", "index_sha256"):
-        if not r2.get(field_name):
-            raise ProvisionError(f"[{name}] config/scopes.toml has no r2.{field_name}")
-    plan = Plan(jobs=[Job(name, "db", r2["db_key"], db_path, r2["db_sha256"].lower())])
-    if numpy_backend and dense_cfg:
-        paths = dense.artifact_paths(index_path)
-        for kind, part in (("dense_matrix", "matrix"), ("dense_ids", "ids"), ("dense_manifest", "manifest")):
-            plan.jobs.append(Job(name, kind, dense_cfg[f"{part}_key"], paths[part], dense_cfg[f"{part}_sha256"].lower()))
-        plan.stubs.append((index_path, r2["index_sha256"].lower()))
-    else:
-        plan.jobs.append(Job(name, "index", r2["index_key"], index_path, r2["index_sha256"].lower()))
+    artifacts = dense.artifact_paths(index_path)
+    destination = {"db": db_path, "index": index_path, "dense_matrix": artifacts["matrix"],
+                   "dense_ids": artifacts["ids"], "dense_manifest": artifacts["manifest"],
+                   "facts": release_files.facts_path(db_path)}
+    use_artifacts = numpy_backend and "dense_matrix" in files
+    plan = Plan()
+    for kind, f in files.items():
+        if kind.startswith("dense_") and not use_artifacts:
+            continue
+        if kind == "index" and use_artifacts:
+            plan.stubs.append((index_path, f.sha256))
+            continue
+        plan.jobs.append(Job(name, kind, f.key, destination[kind], f.sha256))
     return plan
 
 

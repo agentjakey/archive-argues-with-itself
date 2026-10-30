@@ -155,7 +155,8 @@ def main(argv=None) -> int:
     keys = set(responses)
     # (label, text, filters, cache_key) for each exhibit question
     want = []
-    context = scope_cache_context("pilot")
+    from archive_debugger import scopes as _scopes
+    context = scope_cache_context(_scopes.load_registry().get("default", "pilot"))
     for q in seed:
         k = answer_cache_key(context, q["text"], q.get("filters") or {})
         want.append(("seed " + q["qid"], q["text"], q.get("filters") or {}, k))

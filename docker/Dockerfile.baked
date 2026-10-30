@@ -6,7 +6,5 @@
 # the registry verifies every layer by its digest when the image is pulled.
 ARG BASE_IMAGE=archive-engine:local
 FROM ${BASE_IMAGE}
-COPY --from=data civic.db /data/civic.db
-COPY --from=data index/dense/ /data/index/dense/
-COPY --from=data microlog/civic_microlog.db /data/microlog/civic_microlog.db
-COPY --from=data microlog/index/dense/ /data/microlog/index/dense/
+# The staging folder already holds every release file in the /data layout (release_files.py).
+COPY --from=data / /data/

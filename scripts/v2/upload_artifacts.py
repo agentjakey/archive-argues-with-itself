@@ -1,4 +1,4 @@
-"""Upload the dense artifacts (retrieve/dense.py) to the private R2 data bucket. OPERATOR-RUN.
+"""Upload the derived release files (dense artifacts, corpus facts) to the private R2 bucket. OPERATOR-RUN.
 
 Reaches Cloudflare R2, so the account owner runs it (docs/v2/HOSTING.md, step 2). Each file is
 checked against the sha256 recorded in config/scopes.toml before it is uploaded, and its size is
@@ -16,10 +16,6 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
-LOCAL = {
-    "pilot": "index/dense",
-    "microlog": "microlog/index/dense",
-}
 
 
 def main(argv=None) -> int:
@@ -31,38 +27,36 @@ def main(argv=None) -> int:
         print(f"set {', '.join(missing)} in the environment first", file=sys.stderr)
         return 2
     sys.path.insert(0, str(REPO / "src"))
-    from archive_debugger import scopes
+    from archive_debugger import release_files
     from archive_debugger.boot import make_r2_client
     from archive_debugger.retrieve.dense import file_sha256
 
-    registry = scopes.load_registry()
     client = make_r2_client()
     bucket = os.environ["R2_BUCKET"]
-    for scope, folder in LOCAL.items():
-        dense = registry["scopes"][scope]["dense"]
-        for part in ("matrix", "ids", "manifest"):
-            key = dense[f"{part}_key"]
-            path = args.src / folder / Path(key).name
-            expected = dense[f"{part}_sha256"].lower()
-            actual = file_sha256(path)
-            if actual != expected:
-                print(f"{path}: sha256 does not match config/scopes.toml; nothing uploaded", file=sys.stderr)
-                return 1
-            size = path.stat().st_size
-            try:
-                head = client.head_object(Bucket=bucket, Key=key)
-                if int(head["ContentLength"]) == size:
-                    print(f"skip {key}: already on R2 with the same size")
-                    continue
-            except Exception:  # noqa: BLE001 - not there yet
-                pass
-            print(f"uploading {key} ({size:,} bytes)", flush=True)
-            client.upload_file(str(path), bucket, key)
+    derived = [f for f in release_files.all_files() if f.kind not in ("db", "index")]
+    for f in derived:
+        key = f.key
+        path = f.path(args.src)
+        expected = f.sha256
+        actual = file_sha256(path)
+        if actual != expected:
+            print(f"{path}: sha256 does not match config/scopes.toml; nothing uploaded", file=sys.stderr)
+            return 1
+        size = path.stat().st_size
+        try:
             head = client.head_object(Bucket=bucket, Key=key)
-            if int(head["ContentLength"]) != size:
-                print(f"{key}: size on R2 differs after upload", file=sys.stderr)
-                return 1
-            print(f"uploaded {key}")
+            if int(head["ContentLength"]) == size:
+                print(f"skip {key}: already on R2 with the same size")
+                continue
+        except Exception:  # noqa: BLE001 - not there yet
+            pass
+        print(f"uploading {key} ({size:,} bytes)", flush=True)
+        client.upload_file(str(path), bucket, key)
+        head = client.head_object(Bucket=bucket, Key=key)
+        if int(head["ContentLength"]) != size:
+            print(f"{key}: size on R2 differs after upload", file=sys.stderr)
+            return 1
+        print(f"uploaded {key}")
     return 0
 
 

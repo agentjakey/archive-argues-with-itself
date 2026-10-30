@@ -36,7 +36,9 @@ function GapsHero({ start, end }: { start: number; end: number }) {
  *  note's crisis resources come from the single source of truth (crisis.py) via /scopes. Numbers
  *  match docs/gaps.md and reports/microlog. */
 export function Gaps({ scope, crisis }: { scope: ScopeInfo | null; crisis: Crisis | null }) {
-  const isMicrolog = scope?.name === "microlog";
+  // Each audited collection has its own measured gaps; a collection not yet audited gets none.
+  const isMicrolog = scope?.audit === "microlog";
+  const isPilot = scope?.audit === "pilot";
   const cw = scope?.coverage_window;
   const start = cw?.min_year ?? null;
   const end = cw?.max_year ?? null;
@@ -56,6 +58,11 @@ export function Gaps({ scope, crisis }: { scope: ScopeInfo | null; crisis: Crisi
       {!scope || start == null || end == null ? (
         <p className="text-muted" aria-live="polite">
           Loading coverage.
+        </p>
+      ) : !isMicrolog && !isPilot ? (
+        <p className="text-muted">
+          This collection has not been audited yet. Its coverage is shown on the Sources and Coverage map
+          pages; its gaps have not been measured.
         </p>
       ) : isMicrolog ? (
         <>

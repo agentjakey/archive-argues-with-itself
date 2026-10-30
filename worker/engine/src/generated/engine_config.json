@@ -18,11 +18,13 @@
  "key_version": 2,
  "r2_keys": [
   "microlog/civic_microlog.db",
+  "microlog/civic_microlog.facts.json",
   "microlog/dense/vectors_microlog.dense.json",
   "microlog/dense/vectors_microlog.ids.npy",
   "microlog/dense/vectors_microlog.matrix.npy",
   "microlog/vectors_microlog.db",
   "pilot/civic.db",
+  "pilot/civic.facts.json",
   "pilot/dense/vectors.dense.json",
   "pilot/dense/vectors.ids.npy",
   "pilot/dense/vectors.matrix.npy",

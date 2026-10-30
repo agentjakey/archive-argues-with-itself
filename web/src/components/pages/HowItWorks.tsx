@@ -7,7 +7,9 @@ import { Page, Source } from "./Page";
  *  (reports/microlog). No corpus's numbers render under another. Numbers match docs/methods.md,
  *  docs/gaps.md, and reports/microlog. */
 export function HowItWorks({ scope }: { scope?: ScopeInfo | null }) {
-  const isMicrolog = scope?.name === "microlog";
+  // Each audited collection has its own published results; a collection not yet audited gets none.
+  const isMicrolog = scope?.audit === "microlog";
+  const isPilot = scope == null || scope.audit === "pilot";   // before the scope loads: the landing collection's results
   const cw = scope?.coverage_window;
   const windowStr = cw && cw.min_year != null && cw.max_year != null ? `${cw.min_year} to ${cw.max_year}` : "the years it covers";
   return (
@@ -69,6 +71,11 @@ export function HowItWorks({ scope }: { scope?: ScopeInfo | null }) {
           abstained on 5 of the 7 that should be refused and answered 2 off target, and it falsely abstained on
           1 of the 40 answerable. <Source file="reports/microlog/audit_numbers.json" />
         </p>
+      ) : !isPilot ? (
+        <p className="text-muted">
+          This collection has not been audited yet, so its accuracy is not known. The results above and in
+          Gaps describe the audited collections only.
+        </p>
       ) : (
         <p>
           That rule was specified before it was tested, amended once by criterion, then frozen. On the 50
@@ -105,6 +112,11 @@ export function HowItWorks({ scope }: { scope?: ScopeInfo | null }) {
             answerable. See Gaps for where it slipped. <Source file="reports/microlog/audit_numbers.json" />
           </p>
         </>
+      ) : !isPilot ? (
+        <p className="text-muted">
+          This collection has not been audited yet, so its accuracy is not known. The results above and in
+          Gaps describe the audited collections only.
+        </p>
       ) : (
         <>
           <p>

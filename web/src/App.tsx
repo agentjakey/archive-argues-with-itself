@@ -46,18 +46,18 @@ import { plural } from "./lib/format";
 import type { Comparability, EditorialNote, EvidenceRow, Example, Filters, Flagged, Period, Story } from "./types";
 import { askedQuestion, attractStories, galleryStories, heroStory } from "./lib/stories";
 
-// The verified refuse probes, per scope, used both for the "See it decline" doorway (refuseQid
-// below) and for the "(thin record)" example chip: these reliably abstain, so a thin-tagged chip
-// never returns an answer. The first one present in the active scope's seed is used.
-const REFUSE_PROBE_QIDS = ["q039", "mq41"];
-
 export default function App() {
   const kiosk = useKiosk();
   const offline = useOffline();   // ?offline=1: no ask box, cached questions and stories only
-  const chips = useExamples(6, REFUSE_PROBE_QIDS);
+  // Each scope's verified refuse probe comes from the scope registry (served in /scopes): a seed
+  // question the record cannot answer, used for the "See it decline" doorway and the "(thin record)"
+  // chip. These reliably abstain, so a thin-tagged chip never returns an answer.
+  const scopesInfo = useScopes();
+  const refuseProbes = (scopesInfo?.scopes ?? []).map((s) => s.refuse_probe).filter((q): q is string => !!q);
+  const chips = useExamples(6, refuseProbes);
   const { status, elapsed, response, error, run, retry, wake } = useAsk();
-  // In a static release the engine sleeps when idle: start it when the page loads and when the
-  // question box gets focus, so a live question rarely waits for it.
+  // In a static release the engine sleeps when idle: start it when the question box gets focus,
+  // so a live question rarely waits for it. Reading the stories never wakes it.
   const preWake = usePreWake(!offline);
 
   const initial = useRef(readState(window.location.search));
@@ -92,7 +92,6 @@ export default function App() {
   const [decadeRetry, setDecadeRetry] = useState<{ a: Period; b: Period } | null>(null);
   const [decadeElapsed, setDecadeElapsed] = useState(0);
   const { stories, loading: storiesLoading } = useStories();
-  const scopesInfo = useScopes();
   const activeScopeInfo =
     scopesInfo?.scopes.find((s) => s.name === (initial.current.scope ?? scopesInfo.default)) ?? null;
   const scopeExamples = useScopeExamples((scopesInfo?.scopes ?? []).map((s) => s.name));
@@ -571,7 +570,7 @@ export default function App() {
   // out-of-record COVID-2020 probes that abstain. It is a real seed example of the active scope,
   // pulled from that scope's /examples, so the card appears only when the question is actually
   // available (a scope without it, or with no examples, shows no refuse card).
-  const refuseQid = activeScopeInfo?.name === "microlog" ? "mq41" : "q039";
+  const refuseQid = activeScopeInfo?.refuse_probe ?? null;
   const refuseExample = chips.find((c) => c.qid === refuseQid) ?? null;
   // A one-line summary for the collapsed "About this corpus" strip, from the same live per-scope
   // composition the strip itself reads, so the summary and the opened band can never disagree.

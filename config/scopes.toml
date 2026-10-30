@@ -36,6 +36,19 @@ inherit = true
 # GitHub-release fallback (its files are under GitHub's 2 GiB per-asset cap), so with the R2
 # vars absent it still boots the old way. See [scopes.pilot.r2] / [scopes.pilot.github_release].
 source = "r2"
+# Release layout and curated material (read by archive_debugger.release_files, the app and the
+# release tools; nothing else names a scope). release_dir is this scope's folder under the data
+# root: the container's /data, or a local folder of verified copies.
+release_dir = ""
+seed = "eval/seed_questions.jsonl"
+stories = "config/stories.json"
+# A seed question that the record cannot answer, used for the "See it decline" doorway.
+refuse_probe = "q039"
+# Display facts: who published this collection, whether it covers every province and territory,
+# and which audit's published results describe it (none for a collection not yet audited).
+jurisdiction_phrase = "Canadian federal, Ontario and Alberta"
+national = false
+audit = "pilot"
 # Display facts for the scope switcher (read by the API /scopes endpoint; ignored by
 # resolve_scope). Additive: no data path or behavior depends on these.
 # Label carries no year range: the per-scope coverage window (1960-2009 for the pilot) is derived
@@ -66,6 +79,12 @@ matrix_sha256 = "353cd7f9864d2b43a9dc43817b9f4f2617d0a9847c6b22de38a426c553a2fd2
 ids_sha256 = "ee47449630234a4a2ddda12b52bd83f63ab2a0424b74be1943c0354131312ca0"
 manifest_sha256 = "465c84cbb9a9f616f364613d14ed502d48a75bf9ee117b6253b342ca19a1133c"
 
+[scopes.pilot.facts]
+# Precomputed corpus facts (scripts/v2/build_scope_facts.py): the server loads them instead of
+# running the aggregate queries when the facts version and the database sha256 match.
+key = "pilot/civic.facts.json"
+sha256 = "1b7a055f81c1e02c36ee45255d4151e4b515ff0e02978d285606625d4294442c"
+
 [scopes.pilot.github_release]
 # Selectable fallback: the existing GitHub release. Used when source = "github_release", and
 # also when source = "r2" but the R2 vars are absent, so the pilot still boots the old way with
@@ -87,6 +106,19 @@ index_path = "data/exploration/microlog/index/vectors_microlog.db"
 # so there is no github_release fallback for this scope; with the R2 vars absent and no local
 # data, the boot fails fast rather than serving this scope half-provisioned.
 source = "r2"
+# Release layout and curated material (read by archive_debugger.release_files, the app and the
+# release tools; nothing else names a scope). release_dir is this scope's folder under the data
+# root: the container's /data, or a local folder of verified copies.
+release_dir = "microlog"
+seed = "config/seed_questions.microlog.jsonl"
+stories = "config/stories.microlog.json"
+# A seed question that the record cannot answer, used for the "See it decline" doorway.
+refuse_probe = "mq41"
+# Display facts: who published this collection, whether it covers every province and territory,
+# and which audit's published results describe it (none for a collection not yet audited).
+jurisdiction_phrase = "Canadian federal, provincial, and municipal"
+national = true
+audit = "microlog"
 # Display facts for the scope switcher (see the pilot entry).
 label = "National public health, all provinces"
 blurb = "Microlog microfiche: federal, provincial, and municipal issuers"
@@ -116,3 +148,9 @@ manifest_key = "microlog/dense/vectors_microlog.dense.json"
 matrix_sha256 = "eac89f0e9800ec7415d2995deb19d18148c1cef8c45f22192bb9078a7aa0a53a"
 ids_sha256 = "6796388dbe622ba9827027172fde9c0c856af9299146c9ec41be015e7978f3cf"
 manifest_sha256 = "c305f8799c08f7e6aa46c347a872100218857b765da37176427e3a2b561d740a"
+
+[scopes.microlog.facts]
+# Precomputed corpus facts (scripts/v2/build_scope_facts.py): the server loads them instead of
+# running the aggregate queries when the facts version and the database sha256 match.
+key = "microlog/civic_microlog.facts.json"
+sha256 = "7c483c0acf6c5352b9a6d03f82a506a772ea4d39703edbd96d5dac4233887d53"

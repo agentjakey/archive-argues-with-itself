@@ -41,9 +41,10 @@ def write_json(path: Path, value) -> None:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", default="site/data", type=Path)
-    parser.add_argument("--scopes", default="pilot,microlog")
+    parser.add_argument("--scopes", default="", help="comma-separated scopes; default: every scope in config/scopes.toml")
     args = parser.parse_args(argv)
-    wanted = [s.strip() for s in args.scopes.split(",") if s.strip()]
+    from archive_debugger import release_files
+    wanted = [s.strip() for s in args.scopes.split(",") if s.strip()] or release_files.scope_names()
 
     from fastapi.testclient import TestClient
 
@@ -56,7 +57,10 @@ def main(argv=None) -> int:
 
     if args.out.exists():
         shutil.rmtree(args.out)
-    app = create_app(Path("config/pilot.toml"), load_env=False, serve_scopes=[s for s in wanted if s != "pilot"],
+    from archive_debugger import scopes as _scopes
+    _default = _scopes.load_registry().get("default")
+    _base_config = Path(_scopes.resolve_scope(_default).config_path)
+    app = create_app(_base_config, load_env=False, serve_scopes=[s for s in wanted if s != _default],
                      enabled_scopes=wanted)
     summary = {}
     with TestClient(app, raise_server_exceptions=False) as client:

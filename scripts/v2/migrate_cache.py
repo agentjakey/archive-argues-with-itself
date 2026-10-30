@@ -37,17 +37,16 @@ from archive_debugger.generate.answer import generation_meta, salient_terms
 from archive_debugger.generate.cli import build_filters, load_generate_config, retrieve_pool, sent_temperature
 from archive_debugger.retrieve.search import Retriever
 
-SEED_FILES = {"pilot": Path("eval/seed_questions.jsonl"), "microlog": Path("config/seed_questions.microlog.jsonl")}
-STORY_FILES = {"pilot": Path("config/stories.json"), "microlog": Path("config/stories.microlog.json")}
-
-
 def curated_questions(scope: str) -> list[dict]:
-    """Seed and story questions of a scope: label, question text, filters."""
+    """Seed and story questions of a scope (files named by its registry entry): label, question
+    text, filters."""
+    from archive_debugger import release_files
+    seed_file, story_file = release_files.curated_files(scope)
     out = []
-    if SEED_FILES[scope].exists():
-        for q in load_seed(SEED_FILES[scope]):
+    if seed_file is not None and seed_file.exists():
+        for q in load_seed(seed_file):
             out.append({"label": f"seed:{q['qid']}", "question": q["text"], "filters": q.get("filters") or {}})
-    for s in editorial.load_stories(STORY_FILES[scope]):
+    for s in editorial.load_stories(story_file) if story_file is not None else []:
         out.append({"label": f"story:{s['id']}", "question": editorial.asked_question(s), "filters": s.get("filters") or {}})
     return out
 
@@ -60,7 +59,7 @@ def signature_of_rows(evidence: list[dict]) -> tuple:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--scope", choices=sorted(SEED_FILES), required=True)
+    parser.add_argument("--scope", required=True, help="a scope in config/scopes.toml")
     parser.add_argument("--old", required=True, help="the v1 answers.db")
     parser.add_argument("--out", required=True, help="where the v2 table is written")
     args = parser.parse_args(argv)

@@ -28,7 +28,7 @@ from archive_debugger import boot, scopes
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dest", required=True, help="an EMPTY scratch directory on the disk being measured")
-    parser.add_argument("--scopes", default="pilot,microlog")
+    parser.add_argument("--scopes", default="", help="comma-separated scopes; default: every scope in config/scopes.toml")
     parser.add_argument("--out", required=True)
     parser.add_argument("--where", default="", help="free text: where this ran (e.g. home network, a Cloudflare container)")
     parser.add_argument("--keep", action="store_true", help="keep the downloaded files")
@@ -45,7 +45,8 @@ def main(argv=None) -> int:
     rows = []
     t_all = time.monotonic()
     try:
-        for scope in [s.strip() for s in args.scopes.split(",") if s.strip()]:
+        from archive_debugger import release_files
+        for scope in [s.strip() for s in args.scopes.split(",") if s.strip()] or release_files.scope_names():
             for spec in boot.scope_provision_specs(scope, registry=registry):
                 target = dest / spec.r2_key.replace("/", "__")
                 t0 = time.monotonic()

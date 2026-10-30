@@ -28,11 +28,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-SCOPE_FILES = {
-    "pilot": {"db": "civic.db", "index": "index/vectors.db", "env": ("CIVIC_DB_PATH", "CIVIC_INDEX_PATH")},
-    "microlog": {"db": "microlog/civic_microlog.db", "index": "microlog/index/vectors_microlog.db",
-                 "env": ("MICROLOG_DB_PATH", "MICROLOG_INDEX_PATH")},
-}
 
 
 def link(src: Path, dest: Path) -> None:
@@ -49,15 +44,16 @@ def build_layout(scope: str, layout: str, src: Path, work: Path) -> tuple[Path, 
     from archive_debugger import provision
     from archive_debugger.api.cache import canonical_data_sha256
     from archive_debugger.retrieve import dense
-    files = SCOPE_FILES[scope]
-    db = work / Path(files["db"]).name
-    index = work / "index" / Path(files["index"]).name
-    link(src / files["db"], db)
+    from archive_debugger import release_files
+    files = {f.kind: f for f in release_files.scope_files(scope)}
+    db = work / Path(files["db"].relative).name
+    index = work / "index" / Path(files["index"].relative).name
+    link(files["db"].path(src), db)
     if layout == "v1":
-        link(src / files["index"], index)
+        link(files["index"].path(src), index)
     else:
         provision.write_stub_index(index, canonical_data_sha256(scope)["index"])
-        published = dense.artifact_paths(src / files["index"])
+        published = dense.artifact_paths(files["index"].path(src))
         local = dense.artifact_paths(index)
         for part in ("matrix", "ids", "manifest"):
             link(published[part], local[part])
@@ -76,7 +72,8 @@ def capture(scope: str, layout: str, src: Path, out: Path) -> int:
     os.environ["CIVIC_DENSE_BACKEND"] = "numpy"
     with tempfile.TemporaryDirectory(prefix=f"parity-{scope}-{layout}-", dir=src) as tmp:
         db, index = build_layout(scope, layout, src, Path(tmp))
-        db_env, index_env = SCOPE_FILES[scope]["env"]
+        from archive_debugger import release_files
+        db_env, index_env = release_files.path_env_names(scope)
         os.environ[db_env], os.environ[index_env] = str(db), str(index)
         resolved = scopes.resolve_scope(scope)
         active = None if resolved.inherit else resolved
@@ -151,7 +148,7 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     c = sub.add_parser("capture")
-    c.add_argument("--scope", choices=sorted(SCOPE_FILES), required=True)
+    c.add_argument("--scope", required=True, help="a scope in config/scopes.toml")
     c.add_argument("--layout", choices=["v1", "artifacts"], required=True)
     c.add_argument("--src", type=Path, required=True, help="folder with the verified data and artifacts")
     c.add_argument("--out", type=Path, required=True)
@@ -159,7 +156,7 @@ def main(argv=None) -> int:
     m.add_argument("a", type=Path)
     m.add_argument("b", type=Path)
     s = sub.add_parser("answers")
-    s.add_argument("--scope", choices=sorted(SCOPE_FILES), required=True)
+    s.add_argument("--scope", required=True, help="a scope in config/scopes.toml")
     s.add_argument("--old", type=Path, required=True)
     s.add_argument("--new", type=Path, required=True)
     args = parser.parse_args(argv)

@@ -137,13 +137,14 @@ def main() -> int:
         for _b in app.state.bundles.values():
             _b.cache.put = lambda record: intercepted.append(record["key"])  # type: ignore[assignment]
 
-        # The microlog scope's seed and story questions, where microlog is served here.
-        if "microlog" in app.state.bundles:
-            from archive_debugger.editorial import load_stories as _load_stories
-            for q in load_seed(REPO / "config/seed_questions.microlog.jsonl"):
-                golden.append(("microlog:seed:" + q["qid"], q["text"], q.get("filters") or {}, "microlog"))
-            for s in _load_stories(REPO / "config/stories.microlog.json"):
-                golden.append(("microlog:story:" + s["id"], asked_question(s), s.get("filters") or {}, "microlog"))
+        # Every other served scope's seed and story questions (files named by the scope registry).
+        sys.path.insert(0, str(REPO / "scripts" / "v2"))
+        from migrate_cache import curated_questions
+        for scope_name in app.state.bundles:
+            if scope_name == app.state.default_scope:
+                continue
+            for q in curated_questions(scope_name):
+                golden.append((f"{scope_name}:{q['label']}", q["question"], q["filters"], scope_name))
 
         print(f"== {len(golden)} EXHIBIT QUESTIONS (must serve from cache, must NOT degrade) ==")
         for label, text, filt, scope in golden:
