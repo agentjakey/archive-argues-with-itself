@@ -14,7 +14,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "build:e2e": "vite build --mode e2e",
-    "build:staging": "vite build --mode staging"
+    "build:staging": "vite build --mode staging",
+    "build:production": "vite build --mode release"
   },
   "dependencies": {
     "react": "^18.3.1",

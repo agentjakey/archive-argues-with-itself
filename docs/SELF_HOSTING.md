@@ -55,7 +55,8 @@ npx wrangler deploy --env staging --var RELEASE_ID:<release>
 ```
 
 Set the data bucket's name in both `r2_buckets` entries. Create an invisible Turnstile widget for your
-site's hostnames and build the site with its site key. Seed D1 with the recorded answers to the
+site's hostnames and put its site key in the web build settings (`web/.env.release` for
+production; the staging file uses Cloudflare's always-pass test key). Seed D1 with the recorded answers to the
 example questions (`scripts/v2/export_cache_sql.py`, then `npx wrangler d1 execute DB --remote --file
 <sql>`); only curated rows are exported.
 
@@ -65,7 +66,7 @@ The production environment attaches the custom domains in `worker/engine/wrangle
 ## Releases and rollback
 
 ```
-cd web; npm ci; npm run build; cd ..        # with VITE_STATIC_DATA=/data, VITE_API_BASE and VITE_TURNSTILE_SITEKEY set
+cd web; npm ci; npm run build:<env>; cd ..  # settings in web/.env.staging or web/.env.release
 python scripts/v2/build_release.py assemble --release-id <id> --api-origin https://<your engine Worker>
 python scripts/v2/build_release.py gate
 python scripts/v2/build_release.py publish --env <env>

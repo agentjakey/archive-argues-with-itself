@@ -3,9 +3,10 @@ name: deploy
 # Deploys only when asked: a manual run (choose the environment and what to deploy) or a pushed
 # release tag (v2.*), which deploys both to production. Every deploy runs the tests and the release
 # gates first. Credentials come from GitHub Actions secrets (CLOUDFLARE_API_TOKEN,
-# CLOUDFLARE_ACCOUNT_ID); per-environment build settings from repository variables. The engine's
-# own secrets (ANTHROPIC_API_KEY, TURNSTILE_SECRET) are set once with `wrangler secret put` and are
-# never handled here. See docs/SELF_HOSTING.md.
+# CLOUDFLARE_ACCOUNT_ID); the public site build settings from web/.env.staging and web/.env.release,
+# and the engine origin from the API_ORIGIN repository variable. The engine's own secrets
+# (ANTHROPIC_API_KEY, TURNSTILE_SECRET_KEY) are set once with `wrangler secret put` and are never
+# handled here. See docs/SELF_HOSTING.md.
 on:
   workflow_dispatch:
     inputs:
@@ -62,15 +63,12 @@ jobs:
           cache: pip
       - run: python -m pip install -e ".[dev]"
       - name: build the web app in static mode
+        # build settings are committed and public: web/.env.staging and web/.env.release
         working-directory: web
-        env:
-          VITE_STATIC_DATA: /data
-          VITE_API_BASE: ${{ vars.API_ORIGIN }}
-          VITE_TURNSTILE_SITEKEY: ${{ vars.TURNSTILE_SITEKEY }}
         run: |
           npm ci
           npm test
-          npm run build
+          npm run build:${{ env.DEPLOY_ENV }}
       - name: assemble and gate the release
         run: |
           python scripts/v2/build_release.py assemble --release-id "$RELEASE_ID" --api-origin "${{ vars.API_ORIGIN }}"

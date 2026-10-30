@@ -301,6 +301,7 @@ worker/site/release/
 # The end-to-end build settings hold no secrets.
 !web/.env.e2e
 !web/.env.staging
+!web/.env.release
 
 # Private working notes for v2 (baseline, decisions, runbooks): kept locally, never published.
 docs/v2/
