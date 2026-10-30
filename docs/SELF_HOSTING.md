@@ -89,7 +89,9 @@ token and account id as Actions secrets.
 A collection is config plus data. Add its entry to `config/scopes.toml` (its config file, R2 keys and
 sha256, `release_dir`, seed and stories files, a seed question the record cannot answer for the
 "See it decline" doorway, its publisher phrase, whether it is national, and the audit whose results
-describe it, if any), build and upload its derived files, and add it to `CIVIC_ENABLED_SCOPES`. The
+describe it, if any), build and upload its derived files, and add it to `CIVIC_ENABLED_SCOPES`. In
+the split layout it gets its own engine, sized by its entry in the engine Worker's `INSTANCE_TYPES`
+(or `INSTANCE_TYPE` when it has none). The
 boot, the Worker's allow list, the release tools and the site pick it up from the registry; a
 collection that has not been audited shows that, never another collection's numbers.
 
