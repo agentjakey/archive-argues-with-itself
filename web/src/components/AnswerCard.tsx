@@ -15,6 +15,9 @@ interface Props {
   notes?: EditorialNote[] | null;   // dated notes about this stored answer, shown above it, never in it
 }
 
+/** Shown beside every answer the model wrote. */
+export const AI_LINE = "Written by Claude, an AI model, from the pages cited. It can be wrong; open the page to check.";
+
 /** No box: a left rule, serif heading, marks [n] beside each claim, Sources below. */
 export function AnswerCard({ answer, byId, onOpen, notes }: Props) {
   const numbered = useMemo(() => numberCitations(answer.sentences), [answer.sentences]);
@@ -31,6 +34,9 @@ export function AnswerCard({ answer, byId, onOpen, notes }: Props) {
         Answer from the record
       </h2>
       <EditorialNotes notes={notes} className="mt-3" />
+      <p className="mt-2 text-sm text-muted" data-testid="ai-line">
+        {AI_LINE}
+      </p>
       <div className="mt-3 max-w-prose leading-relaxed">
         {answer.sentences.map((s, i) => (
           <p key={i} className="mb-3">

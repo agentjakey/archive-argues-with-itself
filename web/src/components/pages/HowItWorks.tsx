@@ -28,9 +28,10 @@ export function HowItWorks({ scope }: { scope?: ScopeInfo | null }) {
       <h3>Four rules that never move</h3>
       <ol>
         <li>
-          <b>One network call.</b> The only thing this tool talks to while you use it is the language model
-          that drafts answers. Nothing re-fetches the archive; the corpus was collected once and lives in one
-          database.
+          <b>One outside call per answer.</b> To answer, the engine calls only the language model that drafts
+          the answer. It never searches the live archive; the corpus was collected once and lives in one
+          database. (Your browser separately loads page images from archive.org and, when you ask, runs a
+          Cloudflare person check.)
         </li>
         <li>
           <b>A citation is verified by three structural checks, and nothing else.</b> The cited passage exists;

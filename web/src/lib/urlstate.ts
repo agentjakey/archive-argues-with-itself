@@ -3,8 +3,13 @@ import type { Filters } from "../types";
 // The URL is the app's state: q + filters on ask, pins=a,b on pin, kiosk preserved,
 // view=how|gaps|about for the reading pages.
 
-export type View = "explore" | "how" | "gaps" | "sources" | "map" | "timeline" | "about";
-export const VIEWS: readonly View[] = ["explore", "how", "gaps", "sources", "map", "timeline", "about"];
+export type View =
+  | "explore" | "how" | "gaps" | "sources" | "map" | "timeline" | "about"
+  | "privacy" | "terms" | "accessibility" | "corrections";
+export const VIEWS: readonly View[] = [
+  "explore", "how", "gaps", "sources", "map", "timeline", "about",
+  "privacy", "terms", "accessibility", "corrections",
+];
 
 // Short label per view, matching the nav, for the browser tab title. The home/ask view (null) uses
 // the bare site name.
@@ -17,6 +22,10 @@ export const VIEW_TITLE: Record<View, string> = {
   map: "Coverage map",
   timeline: "Timeline",
   about: "About",
+  privacy: "Privacy",
+  terms: "Terms of use",
+  accessibility: "Accessibility",
+  corrections: "Corrections and care",
 };
 
 export function documentTitle(view: View | null): string {

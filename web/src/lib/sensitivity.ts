@@ -159,8 +159,8 @@ export const ATTRIBUTION_NOTICE = {
 // Gaps care notes, from this one constant so the three can never drift. CARE-aligned and
 // Notices-ready, with the plain non-overclaim disclaimer.
 export const GOVERNANCE_STATEMENT =
-  "This tool is aligned with the CARE Principles for Indigenous Data Governance, and informed by the " +
-  "Local Contexts Notices and the First Nations principles of OCAP. It is not community-governed, not " +
+  "This tool takes the CARE Principles for Indigenous Data Governance, the Local Contexts Notices and the " +
+  "First Nations principles of OCAP as guidance; it does not claim to meet them. It is not community-governed, not " +
   "certified, and has not been reviewed or endorsed by any community. Real governance notices are " +
   "created by the holding institution together with the communities concerned, through the Local " +
   "Contexts Hub. This tool only adds context alongside the record. It never changes the record, and " +

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PageDrawer } from "../components/PageDrawer";
 import type { EvidenceRow } from "../types";
@@ -36,6 +36,9 @@ describe("PageDrawer offline degradation (R1, both scopes)", () => {
   it("online + not in the pack: keeps the archive.org image and viewer (web experience preserved)", () => {
     render(<PageDrawer row={row({ offline: false, page_image: ARCHIVE_IMG })} onClose={vi.fn()} offline={false} />);
     expect(screen.getByRole("img", { name: /Page image/ })).toHaveAttribute("src", ARCHIVE_IMG);
+    // archive.org's own viewer page (its scripts, cookies and analytics) loads only on request
+    expect(screen.queryByTitle("archive.org page viewer")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Load the archive.org viewer here" }));
     expect(screen.getByTitle("archive.org page viewer")).toBeInTheDocument();
   });
 });

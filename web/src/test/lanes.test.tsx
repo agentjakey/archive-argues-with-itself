@@ -28,7 +28,7 @@ describe("EvidenceTrail", () => {
     // scope the count to the lanes, not the whole trail).
     expect(within(screen.getByTestId("lanes")).getAllByText("Cited")).toHaveLength(1);
     const timeline = screen.getByRole("navigation", { name: "Decades" });
-    expect(within(timeline).getByRole("button", { name: /1970s: 1 retrieved, 40 matching/ })).toBeInTheDocument();
-    expect(within(timeline).getByRole("button", { name: /1960s: 0 retrieved, 0 matching/ })).toHaveClass("is-zero");
+    expect(within(timeline).getByRole("button", { name: /1970s 1 retrieved 40 matched/ })).toBeInTheDocument();
+    expect(within(timeline).getByRole("button", { name: /1960s 0 retrieved 0 matched/ })).toHaveClass("is-zero");
   });
 });

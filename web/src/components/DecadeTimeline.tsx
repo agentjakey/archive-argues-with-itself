@@ -28,15 +28,27 @@ export function DecadeTimeline({ lanes, active, onJump }: Props) {
                 className={`timeline-btn ${zero ? "is-zero" : ""} ${isActive ? "is-active" : ""}`}
                 aria-current={isActive ? "true" : undefined}
                 onClick={() => onJump(l.key)}
-                aria-label={`${l.key}: ${l.retrieved} retrieved, ${l.matched == null ? "matching count pending" : `${l.matched} matching in corpus`}`}
               >
                 <span className="timeline-label">{l.key}</span>
                 <span className="timeline-mark" aria-hidden="true" />
-                <span className="timeline-counts" aria-hidden="true">
+                {/* the button is named by what it shows: decade, retrieved, matched */}
+                <span className="timeline-counts">
                   <span>
+                    {" "}
                     <b>{l.retrieved}</b> retrieved
                   </span>
-                  <span>{l.matched == null ? "..." : formatInt(l.matched)} matched</span>
+                  <span>
+                    {" "}
+                    {l.matched == null ? (
+                      <>
+                        <span aria-hidden="true">...</span>
+                        <span className="sr-only">count pending</span>
+                      </>
+                    ) : (
+                      formatInt(l.matched)
+                    )}{" "}
+                    matched
+                  </span>
                 </span>
               </button>
             </li>

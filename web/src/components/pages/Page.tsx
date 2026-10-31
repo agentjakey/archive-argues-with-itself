@@ -22,3 +22,25 @@ export function Source({ file }: { file: string }) {
     </span>
   );
 }
+
+/** The date a public policy page last changed. Changes are logged in CHANGELOG.md. */
+export function LastUpdated({ date }: { date: string }) {
+  return (
+    <p className="text-sm text-muted">
+      Last updated <time dateTime={date}>{date}</time>.
+    </p>
+  );
+}
+
+/** A link that opens outside the site. */
+export function Ext({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a className="linkish" href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+}
+
+export const REPO_URL = "https://github.com/agentjakey/archive-argues-with-itself";
+export const HELLO = "hello@archiveargues.org";
+export const POLICY_DATE = "2026-10-31";

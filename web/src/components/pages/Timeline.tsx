@@ -244,7 +244,6 @@ function Bar({
       className="tl-bar"
       role="button"
       tabIndex={0}
-      aria-label={`${label}. Open this period.`}
       onClick={onDrill}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -253,15 +252,17 @@ function Bar({
         }
       }}
     >
+      {/* the title is the button's accessible name (SVG names a group from its title) */}
       <title>{label}</title>
       {/* full-slot hit target so even a zero bar is clickable */}
       <rect x={x} y={TOP} width={SLOT} height={baseline - TOP + BOT} fill="transparent" />
       {h > 0 && <rect x={barX} y={baseline - h} width={BAR_W} height={h} fill={fill} stroke="#1c1a17" strokeWidth="1" rx="2" />}
-      <text x={cx} y={baseline - h - 8} textAnchor="middle" fontSize="15" fill="#1c1a17" fontFamily="ui-monospace, monospace">
-        {formatInt(bar.count)}
-      </text>
+      {/* the period first, then its count: the order the accessible name reads in */}
       <text x={cx} y={baseline + 20} textAnchor="middle" fontSize="14" fill="#1c1a17" fontFamily="ui-sans-serif, system-ui">
         {bar.label}
+      </text>
+      <text x={cx} y={baseline - h - 8} textAnchor="middle" fontSize="15" fill="#1c1a17" fontFamily="ui-monospace, monospace">
+        {formatInt(bar.count)}
       </text>
     </g>
   );

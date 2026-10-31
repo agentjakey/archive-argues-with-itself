@@ -1,4 +1,5 @@
-import type { FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { onChallengeState, SLOT_ID, type ChallengeState } from "../lib/turnstile";
 import type { DocType, Filters, Jurisdiction, Period, ScopeInfo } from "../types";
 
 const PERIODS: Period[] = ["pre-1960", "1960s", "1970s", "1980s", "1990s", "2000s", "post-2009", "undated"];
@@ -52,6 +53,8 @@ export function AskBar({ question, filters, busy, kiosk, scope, onQuestion, onFi
     cw && cw.min_year != null && cw.max_year != null
       ? `Ask about the public-health record, ${cw.min_year} to ${cw.max_year}`
       : "Ask about the public-health record";
+  const [challenge, setChallenge] = useState<ChallengeState>("idle");
+  useEffect(() => onChallengeState(setChallenge), []);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (question.trim()) onAsk();
@@ -70,6 +73,7 @@ export function AskBar({ question, filters, busy, kiosk, scope, onQuestion, onFi
         <label className="sr-only" htmlFor="question">
           Question
         </label>
+        <div>
         <div className="flex gap-2">
           <input
             id="question"
@@ -85,6 +89,15 @@ export function AskBar({ question, filters, busy, kiosk, scope, onQuestion, onFi
           <button type="submit" className="chip chip-primary px-5" disabled={busy || !question.trim()}>
             Ask
           </button>
+        </div>
+        {/* The person check (Cloudflare Turnstile) draws here. Most visitors never see it; when
+            Cloudflare asks for a click, it appears right under the button that was pressed. */}
+        <div id={SLOT_ID} className="turnstile-slot" />
+        <p className={challenge === "interactive" ? "mt-2 text-sm text-ink" : "sr-only"} role="status" aria-live="polite">
+          {challenge === "interactive"
+            ? "Before your question is sent, Cloudflare asks you to confirm you are a person. Answer the check just above."
+            : ""}
+        </p>
         </div>
         {!kiosk && (
           // Filters are collapsed by default so the ask box stays a single clean line; the selects

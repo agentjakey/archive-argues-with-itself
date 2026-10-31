@@ -28,7 +28,8 @@ export function CoveragePanel({ coverage, undatedShare, explanation, scope }: Pr
           Counting lexical matches across the corpus.
         </p>
       ) : (
-        <div className="mt-3 overflow-x-auto">
+        // Focusable so a keyboard user can scroll the table sideways on a narrow screen.
+        <div className="mt-3 overflow-x-auto" role="region" aria-label="Coverage by decade" tabIndex={0}>
           <table className="grid-table" data-testid="coverage-grid">
             <thead>
               <tr>

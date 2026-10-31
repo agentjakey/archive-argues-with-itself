@@ -83,13 +83,19 @@ describe("reading pages", () => {
     expect(screen.queryByText(/338,338 of 745,893/)).toBeNull();
   });
 
-  it("About names the partners, the image source, and the licence", () => {
+  it("About says who built it, that no one endorses the answers, and how answers are made", () => {
     render(<About />);
-    expect(screen.getByText(/AI Builders Fellowship of the/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Jacob Ortiz" })).toHaveAttribute("href", "https://github.com/agentjakey");
+    expect(screen.getByText(/Last updated/)).toBeInTheDocument();
+    expect(screen.getByText(/2026 AI Builders Fellowship/)).toBeInTheDocument();
+    expect(screen.getByText(/nor\s+the Government of Canada, endorses the answers/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "BC + AI Ecosystem" })).toHaveAttribute("href", "https://bc-ai.ca");
     expect(screen.getByRole("link", { name: "Internet Archive Canada" })).toHaveAttribute("href", "https://internetarchivecanada.org");
-    expect(screen.getByText(/served by archive.org/)).toBeInTheDocument();
+    expect(screen.getByText(/Claude, an AI\s+model made by Anthropic/)).toBeInTheDocument();
+    expect(screen.getByText(/88.6% to 96.1%/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "ACCURACY.md" })).toHaveAttribute("href", expect.stringContaining("docs/ACCURACY.md"));
+    expect(screen.getByRole("link", { name: "METHODS.md" })).toHaveAttribute("href", expect.stringContaining("docs/METHODS.md"));
+    expect(screen.getByRole("link", { name: "Qipu" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "hello@archiveargues.org" })).toHaveAttribute("href", "mailto:hello@archiveargues.org");
     expect(screen.getByRole("link", { name: /github.com\/agentjakey/ })).toHaveAttribute("href", "https://github.com/agentjakey/archive-argues-with-itself");
     expect(screen.getByText(/MIT licence/)).toBeInTheDocument();
   });

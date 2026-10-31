@@ -12,20 +12,16 @@ const KICKER = "Two pages from the public record";
 
 /** The threshold: the single focal thing on the landing, shown before the machinery. One curated
  *  pair from the record, its two pages years apart sized as artifacts, with the caption and the
- *  comparability label saying what the pair can and cannot show. It is one button (one action: open the full cited answer), following the same
- *  accessible pattern as the gallery cards (spans inside the button, the question in the aria-label).
+ *  comparability label saying what the pair can and cannot show. Like the gallery cards, the whole
+ *  pair opens the full cited answer on a mouse click, and one real button, "See the full answer" (its
+ *  accessible name adds the question), does it from the keyboard.
  *  With no featured story it renders nothing, so the landing falls back to its framing and the tool. */
 export function ThresholdHero({ featured, onOpen }: Props) {
   if (!featured) return null;
   const [a, b] = featured.pins;
   return (
     <section className="settle mt-6 border-b border-rule pb-10" aria-labelledby="threshold-kicker">
-      <button
-        type="button"
-        onClick={() => onOpen(featured)}
-        aria-label={`See the full answer: ${featured.question}`}
-        className="group block w-full cursor-pointer border-0 bg-transparent p-0 text-left"
-      >
+      <div onClick={() => onOpen(featured)} className="group block w-full cursor-pointer text-left">
         <span id="threshold-kicker" className="tag block">
           {KICKER}
         </span>
@@ -64,10 +60,18 @@ export function ThresholdHero({ featured, onOpen }: Props) {
             <span className="tag">{featured.comparability.label}</span>
           </span>
         )}
-        <span className="mt-4 inline-block font-sans text-base text-ink underline decoration-transparent underline-offset-4 group-hover:decoration-current">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(featured);
+          }}
+          aria-label={`See the full answer: ${featured.question}`}
+          className="mt-4 inline-block cursor-pointer border-0 bg-transparent p-0 font-sans text-base text-ink underline decoration-transparent underline-offset-4 group-hover:decoration-current"
+        >
           See the full answer
-        </span>
-      </button>
+        </button>
+      </div>
     </section>
   );
 }

@@ -97,16 +97,25 @@ const SCOPE: ScopeInfo = {
   composition: COMPOSITION,
 };
 
+/** A period bar: an SVG group with role button, named in the browser by its title (jsdom's name
+ *  computation does not apply the SVG title rule, so the test finds it by its title). */
+function bar(name: RegExp): HTMLElement {
+  const titles = Array.from(document.querySelectorAll('[role="button"] > title'));
+  const found = titles.filter((t) => name.test(t.textContent ?? ""));
+  if (found.length !== 1) throw new Error(`expected one bar titled ${name}, found ${found.length}`);
+  return found[0].parentElement as HTMLElement;
+}
+
 describe("TimelinePage", () => {
   it("renders a bar per period with its real document count, plus a separate undated bar", () => {
     render(
       <TimelinePage scope={SCOPE} initialQuestion="" onDrillDecade={vi.fn()} onCompareDecades={vi.fn()} />,
     );
     // each period a clickable bar labelled with its real count
-    expect(screen.getByRole("button", { name: /^1970s: 500 documents/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^2000s: 300 documents/ })).toBeInTheDocument();
+    expect(bar(/^1970s: 500 documents/)).toBeInTheDocument();
+    expect(bar(/^2000s: 300 documents/)).toBeInTheDocument();
     // undated is its own bar with the composition's undated item count (same basis as Sources)
-    expect(screen.getByRole("button", { name: /^undated: 420 documents/ })).toBeInTheDocument();
+    expect(bar(/^undated: 420 documents/)).toBeInTheDocument();
     // the undated count is single-sourced with composition.undated.items
     expect(screen.getByText(/Undated documents \(420\)/)).toBeInTheDocument();
   });
@@ -116,7 +125,7 @@ describe("TimelinePage", () => {
     render(
       <TimelinePage scope={SCOPE} initialQuestion="smoking" onDrillDecade={onDrill} onCompareDecades={vi.fn()} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /^1980s: 900 documents/ }));
+    fireEvent.click(bar(/^1980s: 900 documents/));
     expect(onDrill).toHaveBeenCalledWith("1980s", "smoking");
   });
 

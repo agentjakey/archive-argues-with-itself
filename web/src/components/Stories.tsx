@@ -47,18 +47,16 @@ export function StoryGallery({ stories, loading, onOpen }: Props) {
   );
 }
 
-/** One card, uniform with every other. A single button (one action, opens the story), holding the
- *  two scanned pages, the question, the caption, and a "See the full answer" cue that underlines on
- *  hover. Phrasing spans only (no headings inside a button); the button's label carries the question,
- *  and each scan carries alt text. */
+/** One card, uniform with every other: the two scanned pages, the question, the caption, and one
+ *  button, "See the full answer", whose accessible name adds the question. The whole card also opens
+ *  the story on a mouse click; keyboard and screen-reader users have the button. Each scan carries
+ *  alt text. */
 function ArgumentCard({ story, onOpen }: { story: Story; onOpen: (s: Story) => void }) {
   const [a, b] = story.pins;
   return (
-    <button
-      type="button"
+    <div
       onClick={() => onOpen(story)}
-      aria-label={`See the full answer: ${story.question}`}
-      className="group block w-full cursor-pointer border-0 border-b border-rule bg-transparent p-0 pb-4 text-left"
+      className="group block w-full cursor-pointer border-b border-rule pb-4 text-left"
     >
       <span className="grid grid-cols-2 gap-2">
         {[a, b].map((p, i) => (
@@ -80,9 +78,17 @@ function ArgumentCard({ story, onOpen }: { story: Story; onOpen: (s: Story) => v
       {story.comparability && (
         <span className="mt-1 block text-xs text-muted">{story.comparability.label}</span>
       )}
-      <span className="mt-2 block font-sans text-sm text-ink underline decoration-transparent underline-offset-2 group-hover:decoration-current">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen(story);
+        }}
+        aria-label={`See the full answer: ${story.question}`}
+        className="mt-2 block cursor-pointer border-0 bg-transparent p-0 font-sans text-sm text-ink underline decoration-transparent underline-offset-2 group-hover:decoration-current"
+      >
         See the full answer
-      </span>
-    </button>
+      </button>
+    </div>
   );
 }

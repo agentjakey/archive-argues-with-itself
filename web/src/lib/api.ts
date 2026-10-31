@@ -12,7 +12,7 @@ import type {
 } from "../types";
 import { API_BASE, staticMode } from "./config";
 import * as shards from "./staticData";
-import { turnstileToken } from "./turnstile";
+import { turnstileResult, type TokenFailure } from "./turnstile";
 
 // Empty API_BASE means same-origin (the FastAPI app serves web/dist). In a static release the
 // reading room comes from the release's shards (staticData.ts) and only live questions reach the
@@ -38,6 +38,37 @@ export class ApiError extends Error {
     this.status = status;
     this.detail = detail;
   }
+}
+
+/** The person check (Turnstile) did not pass, ran out of time or did not load, so the question was
+ *  not sent or was refused. Shown as a plain message with a retry. */
+export class TurnstileError extends ApiError {
+  constructor(detail: string) {
+    super(403, detail);
+    this.name = "TurnstileError";
+  }
+}
+
+export const CHECK_MESSAGES: Record<TokenFailure | "refused" | "unreachable", string> = {
+  failed: "We could not confirm that this question came from a person, so it was not sent. Please try again.",
+  refused: "We could not confirm that this question came from a person, so it was not sent. Please try again.",
+  expired: "The check that this question came from a person ran out of time, so it was not sent. Please try again.",
+  timeout: "The check that this question came from a person ran out of time, so it was not sent. Please try again.",
+  unavailable:
+    "The check that this question came from a person did not load, so it was not sent. If something blocks " +
+    "challenges.cloudflare.com on your connection, allow it, then try again.",
+  unreachable: "The site could not run its check that this question came from a person just now. Please try again in a minute.",
+};
+
+export const RATE_LIMIT_MESSAGE = "Too many questions from this connection in the last minute. Wait a minute, then try again.";
+
+/** A refusal from the engine Worker's guards, as a plain sentence, or null for any other error. */
+export function guardError(status: number, body: unknown): ApiError | null {
+  const code = body && typeof body === "object" ? (body as Record<string, unknown>).error : null;
+  if (code === "turnstile_missing" || code === "turnstile_failed") return new TurnstileError(CHECK_MESSAGES.refused);
+  if (code === "turnstile_unreachable" || code === "turnstile_not_configured") return new TurnstileError(CHECK_MESSAGES.unreachable);
+  if (status === 429 || code === "rate_limited") return new ApiError(429, RATE_LIMIT_MESSAGE);
+  return null;
 }
 
 /** The engine was asleep or is still waking: the request was not lost, it can be retried once the
@@ -106,13 +137,16 @@ function wakingState(body: unknown): EngineStatus | null {
 }
 
 async function request<T>(path: string, init?: RequestInit & { guarded?: boolean }): Promise<T> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  // The person check comes first and has its own time limits (a visitor may be answering a
+  // challenge); the request timeout starts when the request does.
+  if (init?.guarded) {
+    const check = await turnstileResult();
+    if (check.failure) throw new TurnstileError(CHECK_MESSAGES[check.failure]);
+    if (check.token) headers["x-turnstile-token"] = check.token;
+  }
   const ctrl = new AbortController();
   const timer = window.setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
-  const headers: Record<string, string> = { "content-type": "application/json" };
-  if (init?.guarded) {
-    const token = await turnstileToken();
-    if (token) headers["x-turnstile-token"] = token;
-  }
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
@@ -137,6 +171,8 @@ async function request<T>(path: string, init?: RequestInit & { guarded?: boolean
     }
     const waking = res.status === 503 ? wakingState(body) : null;
     if (waking) throw new EngineWaking(waking);
+    const refused = init?.guarded ? guardError(res.status, body) : null;
+    if (refused) throw refused;
     throw new ApiError(res.status, errorDetail(res.status, body));
   }
   return (await res.json()) as T;

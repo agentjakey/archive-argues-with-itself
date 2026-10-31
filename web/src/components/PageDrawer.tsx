@@ -22,6 +22,9 @@ export function PageDrawer({ row, onClose, source, offline = false }: Props) {
   const panelRef = useRef<HTMLElement>(null);
   const opener = useRef<Element | null>(null);
   const [imgError, setImgError] = useState(false);
+  // archive.org's interactive viewer is a page of its own, with its own scripts, cookies and
+  // analytics, so it loads only when the visitor asks for it.
+  const [viewer, setViewer] = useState(false);
   useEscape(row !== null, onClose);
 
   // Keep Tab inside the modal drawer: on the first/last focusable, wrap to the other end. With the
@@ -46,6 +49,7 @@ export function PageDrawer({ row, onClose, source, offline = false }: Props) {
 
   useEffect(() => {
     setImgError(false);   // a new page starts fresh, so a prior load failure never sticks
+    setViewer(false);
   }, [row]);
 
   useEffect(() => {
@@ -127,13 +131,27 @@ export function PageDrawer({ row, onClose, source, offline = false }: Props) {
               onError={() => setImgError(true)}
             />
             <div className="mt-4">
-              <iframe
-                src={row.embed_url}
-                title="archive.org page viewer"
-                className="w-full h-[60vh] border border-rule bg-paper"
-                loading="lazy"
-              />
-              <p className="mt-2 text-sm text-muted">If the viewer above does not load, the page is available on archive.org.</p>
+              {viewer ? (
+                <>
+                  <iframe
+                    src={row.embed_url}
+                    title="archive.org page viewer"
+                    className="w-full h-[60vh] border border-rule bg-paper"
+                    loading="lazy"
+                  />
+                  <p className="mt-2 text-sm text-muted">If the viewer above does not load, the page is available on archive.org.</p>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="chip" onClick={() => setViewer(true)}>
+                    Load the archive.org viewer here
+                  </button>
+                  <p className="mt-2 text-sm text-muted">
+                    The viewer lets you turn pages and zoom. It is archive.org's own page, with its own cookies and
+                    analytics, so it loads only if you ask.
+                  </p>
+                </>
+              )}
             </div>
           </>
         )}

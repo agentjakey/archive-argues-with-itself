@@ -530,3 +530,73 @@ button:hover .page-artifact {
 .waking-progress::-moz-progress-bar {
   background: #1c1a17;
 }
+
+/* The person check beside Ask. Empty for most visitors (Turnstile's interaction-only appearance draws
+   nothing unless a click is needed); when a challenge appears it sits under the Ask button. */
+.turnstile-slot {
+  display: flex;
+  justify-content: flex-end;
+}
+.turnstile-slot iframe {
+  max-width: 100%;
+}
+.turnstile-fallback {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 60;
+}
+
+/* Tables on the policy pages: rules, not boxes; on a phone the table scrolls inside its own frame. */
+.table-frame {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.reading-body table {
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  min-width: 640px;
+}
+/* On a phone each row of a stacking table becomes a short block, each cell under its own label. */
+@media (max-width: 699px) {
+  .reading-body table.stack-table {
+    min-width: 0;
+  }
+  .stack-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .stack-table tr {
+    display: block;
+    border-top: 1px solid var(--rule, #d9d2c3);
+    padding: 0.5rem 0;
+  }
+  .stack-table td {
+    display: block;
+    border-top: 0;
+    padding: 0.15rem 0;
+  }
+  .stack-table td::before {
+    content: attr(data-label) ": ";
+    font-weight: 600;
+  }
+}
+.reading-body th,
+.reading-body td {
+  border-top: 1px solid var(--rule, #d9d2c3);
+  padding: 0.4rem 0.6rem 0.4rem 0;
+  text-align: left;
+  vertical-align: top;
+}
+.reading-body th {
+  font-family: system-ui, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 600;
+}
+.reading-body ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}

@@ -26,6 +26,10 @@ import { useCoverage } from "./hooks/useCoverage";
 import { useExamples } from "./hooks/useExamples";
 import { useKiosk, useOffline } from "./hooks/useKiosk";
 import { About } from "./components/pages/About";
+import { Accessibility } from "./components/pages/Accessibility";
+import { Corrections } from "./components/pages/Corrections";
+import { Privacy } from "./components/pages/Privacy";
+import { Terms } from "./components/pages/Terms";
 import { Gaps } from "./components/pages/Gaps";
 import { HowItWorks } from "./components/pages/HowItWorks";
 import { SourcesPage } from "./components/pages/Sources";
@@ -618,6 +622,10 @@ export default function App() {
         />
       )}
       {view === "about" && <About scope={activeScopeInfo} />}
+      {view === "privacy" && <Privacy />}
+      {view === "terms" && <Terms />}
+      {view === "accessibility" && <Accessibility />}
+      {view === "corrections" && <Corrections />}
       {view === null && (
       <main id="main-content" tabIndex={-1}>
       {showStories && (
@@ -638,7 +646,7 @@ export default function App() {
                 type="button"
                 onClick={() => pick(refuseExample)}
                 disabled={busy}
-                aria-label={`See the tool decline: ${refuseExample.text}`}
+                aria-label={`See it decline: ${refuseExample.text}`}
                 className="linkish text-ink disabled:opacity-60"
               >
                 See it decline
@@ -683,7 +691,7 @@ export default function App() {
         </details>
       )}
 
-      {status === "error" && error && <ErrorCard detail={error} />}
+      {status === "error" && error && <ErrorCard detail={error} onRetry={retry} />}
       {status === "waking" && wake && (
         <>
           <WakingCard wake={wake} question={asked} onRetry={retry} />
@@ -808,7 +816,7 @@ export default function App() {
       </main>
       )}
 
-      <Footer onAbout={() => goView("about")} />
+      <Footer onView={goView} />
       <PageDrawer row={drawer} onClose={() => setDrawer(null)} source={activeScopeInfo} offline={offline || kiosk} />
     </div>
   );
