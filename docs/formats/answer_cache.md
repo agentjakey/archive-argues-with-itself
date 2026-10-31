@@ -22,9 +22,14 @@ key = sha256 of canonical JSON (sorted keys, no spaces, non-ASCII kept) of
 - `canonical(filters)`: `period`, `jurisdiction` and `doc_type` as normalized strings when not
   empty; `min_ocr` as a string with four decimals when set and not zero; other keys ignored.
 - The Worker keys only the configured provider and model of each scope (from the generated
-  config). A request with `nocache` or `evidence_only` goes to the engine. So does a request for
-  another provider or model, when the engine Worker's `PUBLIC_MODELS` allows it; otherwise the
-  request is refused. An `evidence_only` response is never stored.
+  config). A request with `evidence_only` goes to the engine, and so does one with `nocache` where
+  the engine Worker's `PUBLIC_NOCACHE` is on (staging); production ignores a public `nocache` and
+  removes it before the engine sees the request. A request for another provider or model goes to
+  the engine when `PUBLIC_MODELS` allows it; otherwise it is refused. An `evidence_only` response is
+  never stored, and neither is the answer to a question that contains an email address or a phone
+  number (`has_contact_details` in `src/archive_debugger/api/cache.py`).
+- The engine Worker caps a visitor row's `expires_at` at `created_at` plus the generated config's
+  `retention_days` (90) when it writes it, whatever the engine sent.
 
 ## Row (table `answers_v2`, the same in SQLite and D1)
 
@@ -38,7 +43,7 @@ key = sha256 of canonical JSON (sorted keys, no spaces, non-ASCII kept) of
 | `extras_version` | the engine's `EXTRAS_VERSION` (a hash of the code that adds date methods and care flags) when stored |
 | `model`, `prompt_sha256`, `context` | what produced the answer |
 | `created_at` | ISO 8601 UTC, seconds, `+00:00` |
-| `expires_at` | NULL for a curated row; `created_at` + 180 days otherwise |
+| `expires_at` | NULL for a curated row; `created_at` + 90 days otherwise |
 
 A row that is not curated keeps no words of the question. In its `response_json`, the coverage
 block's `salient_terms` and `uncovered_terms` are replaced by

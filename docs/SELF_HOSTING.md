@@ -113,7 +113,16 @@ collection that has not been audited shows that, never another collection's numb
 - **The public gets the configured model only.** A request for another provider or model is
   refused by the engine Worker unless `PUBLIC_MODELS` names it (staging allows `stub`; production
   allows nothing else). `evidence_only` asks for the passages alone, with no model call, and is
-  never stored.
+  never stored. A public `nocache` is honored only where `PUBLIC_NOCACHE` is `true` (staging, for
+  measurements); production drops it.
+- **The engine sees only the question.** The engine Worker forwards a bare request (method, URL,
+  JSON body) to the container: no address, user agent, referrer, cookie or Turnstile token.
+- **Logs never hold a question.** Workers Logs keep the Worker's own lines and the container's;
+  invocation logs are off in `wrangler.jsonc` (they would record request URLs, and `/coverage` and
+  the GET form of `/ask` carry the question in the URL), and uvicorn runs without an access log.
+- **The snapshot re-check stays out of the first question's way.** It starts after the first answer
+  is sent or 60 seconds after ready, whichever comes first, in a thread at the lowest CPU priority
+  (`SCHED_IDLE`) and the idle IO class (honored only by IO schedulers that support it).
 - **The engine stops itself when idle.** The Durable Object records the last real use (a question,
   a wake, the moment the engine became ready; never `/health`) and its alarm stops the container
   once that is `SLEEP_AFTER_MINUTES` old. The platform's inactivity timeout is set too, but it is not
@@ -129,7 +138,10 @@ collection that has not been audited shows that, never another collection's numb
 
 ## Privacy and costs
 
-What is kept about questions: `docs/PRIVACY.md`. A monthly cost estimate for given awake hours and
+Every piece of data the site and the engine touch, and how each was checked: `docs/DATA_FLOWS.md`
+(the public privacy page is built from it). Visitor answers expire after 90 days; to delete one on
+request, `python scripts/v2/delete_answer.py --question "..."` prints the D1 command. Apply new D1
+migrations after a deploy that adds one: `npx wrangler d1 migrations apply DB --remote --env <env>`. A monthly cost estimate for given awake hours and
 instance size, from the published prices: `python scripts/v2/cost_estimate.py --instance standard-3
 --awake-hours 1 2 6`.
 

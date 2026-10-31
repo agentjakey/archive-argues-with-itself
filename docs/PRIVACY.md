@@ -1,24 +1,27 @@
 # Privacy
 
-What the site and the engine keep about the questions people ask.
+The full privacy page is on the site: https://archiveargues.org/?view=privacy. Every piece of data
+the site and the engine touch, with how each was checked, is in `docs/DATA_FLOWS.md`. In short
+(last updated 2026-10-31):
 
-- **Questions from visitors are not stored as text.** When the engine answers a question that is
-  not one of the seed or story questions, it stores the answer under a one-way hash of the
-  question, with the answer, its evidence and its metadata. The words of the question are not
-  stored: the answer's coverage block keeps only how many search terms the question had and which
-  of them the record did not cover, and the words are put back from the question of whoever asks
-  it again.
-- **Stored answers to visitors' questions expire after 180 days.** A daily job deletes them. The
-  answers to the published seed and story questions are kept, with their questions, because they
-  are part of the exhibit.
-- **Logs carry no questions and no addresses.** The engine Worker logs the route, the outcome and
-  timings. Rate limiting uses a salted hash of the visitor's address, which is not stored.
-- **The old hosting.** The answer cache from the Railway deployment held visitors' questions in
-  the form the v1 engine used. Only the seed and story answers were moved; the old file is deleted
-  with the Railway volume.
-- **Cloudflare Turnstile** checks that a request comes from a browser before a question can wake
-  the engine or reach the model. It runs invisibly and is subject to Cloudflare's Turnstile
-  Privacy Addendum: https://www.cloudflare.com/turnstile-privacy-policy/
-- **Anthropic** receives the question and the retrieved passages when a new answer is written,
-  under Anthropic's commercial terms for the API.
-- **No accounts, no cookies set by the site, no analytics.**
+- No accounts, no ads, no cookies and no tracking on the site, and nothing is sold.
+- A visitor's question is not stored as text. Its answer is stored under a one-way key made from the
+  question, with the question's words removed from the stored coverage block, and deleted after 90
+  days (D1's history can restore deleted rows for up to 30 more days). A question that contains an
+  email address or a phone number is answered but never stored. The answers to the published seed
+  and story questions are kept with their questions, as part of the exhibit.
+- The question and the retrieved page text are sent to Anthropic to write the answer. Anthropic
+  deletes API inputs and outputs within 30 days unless it must keep them longer to enforce its
+  usage policy or by law, and does not train on them by default.
+- The engine receives the question only, without the visitor's address or browser details. Logs
+  hold routes, outcomes and timings, never a question or an address, for 7 days.
+- Rate limiting uses a hash of the visitor's address held by Cloudflare for one minute; it is never
+  written to the database or to logs.
+- This site uses Cloudflare Turnstile to tell people from bots. Its use is governed by the Turnstile
+  Privacy Addendum (https://www.cloudflare.com/turnstile-privacy-policy/).
+- Page images load from archive.org. The archive.org page viewer, which sets its own cookies, loads
+  only when a visitor asks for it.
+- Deletion requests: hello@archiveargues.org, with the question's text and roughly when it was
+  asked. The question feature is for people 18 and over.
+
+Changes are dated and logged in `CHANGELOG.md`.

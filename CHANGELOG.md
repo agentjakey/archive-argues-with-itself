@@ -258,3 +258,33 @@ parity: the seed and story questions retrieve identical pools under the old and 
 every migrated stored answer is unchanged. The old Railway address redirects to
 https://archiveargues.org with path and query kept (`redirect/`). Hosting runbook:
 `docs/SELF_HOSTING.md`; accuracy: `docs/ACCURACY.md`.
+
+## Launch hygiene (2026-10-31)
+
+Public pages for About, Privacy, Terms of use, Accessibility, and Corrections and care, linked from
+the footer of every page, each with its last-updated date. Every piece of data the site and the
+engine touch is listed, with how it was checked, in `docs/DATA_FLOWS.md`; the privacy page is built
+from it. Changes to the privacy page are logged here, dated.
+
+- Answers to visitors' questions are kept for 90 days instead of 180; rows already stored were
+  brought forward by a D1 migration. Curated answers do not expire.
+- A question that contains an email address or a phone number is still answered, but its answer is
+  never stored or served from the cache.
+- Production ignores `nocache` from the public; staging keeps it for measurements.
+- The engine receives only the question: no address, browser details, referrer or token. Workers
+  invocation logs are off and the engine keeps no access log, so no log line holds a question or an
+  address.
+- The person check (Cloudflare Turnstile) draws beside the Ask button and works whether the widget is
+  set to Invisible or Managed; a failed or expired check gets a plain message and a retry.
+- archive.org's page viewer, which brings its own cookies and analytics, loads only when asked for.
+- Beside every answer: "Written by Claude, an AI model, from the pages cited. It can be wrong; open
+  the page to check."
+- A restored snapshot is hashed again at the lowest CPU and IO priority, after the first answer or
+  60 seconds, so it no longer slows the first question.
+- `robots.txt` on both hosts (the engine disallows everything), a sitemap of the public pages, and
+  `/.well-known/security.txt`; `SECURITY.md` names security@archiveargues.org.
+- Accessibility: axe-core and a keyboard pass on every page at phone and laptop width; story cards,
+  timeline bars and decade buttons now have accessible names that contain their visible text, and
+  the coverage table can be scrolled from the keyboard.
+- The care statement no longer says the tool is "aligned with" the CARE Principles; it names them,
+  the Local Contexts Notices and OCAP as guidance and says it does not claim to meet them.
