@@ -15,12 +15,13 @@ export function Accessibility() {
       <ul>
         <li>
           an automated check with axe-core (WCAG 2.0, 2.1 and 2.2 A and AA rules) on every page, on an answer
-          with its evidence, and on the page drawer; issues it found were fixed, and it now reports none;
+          with its evidence, on a story and on the page drawer; issues it found were fixed, and it now reports none;
         </li>
         <li>
-          a full keyboard pass: every page reached from the menu and the footer, a question asked and answered,
-          a story opened, the page drawer opened and closed with focus kept inside it and returned afterwards,
-          the filters, and the skip link.
+          a keyboard pass: the skip link, a story opened, every footer page opened with focus moved to its
+          heading, the question box reached from the menu, a question typed, the filters opened, a citation
+          opened in the page drawer with focus kept inside it and returned when it closed, and a visible focus
+          indicator on the skip link, the story button, the footer links and the citation.
         </li>
       </ul>
       <p>

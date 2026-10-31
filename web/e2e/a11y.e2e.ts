@@ -87,6 +87,14 @@ test("keyboard: skip link, menu, footer pages, a question, the drawer and the fi
   await page.keyboard.press("Enter");
   await expect(page.locator("#main-content")).toBeFocused();
 
+  // A story opens from its button with Enter.
+  const storyButton = page.getByRole("button", { name: `See the full answer: ${hero.question}` });
+  await storyButton.focus();
+  expect(await focusVisible(page)).toBe(true);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: /^\d{4} and \d{4}$/ })).toBeVisible();
+  await page.goto("/");
+
   // Every footer page opens from the keyboard and moves focus to its heading.
   for (const [name, heading] of [
     ["Privacy", "Privacy"], ["Terms of use", "Terms of use"], ["Accessibility", "Accessibility"],
