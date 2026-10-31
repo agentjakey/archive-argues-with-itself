@@ -28,6 +28,8 @@ def release(tmp_path):
     (web / "index.html").write_text("<!doctype html><html><head><title>Archive Argues With Itself</title></head>"
                                     "<body></body></html>", encoding="utf-8")
     (web / "assets" / "index.js").write_text("console.log('reading room');", encoding="utf-8")
+    for name in ("robots.txt", "sitemap.xml"):     # web/public, copied into the build by vite
+        shutil.copyfile(REPO / "web" / "public" / name, web / name)
     out = tmp_path / "release"
     mod.assemble("test-release", web, REPO / "site" / "data", REPO / "site" / "static", out, "https://api.archiveargues.org")
     return mod, out
@@ -134,3 +136,35 @@ def test_caching_headers_and_the_versioned_data_folder(release):
     for path in ("/", "/index.html", "/release-manifest.json"):
         assert "Cache-Control: no-cache" in rules[path]
     assert not any(r.startswith("Cache-Control") for r in rules["/*"])        # no rule that would merge into others
+
+
+def test_robots_sitemap_and_security_txt_ship_with_the_release(release):
+    mod, out = release
+    robots = (out / "robots.txt").read_text(encoding="utf-8")
+    assert "Allow: /" in robots and "Sitemap: https://archiveargues.org/sitemap.xml" in robots
+    sitemap = (out / "sitemap.xml").read_text(encoding="utf-8")
+    for view in ("about", "privacy", "terms", "accessibility", "corrections"):
+        assert f"https://archiveargues.org/?view={view}</loc>" in sitemap
+    security = (out / ".well-known" / "security.txt").read_text(encoding="utf-8")
+    assert "Contact: mailto:security@archiveargues.org" in security
+    assert "Preferred-Languages: en, fr" in security
+    assert "Policy: https://github.com/agentjakey/archive-argues-with-itself/blob/main/SECURITY.md" in security
+    assert "security@archiveargues.org" in (REPO / "SECURITY.md").read_text(encoding="utf-8")
+
+
+def test_site_files_are_gated(release):
+    mod, out = release
+    from datetime import datetime, timezone
+    assert mod.site_file_problems(out) == []
+    assert any("Expires has passed" in p for p in mod.site_file_problems(out, now=datetime(2028, 1, 1, tzinfo=timezone.utc)))
+    headers = (out / "_headers").read_text(encoding="utf-8")
+    (out / "_headers").write_text(headers.replace("script-src 'self'", "script-src 'self' https://static.cloudflareinsights.com"), encoding="utf-8")
+    (out / "robots.txt").write_text("\n".join(["User-agent: *", "Disallow: /", ""]), encoding="utf-8")
+    sitemap = out / "sitemap.xml"
+    sitemap.write_text(sitemap.read_text(encoding="utf-8").replace("?view=privacy", "?view=elsewhere"), encoding="utf-8")
+    (out / ".well-known" / "security.txt").unlink()
+    problems = mod.site_file_problems(out)
+    assert any("cloudflareinsights.com" in p for p in problems)
+    assert any("must allow crawling" in p for p in problems)
+    assert any("view=privacy" in p for p in problems)
+    assert any("security.txt is missing" in p for p in problems)

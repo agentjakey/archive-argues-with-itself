@@ -12,7 +12,9 @@
             story is on a featured surface; every dated note about a recorded answer is attached
             to it; the data hashes match config/scopes.toml; no curated question is missing a
             recorded answer unless config/release_allow_missing.json lists it with a reason; no
-            text that looks like a secret; and the web source renders no raw HTML.
+            text that looks like a secret; the web source renders no raw HTML; the CSP stays strict
+            (no inline or eval scripts, no analytics host); robots.txt allows crawling and names the
+            sitemap, which lists every page; and security.txt is complete and not expired.
   publish   gate, then upload the release as a new version of the site Worker and deploy it
             (npx wrangler, with the account owner's credentials).
   rollback  deploy an earlier version again: one command.
@@ -119,6 +121,7 @@ def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, ap
     headers = (static / "_headers.template").read_text(encoding="utf-8").replace("{api_origin}", api_origin)
     (out / "_headers").write_text(headers, encoding="utf-8")
     shutil.copyfile(static / "_redirects", out / "_redirects")
+    shutil.copytree(static / ".well-known", out / ".well-known", dirs_exist_ok=True)
     export = json.loads((data / "export.json").read_text(encoding="utf-8"))
     manifest = {
         "release_id": release_id,
@@ -183,6 +186,8 @@ def gate(release: Path, allow_missing_path: Path) -> list[str]:
     for path in (REPO / "web" / "src").rglob("*.tsx"):
         if "dangerouslySetInnerHTML" in path.read_text(encoding="utf-8"):
             problems.append(f"{path.relative_to(REPO).as_posix()}: renders raw HTML")
+
+    problems += site_file_problems(release)
 
     version = manifest.get("data_version") or ""
     data = release / "data" / version
@@ -259,6 +264,74 @@ def gate(release: Path, allow_missing_path: Path) -> list[str]:
             for note in editorial.notes_for_answer(notes, scope, entry["question"], cached=True):
                 if note["id"] not in {n["id"] for n in response.get("editorial_notes") or []}:
                     problems.append(f"{scope} {label}: dated note {note['id']} is not attached")
+    return problems
+
+
+SITE = "https://archiveargues.org"
+CSP_FORBIDDEN_SOURCES = {"'unsafe-eval'", "*", "https:", "http:", "https://*", "https://*.cloudflare.com"}
+CSP_FORBIDDEN_HOSTS = ("cloudflareinsights.com",)   # Web Analytics is off; its beacon stays blocked
+SECURITY_FIELDS = ("Contact", "Expires", "Policy", "Preferred-Languages")
+
+
+def site_file_problems(release: Path, now: datetime | None = None) -> list[str]:
+    """The headers, robots.txt, sitemap.xml and security.txt, read as they will be published."""
+    problems: list[str] = []
+    now = now or datetime.now(timezone.utc)
+
+    headers = (release / "_headers").read_text(encoding="utf-8") if (release / "_headers").exists() else ""
+    csp = next((line.split(":", 1)[1].strip() for line in headers.splitlines()
+                if line.strip().lower().startswith("content-security-policy:")), "")
+    if not csp:
+        problems.append("_headers: no Content-Security-Policy")
+    directives = {part.split()[0]: part.split()[1:] for part in (p.strip() for p in csp.split(";")) if part}
+    script_src = directives.get("script-src", [])
+    if "'unsafe-inline'" in script_src:
+        problems.append("_headers: script-src allows inline scripts")
+    sources = {token for values in directives.values() for token in values}
+    for forbidden in sorted(CSP_FORBIDDEN_SOURCES & sources):
+        problems.append(f"_headers: the CSP allows {forbidden}")
+    for host in CSP_FORBIDDEN_HOSTS:
+        if host in csp:
+            problems.append(f"_headers: the CSP allows {host}")
+    if directives.get("frame-ancestors") != ["'none'"] or directives.get("object-src") != ["'none'"]:
+        problems.append("_headers: the CSP must set frame-ancestors and object-src to 'none'")
+
+    robots_path = release / "robots.txt"
+    robots = robots_path.read_text(encoding="utf-8") if robots_path.exists() else ""
+    rules = [line.strip().lower() for line in robots.splitlines()]
+    if "disallow: /" in rules or "allow: /" not in rules:
+        problems.append("robots.txt: the site must allow crawling")
+    if f"sitemap: {SITE}/sitemap.xml" not in rules:
+        problems.append("robots.txt: does not name the sitemap")
+
+    sitemap_path = release / "sitemap.xml"
+    sitemap = sitemap_path.read_text(encoding="utf-8") if sitemap_path.exists() else ""
+    listed = set(re.findall(r"<loc>([^<]+)</loc>", sitemap))
+    views = re.search(r"export const VIEWS[^=]*=\s*\[([^\]]+)\]", (REPO / "web" / "src" / "lib" / "urlstate.ts").read_text(encoding="utf-8"))
+    wanted = {f"{SITE}/"} | {f"{SITE}/?view={v}" for v in re.findall(r'"([a-z]+)"', views.group(1) if views else "")}
+    if wanted - listed:
+        problems.append(f"sitemap.xml: missing {sorted(wanted - listed)}")
+
+    security_path = release / ".well-known" / "security.txt"
+    if not security_path.exists():
+        problems.append(".well-known/security.txt is missing")
+    else:
+        fields: dict = {}
+        for line in security_path.read_text(encoding="utf-8").splitlines():
+            if ":" in line and not line.startswith("#"):
+                name, value = line.split(":", 1)
+                fields.setdefault(name.strip(), value.strip())
+        for name in SECURITY_FIELDS:
+            if not fields.get(name):
+                problems.append(f"security.txt: no {name}")
+        try:
+            expires = datetime.fromisoformat(fields.get("Expires", "").replace("Z", "+00:00"))
+            if expires <= now:
+                problems.append("security.txt: Expires has passed")
+            elif (expires - now).days > 366:
+                problems.append("security.txt: Expires is more than a year out (RFC 9116 recommends less)")
+        except ValueError:
+            problems.append("security.txt: Expires is not a date")
     return problems
 
 
