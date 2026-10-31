@@ -79,7 +79,7 @@
       "durable_objects": { "bindings": [{ "name": "ENGINE", "class_name": "EngineContainer" }] },
       "exports": { "EngineContainer": { "type": "durable-object", "storage": "sqlite" } },
       "d1_databases": [
-        { "binding": "DB", "database_name": "archive-argues-cache", "database_id": "SET-ME-production-d1-id", "migrations_dir": "migrations" }
+        { "binding": "DB", "database_name": "archive-argues-cache", "database_id": "c0b30598-6dc3-4db7-b1de-aec59c720509", "migrations_dir": "migrations" }
       ],
       "r2_buckets": [{ "binding": "DATA", "bucket_name": "archive-argues-data" }],
       "ratelimits": [
