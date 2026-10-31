@@ -52,23 +52,33 @@ LOAD_QUESTIONS = [
 
 def call(api: str, method: str, path: str, body: dict | None = None, timeout: float = 60.0,
          headers: dict | None = None) -> tuple[int, dict, float]:
+    """One request to the engine Worker. A GET that never reached it (a DNS, TLS or connection
+    failure on this side) is tried again, up to three times in all; the Worker's own answers, errors
+    included, come back as they are. A POST is never repeated, so no question is asked twice."""
     data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(f"{api}{path}", data=data, method=method,
-                                 headers={"content-type": "application/json", "user-agent": USER_AGENT,
-                                          "x-turnstile-token": DUMMY_TOKEN})
-    t0 = time.monotonic()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read().decode("utf-8") or "{}")
-            if headers is not None:
-                headers.update({k.lower(): v for k, v in resp.headers.items()})
-            return resp.status, payload, time.monotonic() - t0
-    except urllib.error.HTTPError as exc:
+    attempts = 3 if method == "GET" else 1
+    for attempt in range(attempts):
+        req = urllib.request.Request(f"{api}{path}", data=data, method=method,
+                                     headers={"content-type": "application/json", "user-agent": USER_AGENT,
+                                              "x-turnstile-token": DUMMY_TOKEN})
+        t0 = time.monotonic()
         try:
-            payload = json.loads(exc.read().decode("utf-8") or "{}")
-        except ValueError:
-            payload = {}
-        return exc.code, payload, time.monotonic() - t0
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                payload = json.loads(resp.read().decode("utf-8") or "{}")
+                if headers is not None:
+                    headers.update({k.lower(): v for k, v in resp.headers.items()})
+                return resp.status, payload, time.monotonic() - t0
+        except urllib.error.HTTPError as exc:
+            try:
+                payload = json.loads(exc.read().decode("utf-8") or "{}")
+            except ValueError:
+                payload = {}
+            return exc.code, payload, time.monotonic() - t0
+        except (urllib.error.URLError, TimeoutError, OSError):
+            if attempt == attempts - 1:
+                raise
+            time.sleep(5 * (attempt + 1))
+    raise AssertionError("unreachable")
 
 
 def engine_stage(health: dict) -> tuple[str, dict | None]:
