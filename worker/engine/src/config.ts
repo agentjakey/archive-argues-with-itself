@@ -22,6 +22,7 @@ export interface Env {
   DAILY_MODEL_CALLS: string;
   TURNSTILE_REQUIRED: string;    // "true" | "false"
   KEEP_WARM_WINDOWS: string;     // "" (off) or e.g. "mon-fri 13:00-23:00" in UTC
+  PUBLIC_MODELS?: string;        // what a public /ask may choose besides the configured model: "" or e.g. "stub"
   PUBLIC_URL: string;
   // Secrets (wrangler secret put)
   ANTHROPIC_API_KEY?: string;
@@ -74,6 +75,18 @@ export function verifyPolicy(mode: string, restoredFromSnapshot: boolean, snapsh
   if (mode === "image") return "trust-image";
   if (restoredFromSnapshot && (snapshotVerify || "").trim() === "trust") return "trust-snapshot";
   return "full";
+}
+
+/** Whether a public request may use this provider and model. The scope's configured provider and
+ *  model always may; anything else only when PUBLIC_MODELS names it, as "provider" (any model) or
+ *  "provider:model", comma-separated. Production leaves PUBLIC_MODELS empty. */
+export function modelAllowed(provider: string | null, model: string | null, configured: ScopeConfig,
+                             publicModels: string | undefined): boolean {
+  const wantProvider = provider || configured.provider;
+  const wantModel = model || configured.model;
+  if (wantProvider === configured.provider && wantModel === configured.model) return true;
+  const allowed = (publicModels || "").split(",").map((s) => s.trim()).filter(Boolean);
+  return allowed.includes(wantProvider) || allowed.includes(`${wantProvider}:${wantModel}`);
 }
 
 /** The instance for one engine: its entry in INSTANCE_TYPES (split layout) or INSTANCE_TYPE. A

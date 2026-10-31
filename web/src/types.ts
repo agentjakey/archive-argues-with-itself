@@ -51,6 +51,7 @@ export interface AskRequest {
   provider?: "stub" | "anthropic";
   model?: string;
   nocache?: boolean;
+  evidence_only?: boolean;   // retrieval only: no model call, never stored
 }
 
 export interface Sentence {

@@ -157,7 +157,23 @@ def test_get_ask_provider_stub_needs_no_key(tmp_path, monkeypatch):
         assert c.get("/ask", params={"q": "x", "provider": "bogus"}).status_code == 422
 
 
-ALBERTA_V1_QUESTION = "How did Alberta health insurance coverage change between the 1970s and 1990s?"
+def test_evidence_only_returns_the_record_without_a_model_call_or_a_stored_row(tmp_path):
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta"), ("b", 1990, "ontario")])
+    hits = r.search("vaccination hospital", top_k=12)
+    llm = StubLLM(Draft(sentences=[CitedSentence(text="A programme ran.", cited_ids=[hits[0]["passage_id"]])]))
+    with TestClient(_app(tmp_path, r, llm=llm)) as c:
+        post = c.post("/ask", json={"question": "vaccination hospital", "filters": {"period": "1980s"},
+                                    "evidence_only": True}).json()
+        get = c.get("/ask", params={"q": "vaccination hospital", "evidence_only": 1}).json()
+        later = c.post("/ask", json={"question": "vaccination hospital"}).json()
+    assert post["evidence_only"] is True and "degraded" not in post
+    assert post["answer"]["abstained"] is True and post["answer"]["cached"] is None
+    assert post["evidence"] and get["evidence"] and get["evidence_only"] is True
+    assert llm.calls == 1                                                     # only the ordinary question
+    assert later["answer"]["cached"] is None                                  # the record alone was never stored
+
+
+ALBERTA_V1_QUESTION ="How did Alberta health insurance coverage change between the 1970s and 1990s?"
 
 
 def test_alberta_story_is_corrected_not_rewritten():

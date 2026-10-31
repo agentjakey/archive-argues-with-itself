@@ -13,6 +13,7 @@ import { idleCheck } from "./schedule";
 const PORT = 8080;
 const PROBE_TIMEOUT_MS = 2000;
 const PROBE_EVERY_MS = 1000;
+const RECHECK_PROBE_EVERY_MS = 5000;
 const WAKE_LOG_KEY = "wakes";
 const LAST_ACTIVITY_KEY = "last_activity";
 const WAKE_LOG_LIMIT = 50;
@@ -31,6 +32,7 @@ export interface WakeRecord {
   port_open_seconds: number | null;
   ready_seconds: number | null;
   provision: Stage | null;
+  snapshot_check?: string | null;   // a trusted restore hashed again after ready: pending, running, passed, failed
   exit: string | null;
 }
 
@@ -148,12 +150,16 @@ export class EngineContainer extends DurableObject<Env> {
     return env;
   }
 
+  /** Where this engine's snapshot id for the current release is kept. */
+  private snapshotKey(): string {
+    return `snapshot:${this.env.RELEASE_ID}:${this.engineName}`;
+  }
+
   /** Start the container when it is not running. Returns at once; readiness is probed by alarm. */
   private async ensureStarted(): Promise<void> {
     if (this.container.running) return;
     const mode = this.env.PROVISION_MODE || "r2-binding";
-    const snapshotId =
-      mode === "snapshot" ? await this.ctx.storage.get<string>(`snapshot:${this.env.RELEASE_ID}:${this.engineName}`) : undefined;
+    const snapshotId = mode === "snapshot" ? await this.ctx.storage.get<string>(this.snapshotKey()) : undefined;
     this.cacheToken = randomToken();
     this.ready = false;
     this.lastStage = null;
@@ -181,6 +187,7 @@ export class EngineContainer extends DurableObject<Env> {
       port_open_seconds: null,
       ready_seconds: null,
       provision: null,
+      snapshot_check: verifyPolicy(mode, Boolean(snapshotId), this.env.SNAPSHOT_VERIFY) === "trust-snapshot" ? "pending" : null,
       exit: null,
     };
     this.ctx.waitUntil(
@@ -231,6 +238,8 @@ export class EngineContainer extends DurableObject<Env> {
     if (this.wake && this.wake.port_open_seconds === null) this.wake.port_open_seconds = Math.round(elapsed * 10) / 10;
     this.lastStage = (seen.body.stage as Stage) ?? null;
     this.lastError = (seen.body.error as string) ?? null;
+    await this.followRecheck();
+    if (!this.container.running) return;   // the snapshot failed its check and the engine was stopped
     if (seen.status === 200 && !this.ready) {
       this.ready = true;
       if (this.wake && this.wake.ready_seconds === null) {   // not again after a restart of this object
@@ -243,11 +252,39 @@ export class EngineContainer extends DurableObject<Env> {
     }
   }
 
+  /** A trusted restore is hashed again once the engine is ready, and the engine's /health reports
+   *  it (stage.recheck). Keep the wake record current; on a mismatch drop the snapshot and stop. */
+  private async followRecheck(): Promise<void> {
+    const recheck = this.lastStage && typeof this.lastStage.recheck === "string" ? this.lastStage.recheck : null;
+    if (!recheck || !this.wake || this.wake.snapshot_check === recheck) return;
+    this.wake.snapshot_check = recheck;
+    await this.saveWake();
+    if (recheck === "failed") await this.dropSnapshot();
+  }
+
+  /** The restored disk did not match the published hashes: forget this release's snapshot, so the
+   *  next wake downloads from R2, verifies in full and takes a new one; stop the engine; and say so
+   *  on /health until the next wake. */
+  private async dropSnapshot(): Promise<void> {
+    await this.ctx.storage.delete(this.snapshotKey());
+    this.ready = false;
+    this.lastError = "snapshot check failed: a restored file did not match its published sha256. The snapshot " +
+      "was dropped; the next wake downloads from R2.";
+    if (this.wake && !this.wake.exit) {
+      this.wake.exit = "snapshot check failed: snapshot dropped";
+      await this.saveWake();
+    }
+    console.log(JSON.stringify({ event: "snapshot_dropped", name: this.engineName, release: this.env.RELEASE_ID }));
+    await this.container.destroy();
+  }
+
   /** In snapshot mode, the first ready container of a release is snapshotted (its disk holds the
-   *  verified data), and later wakes restore from it instead of downloading. */
+   *  verified data), and later wakes restore from it instead of downloading. A restored container
+   *  is never snapshotted again. */
   private async maybeSnapshot(): Promise<void> {
     if ((this.env.PROVISION_MODE || "") !== "snapshot") return;
-    const key = `snapshot:${this.env.RELEASE_ID}:${this.engineName}`;
+    if (this.wake?.mode === "snapshot-restore") return;
+    const key = this.snapshotKey();
     if (await this.ctx.storage.get<string>(key)) return;
     try {
       const snap = await this.container.snapshotContainer({ name: `${this.env.RELEASE_ID}-${this.engineName}` });
@@ -268,6 +305,12 @@ export class EngineContainer extends DurableObject<Env> {
       return;
     }
     await this.checkIdle();
+    // While a restored disk is being hashed again, look at it every few seconds; the idle check
+    // above still decides when the engine stops.
+    const check = this.wake?.snapshot_check ?? null;
+    if (this.container.running && (check === "pending" || check === "running")) {
+      await this.ctx.storage.setAlarm(Date.now() + RECHECK_PROBE_EVERY_MS);
+    }
   }
 
   private currentStatus(): EngineStatus {

@@ -22,7 +22,9 @@ key = sha256 of canonical JSON (sorted keys, no spaces, non-ASCII kept) of
 - `canonical(filters)`: `period`, `jurisdiction` and `doc_type` as normalized strings when not
   empty; `min_ocr` as a string with four decimals when set and not zero; other keys ignored.
 - The Worker keys only the configured provider and model of each scope (from the generated
-  config). A request for another provider or model, or with `nocache`, goes to the engine.
+  config). A request with `nocache` or `evidence_only` goes to the engine. So does a request for
+  another provider or model, when the engine Worker's `PUBLIC_MODELS` allows it; otherwise the
+  request is refused. An `evidence_only` response is never stored.
 
 ## Row (table `answers_v2`, the same in SQLite and D1)
 

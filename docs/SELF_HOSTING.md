@@ -106,7 +106,14 @@ collection that has not been audited shows that, never another collection's numb
   or (`SNAPSHOT_VERIFY=trust`) by the wake the snapshot was taken from, since a snapshot is taken
   only after a wake of the same release verified every file and is keyed by release; and for data
   baked into the image by the registry, which addresses each layer by its digest and verifies it on
-  pull, after the bake script checked every file.
+  pull, after the bake script checked every file. A trusted restore is still hashed in full in the
+  background once the engine is serving (`/health` shows `stage.recheck`). On a mismatch the engine
+  stops serving, the engine Worker forgets that snapshot and stops the container, and the next
+  wake downloads from R2 again.
+- **The public gets the configured model only.** A request for another provider or model is
+  refused by the engine Worker unless `PUBLIC_MODELS` names it (staging allows `stub`; production
+  allows nothing else). `evidence_only` asks for the passages alone, with no model call, and is
+  never stored.
 - **The engine stops itself when idle.** The Durable Object records the last real use (a question,
   a wake, the moment the engine became ready; never `/health`) and its alarm stops the container
   once that is `SLEEP_AFTER_MINUTES` old. The platform's inactivity timeout is set too, but it is not

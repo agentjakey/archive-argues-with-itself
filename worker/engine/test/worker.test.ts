@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { readAsk } from "../src/ask";
 import { benchCacheStores, summarize } from "../src/bench";
 import { notesForAnswer, purgeExpired, readRow, servedHit, writeRow, type CacheRow } from "../src/cache";
-import { ENGINE_CONFIG, instanceFor, verifyPolicy } from "../src/config";
+import { ENGINE_CONFIG, instanceFor, modelAllowed, verifyPolicy } from "../src/config";
 import { checkTurnstile, clientKey, corsHeaders, takeModelBudget, TURNSTILE_HEADER } from "../src/guard";
 import { contentKey } from "../src/key";
 import { parseRange } from "../src/ranges";
@@ -73,16 +73,52 @@ describe("serving a stored answer without the engine", () => {
 });
 
 describe("reading an /ask request", () => {
+  const production = { PUBLIC_MODELS: "" };
+  const staging = { PUBLIC_MODELS: "stub" };
+  const post = (body: Record<string, unknown>) =>
+    new Request("https://api.test/ask", { method: "POST", body: JSON.stringify(body) });
+
   it("reads GET permalinks and POST bodies and decides cacheability", async () => {
-    const get = await readAsk(new Request("https://api.test/ask?q=tobacco&jurisdiction=ontario&scope=microlog"));
+    const get = await readAsk(new Request("https://api.test/ask?q=tobacco&jurisdiction=ontario&scope=microlog"), production);
     expect(get?.input).toEqual({ scope: "microlog", question: "tobacco", filters: { jurisdiction: "ontario" } });
     expect(get?.cacheable).toBe(true);
-    const nocache = await readAsk(new Request("https://api.test/ask?q=t&nocache=1"));
+    expect(get?.allowed).toBe(true);
+    const nocache = await readAsk(new Request("https://api.test/ask?q=t&nocache=1"), production);
     expect(nocache?.cacheable).toBe(false);
-    const post = await readAsk(new Request("https://api.test/ask", { method: "POST", body: JSON.stringify({ question: "q", provider: "stub" }) }));
-    expect(post?.input.scope).toBe(ENGINE_CONFIG.default_scope);
-    expect(post?.cacheable).toBe(false);
-    expect(await readAsk(new Request("https://api.test/ask?q=t&scope=elsewhere"))).toBeNull();
+    const stubbed = await readAsk(post({ question: "q", provider: "stub" }), staging);
+    expect(stubbed?.input.scope).toBe(ENGINE_CONFIG.default_scope);
+    expect(stubbed?.cacheable).toBe(false);
+    expect(await readAsk(new Request("https://api.test/ask?q=t&scope=elsewhere"), production)).toBeNull();
+  });
+
+  it("refuses the stub and any unlisted model from the public in production, and allows the stub on staging", async () => {
+    expect((await readAsk(post({ question: "q", provider: "stub" }), production))?.allowed).toBe(false);
+    expect((await readAsk(new Request("https://api.test/ask?q=t&provider=stub"), production))?.allowed).toBe(false);
+    expect((await readAsk(post({ question: "q", model: "claude-opus-5-5" }), production))?.allowed).toBe(false);
+    expect((await readAsk(post({ question: "q", provider: "other" }), production))?.allowed).toBe(false);
+    expect((await readAsk(post({ question: "q", provider: "stub" }), staging))?.allowed).toBe(true);
+    expect((await readAsk(post({ question: "q", model: "claude-opus-5-5" }), staging))?.allowed).toBe(false);
+    const configured = { question: "q", provider: PILOT.provider, model: PILOT.model };
+    expect((await readAsk(post(configured), production))?.allowed).toBe(true);
+    expect((await readAsk(post(configured), production))?.cacheable).toBe(true);
+  });
+
+  it("lets anyone ask for the record alone, never from the cache", async () => {
+    const fill = await readAsk(post({ question: "q", filters: { period: "1970s" }, evidence_only: true }), production);
+    expect(fill).toMatchObject({ allowed: true, cacheable: false, evidenceOnly: true });
+    const get = await readAsk(new Request("https://api.test/ask?q=t&evidence_only=1"), production);
+    expect(get).toMatchObject({ allowed: true, cacheable: false, evidenceOnly: true });
+  });
+});
+
+describe("which models the public may use", () => {
+  it("takes provider entries and provider:model entries", () => {
+    expect(modelAllowed(null, null, PILOT, "")).toBe(true);
+    expect(modelAllowed("stub", null, PILOT, "")).toBe(false);
+    expect(modelAllowed("stub", null, PILOT, " stub , x")).toBe(true);
+    expect(modelAllowed(PILOT.provider, "other-model", PILOT, `${PILOT.provider}:other-model`)).toBe(true);
+    expect(modelAllowed(PILOT.provider, "third-model", PILOT, `${PILOT.provider}:other-model`)).toBe(false);
+    expect(modelAllowed(null, null, PILOT, undefined)).toBe(true);
   });
 });
 

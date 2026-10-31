@@ -186,6 +186,39 @@ def test_provision_downloads_then_verifies_present_files(tmp_path, monkeypatch):
                             source=source, mode="present", log=lambda _m: None)
 
 
+def test_a_trusted_snapshot_is_hashed_again_after_ready(tmp_path, monkeypatch):
+    db, index = os.urandom(40_000), os.urandom(20_000)
+    monkeypatch.setenv("CIVIC_DB_PATH", str(tmp_path / "data" / "civic.db"))
+    monkeypatch.setenv("CIVIC_INDEX_PATH", str(tmp_path / "data" / "index" / "vectors.db"))
+    monkeypatch.setenv("CIVIC_DENSE_BACKEND", "sqlite")
+    registry = _registry(tmp_path, db, index)
+    source = FakeSource({"pilot/civic.db": db, "pilot/vectors.db": index})
+    first = provision.provision(["pilot"], provision.Progress(), stop=threading.Event(), registry=registry,
+                                source=source, mode="r2-binding", log=lambda _m: None)
+    assert first == []                                                        # downloaded and hashed: nothing to recheck
+
+    monkeypatch.setenv(provision.ENV_VERIFY_PRESENT, "trust-image")
+    assert provision.provision(["pilot"], provision.Progress(), stop=threading.Event(), registry=registry,
+                               mode="present", log=lambda _m: None) == []    # image layers: verified by digest
+
+    monkeypatch.setenv(provision.ENV_VERIFY_PRESENT, "trust-snapshot")
+    progress = provision.Progress()
+    trusted = provision.provision(["pilot"], progress, stop=threading.Event(), registry=registry,
+                                  mode="present", log=lambda _m: None)
+    assert sorted(j.kind for j in trusted) == ["db", "index"]
+    assert progress.snapshot()["recheck"] is None
+    provision.recheck_trusted(trusted, progress, threading.Event(), log=lambda _m: None)
+    assert progress.snapshot()["recheck"] == "passed"
+
+    (tmp_path / "data" / "civic.db").write_bytes(b"corrupted on restore")
+    progress = provision.Progress()
+    trusted = provision.provision(["pilot"], progress, stop=threading.Event(), registry=registry,
+                                  mode="present", log=lambda _m: None)      # trusted at start: still served at once
+    with pytest.raises(provision.ProvisionError, match="pilot/db: restored file"):
+        provision.recheck_trusted(trusted, progress, threading.Event(), log=lambda _m: None)
+    assert progress.snapshot()["recheck"] == "failed"
+
+
 def test_numpy_backend_fetches_artifacts_and_writes_a_stand_in_index(tmp_path, monkeypatch):
     db, index = os.urandom(20_000), os.urandom(10_000)
     manifest = json.dumps({"artifact_version": dense.ARTIFACT_VERSION, "rows": 1, "dim": 2, "index_file": "vectors.db",

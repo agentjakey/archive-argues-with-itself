@@ -3,7 +3,9 @@
 //   GET  /health      the engine's state (asleep, waking with its stage, ready, failed); never wakes it
 //   POST /wake        pre-wake from the site (Turnstile, rate limited)
 //   GET|POST /ask     a stored answer straight from D1 when there is one; otherwise Turnstile, the
-//                     rate limit and the daily model budget, then the engine (woken if asleep)
+//                     rate limit and the daily model budget, then the engine (woken if asleep).
+//                     A provider or model other than the scope's own is refused unless
+//                     PUBLIC_MODELS names it; evidence_only asks for the record alone (no model)
 //   GET  /coverage    forwarded only while the engine is awake
 //   GET  /flag        forwarded only while the engine is awake
 //   GET  /__bench/cache?key=K&reads=N   staging only (needs the BENCH_* bindings): D1, KV and R2 read times
@@ -47,9 +49,13 @@ async function guard(request: Request, env: Env, limiter: RateLimit): Promise<Gu
 
 async function handleAsk(request: Request, env: Env, cors: Record<string, string>): Promise<Response> {
   const t0 = Date.now();
-  const parsed = await readAsk(request);
+  const parsed = await readAsk(request, env);
   if (!parsed) return json({ error: "a question and a served scope are required" }, 422, cors);
-  const { input, cacheable } = parsed;
+  const { input, cacheable, allowed, evidenceOnly } = parsed;
+  if (!allowed) {
+    log({ route: "/ask", scope: input.scope, outcome: "model_refused", ms: Date.now() - t0 });
+    return json({ error: "that provider or model is not available here" }, 422, cors);
+  }
   if (cacheable) {
     const hit = await servedHit(env.DB, input);
     if (hit) {
@@ -64,7 +70,8 @@ async function handleAsk(request: Request, env: Env, cors: Record<string, string
   }
   const forwarded = new Request(request);
   forwarded.headers.delete("x-turnstile-token");
-  if (!(await takeModelBudget(env.DB, env))) forwarded.headers.set(BUDGET_HEADER, "exhausted");
+  // The record alone makes no model call, so it does not spend the daily model budget.
+  if (!evidenceOnly && !(await takeModelBudget(env.DB, env))) forwarded.headers.set(BUDGET_HEADER, "exhausted");
   const resp = await stub(env, engineFor(env, input.scope)).forward(forwarded, true);
   log({ route: "/ask", scope: input.scope, outcome: resp.status === 200 ? "engine" : `engine_${resp.status}`, ms: Date.now() - t0 });
   return withHeaders(resp, { ...cors, "x-answer-source": "engine" });

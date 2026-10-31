@@ -424,7 +424,7 @@ export default function App() {
   // Resolve a pending two-decade comparison once its answer's pool is in. Pick the top-ranked pool
   // passage in each period (period_of matches the histogram's buckets). For a period the unfiltered
   // pool did not surface, fill that column on demand with one period-filtered retrieval: the EXISTING
-  // /ask path, no model call (provider "stub"), so N1 holds (no new external call, reuses retrieval).
+  // /ask path with evidence_only (retrieval, no model call, never stored), so N1 holds.
   // Only a period with no passage even then is reported as empty, so the compare view never
   // dead-ends: it shows a real side-by-side comparison or a clear inline reason.
   useEffect(() => {
@@ -477,8 +477,8 @@ export default function App() {
     let cancelled = false;
     Promise.all(
       picked.missing.map((p) =>
-        apiAsk({ question, filters: { period: p }, provider: "stub" })
-          // A degraded stub response (budget or an interrupted scan) did not complete normally, so
+        apiAsk({ question, filters: { period: p }, evidence_only: true })
+          // A degraded response (budget or an interrupted scan) did not complete normally, so
           // its missing row is a timeout, not a real absence; a thrown error (client abort / network)
           // is likewise "did not finish," never an absence.
           .then((r) => ({

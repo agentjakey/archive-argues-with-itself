@@ -56,6 +56,7 @@
         "DAILY_MODEL_CALLS": "100",
         "TURNSTILE_REQUIRED": "true",
         "KEEP_WARM_WINDOWS": "",
+        "PUBLIC_MODELS": "stub",
         "PUBLIC_URL": "https://archive-argues-site-staging.jakemyguy.workers.dev"
       }
     },
@@ -99,6 +100,7 @@
         "DAILY_MODEL_CALLS": "300",
         "TURNSTILE_REQUIRED": "true",
         "KEEP_WARM_WINDOWS": "",
+        "PUBLIC_MODELS": "",
         "PUBLIC_URL": "https://archiveargues.org"
       }
     }

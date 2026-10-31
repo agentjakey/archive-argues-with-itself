@@ -29,7 +29,8 @@ Files already present: CIVIC_VERIFY_PRESENT=full (default) hashes them; trust-im
 for files that are part of the container image, whose layers the registry verifies by digest on
 pull; trust-snapshot skips it for a disk restored from a snapshot, which is taken only after the
 same files were verified in full on an earlier wake of the same release (docs/SELF_HOSTING.md,
-"Design choices").
+"Design choices"). Snapshot files are still hashed once the engine is serving (recheck_trusted); a
+mismatch stops the engine and the engine Worker drops that snapshot.
 
 One retry rule for every network read: timeouts, connection errors, 5xx, 408 and 429 are retried
 with backoff; any other 4xx fails at once.
@@ -99,6 +100,7 @@ class Progress:
         self.error: Optional[str] = None
         self.started = time.monotonic()
         self.finished: Optional[float] = None
+        self.recheck: Optional[str] = None   # trusted files hashed after ready: running, passed, failed
 
     def set_stage(self, stage: str) -> None:
         with self._lock:
@@ -125,6 +127,10 @@ class Progress:
         with self._lock:
             self.finished = time.monotonic()
 
+    def set_recheck(self, state: str) -> None:
+        with self._lock:
+            self.recheck = state
+
     def snapshot(self) -> dict:
         with self._lock:
             total = sum(f["total"] for f in self.files.values())
@@ -133,7 +139,7 @@ class Progress:
             end = self.finished or time.monotonic()
             return {"stage": self.stage, "error": self.error, "files": len(self.files),
                     "bytes_total": total, "bytes_downloaded": got, "bytes_verified": hashed,
-                    "seconds": round(end - self.started, 1)}
+                    "seconds": round(end - self.started, 1), "recheck": self.recheck}
 
 
 # --- sources ------------------------------------------------------------------------------------
@@ -440,9 +446,10 @@ def fetch_all(jobs: list, source: RangeSource, progress: Progress, *, workers: i
     log(f"[provision] {len(fetches)} files downloaded and verified")
 
 
-def _verify_present(jobs: list, progress: Progress, stop: threading.Event, policy: str, log: Log) -> list:
-    """Jobs whose file is already present are checked (or trusted, for image data) and dropped from
-    the list; the rest still need fetching."""
+def _verify_present(jobs: list, progress: Progress, stop: threading.Event, policy: str, log: Log,
+                    trusted: Optional[list] = None) -> list:
+    """Jobs whose file is already present are checked (or trusted, under a trust policy, and then
+    added to `trusted`) and dropped from the list; the rest still need fetching."""
     missing = []
     for job in jobs:
         if not job.dest.exists():
@@ -453,6 +460,8 @@ def _verify_present(jobs: list, progress: Progress, stop: threading.Event, polic
         progress.advance(name, downloaded=job.dest.stat().st_size, state="present")
         if policy in TRUSTED_POLICIES:
             progress.advance(name, state=TRUSTED_POLICIES[policy])
+            if trusted is not None:
+                trusted.append(job)
             continue
         got = hash_file(job.dest, progress, name, stop)
         if got != job.sha256:
@@ -474,10 +483,31 @@ def make_source(mode: str, stop: threading.Event) -> Optional[RangeSource]:
     raise ProvisionError(f"unknown {ENV_PROVISION}={mode!r} (r2-binding, r2-s3 or present)")
 
 
+def recheck_trusted(jobs: list, progress: Progress, stop: threading.Event, log: Log = print) -> None:
+    """Hash files that were trusted at start (a restored snapshot), once the engine is serving.
+    Progress.recheck goes running, then passed or failed; a mismatch raises ProvisionError naming
+    the file, and the caller stops serving."""
+    progress.set_recheck("running")
+    t0 = time.monotonic()
+    try:
+        for job in jobs:
+            name = f"{job.scope}/{job.kind}"
+            if hash_file(job.dest, None, name, stop) != job.sha256:
+                raise ProvisionError(f"{name}: restored file {job.dest} does not match the published sha256")
+    except ProvisionError:
+        progress.set_recheck("failed")
+        raise
+    progress.set_recheck("passed")
+    log(f"[provision] {len(jobs)} trusted files hashed again after ready in {time.monotonic() - t0:.1f}s: all match")
+
+
 def provision(scope_names: list, progress: Progress, *, stop: threading.Event, log: Log = print,
               registry: Optional[dict] = None, source: Optional[RangeSource] = None,
-              mode: Optional[str] = None) -> None:
-    """Provision and verify every file the given scopes need. Raises ProvisionError (or Stopped)."""
+              mode: Optional[str] = None) -> list:
+    """Provision and verify every file the given scopes need. Raises ProvisionError (or Stopped).
+    Returns the jobs whose present files were trusted from a snapshot without a hash, for
+    recheck_trusted once the engine is ready (image data is not rechecked: the registry verified
+    it)."""
     mode = mode or os.environ.get(ENV_PROVISION, "present").strip().lower()
     policy = os.environ.get(ENV_VERIFY_PRESENT, "full").strip().lower()
     if policy != "full" and policy not in TRUSTED_POLICIES:
@@ -490,7 +520,8 @@ def provision(scope_names: list, progress: Progress, *, stop: threading.Event, l
         jobs += plan.jobs
         stubs += plan.stubs
     progress.set_stage("checking")
-    missing = _verify_present(jobs, progress, stop, policy, log)
+    trusted: list = []
+    missing = _verify_present(jobs, progress, stop, policy, log, trusted)
     if missing:
         source = source or make_source(mode, stop)
         if source is None:
@@ -508,3 +539,4 @@ def provision(scope_names: list, progress: Progress, *, stop: threading.Event, l
             write_stub_index(Path(index_path), published)
     progress.set_stage("provisioned")
     progress.done()
+    return trusted if policy == "trust-snapshot" else []

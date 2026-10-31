@@ -143,7 +143,7 @@ async function request<T>(path: string, init?: RequestInit & { guarded?: boolean
 }
 
 export async function ask(body: AskRequest): Promise<AskResponse> {
-  if (staticMode() && !body.provider && !body.nocache) {
+  if (staticMode() && !body.provider && !body.nocache && !body.evidence_only) {
     const recorded = await shards.recordedAnswer(await staticScope(), body.question, body.filters);
     if (recorded) return recorded;
   }

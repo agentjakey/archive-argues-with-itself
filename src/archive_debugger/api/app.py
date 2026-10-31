@@ -105,6 +105,7 @@ _DEGRADE_MSG = {
     "index_unavailable": "this collection's search index did not load, so here is no answer rather than a partial one. "
                          "Pick a story below, or try the other collection.",
 }
+_EVIDENCE_ONLY_MSG = "the record for this question, without an answer."
 
 
 class _RetrievalTimeout(Exception):
@@ -215,6 +216,8 @@ class AskRequest(BaseModel):
     provider: Optional[str] = None
     model: Optional[str] = None
     nocache: bool = False
+    evidence_only: bool = False
+
 
 
 def evidence_rows(hits: list[dict], verified: list[dict], prompt_ids: Optional[set] = None,
@@ -1064,15 +1067,30 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             _prime_model_client()   # prime the generation client once (guarded; no billed call)
             app.state.warmed.set()
 
+    def _recheck_snapshot(app: FastAPI, trusted: list) -> None:
+        """Hash the files a snapshot restore trusted, while the engine serves. On a mismatch the
+        engine stops serving and reports the failure on /health; the engine Worker then drops the
+        snapshot and the next wake downloads from R2."""
+        try:
+            provision.recheck_trusted(trusted, app.state.progress, app.state.stopping)
+        except provision.Stopped:
+            return
+        except Exception as exc:  # noqa: BLE001 - a mismatch or a read error: stop serving
+            app.state.ready.clear()
+            app.state.startup_error = f"snapshot check failed: {exc}"
+            app.state.progress.fail(app.state.startup_error)
+            print(f"[startup] {app.state.startup_error}; not serving", flush=True)
+
     def _start_in_background(app: FastAPI) -> None:
         """The serving path for a real process: provision the data (when CIVIC_PROVISION is set),
         open the scopes, mark ready, then warm. Runs in its own thread so the port answers from the
         first second and /health reports each stage. A failure is reported on /health and in the
         log; it never kills the process."""
         progress = app.state.progress
+        trusted: list = []
         try:
             if os.environ.get(provision.ENV_PROVISION):
-                provision.provision(_scopes_to_provision(), progress, stop=app.state.stopping)
+                trusted = provision.provision(_scopes_to_provision(), progress, stop=app.state.stopping)
             if app.state.stopping.is_set():
                 return
             progress.set_stage("loading")
@@ -1085,6 +1103,10 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             progress.set_stage("ready")
             print(f"[startup] ready: scopes {sorted(bundles)} opened in {time.monotonic() - t0:.1f}s; "
                   f"{progress.snapshot()}", flush=True)
+            if trusted:
+                app.state.recheck_thread = threading.Thread(target=_recheck_snapshot, args=(app, trusted),
+                                                            name="snapshot-recheck", daemon=True)
+                app.state.recheck_thread.start()
             _warm_all(app, bundles)
         except provision.Stopped:
             return
@@ -1100,6 +1122,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         app.state.stopping = threading.Event()
         app.state.startup_error = None
         app.state.progress = provision.Progress()
+        app.state.recheck_thread = None
         app.state.bundles = {}
         app.state.default_scope = base_name
         app.state.landing_scope = base_name
@@ -1131,6 +1154,9 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 b.interrupt()
             for t in threads:
                 t.join(timeout=SHUTDOWN_JOIN_S)
+            if app.state.recheck_thread is not None:
+                app.state.recheck_thread.join(timeout=SHUTDOWN_JOIN_S)
+                threads.append(app.state.recheck_thread)
             if any(t.is_alive() for t in threads):
                 print("[shutdown] background work did not stop in time; leaving its connections open "
                       "for the process exit", flush=True)
@@ -1163,7 +1189,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         return b
 
     def answer(b: Bundle, question: str, filters: Optional[dict], req_provider: Optional[str],
-               req_model: Optional[str], nocache: bool, budget: Optional[str] = None):
+               req_model: Optional[str], nocache: bool, budget: Optional[str] = None,
+               evidence_only: bool = False):
         r = b.retriever
         gcfg = b.gcfg
         kind = req_provider or b.provider or gcfg["provider"]
@@ -1198,18 +1225,16 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             served["flagged"] = flags.detect(served["evidence"], question=clean,
                                              answer_text=sa.get("text")) if not sa.get("abstained") else None
 
-        def degraded(reason: str, pool_rows: list, hits: list, conn) -> dict:
-            """A 200 limited-mode response: the record, a designed message, no model paragraph, no
-            raw error, and never cached (N6). `conn` is the caller's connection (the base connection
-            under b.lock for the empty/cached paths, or the request's pooled connection for the miss
-            path), so date-method attachment never touches a connection another thread is using."""
-            msg = _DEGRADE_MSG[reason].format(url=PUBLIC_URL)
+        def record_only(msg: str, pool_rows: list, hits: list, conn) -> dict:
+            """The record with a designed message and no model paragraph, never cached (N6). `conn`
+            is the caller's connection (the base connection under b.lock for the empty/cached paths,
+            or the request's pooled connection for the miss path), so date-method attachment never
+            touches a connection another thread is using."""
             cov = coverage_of(clean, hits)
             ans = Answer(text=msg, sentences=[], verified_citations=[], unsupported=[],
                          abstained=True, coverage=cov, abstention_text=msg, generation=gen)
             out = {"answer": ans.to_dict(),
-                   "evidence": evidence_rows(pool_rows, [], {h["passage_id"] for h in hits}, b.pages_dir),
-                   "degraded": {"reason": reason, "live_url": PUBLIC_URL}}
+                   "evidence": evidence_rows(pool_rows, [], {h["passage_id"] for h in hits}, b.pages_dir)}
             out["answer"]["cached"] = None
             _attach_date_method(conn, out["evidence"])
             # Limited mode shows the retrieved record (a result path), so widen the care scan to the
@@ -1218,13 +1243,19 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             out["flagged"] = flags.detect(out["evidence"], question=clean if pool_rows else None)
             return out
 
+        def degraded(reason: str, pool_rows: list, hits: list, conn) -> dict:
+            """A 200 limited-mode response: the record, a designed message, no raw error."""
+            out = record_only(_DEGRADE_MSG[reason].format(url=PUBLIC_URL), pool_rows, hits, conn)
+            out["degraded"] = {"reason": reason, "live_url": PUBLIC_URL}
+            return out
+
         if not clean:
             with b.lock:
                 return degraded("empty", [], [], r.conn)
         if not b.answers_allowed:
             with b.lock:
                 return degraded("index_unavailable", [], [], r.conn)
-        if not nocache:
+        if not nocache and not evidence_only:
             hit = b.cache.get(key)
             served = copy.deepcopy(hit["response"]) if hit is not None else None
             # A visitor's row holds no words of the question; put them back from this request's own
@@ -1271,6 +1302,14 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 _log_timing(b.name, time.monotonic() - t_start, 0.0, "degraded:retrieval_slow", 0)
                 return degraded("retrieval_slow", [], [], pr.conn)
             t_ret = time.monotonic() - t_start
+
+            # Retrieval only (the site's period fill for a comparison): the record, no model call,
+            # nothing stored.
+            if evidence_only:
+                _log_timing(b.name, t_ret, 0.0, "evidence_only", len(hits))
+                out = record_only(_EVIDENCE_ONLY_MSG, pool_rows, hits, pr.conn)
+                out["evidence_only"] = True
+                return out
 
             if kind == "anthropic" and b.llm is None and not _key_available():
                 _log_timing(b.name, t_ret, 0.0, "degraded:no_key", len(hits))
@@ -1455,21 +1494,23 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         if not app.state.ready.is_set():
             return starting_answer(req.question)
         return answer(_bundle(scope), req.question, req.filters, req.provider, req.model, req.nocache,
-                      x_civic_model_budget)
+                      x_civic_model_budget, req.evidence_only)
 
     @app.get("/ask")
     def ask_get(q: str = Query(..., min_length=1), period: Optional[str] = None,
                 jurisdiction: Optional[str] = None, doc_type: Optional[str] = None, nocache: int = 0,
-                provider: Optional[str] = None, scope: Optional[str] = None,
+                provider: Optional[str] = None, scope: Optional[str] = None, evidence_only: int = 0,
                 x_civic_model_budget: Optional[str] = Header(default=None)):
         """Permalink form: same handler as POST, filters from query params. `provider=stub`
-        exercises retrieval and the response shape without a model call (smoke tests)."""
+        exercises retrieval and the response shape without a model call (smoke tests; the engine
+        Worker refuses it from the public where it is not allowed); `evidence_only=1` returns the
+        record alone."""
         if provider is not None and provider not in ("stub", "anthropic"):
             raise HTTPException(status_code=422, detail="provider must be 'stub' or 'anthropic'")
         if not app.state.ready.is_set():
             return starting_answer(q)
         return answer(_bundle(scope), q, _clean_filters(period, jurisdiction, doc_type), provider, None, bool(nocache),
-                      x_civic_model_budget)
+                      x_civic_model_budget, bool(evidence_only))
 
     if Path(web_dist).is_dir():
         dist = Path(web_dist)
