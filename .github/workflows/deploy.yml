@@ -1,7 +1,9 @@
 name: deploy
 
 # Deploys only when asked: a manual run (choose the environment and what to deploy) or a pushed
-# release tag (v2.*), which deploys both to production. Every deploy runs the tests and the release
+# release tag (v2.*), which deploys both to production. A push to a branch, main included, never
+# deploys: there is no branch trigger, and the first job refuses any other event as a second guard
+# (tests/test_deploy_workflow.py checks both). Every deploy runs the tests and the release
 # gates first. Credentials come from GitHub Actions secrets (CLOUDFLARE_API_TOKEN,
 # CLOUDFLARE_ACCOUNT_ID); the public site build settings from web/.env.staging and web/.env.release,
 # and the engine origin from the API_ORIGIN repository variable. The engine's own secrets
@@ -34,6 +36,8 @@ env:
 
 jobs:
   test:
+    # every other job needs this one, so nothing deploys unless this guard passes
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v2.')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
