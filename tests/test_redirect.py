@@ -65,3 +65,12 @@ def test_health_path_answers_200_for_railway():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_no_railway_config_file_can_override_the_dashboard():
+    # Railway reads its config file from an absolute path, not from the service's Root Directory,
+    # so a file at the repository root would apply to the redirect service too. The dashboard
+    # settings are the whole configuration.
+    for name in ("railway.json", "railway.toml"):
+        assert not (REPO / name).exists(), name
+        assert not (REPO / "redirect" / name).exists(), f"redirect/{name}"

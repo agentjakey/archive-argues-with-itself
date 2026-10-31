@@ -137,4 +137,7 @@ instance size, from the published prices: `python scripts/v2/cost_estimate.py --
 
 `redirect/` is a tiny standard-library app that answers every request with a 301 to the same path and
 query on the new domain (old `/ask?q=...` permalinks open the reading room). Deploy it in place of the
-old service, with no volume, and its address keeps working.
+old service, with no volume, and its address keeps working. Build it from `redirect/Dockerfile` with
+`redirect/` as the build context, health check `/__redirect_health`, and `REDIRECT_TARGET` set to the
+new origin. The repository has no config-as-code file for any host, so these go in the host's own
+settings.

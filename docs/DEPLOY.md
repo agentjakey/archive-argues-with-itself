@@ -135,9 +135,12 @@ two-scope R2 deploy, use the section above.
    is under GitHub's 2 GiB per-file limit; the script refuses larger files.
 
 3. **Railway: New Project -> Deploy from GitHub repo**, pick the repository.
-   Railway reads `railway.json` (Dockerfile build, health check on `/health`,
-   one replica, restart on failure). The first build takes several minutes:
-   node stage, python stage, and the embedding model baked into the image.
+   In the service's Settings, set: Builder `Dockerfile`, Dockerfile path
+   `Dockerfile`, healthcheck path `/health`, healthcheck timeout `1800`, one
+   replica, restart policy "on failure" with 10 retries. The repository carries no
+   `railway.json` (Railway stops reading config as code on 2026-12-01), so these
+   dashboard values are the whole configuration. The first build takes several
+   minutes: node stage, python stage, and the embedding model baked into the image.
 
 4. **Add a volume**: in the service, Settings -> Volumes -> Add Volume, mount
    path `/data`, size 10 GB (data 3.2 GiB, cache, and headroom for a resumed
@@ -153,7 +156,7 @@ two-scope R2 deploy, use the section above.
 7. **Watch the logs**. You will see `civic.db: downloading from ...`, a line every
    100 MB with the rate, `checksum ok` for each file, then
    `Application startup complete`. The health check waits up to 30 minutes for
-   this first boot (`healthcheckTimeout` in `railway.json`); GitHub releases
+   this first boot (the healthcheck timeout from step 3); GitHub releases
    usually download at tens of MB/s, so expect a few minutes. If the download is
    interrupted the container restarts and resumes from the partial file.
 
