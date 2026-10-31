@@ -40,7 +40,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import platform
 import queue
+import sys
 import threading
 import time
 import urllib.error
@@ -481,6 +483,61 @@ def make_source(mode: str, stop: threading.Event) -> Optional[RangeSource]:
     if mode == "present":
         return None
     raise ProvisionError(f"unknown {ENV_PROVISION}={mode!r} (r2-binding, r2-s3 or present)")
+
+
+_IOPRIO_SET = {"x86_64": 251, "aarch64": 30}   # syscall numbers of ioprio_set
+_IOPRIO_WHO_PROCESS = 1                         # with a thread id, applies to that thread only
+_IOPRIO_CLASS_IDLE = 3
+_IOPRIO_CLASS_SHIFT = 13
+
+
+def wait_for_turn(signal: threading.Event, stop: threading.Event, delay_s: float,
+                  clock: Callable[[], float] = time.monotonic) -> str:
+    """Wait until `signal` is set or `delay_s` has passed, whichever is first. Returns "signal",
+    "delay" or "stopped" (stop was set first)."""
+    deadline = clock() + delay_s
+    while not stop.is_set():
+        if signal.is_set():
+            return "signal"
+        left = deadline - clock()
+        if left <= 0:
+            return "delay"
+        signal.wait(timeout=min(left, 0.5))
+    return "stopped"
+
+
+def lower_this_thread() -> str:
+    """Put the calling thread at the lowest CPU priority (SCHED_IDLE, else nice 19) and the idle IO
+    class, on Linux. Other threads, the ones serving questions, keep their priority. Returns what was
+    applied, for the log; anything the kernel refuses is skipped, never fatal. A no-op elsewhere.
+    The idle IO class only has an effect under an IO scheduler that honors it (BFQ); under none or
+    mq-deadline it is accepted and ignored."""
+    if not sys.platform.startswith("linux"):
+        return "unchanged (not Linux)"
+    tid = threading.get_native_id()
+    applied = []
+    try:
+        os.sched_setscheduler(tid, os.SCHED_IDLE, os.sched_param(0))
+        applied.append("cpu=SCHED_IDLE")
+    except (AttributeError, OSError):
+        try:
+            os.setpriority(os.PRIO_PROCESS, tid, 19)
+            applied.append("cpu=nice19")
+        except OSError:
+            applied.append("cpu=unchanged")
+    number = _IOPRIO_SET.get(platform.machine())
+    if number is None:
+        applied.append("io=unchanged")
+    else:
+        try:
+            import ctypes
+            libc = ctypes.CDLL(None, use_errno=True)
+            value = (_IOPRIO_CLASS_IDLE << _IOPRIO_CLASS_SHIFT) | 0
+            ok = libc.syscall(number, _IOPRIO_WHO_PROCESS, tid, value) == 0
+            applied.append("io=idle" if ok else "io=unchanged")
+        except (OSError, AttributeError):
+            applied.append("io=unchanged")
+    return " ".join(applied)
 
 
 def recheck_trusted(jobs: list, progress: Progress, stop: threading.Event, log: Log = print) -> None:

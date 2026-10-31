@@ -152,3 +152,70 @@ def test_spent_daily_budget_shows_the_record_without_a_model_call(tmp_path, monk
     with TestClient(_app(tmp_path, r, provider="anthropic")) as c:
         j = c.post("/ask", json={"question": "vaccination hospital"}, headers={"x-civic-model-budget": "exhausted"}).json()
     assert j["degraded"]["reason"] == "daily_budget" and len(j["evidence"]) > 0
+
+
+def test_visitor_rows_expire_after_90_days():
+    assert answer_cache.RETENTION_DAYS == 90
+    now = datetime(2026, 10, 31, 12, 0, tzinfo=timezone.utc)
+    row = answer_cache.make_record(key="k" * 64, scope="pilot", context="c", response={"answer": {}},
+                                   extras_version="x", curated_question=None, now=now)
+    assert row["expires_at"] == "2027-01-29T12:00:00+00:00"
+    curated = answer_cache.make_record(key="k" * 64, scope="pilot", context="c", response={"answer": {}},
+                                       extras_version="x", curated_question="q", now=now)
+    assert curated["expires_at"] is None
+
+
+CONTACT_QUESTIONS = [
+    "email me at jo.smith@example.ca about the 1974 plan",
+    "call 613-555-0199 about tuberculosis",
+    "my number is (613) 555 0199",
+    "+1 613.555.0199 asked about nursing stations",
+    "1-800-555-0199 is the line",
+    "+44 20 7946 0958",
+    "6135550199",
+]
+ORDINARY_QUESTIONS = [
+    "What did Alberta report between 1974 and 1999?",
+    "1960 1970 1980 coverage of immunization",
+    "tuberculosis in 1955-1965",
+    "population 2,500,000 in 1981",
+    "How many beds in 1972? 450 beds",
+    "reports from 1984 to 2012",
+    "2001 2002 2003 2004 rates",
+    "What is @ Health Canada?",
+]
+
+
+def test_contact_details_are_recognized_and_years_are_not():
+    assert [q for q in CONTACT_QUESTIONS if not answer_cache.has_contact_details(q)] == []
+    assert [q for q in ORDINARY_QUESTIONS if answer_cache.has_contact_details(q)] == []
+
+
+def test_a_question_with_contact_details_is_answered_but_never_cached(tmp_path):
+    from archive_debugger.generate.llm import CitedSentence, Draft, StubLLM
+    r, _ = _retriever(tmp_path, [("a", 1974, "alberta"), ("b", 1999, "alberta")])
+    hits = r.search("vaccination hospital", top_k=12)
+    llm = StubLLM(Draft(sentences=[CitedSentence(text="A programme ran.", cited_ids=[hits[0]["passage_id"]])]))
+    cache_db = tmp_path / "cache" / "answers.db"
+    question = "vaccination hospital, write to jo.smith@example.ca or 613-555-0199"
+    with TestClient(_app(tmp_path, r, llm=llm)) as c:
+        first = c.post("/ask", json={"question": question}).json()
+        again = c.post("/ask", json={"question": question}).json()
+        c.get("/coverage", params={"q": question})
+        assert not any(question in str(k) for b in c.app.state.bundles.values() for k in b.coverage_cache)
+    assert first["answer"]["text"] and first["answer"]["cached"] is None
+    assert again["answer"]["cached"] is None
+    assert sqlite3.connect(cache_db).execute("SELECT COUNT(*) FROM answers_v2").fetchone()[0] == 0
+    with TestClient(_app(tmp_path, r, llm=llm)) as c:      # the same question without them is stored
+        c.post("/ask", json={"question": "vaccination hospital, write to the ministry"})
+    assert sqlite3.connect(cache_db).execute("SELECT COUNT(*) FROM answers_v2").fetchone()[0] == 1
+
+
+def test_the_first_answer_sent_is_signalled(tmp_path):
+    r, _ = _retriever(tmp_path, [("a", 1990, "alberta")])
+    with TestClient(_app(tmp_path, r)) as c:
+        assert not c.app.state.first_answer.is_set()
+        c.get("/health")
+        assert not c.app.state.first_answer.is_set()
+        c.get("/ask", params={"q": "vaccination hospital"})
+        assert c.app.state.first_answer.is_set()

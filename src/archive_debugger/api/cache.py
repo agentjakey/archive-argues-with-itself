@@ -13,9 +13,11 @@ The engine Worker computes the same key in TypeScript from the question, the fil
 context string published with each release, so it can serve a stored answer without waking the
 engine. Both sides are tested against the shared vectors in config/cache_key_vectors.json.
 
-Privacy rule (docs/PRIVACY.md): a row keeps its question text only when the question is a
+Privacy rule (docs/DATA_FLOWS.md): a row keeps its question text only when the question is a
 curated one (a seed question or a story's asked question). Any other row stores the key hash,
-the answer and its metadata, no question, and expires RETENTION_DAYS after it was written.
+the answer and its metadata, no question, and expires RETENTION_DAYS after it was written. A
+question that contains an email address or a phone number (has_contact_details) is answered but
+never stored or served from the cache.
 
 Two stores share one interface: LocalCache (a SQLite file, for development, tests and the
 offline exhibit) and RemoteCache (the engine Worker's internal cache route, backed by D1).
@@ -38,11 +40,19 @@ from typing import Optional, Protocol
 from archive_debugger.retrieve.config import RetrieveConfig
 
 KEY_VERSION = 2
-RETENTION_DAYS = 180
+RETENTION_DAYS = 90
 _PATH_FIELDS = ("db_path", "index_path")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 _SPACES = re.compile(r" {2,}")
 _FILTER_TEXT = ("period", "jurisdiction", "doc_type")
+_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
+# North American numbers (613-555-0199, (613) 555 0199, +1 613.555.0199, 1-800-555-0199) and
+# international numbers written with a leading +. Years and counts in a question ("1974 and 1999",
+# "1960 1970 1980") do not match: the groups must be 3-3-4 digits, or start with +.
+_PHONE = re.compile(
+    r"(?<![\d+])(?:\+?1[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)"
+    r"|(?<![\d+])\+\d{1,3}(?:[\s.-]?\d{2,5}){2,5}(?!\d)"
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS answers_v2 (
@@ -155,6 +165,13 @@ def canonical_data_sha256(scope: str, registry: Optional[dict] = None) -> dict:
     if not all(len(v) == 64 for v in out.values()):
         raise ValueError(f"scope {scope!r} has no published data sha256 in config/scopes.toml")
     return out
+
+
+def has_contact_details(text: Optional[str]) -> bool:
+    """True when a question contains something that looks like an email address or a phone number.
+    Such a question is still answered, but its answer is never stored or served from the cache."""
+    text = text or ""
+    return bool(_EMAIL.search(text) or _PHONE.search(text))
 
 
 # --- question terms in a stored answer -----------------------------------------------------------

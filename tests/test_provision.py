@@ -6,6 +6,8 @@ import hashlib
 import io
 import json
 import os
+import sys
+import time
 import threading
 import urllib.error
 from pathlib import Path
@@ -241,3 +243,49 @@ def test_numpy_backend_fetches_artifacts_and_writes_a_stand_in_index(tmp_path, m
     assert dense.usable_artifacts(index_file) is not None                    # the stand-in is accepted for its index
     dense.stub_sidecar(index_file).write_text(json.dumps({"stands_in_for_index_sha256": "f" * 64}), encoding="utf-8")
     assert dense.usable_artifacts(index_file) is None                        # but not for another one
+
+
+def test_the_recheck_waits_for_the_first_answer_or_the_delay():
+    signal, stop = threading.Event(), threading.Event()
+    signal.set()
+    assert provision.wait_for_turn(signal, stop, 60.0) == "signal"
+    times = iter([0.0, 0.0, 61.0])
+    assert provision.wait_for_turn(threading.Event(), stop, 60.0, clock=lambda: next(times)) == "delay"
+    stop.set()
+    assert provision.wait_for_turn(threading.Event(), stop, 60.0) == "stopped"
+
+
+def test_the_recheck_waits_in_real_time_until_signalled():
+    signal, stop = threading.Event(), threading.Event()
+    threading.Timer(0.2, signal.set).start()
+    t0 = time.monotonic()
+    assert provision.wait_for_turn(signal, stop, 30.0) == "signal"
+    assert time.monotonic() - t0 < 5.0
+
+
+def test_lowering_the_recheck_thread_never_raises_and_says_what_it_did():
+    seen = {}
+
+    def run():
+        seen["result"] = provision.lower_this_thread()
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    worker.join()
+    if sys.platform.startswith("linux"):
+        assert "cpu=" in seen["result"] and "io=" in seen["result"]
+    else:
+        assert seen["result"] == "unchanged (not Linux)"
+
+
+def test_the_server_keeps_no_access_log():
+    """A request line would carry the question of a GET /ask or /coverage into the container logs."""
+    script = Path("docker/entrypoint.sh").read_text(encoding="utf-8")
+    starts = [line for line in script.splitlines() if line.strip().startswith("exec uvicorn")]
+    assert len(starts) == 2 and all("--no-access-log" in line for line in starts)
+
+
+def test_the_image_entrypoint_has_unix_line_endings():
+    """The image is built from the working tree; a carriage return breaks the shebang and set -eu.
+    .gitattributes keeps it LF on checkout, but an editor on Windows can still write CRLF."""
+    assert b"\r" not in Path("docker/entrypoint.sh").read_bytes()

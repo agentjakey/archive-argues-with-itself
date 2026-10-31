@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
@@ -87,6 +87,7 @@ MODEL_FLOOR_S = 2.0                  # below this remaining, skip the model and 
 # retrieval to actually finish in time (the warm/readiness work and, if needed, the A4 in-memory path).
 RETRIEVAL_DEADLINE_S = BUDGET_S - MODEL_FLOOR_S - MODEL_MARGIN_S   # hard cap on the dense scan (< budget)
 POOL_SIZE = 8                        # read-only connections per scope, so concurrent asks do not serialize
+RECHECK_DELAY_S = 60.0               # a restored snapshot is hashed again after the first answer, or after this
 SHUTDOWN_JOIN_S = 20.0               # how long shutdown waits for startup and warm work to stop
 MAX_QUESTION_CHARS = 500             # server-side defense in depth; the web input caps lower
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://archiveargues.org")
@@ -1068,9 +1069,17 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             app.state.warmed.set()
 
     def _recheck_snapshot(app: FastAPI, trusted: list) -> None:
-        """Hash the files a snapshot restore trusted, while the engine serves. On a mismatch the
-        engine stops serving and reports the failure on /health; the engine Worker then drops the
-        snapshot and the next wake downloads from R2."""
+        """Hash the files a snapshot restore trusted, while the engine serves. It waits until the
+        first answer has been sent or RECHECK_DELAY_S has passed, whichever is first, and runs at the
+        lowest CPU and IO priority (provision.lower_this_thread), so it stays out of the way of the
+        first question. On a mismatch the engine stops serving and reports the failure on /health;
+        the engine Worker then drops the snapshot and the next wake downloads from R2."""
+        if provision.wait_for_turn(app.state.first_answer, app.state.stopping, RECHECK_DELAY_S) == "stopped":
+            return
+        app.state.recheck_priority = provision.lower_this_thread()
+        print(f"[provision] snapshot recheck starting "
+              f"({'after the first answer' if app.state.first_answer.is_set() else f'after {RECHECK_DELAY_S:.0f}s'}; "
+              f"priority {app.state.recheck_priority})", flush=True)
         try:
             provision.recheck_trusted(trusted, app.state.progress, app.state.stopping)
         except provision.Stopped:
@@ -1123,6 +1132,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         app.state.startup_error = None
         app.state.progress = provision.Progress()
         app.state.recheck_thread = None
+        app.state.first_answer = threading.Event()   # the first /ask response has been sent
+        app.state.recheck_priority = None
         app.state.bundles = {}
         app.state.default_scope = base_name
         app.state.landing_scope = base_name
@@ -1204,6 +1215,9 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         context = b.context(kind, model_id)
         key = answer_cache_key(context, question, filters)
         clean = clean_question(question)
+        # A question with an email address or a phone number in it is answered, never cached: no
+        # stored row is read for it and none is written.
+        private = answer_cache.has_contact_details(question)
 
         def store(served: dict, created: Optional[datetime] = None) -> str:
             """Store the served form (date methods and flags included, cached and editorial notes
@@ -1255,7 +1269,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         if not b.answers_allowed:
             with b.lock:
                 return degraded("index_unavailable", [], [], r.conn)
-        if not nocache and not evidence_only:
+        if not nocache and not evidence_only and not private:
             hit = b.cache.get(key)
             served = copy.deepcopy(hit["response"]) if hit is not None else None
             # A visitor's row holds no words of the question; put them back from this request's own
@@ -1348,7 +1362,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             result = {"answer": ans.to_dict(),
                       "evidence": evidence_rows(pool_rows, ans.verified_citations, {h["passage_id"] for h in hits}, b.pages_dir)}
             add_extras(result, pr.conn)
-            store(result)
+            if not private:
+                store(result)
             result["answer"]["cached"] = None
             result["editorial_notes"] = editorial.notes_for_answer(notes, b.name, question, cached=False)
             _log_timing(b.name, t_ret, time.monotonic() - t_model, "abstain" if ans.abstained else "answer", len(hits))
@@ -1467,13 +1482,15 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         b = _bundle(scope)
         filters = _clean_filters(period, jurisdiction, doc_type)
         ck = (q, tuple(sorted(filters.items())))
-        cached = b.coverage_cache.get(ck)
+        private = answer_cache.has_contact_details(q)   # never kept, as for /ask
+        cached = None if private else b.coverage_cache.get(ck)
         if cached is not None:
             return cached
         with b.lock:
             r = b.retriever
             result = compute_coverage(r.conn, q, build_filters(filters), doc_type_families=r.cfg.active_families())
-        b.coverage_cache[ck] = result
+        if not private:
+            b.coverage_cache[ck] = result
         return result
 
     def starting_answer(question: str) -> dict:
@@ -1489,15 +1506,17 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         return out
 
     @app.post("/ask")
-    def ask_post(req: AskRequest, scope: Optional[str] = None,
+    def ask_post(req: AskRequest, background: BackgroundTasks, scope: Optional[str] = None,
                  x_civic_model_budget: Optional[str] = Header(default=None)):
         if not app.state.ready.is_set():
             return starting_answer(req.question)
-        return answer(_bundle(scope), req.question, req.filters, req.provider, req.model, req.nocache,
-                      x_civic_model_budget, req.evidence_only)
+        out = answer(_bundle(scope), req.question, req.filters, req.provider, req.model, req.nocache,
+                     x_civic_model_budget, req.evidence_only)
+        background.add_task(app.state.first_answer.set)   # runs once the response has been sent
+        return out
 
     @app.get("/ask")
-    def ask_get(q: str = Query(..., min_length=1), period: Optional[str] = None,
+    def ask_get(background: BackgroundTasks, q: str = Query(..., min_length=1), period: Optional[str] = None,
                 jurisdiction: Optional[str] = None, doc_type: Optional[str] = None, nocache: int = 0,
                 provider: Optional[str] = None, scope: Optional[str] = None, evidence_only: int = 0,
                 x_civic_model_budget: Optional[str] = Header(default=None)):
@@ -1509,8 +1528,10 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             raise HTTPException(status_code=422, detail="provider must be 'stub' or 'anthropic'")
         if not app.state.ready.is_set():
             return starting_answer(q)
-        return answer(_bundle(scope), q, _clean_filters(period, jurisdiction, doc_type), provider, None, bool(nocache),
-                      x_civic_model_budget, bool(evidence_only))
+        out = answer(_bundle(scope), q, _clean_filters(period, jurisdiction, doc_type), provider, None, bool(nocache),
+                     x_civic_model_budget, bool(evidence_only))
+        background.add_task(app.state.first_answer.set)
+        return out
 
     if Path(web_dist).is_dir():
         dist = Path(web_dist)
