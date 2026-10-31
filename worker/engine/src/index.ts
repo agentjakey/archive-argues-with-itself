@@ -9,12 +9,13 @@
 //   GET  /coverage    forwarded only while the engine is awake
 //   GET  /flag        forwarded only while the engine is awake
 //   GET  /__bench/cache?key=K&reads=N   staging only (needs the BENCH_* bindings): D1, KV and R2 read times
+//   GET  /robots.txt  disallows everything: the engine is not for crawlers
 //
 // Logs carry the route, the outcome and timings, never a question or an address.
-import { readAsk, engineFor, engineNames } from "./ask";
+import { bareRequest, readAsk, engineFor, engineNames, engineRequest } from "./ask";
 import { servedHit, purgeExpired, storedAnswerResponse } from "./cache";
 import { benchCacheStores, type BenchBindings } from "./bench";
-import { ENGINE_CONFIG, type Env } from "./config";
+import { ENGINE_CONFIG, ROBOTS, type Env } from "./config";
 import { checkRate, checkTurnstile, clientKey, corsHeaders, takeModelBudget, type GuardResult } from "./guard";
 import { keepWarmNow } from "./schedule";
 
@@ -68,8 +69,7 @@ async function handleAsk(request: Request, env: Env, cors: Record<string, string
     log({ route: "/ask", scope: input.scope, outcome: checked.reason, ms: Date.now() - t0 });
     return json({ error: checked.reason }, checked.status ?? 403, cors);
   }
-  const forwarded = new Request(request);
-  forwarded.headers.delete("x-turnstile-token");
+  const forwarded = await engineRequest(request, parsed);
   // The record alone makes no model call, so it does not spend the daily model budget.
   if (!evidenceOnly && !(await takeModelBudget(env.DB, env))) forwarded.headers.set(BUDGET_HEADER, "exhausted");
   const resp = await stub(env, engineFor(env, input.scope)).forward(forwarded, true);
@@ -104,6 +104,9 @@ export default {
     const cors = corsHeaders(request, env);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     try {
+      if (url.pathname === "/robots.txt" && request.method === "GET") {
+        return new Response(ROBOTS, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=86400" } });
+      }
       if (url.pathname === "/health" && request.method === "GET") {
         return await handleHealth(env, cors, url.searchParams.get("wakes") === "1");
       }
@@ -120,7 +123,7 @@ export default {
       }
       if ((url.pathname === "/coverage" || url.pathname === "/flag") && request.method === "GET") {
         const scope = url.searchParams.get("scope") || ENGINE_CONFIG.default_scope;
-        const resp = await stub(env, engineFor(env, scope)).forward(request, false);
+        const resp = await stub(env, engineFor(env, scope)).forward(bareRequest(request.url, "GET", null), false);
         return withHeaders(resp, cors);
       }
       return json({ error: "not found" }, 404, cors);
@@ -132,7 +135,7 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const now = new Date(controller.scheduledTime);
-    // Once a day (the 04:00 UTC run): drop visitor answers past their 180-day retention.
+    // Once a day (the 04:00 UTC run): drop visitor answers past their retention (ENGINE_CONFIG.retention_days).
     if (now.getUTCHours() === 4 && now.getUTCMinutes() < 10) {
       ctx.waitUntil(purgeExpired(env.DB, now).then((n) => log({ event: "purge", rows: n })));
     }

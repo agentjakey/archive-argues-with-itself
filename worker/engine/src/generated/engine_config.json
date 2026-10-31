@@ -30,7 +30,7 @@
   "pilot/dense/vectors.matrix.npy",
   "pilot/vectors.db"
  ],
- "retention_days": 180,
+ "retention_days": 90,
  "scopes": {
   "microlog": {
    "context": "f8f179ef53522710552b7984c68c93f712f91971e83db2529c50248fe6431248",

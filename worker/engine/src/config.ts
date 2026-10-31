@@ -23,6 +23,7 @@ export interface Env {
   TURNSTILE_REQUIRED: string;    // "true" | "false"
   KEEP_WARM_WINDOWS: string;     // "" (off) or e.g. "mon-fri 13:00-23:00" in UTC
   PUBLIC_MODELS?: string;        // what a public /ask may choose besides the configured model: "" or e.g. "stub"
+  PUBLIC_NOCACHE?: string;       // "true" lets a public /ask skip the answer cache (staging); off in production
   PUBLIC_URL: string;
   // Secrets (wrangler secret put)
   ANTHROPIC_API_KEY?: string;
@@ -57,6 +58,9 @@ export interface EngineConfig {
 export const ENGINE_CONFIG = generated as EngineConfig;
 export const STOPWORDS: ReadonlySet<string> = new Set(ENGINE_CONFIG.stopwords);
 export const SCOPES = Object.keys(ENGINE_CONFIG.scopes);
+
+/** The engine's robots.txt: it is an API, not pages, so nothing is for crawlers. */
+export const ROBOTS = ["User-agent: *", "Disallow: /", ""].join("\n");
 
 export function flag(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value === "") return fallback;

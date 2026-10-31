@@ -10,7 +10,10 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-15",
   "compatibility_flags": ["enable_ctx_exports"],
-  "observability": { "enabled": true },
+  // Workers Logs keep only what the code logs (route, outcome, timings) and the container's own
+  // lines. Invocation logs are off: they would record each request's URL, and /coverage and the
+  // GET form of /ask carry the question in the URL.
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": false } },
 
   "env": {
     "staging": {
@@ -57,6 +60,7 @@
         "TURNSTILE_REQUIRED": "true",
         "KEEP_WARM_WINDOWS": "",
         "PUBLIC_MODELS": "stub",
+        "PUBLIC_NOCACHE": "true",
         "PUBLIC_URL": "https://archive-argues-site-staging.jakemyguy.workers.dev"
       }
     },
@@ -101,6 +105,7 @@
         "TURNSTILE_REQUIRED": "true",
         "KEEP_WARM_WINDOWS": "",
         "PUBLIC_MODELS": "",
+        "PUBLIC_NOCACHE": "",
         "PUBLIC_URL": "https://archiveargues.org"
       }
     }

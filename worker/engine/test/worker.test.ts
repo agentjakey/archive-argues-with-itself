@@ -1,9 +1,9 @@
 // Serving stored answers from D1, the guards, the budget, keep-warm windows and range parsing.
 import { describe, expect, it } from "vitest";
-import { readAsk } from "../src/ask";
+import { engineRequest, readAsk } from "../src/ask";
 import { benchCacheStores, summarize } from "../src/bench";
-import { notesForAnswer, purgeExpired, readRow, servedHit, writeRow, type CacheRow } from "../src/cache";
-import { ENGINE_CONFIG, instanceFor, modelAllowed, verifyPolicy } from "../src/config";
+import { cappedExpiry, notesForAnswer, purgeExpired, readRow, servedHit, writeRow, type CacheRow } from "../src/cache";
+import { ENGINE_CONFIG, ROBOTS, instanceFor, modelAllowed, verifyPolicy } from "../src/config";
 import { checkTurnstile, clientKey, corsHeaders, takeModelBudget, TURNSTILE_HEADER } from "../src/guard";
 import { contentKey } from "../src/key";
 import { parseRange } from "../src/ranges";
@@ -73,8 +73,8 @@ describe("serving a stored answer without the engine", () => {
 });
 
 describe("reading an /ask request", () => {
-  const production = { PUBLIC_MODELS: "" };
-  const staging = { PUBLIC_MODELS: "stub" };
+  const production = { PUBLIC_MODELS: "", PUBLIC_NOCACHE: "" };
+  const staging = { PUBLIC_MODELS: "stub", PUBLIC_NOCACHE: "true" };
   const post = (body: Record<string, unknown>) =>
     new Request("https://api.test/ask", { method: "POST", body: JSON.stringify(body) });
 
@@ -83,7 +83,7 @@ describe("reading an /ask request", () => {
     expect(get?.input).toEqual({ scope: "microlog", question: "tobacco", filters: { jurisdiction: "ontario" } });
     expect(get?.cacheable).toBe(true);
     expect(get?.allowed).toBe(true);
-    const nocache = await readAsk(new Request("https://api.test/ask?q=t&nocache=1"), production);
+    const nocache = await readAsk(new Request("https://api.test/ask?q=t&nocache=1"), staging);
     expect(nocache?.cacheable).toBe(false);
     const stubbed = await readAsk(post({ question: "q", provider: "stub" }), staging);
     expect(stubbed?.input.scope).toBe(ENGINE_CONFIG.default_scope);
@@ -108,6 +108,77 @@ describe("reading an /ask request", () => {
     expect(fill).toMatchObject({ allowed: true, cacheable: false, evidenceOnly: true });
     const get = await readAsk(new Request("https://api.test/ask?q=t&evidence_only=1"), production);
     expect(get).toMatchObject({ allowed: true, cacheable: false, evidenceOnly: true });
+  });
+});
+
+describe("nocache from the public", () => {
+  const production = { PUBLIC_MODELS: "", PUBLIC_NOCACHE: "" };
+  const staging = { PUBLIC_MODELS: "stub", PUBLIC_NOCACHE: "true" };
+  const post = (body: Record<string, unknown>) =>
+    new Request("https://api.test/ask?scope=pilot", {
+      method: "POST", body: JSON.stringify(body),
+      headers: { "x-turnstile-token": "t", "content-type": "application/json", "cf-connecting-ip": "203.0.113.9",
+                 "user-agent": "browser", "x-forwarded-for": "203.0.113.9", referer: "https://archiveargues.org/?q=x" },
+    });
+
+  it("is ignored in production: the stored answer is served and the engine never sees it", async () => {
+    const parsed = (await readAsk(post({ question: "tobacco", nocache: true }), production))!;
+    expect(parsed).toMatchObject({ cacheable: true, nocacheDropped: true });
+    const forwarded = await engineRequest(post({ question: "tobacco", nocache: true }), parsed);
+    expect(await forwarded.json()).toEqual({ question: "tobacco" });
+    expect([...forwarded.headers.keys()]).toEqual(["content-type"]);
+    expect(new URL(forwarded.url).searchParams.get("scope")).toBe("pilot");
+    const get = new Request("https://api.test/ask?q=tobacco&nocache=1&scope=pilot");
+    const getParsed = (await readAsk(get, production))!;
+    expect(getParsed).toMatchObject({ cacheable: true, nocacheDropped: true });
+    const getForwarded = await engineRequest(get, getParsed);
+    expect([...getForwarded.headers.keys()]).toEqual([]);
+    expect(new URL(getForwarded.url).searchParams.has("nocache")).toBe(false);
+    expect(new URL(getForwarded.url).searchParams.get("q")).toBe("tobacco");
+  });
+
+  it("is honored on staging, where PUBLIC_NOCACHE is on", async () => {
+    const parsed = (await readAsk(post({ question: "tobacco", nocache: true }), staging))!;
+    expect(parsed).toMatchObject({ cacheable: false, nocacheDropped: false });
+    const forwarded = await engineRequest(post({ question: "tobacco", nocache: true }), parsed);
+    expect(await forwarded.json()).toEqual({ question: "tobacco", nocache: true });
+    expect(forwarded.headers.get("x-turnstile-token")).toBeNull();
+  });
+
+  it("production config leaves it off and staging turns it on", async () => {
+    const { readFileSync } = await import("node:fs");
+    const text = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf-8");
+    const production = text.slice(text.indexOf('"production"'));
+    const staging = text.slice(text.indexOf('"staging"'), text.indexOf('"production"'));
+    expect(production).toMatch(/"PUBLIC_NOCACHE": ""/);
+    expect(staging).toMatch(/"PUBLIC_NOCACHE": "true"/);
+    expect(text).toMatch(/"invocation_logs": false/);
+  });
+});
+
+describe("visitor rows expire within the retention period", () => {
+  it("is 90 days", () => {
+    expect(ENGINE_CONFIG.retention_days).toBe(90);
+  });
+
+  it("brings a later expiry forward and keeps an earlier one", async () => {
+    expect(cappedExpiry("2026-10-31T12:00:00+00:00", "2027-04-29T12:00:00+00:00")).toBe("2027-01-29T12:00:00+00:00");
+    expect(cappedExpiry("2026-10-31T12:00:00+00:00", "2026-11-30T12:00:00+00:00")).toBe("2026-11-30T12:00:00+00:00");
+    const env = fakeEnv();
+    const row = await storedRow("visitor", { curated: 0, question: null, created_at: "2026-10-31T12:00:00+00:00",
+                                              expires_at: "2027-04-29T12:00:00+00:00" });
+    await writeRow(env.DB, row);
+    const stored = (env.DB as unknown as FakeD1).answers.get(String(row.key))!;
+    expect(stored.expires_at).toBe("2027-01-29T12:00:00+00:00");
+    const curated = await storedRow("curated");
+    await writeRow(env.DB, curated);
+    expect((env.DB as unknown as FakeD1).answers.get(String(curated.key))!.expires_at).toBeNull();
+  });
+});
+
+describe("robots", () => {
+  it("disallows everything on the engine", async () => {
+    expect(ROBOTS.split("\n")).toEqual(["User-agent: *", "Disallow: /", ""]);
   });
 });
 

@@ -25,7 +25,8 @@ export async function readRow(db: D1Database, key: string, now: Date = new Date(
 }
 
 /** Store a row written by the engine. Only well-formed rows are accepted, and a row that is not
- *  curated must carry no question and an expiry. */
+ *  curated must carry no question and an expiry, which is never later than retention_days after the
+ *  row was written (a later one is brought forward). */
 export async function writeRow(db: D1Database, row: CacheRow): Promise<void> {
   for (const column of COLUMNS) {
     if (!(column in row)) throw new Error(`cache row is missing ${column}`);
@@ -34,6 +35,7 @@ export async function writeRow(db: D1Database, row: CacheRow): Promise<void> {
   if (!row.curated && (row.question !== null || row.expires_at === null)) {
     throw new Error("a row that is not curated must have no question and an expiry");
   }
+  if (!row.curated) row = { ...row, expires_at: cappedExpiry(String(row.created_at), String(row.expires_at)) };
   await db
     .prepare(`INSERT OR REPLACE INTO answers_v2 (${COLUMNS.join(", ")}) VALUES (${COLUMNS.map(() => "?").join(", ")})`)
     .bind(...COLUMNS.map((c) => row[c]))
@@ -47,6 +49,15 @@ export async function purgeExpired(db: D1Database, now: Date = new Date()): Prom
     .bind(isoSeconds(now))
     .run();
   return result.meta.changes ?? 0;
+}
+
+/** The earlier of a visitor row's own expiry and created_at plus retention_days. A created_at that
+ *  does not parse counts as now. */
+export function cappedExpiry(createdAt: string, expiresAt: string, retentionDays: number = ENGINE_CONFIG.retention_days): string {
+  const created = Date.parse(createdAt);
+  const latest = (Number.isFinite(created) ? created : Date.now()) + retentionDays * 24 * 3600 * 1000;
+  const asked = Date.parse(expiresAt);
+  return isoSeconds(new Date(Number.isFinite(asked) ? Math.min(asked, latest) : latest));
 }
 
 export function isoSeconds(date: Date): string {
