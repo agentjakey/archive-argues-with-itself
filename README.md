@@ -11,6 +11,9 @@ The public record disagrees with itself across decades. This tool shows you the 
 
 **Live demo:** https://archiveargues.org
 
+The earlier address, `archive-argues-with-itself-production.up.railway.app`, is being retired and
+will forward here with the path and query kept.
+
 ![Two Alberta government records on mental health policy, from 1988 and 1993, marked comparable and agreeing, with the note on how to read them and both scanned pages](docs/images/v2/story-laptop.png)
 
 An official answer is not fixed: what a government said caused a problem, or how it
@@ -272,6 +275,11 @@ Built during the AI Builders Fellowship of the BC + AI Ecosystem, with Internet
 Archive Canada, whose collections, OCR, and page images make the tool possible. Page images
 are served by archive.org and are not redistributed here. The publications are Canadian
 government documents and remain under their own terms.
+
+The hosting design follows [Qipu](https://github.com/AbstractsMachine/qipu-vancouver): whatever
+does not depend on a visitor's own question is computed offline, checked by gates and published as
+a versioned static release that goes live, and rolls back, by moving one pointer. The ideas are
+borrowed; no Qipu code is copied.
 
 ## Citation
 

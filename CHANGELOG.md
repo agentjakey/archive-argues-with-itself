@@ -235,7 +235,7 @@ move to Cloudflare was measured: data sizes, the cold boot at the candidate memo
 token cost of an uncached answer, and the R2 download from a home network
 The dense load now normalizes in place, byte-identical to before.
 
-## v2 Phase 1: everything on Cloudflare (unreleased, awaiting staging)
+## v2 Phase 1: everything on Cloudflare (live at https://archiveargues.org, 2026-10-31)
 
 The site becomes a static release on Cloudflare: the reading room, the stories and the recorded
 answers to every seed and story question come from versioned data shards, so they work with the
@@ -250,7 +250,10 @@ so it survives a fresh disk; visitors' questions are no longer stored as text an
 expire after 180 days (`docs/PRIVACY.md`). The engine opens its port at once and reports its
 stages, fetches its data as parallel ranged reads hashed while they arrive, loads precomputed
 dense matrices that are byte-identical to the old ones and skips the 3.9 GB of vectors databases,
-and stops cleanly on SIGTERM at any stage. Evaluation runs write to their own database. Answer
+and stops cleanly on SIGTERM at any stage. Each collection has its own container, which restores a
+snapshot of its verified disk on later wakes; the restored files are hashed again once it is
+serving, and a mismatch drops the snapshot. Public requests get each collection's configured model
+and nothing else. Evaluation runs write to their own database. Answer
 parity: the seed and story questions retrieve identical pools under the old and new layouts, and
 every migrated stored answer is unchanged. The old Railway address redirects to
 https://archiveargues.org with path and query kept (`redirect/`). Hosting runbook:
