@@ -1,0 +1,43 @@
+# The audit panel (docs/formats/audit.md). Judges are named here; the pipeline code names none.
+# The panel uses two judges from different model families; disagreements go to the escalation judge,
+# then to the human queue. Candidates are judges run alongside the panel to choose the second judge
+# by calibration (Phase 2 amendment 2); a candidate's verdicts never decide anything.
+
+[panel]
+judges = ["claude-haiku-4-5", "gpt-oss-120b"]
+escalation = "claude-sonnet-5-5"
+candidates = ["deepseek-v4-flash", "kimi-k2.6"]
+
+[judges.claude-haiku-4-5]
+provider = "anthropic"
+model = "claude-haiku-4-5"
+family = "anthropic"
+batch = true
+max_tokens = 800
+
+[judges.claude-sonnet-5-5]
+provider = "anthropic"
+model = "claude-sonnet-5-5"
+family = "anthropic"
+batch = true
+max_tokens = 3000
+effort = "low"
+
+[judges.gpt-oss-120b]
+provider = "workers-ai"
+model = "@cf/openai/gpt-oss-120b"
+family = "openai"
+max_tokens = 3000
+reasoning_effort = "low"
+
+[judges.deepseek-v4-flash]
+provider = "workers-ai"
+model = "@cf/deepseek-ai/deepseek-v4-flash-0731"
+family = "deepseek"
+max_tokens = 3000
+
+[judges."kimi-k2.6"]
+provider = "workers-ai"
+model = "@cf/moonshotai/kimi-k2.6"
+family = "moonshot"
+max_tokens = 3000

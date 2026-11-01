@@ -1,0 +1,23 @@
+# Audit configuration for one sub-collection (docs/formats/audit.md). Every audit
+# module reads its collection from a file like this; none names a collection in code.
+
+[collection]
+name = "pilot"
+scope = "pilot"                         # the scope in config/scopes.toml: corpus database and settings
+label = "Federal public health (pilot)"
+languages = ["en", "fr"]
+period = [1960, 2009]                   # the collection's dated window
+jurisdictions = ["federal", "ontario", "alberta", "quebec", "british_columbia", "manitoba",
+                 "saskatchewan", "nova_scotia", "new_brunswick", "newfoundland",
+                 "prince_edward_island", "yukon", "northwest_territories", "nunavut",
+                 "international", "unknown"]
+
+[v1]
+# The v1 audit: every kept sentence with the full text of its cited passages.
+worksheet = "reports/phase16/judgment_worksheet.jsonl"
+# Recorded v1 answers in the API response format; they carry each answer's retrieved evidence.
+answers_index = "site/data/pilot/answers/index.json"
+# The author's sentence-support decisions: {qid: {sentence_no: label}}.
+labels = "eval/judgments_phase16.json"
+labels_kind = "by_question"
+label_map = { s = "pass", p = "partial", n = "fail" }

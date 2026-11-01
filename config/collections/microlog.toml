@@ -1,0 +1,20 @@
+# Audit configuration for one sub-collection (docs/formats/audit.md).
+
+[collection]
+name = "microlog"
+scope = "microlog"
+label = "National public health, all provinces (microlog)"
+languages = ["en", "fr"]
+period = [1963, 2018]
+jurisdictions = ["federal", "ontario", "alberta", "quebec", "british_columbia", "manitoba",
+                 "saskatchewan", "nova_scotia", "new_brunswick", "newfoundland",
+                 "prince_edward_island", "yukon", "northwest_territories", "nunavut",
+                 "international", "unknown"]
+
+[v1]
+worksheet = "reports/microlog/judgment_worksheet.jsonl"
+answers_index = "site/data/microlog/answers/index.json"
+# Labels sit in the worksheet's own "judgment" field.
+labels = "reports/microlog/judgment_worksheet.jsonl"
+labels_kind = "worksheet_field"
+label_map = { supported = "pass", partly = "partial", not = "fail" }
