@@ -58,10 +58,14 @@ def prepare_ocr(spec, store, args) -> list:
     collection's cleanest pages for the quality proxy."""
     from archive_debugger.jobs.ocr import build_lexicon
     conn = corpus(args.collection)
+    # The corpus has no per-page OCR confidence; each passage has the build's quality score
+    # (ingest.ocr.ocr_quality), so a page's quality is the mean over its passages.
     worst = conn.execute(
-        "SELECT g.item_id, g.leaf_index, g.ocr_conf_mean FROM pages g WHERE g.has_text = 1 AND g.ocr_conf_mean IS NOT NULL "
-        "AND g.char_count > 400 ORDER BY g.ocr_conf_mean ASC LIMIT ?", (args.limit,)).fetchall()
-    clean = conn.execute("SELECT text FROM passages WHERE ocr_conf_mean IS NOT NULL ORDER BY ocr_conf_mean DESC LIMIT 20000").fetchall()
+        "SELECT item_id, leaf_index, AVG(CAST(ocr_quality AS REAL)) AS q FROM passages "
+        "WHERE ocr_quality IS NOT NULL AND LENGTH(text) > 400 GROUP BY item_id, leaf_index "
+        "HAVING q >= ? ORDER BY q ASC LIMIT ?", (args.min_quality, args.limit)).fetchall()
+    clean = conn.execute("SELECT text FROM passages WHERE ocr_quality IS NOT NULL "
+                         "ORDER BY CAST(ocr_quality AS REAL) DESC LIMIT 20000").fetchall()
     lexicon = build_lexicon([r["text"] for r in clean])
     store.put(f"{spec.input_prefix}/lexicon.txt", "\n".join(sorted(lexicon)).encode("utf-8"))
     pages = []
@@ -69,7 +73,7 @@ def prepare_ocr(spec, store, args) -> list:
         text = "\n".join(t["text"] for t in conn.execute(
             "SELECT text FROM passages WHERE item_id = ? AND leaf_index = ? ORDER BY char_start", (r["item_id"], r["leaf_index"])))
         pages.append({"page_ref": f"{r['item_id']}#{r['leaf_index']}", "item_id": r["item_id"], "leaf": int(r["leaf_index"]),
-                      "old_text": text, "old_quality": r["ocr_conf_mean"]})
+                      "old_text": text, "old_quality": r["q"]})
     units = []
     for n in range(0, len(pages), args.shard):
         uid = f"{args.collection}-worst-{n // args.shard:04d}"
@@ -130,6 +134,7 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=20261101)
     ap.add_argument("--max-units", type=int, default=None)
     ap.add_argument("--source", default=None, help="compile: the folder or store prefix of fetched OCR text")
+    ap.add_argument("--min-quality", type=float, default=0.0, help="ocr: skip pages below this quality score (charts and blanks)")
     args = ap.parse_args(argv)
     spec = spec_mod.load(args.job)
     store = store_mod.open_store(args.store)

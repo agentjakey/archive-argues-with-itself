@@ -27,6 +27,8 @@ ENTRYPOINT []
 CMD ["python", "scripts/v2/jobs.py", "--help"]
 
 FROM base AS gpu
+# docTR reads images through OpenCV, which needs these two system libraries.
+RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
 COPY docker/jobs/requirements-gpu.txt /app/docker/jobs/requirements-gpu.txt
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cu124 torch==2.5.1 \
  && pip install --no-cache-dir -r docker/jobs/requirements-gpu.txt

@@ -184,6 +184,7 @@ class LocalEngine:
     def __init__(self, folder: Path):
         started = time.time()
         self.conn = sqlite3.connect(folder / "civic.db", check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
         self.matrix = np.load(folder / "matrix.npy")
         self.ids = np.load(folder / "ids.npy").tolist()
         self.wake_seconds = round(time.time() - started, 3)

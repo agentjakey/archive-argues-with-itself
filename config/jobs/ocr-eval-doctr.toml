@@ -1,0 +1,26 @@
+# Read the worst pages again. The engine is chosen by measurement (docs/CLUSTER.md, "Choosing the
+# OCR engine"); every candidate is openly licensed. The old text is always kept beside the new.
+[job]
+name = "ocr-eval-doctr"
+kind = "ocr"
+code_version = "1"
+
+[input]
+prefix = "jobs-input/ocr-eval"
+
+[output]
+prefix = "jobs"
+
+[model]
+name = "doctr"
+licence = "Apache-2.0"
+
+[params]
+engine = "doctr"
+image_suffix = ""
+lexicon_key = "jobs-input/ocr-eval/lexicon.txt"
+
+[executor.local]
+
+[executor.k8s]
+gpu = false

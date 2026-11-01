@@ -1,0 +1,28 @@
+# Embed a slice of passages into the index format of config/jobs/index_spec.toml. The same spec
+# runs on this machine's CPU (fastembed) and on GPU nodes (sentence-transformers). A Workers AI
+# executor exists only for models Workers AI serves: see embed-bge-m3.toml.
+[job]
+name = "embed-kind"
+kind = "embed"
+code_version = "1"
+
+[input]
+prefix = "jobs-input/embed-kind"
+
+[output]
+prefix = "jobs"
+
+[model]
+name = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+licence = "Apache-2.0"
+
+[params]
+index_spec = "config/jobs/index_spec.toml"
+batch = 256
+
+[executor.local]
+backend = "fastembed"
+
+[executor.k8s]
+backend = "fastembed"
+gpu = false

@@ -1,0 +1,9 @@
+# The OCR comparison image: the CPU jobs image plus docTR on CPU PyTorch (Apache-2.0 both), for
+# measuring engines on our own pages before choosing one (docs/CLUSTER.md, "Choosing the OCR engine").
+FROM archive-argues-jobs:cpu-1
+USER root
+# docTR reads images through OpenCV, which needs these two system libraries.
+RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 torchvision==0.20.1 \
+ && pip install --no-cache-dir python-doctr==0.10.0
+USER 10001:10001

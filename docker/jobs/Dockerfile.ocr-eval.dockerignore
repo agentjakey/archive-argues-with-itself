@@ -1,0 +1,12 @@
+# The jobs image's own build context (BuildKit reads this instead of the repository's .dockerignore,
+# which is the engine image's). Code and job configs only: no data, no secrets, no tests.
+*
+!src/
+!scripts/v2/jobs.py
+!scripts/v2/catalogue.py
+!scripts/v2/registry.py
+!config/jobs/
+!config/audit.toml
+!docker/jobs/requirements-cpu.txt
+!docker/jobs/requirements-gpu.txt
+**/__pycache__

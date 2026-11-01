@@ -35,7 +35,9 @@ def endpoint_for(spec: JobSpec, executor: str) -> tuple:
         if not account or not token:
             raise RuntimeError("the Workers AI executor needs CF_ACCOUNT_ID and CF_AI_TOKEN")
         return WORKERS_AI_CHAT.format(account=account), {"authorization": f"Bearer {token}"}, s["model"]
-    url = s.get("endpoint") or os.environ.get("JUDGE_ENDPOINT")
+    # JUDGE_ENDPOINT overrides the spec, so the same spec runs where the server has another address
+    # (inside a container, or a cluster Service).
+    url = os.environ.get("JUDGE_ENDPOINT") or s.get("endpoint")
     if not url:
         raise RuntimeError(f"[executor.{executor}] needs an endpoint (or JUDGE_ENDPOINT)")
     headers = {}

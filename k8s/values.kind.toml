@@ -1,0 +1,57 @@
+# Values for the local proof on a kind cluster (no GPU): the CPU image loaded into the cluster, a
+# small quota, R2 credentials from a Secret created in that local cluster only.
+[cluster]
+namespace = "archive-argues"
+create_namespace = true
+owner_label = "archive-argues"
+contact = "hello@archiveargues.org"
+
+[images]
+cpu = "archive-argues-jobs:cpu-1"
+gpu = "archive-argues-jobs:cpu-1"
+pull_policy = "Never"
+pull_secret = ""
+
+[secrets]
+r2 = "archive-argues-r2"
+workers_ai = ""
+
+[quota]
+cpu = "4"
+memory = "8Gi"
+gpus = 0
+storage = "20Gi"
+
+[gpu]
+resource = "nvidia.com/gpu"
+type_label = "nvidia.com/gpu.product"
+type = ""
+node_selector = {}
+tolerations = []
+
+[job]
+parallelism = 2
+completions = 2
+backoff_limit = 2
+ttl_seconds_after_finished = 3600
+store = "r2"
+
+[job.resources.cpu]
+requests = { cpu = "1", memory = "2Gi" }
+limits = { cpu = "2", memory = "3Gi" }
+
+[job.resources.gpu]
+requests = { cpu = "1", memory = "2Gi" }
+limits = { cpu = "2", memory = "3Gi" }
+gpus = 1
+
+[scratch]
+size = "2Gi"
+storage_class = "standard"
+
+[judge_server]
+enabled = false
+model = "Qwen/Qwen2.5-7B-Instruct"
+image = "vllm/vllm-openai:v0.10.1"
+gpus = 1
+max_model_len = 16384
