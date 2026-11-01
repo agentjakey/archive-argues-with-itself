@@ -244,12 +244,15 @@ def main(argv=None) -> int:
                         help="judges that read every item; default: the panel and the candidates")
     parser.add_argument("--no-escalation", action="store_true")
     parser.add_argument("--no-review", action="store_true", help="skip the leniency review")
+    parser.add_argument("--route", nargs="*", default=[],
+                        help="override a check's panel for this run: check=judge_a,judge_b[,escalation] or "
+                             "all=judge_a,judge_b[,escalation] (two families; recorded in the report)")
     args = parser.parse_args(argv)
 
     run_dir = AUDIT_DIR / "runs" / args.run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     ledger = Ledger(AUDIT_DIR / "ledger.jsonl")
-    cfg = judges.load_panel()
+    cfg = judges.with_routes(judges.load_panel(), args.route)
     names = args.collections or collections.all_names()
     all_items, labels = build_items(names)
     items_path = run_dir / "items.jsonl"
@@ -260,6 +263,10 @@ def main(argv=None) -> int:
         index = {it["item_id"]: it for it in all_items}
         # Items that are not v1 answers (drafted benchmark items) are read whole from the file.
         index.update({r["item_id"]: r for r in rows if r.get("kind") in ("benchmark", "benchmark2", "relevance")})
+        # Sentence and answer items written from new answers (scripts/v2/run_benchmark.py judge-items)
+        # carry everything a judge needs and are read whole from the file too.
+        index.update({r["item_id"]: r for r in rows if r.get("item_id") not in index
+                      and str(r.get("source") or "").startswith("benchmark:")})
         wanted = [r["item_id"] for r in rows]
         missing = [i for i in wanted if i not in index]
         if missing:

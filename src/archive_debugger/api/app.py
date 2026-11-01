@@ -1499,6 +1499,11 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     ans = answer_v2.compose_v2(clean, hits, writer, verify, min_passages=gcfg["min_passages"],
                                                generation=gen, filters=filters, window=window,
                                                jurisdictions=jurisdictions)
+                    if notices and ans.state == "INSUFFICIENT_EVIDENCE":
+                        # The records the question reached are restricted and what is left does not
+                        # answer it: the restriction is why there is no answer.
+                        ans.gate_notes.append("the unrestricted records do not answer this; restricted records were not used")
+                        ans.state, ans.coverage_state = "RESTRICTED", None
                 else:
                     ans = compose(clean, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
             except Exception:  # noqa: BLE001 - offline / timeout / provider error -> show the record, not a raw error (N6)

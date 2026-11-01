@@ -647,3 +647,11 @@ def test_a_check_can_have_its_own_two_family_panel_and_no_escalation():
     d = panel.decide_routes(item, {"valid": None, "flags": []}, routes, records)
     assert d["checks"]["supports"]["route"] == "human" and d["human_queue"] == ["supports"]
     assert d["checks"]["in_scope"]["final"] == "pass"
+
+
+def test_a_run_can_route_checks_to_a_panel_without_the_writer():
+    cfg = judges.with_routes(judges.load_panel(), ["all=gpt-oss-120b,deepseek-v4-flash"])
+    assert cfg.route("supports") == (("gpt-oss-120b", "deepseek-v4-flash"), None)
+    assert judges.writer_conflicts(cfg, [{"kind": "answer", "writer_model": "claude-sonnet-5-5"}]) == []
+    with pytest.raises(ValueError):
+        judges.with_routes(judges.load_panel(), ["supports=claude-haiku-5-5,claude-sonnet-5-5"])

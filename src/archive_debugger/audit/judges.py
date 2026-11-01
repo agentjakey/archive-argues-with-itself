@@ -110,6 +110,28 @@ def load_panel(path: Path = AUDIT_CONFIG) -> PanelConfig:
                        lenient_above=float(panel.get("lenient_above", 0.10)))
 
 
+def with_routes(cfg: PanelConfig, overrides: list) -> PanelConfig:
+    """The panel with some checks decided by another pair for one run (for example a panel without
+    the writer's model or family). Each override is check=judge_a,judge_b[,escalation]; "all" sets
+    every check. The two judges must come from two families."""
+    if not overrides:
+        return cfg
+    from dataclasses import replace
+    routes = dict(cfg.check_panels or {})
+    for spec in overrides:
+        check, _, names = spec.partition("=")
+        parts = [n.strip() for n in names.split(",") if n.strip()]
+        if len(parts) not in (2, 3) or any(n not in cfg.specs for n in parts):
+            raise ValueError(f"bad route {spec!r}: check=judge_a,judge_b[,escalation] with defined judges")
+        if cfg.specs[parts[0]].family == cfg.specs[parts[1]].family:
+            raise ValueError(f"bad route {spec!r}: the two judges must come from two families")
+        pair, esc = (parts[0], parts[1]), (parts[2] if len(parts) == 3 else None)
+        checks = prompts.ALL_CHECKS if check == "all" else (check,)
+        for c in checks:
+            routes[c] = (pair, esc)
+    return replace(cfg, check_panels=routes)
+
+
 def same_model(a: str, b: str) -> bool:
     """claude-haiku-4-5 and claude-haiku-4-5-20251001 name the same model."""
     a, b = (a or "").lower(), (b or "").lower()
