@@ -259,7 +259,7 @@ def main(argv=None) -> int:
         rows = read_jsonl(args.items)
         index = {it["item_id"]: it for it in all_items}
         # Items that are not v1 answers (drafted benchmark items) are read whole from the file.
-        index.update({r["item_id"]: r for r in rows if r.get("kind") in ("benchmark", "benchmark2")})
+        index.update({r["item_id"]: r for r in rows if r.get("kind") in ("benchmark", "benchmark2", "relevance")})
         wanted = [r["item_id"] for r in rows]
         missing = [i for i in wanted if i not in index]
         if missing:

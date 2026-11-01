@@ -9,15 +9,16 @@ import json
 
 CHECKS = ("supports", "answers", "in_scope")            # the citation checks people calibrate
 ITEM_CHECKS = ("well_formed", "label_correct")          # checks on a drafted benchmark item
-ALL_CHECKS = CHECKS + ITEM_CHECKS
+ALL_CHECKS = CHECKS + ITEM_CHECKS + ("relevant",)
 KIND_CHECKS = {"sentence": ("supports", "in_scope"), "answer": ("answers",), "benchmark": ITEM_CHECKS,
-               "benchmark2": ITEM_CHECKS}
+               "benchmark2": ITEM_CHECKS, "relevance": ("relevant",)}
 CLASSES = {
     "supports": ("pass", "partial", "fail"),
     "answers": ("pass", "partial", "fail"),
     "in_scope": ("pass", "fail", "unclear"),
     "well_formed": ("pass", "fail"),
     "label_correct": ("pass", "fail"),
+    "relevant": ("pass", "partial", "fail"),
 }
 CONSTRAINTS = ("period", "jurisdiction", "population", "program", "measure")
 CONSTRAINT_VALUES = ("fits", "differs", "unclear", "not_asked")
@@ -202,6 +203,24 @@ BENCHMARK2_TEMPLATE = """<item kind="{kind}">
 
 REFERENCE_BENCHMARK2_SYSTEM = REFERENCE_PREAMBLE + BENCHMARK2_SYSTEM
 
+# Retrieval relevance (Phase 3): one question and one retrieved passage, judged for the pooled
+# retrieval evaluation. Its own prompt and version.
+RELEVANCE_SYSTEM = """You judge whether one passage retrieved from scanned Canadian government publications is relevant to a researcher's question. You return one verdict as JSON.
+
+relevant: does this passage help answer the question asked?
+   pass: it contains information that answers the question, or a substantial part of it, for the place, period, population, program or measure the question names.
+   partial: it is on the question's subject but answers only a small part of it, gives background only, or concerns a different place, period, population, program or measure than the one asked about.
+   fail: it does not help answer the question.
+   Judge only from the passage text and its title, year and jurisdiction. Poor scanned text that still carries the answer counts.
+
+""" + UNTRUSTED
+
+RELEVANCE_TEMPLATE = """<question>{question}</question>
+<filters>{filters}</filters>
+{pages}"""
+
+REFERENCE_RELEVANCE_SYSTEM = REFERENCE_PREAMBLE + RELEVANCE_SYSTEM
+
 STYLES = ("panel", "reference")
 
 
@@ -213,9 +232,10 @@ def kind_of(item: dict) -> str:
 def system(kind: str, style: str = "panel") -> str:
     if style == "reference":
         return {"sentence": REFERENCE_SENTENCE_SYSTEM, "answer": REFERENCE_ANSWER_SYSTEM,
-                "benchmark": REFERENCE_BENCHMARK_SYSTEM, "benchmark2": REFERENCE_BENCHMARK2_SYSTEM}[kind]
+                "benchmark": REFERENCE_BENCHMARK_SYSTEM, "benchmark2": REFERENCE_BENCHMARK2_SYSTEM,
+                "relevance": REFERENCE_RELEVANCE_SYSTEM}[kind]
     return {"sentence": SENTENCE_SYSTEM, "answer": ANSWER_SYSTEM, "benchmark": BENCHMARK_SYSTEM,
-            "benchmark2": BENCHMARK2_SYSTEM}[kind]
+            "benchmark2": BENCHMARK2_SYSTEM, "relevance": RELEVANCE_SYSTEM}[kind]
 
 
 def _check_schema(check: str) -> dict:
@@ -266,6 +286,9 @@ def user_message(item: dict, style: str = "panel") -> str:
                                          behaviour=_body(label.get("behaviour") or ""),
                                          checks=_body(json.dumps(item.get("corpus_checks") or [], sort_keys=True)),
                                          pages=_pages(item.get("sources") or [], limit))
+    if kind_of(item) == "relevance":
+        return RELEVANCE_TEMPLATE.format(question=_body(item["question"]), filters=filters,
+                                         pages=_pages([item["passage"]], limit))
     if kind_of(item) == "benchmark2":
         label = item.get("label") or {}
         return BENCHMARK2_TEMPLATE.format(kind=_attr(item.get("category")), question=_body(item["question"]),
@@ -312,10 +335,21 @@ REFERENCE_BENCHMARK2_PROMPT_VERSION = hashlib.sha256((REFERENCE_BENCHMARK2_SYSTE
                                                       + "full-pages").encode("utf-8")).hexdigest()[:12]
 
 
+RELEVANCE_PROMPT_VERSION = hashlib.sha256((RELEVANCE_SYSTEM + RELEVANCE_TEMPLATE + PAGE
+                                           + json.dumps(verdict_schema("relevance"), sort_keys=True)
+                                           + str(MAX_PAGE_CHARS)).encode("utf-8")).hexdigest()[:12]
+
+REFERENCE_RELEVANCE_PROMPT_VERSION = hashlib.sha256((REFERENCE_RELEVANCE_SYSTEM + RELEVANCE_TEMPLATE + PAGE
+                                                     + json.dumps(verdict_schema("relevance"), sort_keys=True)
+                                                     + "full-pages").encode("utf-8")).hexdigest()[:12]
+
+
 def version_for(kind: str, style: str = "panel") -> str:
     """The prompt version a judgment of this kind of item is made under. Benchmark items have their
     own, so adding them left the citation-check version, and every judgment made under it, as it was.
     Reference judges have one version for all three kinds."""
+    if kind == "relevance":
+        return REFERENCE_RELEVANCE_PROMPT_VERSION if style == "reference" else RELEVANCE_PROMPT_VERSION
     if kind == "benchmark2":
         return REFERENCE_BENCHMARK2_PROMPT_VERSION if style == "reference" else BENCHMARK2_PROMPT_VERSION
     if style == "reference":
