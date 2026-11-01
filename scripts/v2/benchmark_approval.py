@@ -1,7 +1,7 @@
 """The approval sample: drafted benchmark items the panel passed, for a person to check before the
 benchmark is frozen (Phase 2 Part B.5, "a person approves a sample").
 
-    python scripts/v2/benchmark_approval.py --judge-run bench-judge-1 --share 0.1 --seed 20261104
+    python scripts/v2/benchmark_approval.py --judge-run bench-judge-microlog bench-judge-pilot --share 0.1 --seed 20261104
     python scripts/v2/calibration_form.py --kit reports/v2/benchmark/approval/kit.jsonl
 
 A seeded share of each category (at least --minimum per category), in the calibration kit format,
@@ -31,7 +31,7 @@ OUT = build.BENCH / "approval"
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--judge-run", required=True)
+    parser.add_argument("--judge-run", nargs="+", required=True)
     parser.add_argument("--share", type=float, default=0.10)
     parser.add_argument("--minimum", type=int, default=3)
     parser.add_argument("--seed", type=int, required=True)

@@ -149,7 +149,7 @@ def report(run_id: str, run_dir: Path, items: list, labels: dict, gate_rows: dic
         "items": len(items), "sentence_items": len(sentences),
         "answer_items": sum(1 for it in items if prompts.kind_of(it) == "answer"),
         "benchmark_items": sum(1 for it in items if prompts.kind_of(it) == "benchmark"),
-        "answers": len({(it["collection"], it["qid"]) for it in items}),
+        "answers": len({(it["collection"], it.get("qid") or it["item_id"]) for it in items}),
         "by_collection": dict(Counter(it["collection"] for it in items)),
         "valid": dict(Counter(gate_rows[it["item_id"]]["valid"] for it in sentences)),
         "gate_flags": dict(Counter(f for g in gate_rows.values() for f in g["flags"])),

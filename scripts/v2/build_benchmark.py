@@ -2,8 +2,8 @@
 drafted items the judge panel passed, the v1 gold questions, split into dev, validation and test
 by a seed, each file hashed.
 
-    python scripts/v2/build_benchmark.py --judge-run bench-judge-1 --seed 20261103
-    python scripts/v2/build_benchmark.py --judge-run bench-judge-1 --seed 20261103 --freeze
+    python scripts/v2/build_benchmark.py --judge-run bench-judge-microlog bench-judge-pilot --seed 20261103
+    python scripts/v2/build_benchmark.py --judge-run bench-judge-microlog bench-judge-pilot --seed 20261103 --freeze
 
 Sources:
   - drafted items (reports/v2/benchmark/drafts/<collection>.jsonl) whose panel verdicts in the judge
@@ -61,10 +61,11 @@ def v1_gold(name: str) -> list:
     return out
 
 
-def panel_status(items: list, run: str) -> dict:
-    """{item_id: "pass" | "fail" | "pending" | "unjudged"} from the judge run's decisions."""
-    path = AUDIT_DIR / "runs" / run / "panel.jsonl"
-    decisions = {d["item_id"]: d for d in read_jsonl(path)}
+def panel_status(items: list, runs: list) -> dict:
+    """{item_id: "pass" | "fail" | "pending" | "unjudged"} from the judge runs' decisions."""
+    decisions = {}
+    for run in runs:
+        decisions.update({d["item_id"]: d for d in read_jsonl(AUDIT_DIR / "runs" / run / "panel.jsonl")})
     out = {}
     for it in items:
         d = decisions.get(it["item_id"])
@@ -101,7 +102,7 @@ def main(argv=None) -> int:
     from archive_debugger.local_env import load_local_env
     load_local_env(log=lambda m: None)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--judge-run", required=True)
+    parser.add_argument("--judge-run", nargs="+", required=True, help="one or more judge runs")
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--freeze", action="store_true")
     parser.add_argument("--max-rejected", type=float, default=0.10)
