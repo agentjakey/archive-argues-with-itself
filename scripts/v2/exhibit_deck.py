@@ -169,6 +169,8 @@ def cmd_draft(args, s: settings.Settings) -> int:
     done = {r["draft_key"] for r in read_jsonl(WORK / "drafts.jsonl")} if (WORK / "drafts.jsonl").exists() else set()
     if args.redo_refused:
         done -= redo_keys()
+    if args.redraft_kept:
+        done -= kept_keys()
     modes = args.modes.split(",")
     if "when" in modes:
         pages = _when_pages(corpora, s, cand["when"][: args.limit or None])
@@ -239,6 +241,21 @@ def redo_keys() -> set:
                 qid = reason.split(":", 1)[1]
                 year = qid[1:qid.index("q")]
                 keys.add(f"dial|{rnd['play']['question_id']}|{year}")
+        elif rnd["mode"] == "when_was_this":
+            keys.add(f"when|{rnd['pages'][0]['ref']}")
+        else:
+            keys.add(f"same|{rnd['pages'][0]['ref']}|{rnd['pages'][1]['ref']}")
+    return keys
+
+
+def kept_keys() -> set:
+    """Draft keys of every round the builder kept, to draft again under a new prompt version."""
+    keys = set()
+    for rnd in read_json(WORK / "checked.json") or []:
+        if rnd["status"] == "refused":
+            continue
+        if rnd["mode"] == "time_dial":
+            keys |= {f"dial|{rnd['play']['question_id']}|{e['year']}" for e in rnd["play"]["epochs"]}
         elif rnd["mode"] == "when_was_this":
             keys.add(f"when|{rnd['pages'][0]['ref']}")
         else:
@@ -591,6 +608,7 @@ def main(argv=None) -> int:
     d.add_argument("--modes", default="when,same,dial")
     d.add_argument("--chunk", type=int, default=50)
     d.add_argument("--redo-refused", action="store_true", help="draft again what the builder refused for an off-page quote")
+    d.add_argument("--redraft-kept", action="store_true", help="draft again every round the builder kept (a new prompt version)")
     sub.add_parser("check")
     p = sub.add_parser("panel")
     p.add_argument("--run", required=True)
