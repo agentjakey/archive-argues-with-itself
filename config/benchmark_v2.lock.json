@@ -1,0 +1,55 @@
+{
+ "approval": {
+  "rejected": 0,
+  "sampled": 55,
+  "source": "silver labels from ref-approval-1 (claude-fable-5-1, deepseek-v4-pro)",
+  "unresolved": [
+   "microlog:gen:incomparable_pair:0020",
+   "microlog:gen:misleading_ocr:0005",
+   "microlog:gen:wrong_period:0001",
+   "pilot:gen:answerable:0022",
+   "pilot:gen:answerable:0124",
+   "pilot:gen:incomparable_pair:0012"
+  ]
+ },
+ "exclusions": "config/benchmark_v2_exclusions.json",
+ "frozen_at": "2026-11-01T08:48:54Z",
+ "rule": "after the freeze, items may only be excluded through the versioned exclusion list",
+ "second_kind": {
+  "accepted_by_category": {
+   "conflicting": 5,
+   "false_premise": 45,
+   "restricted": 53
+  },
+  "drafted": 148,
+  "judge_runs": [
+   "bench2-panel-1",
+   "bench2-panel-2"
+  ],
+  "reference_runs": [
+   "ref-bench2-1",
+   "ref-bench2-2"
+  ],
+  "status": {
+   "panel_not_pass": 41,
+   "pass": 103,
+   "references_not_pass": 4
+  }
+ },
+ "seed": 20261103,
+ "set_sha256": "8e93d451db5ca8edb97eaffc4d087cb70ca43a7ab4dcbbdc64fe4a5d8b9065a3",
+ "splits": {
+  "dev": {
+   "items": 206,
+   "sha256": "6b32280b568b56087794b0d194148ece09f50f49a42d348294944b0cd139755f"
+  },
+  "test": {
+   "items": 352,
+   "sha256": "8f237470a65fbf3162fed325627c13cdbcc914c308410ca3ca635045014db7c2"
+  },
+  "validation": {
+   "items": 140,
+   "sha256": "9db73b1e606b27ce92c60bd4c3791e7f8ec8d3043d1d149b28d97f6d71de82c7"
+  }
+ }
+}
