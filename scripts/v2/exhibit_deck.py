@@ -396,6 +396,36 @@ def callable_reviewer(s: settings.Settings) -> str:
     raise RuntimeError(f"none of the reviewer models {s.reviewers} is available to this account")
 
 
+def panel_passed(rnd: dict, panel: dict, names: tuple) -> bool:
+    fp = rnd["checks"]["fingerprint"]
+    for name in names:
+        rec = panel.get((rnd["id"], name, fp))
+        v = (rec or {}).get("reply") or {}
+        if not v or any(v.get(c) != "pass" for c in ("supports", "answer_correct", "fair_to_visitor")) or v.get("needs_person"):
+            return False
+    return True
+
+
+def review_selection(pending: list, max_when: int, done_ids: set) -> list:
+    """What the reviewer reads when the budget cannot cover every card: every pair and every dial
+    question, and the panel-passed When Was This? cards spread over the decades, up to max_when in
+    all (counting cards already reviewed). Cards the panel flagged go to a person instead."""
+    panel = latest(WORK / "panel.jsonl", lambda r: (r["round_id"], r["judge"], r["fingerprint"]))
+    names = judges.load_panel().judges
+    others = [r for r in pending if r["mode"] != "when_was_this"]
+    cards = [r for r in pending if r["mode"] == "when_was_this" and panel_passed(r, panel, names)]
+    budget = max(0, max_when - len([i for i in done_ids if i.startswith("wwt-")]))
+    by_decade: dict = {}
+    for r in sorted(cards, key=lambda r: r["id"]):
+        by_decade.setdefault(r["play"]["year"] // 10 * 10, []).append(r)
+    chosen = []
+    while len(chosen) < budget and any(by_decade.values()):
+        for decade in sorted(by_decade):
+            if by_decade[decade] and len(chosen) < budget:
+                chosen.append(by_decade[decade].pop(0))
+    return others + chosen
+
+
 def cmd_review(args, s: settings.Settings) -> int:
     load_env()
     checked = read_json(WORK / "checked.json") or []
@@ -403,25 +433,29 @@ def cmd_review(args, s: settings.Settings) -> int:
     ledger = ledger_for(s)
     done = {(r["round_id"], r["fingerprint"]) for r in read_jsonl(WORK / "review.jsonl")} \
         if (WORK / "review.jsonl").exists() else set()
-    pending = [r for r in _kept(checked) if (r["id"], r["checks"]["fingerprint"]) not in done][: args.limit or None]
+    pending = [r for r in _kept(checked) if (r["id"], r["checks"]["fingerprint"]) not in done]
     if args.mode:
         pending = [r for r in pending if r["mode"] == args.mode]
+    if args.max_when is not None:
+        pending = review_selection(pending, args.max_when, done_ids={rid for rid, _ in done})
+    pending = pending[: args.limit or None]
     if not pending:
         print("nothing to review")
         return 0
     reqs = {r["id"]: llm.anthropic_request(model, prompts.REVIEW_SYSTEM, prompts.round_for_check(r), prompts.REVIEW_SCHEMA,
                                            max_tokens=args.max_tokens, effort=s.reviewer_effort) for r in pending}
     print(f"reviewing {len(reqs)} with {model} (run {args.run}, cap ${args.cap:.2f})")
+    fp = {r["id"]: r["checks"]["fingerprint"] for r in pending}
     try:
-        results = llm.run_anthropic_batch(reqs, ledger, args.run, args.cap, WORK / f"batch_{args.run}.json",
-                                          what=f"review {model}")
+        for n, chunk in enumerate(chunks(reqs, args.chunk)):
+            results = llm.run_anthropic_batch(chunk, ledger, args.run, args.cap, WORK / f"batch_{args.run}_{n}.json",
+                                              what=f"review {model}")
+            for rid, res in results.items():
+                append_jsonl(WORK / "review.jsonl", {"round_id": rid, "fingerprint": fp[rid],
+                                                     "prompt_version": prompts.REVIEW_VERSION, "at": now(), **res})
     except BudgetExceeded as exc:
         print(f"STOPPED: {exc}")
         return 2
-    fp = {r["id"]: r["checks"]["fingerprint"] for r in pending}
-    for rid, res in results.items():
-        append_jsonl(WORK / "review.jsonl", {"round_id": rid, "fingerprint": fp[rid], "prompt_version": prompts.REVIEW_VERSION,
-                                             "at": now(), **res})
     print(f"spent ${ledger.totals(args.run).spent:.4f} this run; phase ${ledger.totals().spent:.4f}")
     return 0
 
@@ -631,6 +665,8 @@ def main(argv=None) -> int:
     r.add_argument("--model", default=None)
     r.add_argument("--mode", default=None)
     r.add_argument("--max-tokens", type=int, default=8000)
+    r.add_argument("--chunk", type=int, default=20)
+    r.add_argument("--max-when", type=int, default=None, help="review every pair and dial question, and at most this many panel-passed cards")
     sub.add_parser("decide")
     sub.add_parser("gaphunt")
     b = sub.add_parser("build")
