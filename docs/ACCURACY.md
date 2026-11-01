@@ -38,8 +38,13 @@ cites. Intervals are Wilson 95% intervals computed in code (`scripts/audit_repor
   reviewed and decided by the author.
 - The pilot's abstention rule was amended once against its own 50 questions, so its abstention
   figures are in-sample; the held-out run is the exception.
-- The sentence intervals treat sentences as independent, but sentences cluster within answers, so
-  the true uncertainty is wider than shown. Intervals that account for this come with the next audit.
+- The sentence intervals treat sentences as independent, but sentences cluster within answers.
+  Resampling whole answers instead (a cluster bootstrap, 10,000 resamples,
+  `scripts/v2/v1_intervals.py`, 2026-11-01) gives, for strict support: pilot 89.3-96.5% (178 sentences, 35
+  answers), microlog 95.9-99.6% (304 sentences, 41 answers). Clustering widens the microlog interval a little and
+  does not widen the pilot's, because the pilot's unsupported sentences are spread over many answers.
+  Where no sentence failed (lenient support, microlog) the bootstrap cannot show any spread, so the
+  Wilson interval above is the one to read.
 - Small denominators (7 and 15 should-abstain questions) give wide intervals.
 - These are the curated evaluation questions, not visitors' questions.
 
