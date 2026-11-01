@@ -43,7 +43,8 @@
       "kv_namespaces": [{ "binding": "BENCH_KV", "id": "6eedf42d9da5473db1d68bfea8253c10" }],
       "ratelimits": [
         { "name": "RL_ASK", "namespace_id": "2001", "simple": { "limit": 6, "period": 60 } },
-        { "name": "RL_WAKE", "namespace_id": "2002", "simple": { "limit": 10, "period": 60 } }
+        { "name": "RL_WAKE", "namespace_id": "2002", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RL_ADMIN", "namespace_id": "2003", "simple": { "limit": 5, "period": 60 } }
       ],
       "triggers": { "crons": ["*/10 * * * *"] },
       "vars": {
@@ -88,7 +89,8 @@
       "r2_buckets": [{ "binding": "DATA", "bucket_name": "archive-argues-data" }],
       "ratelimits": [
         { "name": "RL_ASK", "namespace_id": "1001", "simple": { "limit": 6, "period": 60 } },
-        { "name": "RL_WAKE", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+        { "name": "RL_WAKE", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },
+        { "name": "RL_ADMIN", "namespace_id": "1003", "simple": { "limit": 5, "period": 60 } }
       ],
       "triggers": { "crons": ["*/10 * * * *"] },
       "vars": {

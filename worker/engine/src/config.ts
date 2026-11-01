@@ -9,6 +9,7 @@ export interface Env {
   DATA: R2Bucket;
   RL_ASK: RateLimit;
   RL_WAKE: RateLimit;
+  RL_ADMIN: RateLimit;          // the operator wake (src/admin.ts)
   // Variables
   RELEASE_ID: string;
   ENGINE_LAYOUT: string;         // "single" | "split"
@@ -28,6 +29,7 @@ export interface Env {
   // Secrets (wrangler secret put)
   ANTHROPIC_API_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
+  ADMIN_WAKE_TOKEN?: string;     // the operator wake; unset means /admin/wake answers 404
 }
 
 export interface ScopeConfig {

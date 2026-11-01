@@ -2,6 +2,8 @@
 //
 //   GET  /health      the engine's state (asleep, waking with its stage, ready, failed); never wakes it
 //   POST /wake        pre-wake from the site (Turnstile, rate limited)
+//   POST /admin/wake  operator wake with ADMIN_WAKE_TOKEN (src/admin.ts); 404 when no token is set.
+//                     The same bearer token on /ask replaces Turnstile for operator smoke tests
 //   GET|POST /ask     a stored answer straight from D1 when there is one; otherwise Turnstile, the
 //                     rate limit and the daily model budget, then the engine (woken if asleep).
 //                     A provider or model other than the scope's own is refused unless
@@ -12,6 +14,7 @@
 //   GET  /robots.txt  disallows everything: the engine is not for crawlers
 //
 // Logs carry the route, the outcome and timings, never a question or an address.
+import { checkAdmin } from "./admin";
 import { bareRequest, readAsk, engineFor, engineNames, engineRequest } from "./ask";
 import { servedHit, purgeExpired, storedAnswerResponse } from "./cache";
 import { benchCacheStores, type BenchBindings } from "./bench";
@@ -64,7 +67,10 @@ async function handleAsk(request: Request, env: Env, cors: Record<string, string
       return storedAnswerResponse(request, hit, cors);
     }
   }
-  const checked = await guard(request, env, env.RL_ASK);
+  // The operator's token stands in for Turnstile and the visitor rate limit (smoke tests after a
+  // deploy); the daily model budget still applies. A wrong token is refused, never downgraded.
+  const operator = request.headers.has("authorization");
+  const checked = operator ? await checkAdmin(request, env, env.RL_ADMIN) : await guard(request, env, env.RL_ASK);
   if (!checked.ok) {
     log({ route: "/ask", scope: input.scope, outcome: checked.reason, ms: Date.now() - t0 });
     return json({ error: checked.reason }, checked.status ?? 403, cors);
@@ -73,7 +79,7 @@ async function handleAsk(request: Request, env: Env, cors: Record<string, string
   // The record alone makes no model call, so it does not spend the daily model budget.
   if (!evidenceOnly && !(await takeModelBudget(env.DB, env))) forwarded.headers.set(BUDGET_HEADER, "exhausted");
   const resp = await stub(env, engineFor(env, input.scope)).forward(forwarded, true);
-  log({ route: "/ask", scope: input.scope, outcome: resp.status === 200 ? "engine" : `engine_${resp.status}`, ms: Date.now() - t0 });
+  log({ route: "/ask", scope: input.scope, outcome: resp.status === 200 ? "engine" : `engine_${resp.status}`, operator, ms: Date.now() - t0 });
   return withHeaders(resp, { ...cors, "x-answer-source": "engine" });
 }
 
@@ -98,6 +104,20 @@ async function handleWake(request: Request, env: Env, cors: Record<string, strin
   return json({ engines }, 202, cors);
 }
 
+async function handleAdminWake(request: Request, env: Env): Promise<Response> {
+  const checked = await checkAdmin(request, env, env.RL_ADMIN);
+  if (!checked.ok) {
+    log({ route: "/admin/wake", outcome: checked.reason });
+    return json({ error: checked.reason }, checked.status, {});
+  }
+  const scope = new URL(request.url).searchParams.get("scope");
+  if (scope && !engineNames(env).includes(engineFor(env, scope))) return json({ error: "unknown scope" }, 422, {});
+  const names = scope ? [engineFor(env, scope)] : engineNames(env);
+  const engines = await Promise.all(names.map((name) => stub(env, name).wakeUp()));
+  log({ route: "/admin/wake", outcome: "woken", engines: engines.map((e) => `${e.name}:${e.status}`) });
+  return json({ release: env.RELEASE_ID, engines }, 202, {});
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -111,6 +131,7 @@ export default {
         return await handleHealth(env, cors, url.searchParams.get("wakes") === "1");
       }
       if (url.pathname === "/wake" && request.method === "POST") return await handleWake(request, env, cors);
+      if (url.pathname === "/admin/wake" && request.method === "POST") return await handleAdminWake(request, env);
       if (url.pathname === "/ask" && (request.method === "GET" || request.method === "POST")) {
         return await handleAsk(request, env, cors);
       }
