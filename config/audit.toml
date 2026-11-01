@@ -84,7 +84,7 @@ provider = "anthropic"
 model = "claude-fable-5-1"
 family = "anthropic"
 batch = true
-max_tokens = 16000       # thinking is always on for this model and counts toward it
+max_tokens = 8000        # thinking is always on for this model and counts toward it
 effort = "medium"
 prompt = "reference"
 

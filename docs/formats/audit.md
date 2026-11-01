@@ -123,3 +123,26 @@ leniency review (per check: agreed passes re-read, how many the escalation judge
 rate with its 95% interval, and the flag), spend by provider for the run and the phase, cost per
 judged sentence (panel and escalation; everything in the run), and agreement with the v1 SUPPORTS
 decisions (`audit/calibration.py` `compare`).
+
+## Silver labels (`reports/v2/audit/reference/silver_kit.jsonl`, `silver_approval.jsonl`)
+
+One row per item (`audit/silver.py`, `scripts/v2/silver_labels.py build`): `format` (1), `item_id`,
+`kind`, `collection`, `category` (benchmark items), `references` (the reference judges), `checks`
+(per check: `silver`, the class both references gave, or null when they disagree or one gave no
+verdict, and `votes` by judge), `agreed` (every check has a silver label), `labeler` (`silver`),
+`review` (`reference-judges`). `silver_labels.jsonl` holds the same labels in the calibration labels
+format, for the calibration report. `silver_summary.json` counts agreement per check.
+
+## Author review queue (`reports/v2/audit/review/queue.jsonl`, `queue.json`, `labels.jsonl`)
+
+`queue.jsonl` is in the kit format the calibration form opens (kit items and benchmark approval
+items, renumbered `kit_position`, `kit_batch` = section number, `kit_version` = queue version,
+`queue_format` 1). At most 80 items: every reference disagreement on the kit, then a seeded random 40
+of the agreed kit items, then up to 20 benchmark approval items, flagged ones first. `queue.json`
+records the seed, the counts and each item's section; the form never shows the section. The author's
+labels go to `labels.jsonl` beside it in the calibration labels format. `status.json` and
+`status.md` (`silver_labels.py recompute`) hold the panel's agreement with reference labels, against
+the best labels (the author's where present, silver elsewhere), against the author on the random 40,
+the silver labels' per-item error on the random 40 with its Wilson interval, and each check's status
+(`AGREEMENT-WITH-REFERENCE-ONLY` until the random 40 are labelled; then `AI-AUDITED` only when the
+panel meets the bar and the silver error's upper 95% bound is at most 10%, else `HUMAN-REVIEWED`).
