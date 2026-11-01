@@ -146,7 +146,9 @@ def report(run_id: str, run_dir: Path, items: list, labels: dict, gate_rows: dic
         "run_id": run_id, "prompt_version": prompts.PROMPT_VERSION,
         "benchmark_prompt_version": prompts.BENCHMARK_PROMPT_VERSION, "gate_version": gates.GATE_VERSION,
         "panel_version": panel.PANEL_VERSION, "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "items": len(items), "sentence_items": len(sentences), "answer_items": len(items) - len(sentences),
+        "items": len(items), "sentence_items": len(sentences),
+        "answer_items": sum(1 for it in items if prompts.kind_of(it) == "answer"),
+        "benchmark_items": sum(1 for it in items if prompts.kind_of(it) == "benchmark"),
         "answers": len({(it["collection"], it["qid"]) for it in items}),
         "by_collection": dict(Counter(it["collection"] for it in items)),
         "valid": dict(Counter(gate_rows[it["item_id"]]["valid"] for it in sentences)),
@@ -175,7 +177,8 @@ def write_markdown(r: dict, path: Path) -> None:
     cost = r["cost_per_judged_sentence"]
     lines = [f"# Audit run {r['run_id']}", "",
              f"Prompt {r['prompt_version']}, gates v{r['gate_version']}, panel v{r['panel_version']}, {r['generated_at']}.", "",
-             f"{r['sentence_items']} sentence items and {r['answer_items']} answer items from {r['answers']} answers: "
+             f"{r['sentence_items']} sentence items, {r['answer_items']} answer items and {r['benchmark_items']} benchmark "
+             f"items from {r['answers']} answers or questions: "
              + ", ".join(f"{k} {v}" for k, v in sorted(r["by_collection"].items())) + ".", "",
              f"VALID (gates, sentences): {r['valid']}. Gate flags: {r['gate_flags'] or 'none'}.", "",
              f"Panel: {', '.join(r['panel']['judges'])}; escalation {r['panel']['escalation']}; candidates "
@@ -268,8 +271,8 @@ def main(argv=None) -> int:
         raise SystemExit(f"refused: panel or escalation judges {conflicts} use the model that wrote these answers; "
                          "change [panel] in config/audit.toml")
     write_jsonl(items_path, items)
-    n_answers = sum(1 for it in items if prompts.kind_of(it) == "answer")
-    print(f"{len(items) - n_answers} sentence items and {n_answers} answer items")
+    kinds = Counter(prompts.kind_of(it) for it in items)
+    print(", ".join(f"{n} {kind} items" for kind, n in sorted(kinds.items())))
 
     gate_path = run_dir / "gates.jsonl"
     gate_rows = {g["item_id"]: g for g in read_jsonl(gate_path)}
