@@ -2,7 +2,7 @@
 
 The full privacy page is on the site: https://archiveargues.org/?view=privacy. Every piece of data
 the site and the engine touch, with how each was checked, is in `docs/DATA_FLOWS.md`. In short
-(last updated 2026-10-31):
+(last updated 2026-11-01):
 
 - No accounts, no ads, no cookies and no tracking on the site, and nothing is sold.
 - A visitor's question is not stored as text. Its answer is stored under a one-way key made from the
@@ -17,8 +17,10 @@ the site and the engine touch, with how each was checked, is in `docs/DATA_FLOWS
   hold routes, outcomes and timings, never a question or an address, for 7 days.
 - Rate limiting uses a hash of the visitor's address held by Cloudflare for one minute; it is never
   written to the database or to logs.
-- This site uses Cloudflare Turnstile to tell people from bots. Its use is governed by the Turnstile
-  Privacy Addendum (https://www.cloudflare.com/turnstile-privacy-policy/).
+- This site uses Cloudflare Turnstile to tell people from bots. To verify a check, the engine sends
+  its one-time token and the visitor's IP address to Cloudflare, which already receives the address
+  as the site's host. Its use is governed by the Turnstile Privacy Addendum
+  (https://www.cloudflare.com/turnstile-privacy-policy/).
 - Page images load from archive.org. The archive.org page viewer, which sets its own cookies, loads
   only when a visitor asks for it.
 - Deletion requests: hello@archiveargues.org, with the question's text and roughly when it was

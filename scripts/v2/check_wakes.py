@@ -2,21 +2,24 @@
 "slept: idle". Standard library only; reads /health, which never wakes the engine.
 
     python scripts/v2/check_wakes.py
+    python scripts/v2/check_wakes.py --site https://archiveargues.org
     python scripts/v2/check_wakes.py --api https://archive-argues-engine-staging.<sub>.workers.dev
 
 A wake that is still running (no exit yet) is listed as open, not flagged. A trusted snapshot
-restore whose background check failed is flagged by its exit. Exit status 1 when anything is
-flagged, so the command can gate a script.
+restore whose background check failed is flagged by its exit. With --site, the site's home page
+must answer 200 too. Exit status 1 when anything is flagged, 2 when the site or /health is down, so
+the command can gate a script (the daily GitHub check fails on either).
 """
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+import urllib.error
 import urllib.request
 
 DEFAULT_API = "https://api.archiveargues.org"
-USER_AGENT = "archive-argues-check-wakes/1.0"
+USER_AGENT = "archive-argues-check-wakes/1.0 (+https://archiveargues.org; hello@archiveargues.org)"
 CLEAN_EXIT = "slept: idle"
 
 
@@ -24,6 +27,18 @@ def fetch_health(api: str, timeout: float = 30.0) -> dict:
     req = urllib.request.Request(f"{api.rstrip('/')}/health?wakes=1", headers={"user-agent": USER_AGENT})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
+
+
+def site_status(url: str, timeout: float = 30.0) -> int:
+    """The HTTP status of a GET of the site's home page (0 when it could not be reached)."""
+    req = urllib.request.Request(url, headers={"user-agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+    except (urllib.error.URLError, TimeoutError, OSError):
+        return 0
 
 
 def seconds(value) -> str:
@@ -62,9 +77,26 @@ def review(health: dict) -> tuple[list[str], int]:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--api", default=DEFAULT_API, help=f"engine Worker origin (default {DEFAULT_API})")
+    parser.add_argument("--site", default=None, help="also require this site's home page to answer 200")
     args = parser.parse_args(argv)
-    lines, flagged = review(fetch_health(args.api))
-    print("\n".join(lines))
+    down = []
+    if args.site:
+        status = site_status(args.site)
+        print(f"site {args.site}: {status or 'unreachable'}")
+        if status != 200:
+            down.append(f"site answered {status or 'nothing'}")
+    try:
+        health = fetch_health(args.api)
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+        down.append(f"/health failed: {exc}")
+        health = None
+    flagged = 0
+    if health is not None:
+        lines, flagged = review(health)
+        print("\n".join(lines))
+    if down:
+        print("DOWN: " + "; ".join(down))
+        return 2
     return 1 if flagged else 0
 
 

@@ -45,3 +45,25 @@ def test_nothing_flagged_when_every_wake_slept_idle():
     assert lines[-1].startswith("nothing flagged")
     lines, flagged = mod.review({"status": "asleep", "release": "r", "engines": []})
     assert flagged == 0 and "0 wakes" in lines
+
+
+def test_exit_status_is_2_when_the_site_or_health_is_down_and_1_on_a_flag(monkeypatch, capsys):
+    import urllib.error
+    mod = _module()
+    clean = {"status": "asleep", "release": "r", "engines": [], "wakes": [_wake("pilot", "2026-10-31T10:00:00Z", "slept: idle")]}
+    monkeypatch.setattr(mod, "site_status", lambda url: 200)
+    monkeypatch.setattr(mod, "fetch_health", lambda api: clean)
+    assert mod.main(["--site", "https://site.test"]) == 0
+    monkeypatch.setattr(mod, "site_status", lambda url: 503)
+    assert mod.main(["--site", "https://site.test"]) == 2
+    monkeypatch.setattr(mod, "site_status", lambda url: 200)
+
+    def down(api):
+        raise urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr(mod, "fetch_health", down)
+    assert mod.main(["--site", "https://site.test"]) == 2
+    assert "DOWN: /health failed" in capsys.readouterr().out
+    bad = dict(clean, wakes=[_wake("pilot", "2026-10-31T10:00:00Z", "exited: out of memory")])
+    monkeypatch.setattr(mod, "fetch_health", lambda api: bad)
+    assert mod.main([]) == 1

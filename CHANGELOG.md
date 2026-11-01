@@ -288,3 +288,9 @@ from it. Changes to the privacy page are logged here, dated.
   the coverage table can be scrolled from the keyboard.
 - The care statement no longer says the tool is "aligned with" the CARE Principles; it names them,
   the Local Contexts Notices and OCAP as guidance and says it does not claim to meet them.
+
+### Privacy page, 2026-11-01
+
+- The Turnstile row now says what the engine sends to verify a check: the one-time token and the
+  visitor's IP address, to Cloudflare. This was already the behaviour and already in
+  `docs/DATA_FLOWS.md`; the page did not say it.

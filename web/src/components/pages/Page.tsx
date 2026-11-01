@@ -44,3 +44,4 @@ export function Ext({ href, children }: { href: string; children: ReactNode }) {
 export const REPO_URL = "https://github.com/agentjakey/archive-argues-with-itself";
 export const HELLO = "hello@archiveargues.org";
 export const POLICY_DATE = "2026-10-31";
+export const PRIVACY_DATE = "2026-11-01";

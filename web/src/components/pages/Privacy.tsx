@@ -1,4 +1,4 @@
-import { Ext, HELLO, LastUpdated, Page, POLICY_DATE, REPO_URL } from "./Page";
+import { Ext, HELLO, LastUpdated, Page, PRIVACY_DATE, REPO_URL } from "./Page";
 
 interface Row {
   data: string;
@@ -25,7 +25,7 @@ const ROWS: Row[] = [
     retention: "Under the Internet Archive's policies. The archive.org page viewer, which sets its own cookies, loads only if you ask for it",
   },
   {
-    data: "Turnstile check, run when you first click into the question box or ask",
+    data: "Turnstile check, run when you first click into the question box or ask. To verify it, the engine sends the check's one-time token and your IP address to Cloudflare",
     purpose: "Tell people from bots before a question reaches the AI model",
     processor: "Cloudflare",
     location: "Cloudflare's global network",
@@ -78,7 +78,7 @@ const ROWS: Row[] = [
 export function Privacy() {
   return (
     <Page title="Privacy">
-      <LastUpdated date={POLICY_DATE} />
+      <LastUpdated date={PRIVACY_DATE} />
 
       <h3>The short version</h3>
       <p>
