@@ -42,6 +42,8 @@
   Cache-Control: no-cache
 
 /exhibit/current-deck.json
+  Cache-Control: no-cache
+
 # The catalogue browser (/catalogue/): its compiled files change with each release, so they are
 # cached for an hour; the page itself is revalidated.
 /catalogue/data/*
