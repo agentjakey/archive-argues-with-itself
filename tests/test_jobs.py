@@ -202,3 +202,22 @@ def test_ocr_keeps_the_old_text_and_scores_both(tmp_path):
 
 def test_lexicon_rate_is_none_without_words():
     assert ocr.lexicon_rate("12 34 ..", {"x"}) is None
+
+
+def test_compile_numbers_pages_by_the_viewers_leaves_and_never_guesses(tmp_path):
+    import gzip as gz
+    from archive_debugger.jobs import compile as comp
+    text = "COLOUR CARD|Title page of the report|Page seventy five text about hospital beds"
+    index = [[0, 11, 0, 0], [12, 36, 0, 0], [37, len(text), 0, 0]]
+    numbers = {"pages": [{"leafNum": 1, "pageNumber": ""}, {"leafNum": 2, "pageNumber": "75"}]}
+    files = {"searchtext": gz.compress(text.encode()), "pageindex": gz.compress(json.dumps(index).encode()),
+             "page_numbers": gz.compress(json.dumps(numbers).encode())}
+    lines = comp.compile_item("itemx", files, {"title": "t"}, target_tokens=300, overlap_tokens=40)
+    pages = [l for l in lines if l["kind"] == "page"]
+    assert [(p["page_id"], p["printed_page"]) for p in pages] == [("itemx#0", None), ("itemx#1", "75")]
+    passages = [l for l in lines if l["kind"] == "passage"]
+    assert passages[0]["passage_id"] == "itemx#0:0" and passages[1]["text"].startswith("Page seventy five")
+    # Without page_numbers the item gets no pages at all, and says why.
+    del files["page_numbers"]
+    lines = comp.compile_item("itemx", files, {}, target_tokens=300, overlap_tokens=40)
+    assert [l["kind"] for l in lines] == ["item", "skipped"]

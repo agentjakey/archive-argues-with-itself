@@ -29,6 +29,11 @@ METADATA = "https://archive.org/metadata/{ident}"
 SEARCHTEXT = "_hocr_searchtext.txt.gz"
 PAGEINDEX = "_hocr_pageindex.json.gz"
 DJVU = "_djvu.txt"
+# Which scanned leaves the viewer shows, and their printed numbers. The page index counts every
+# scanned leaf; archive.org's page links (/page/n<k>) count only the shown ones, so a page's link
+# number comes from this file (measured on pilot items: hOCR page p was corpus leaf p - 1, the
+# first scan being a colour card the viewer skips).
+PAGE_NUMBERS = "_page_numbers.json"
 R2_PREFIX = "fulltext/v1"
 
 
@@ -70,6 +75,9 @@ def fetch_item(ident: str, get: Callable, refusals) -> dict:
         index = _try(get, ident, ident + PAGEINDEX, refusals)
         if index is not None:
             files["pageindex"] = (ident + PAGEINDEX, index)
+            numbers = _try(get, ident, ident + PAGE_NUMBERS, refusals)
+            if numbers is not None:
+                files["page_numbers"] = (ident + PAGE_NUMBERS + ".gz", gzip.compress(numbers, mtime=0))
         return {"identifier": ident, "kind": "hocr" if index is not None else "searchtext_only", "files": files}
     meta_raw = get(METADATA.format(ident=ident), refusals=refusals)
     meta = json.loads(meta_raw.decode("utf-8"))
@@ -84,6 +92,10 @@ def fetch_item(ident: str, get: Callable, refusals) -> dict:
             index = _try(get, ident, index_name, refusals) if index_name in names else None
             if index is not None:
                 files["pageindex"] = (index_name, index)
+                numbers_name = search[: -len(SEARCHTEXT)] + PAGE_NUMBERS
+                numbers = _try(get, ident, numbers_name, refusals) if numbers_name in names else None
+                if numbers is not None:
+                    files["page_numbers"] = (numbers_name + ".gz", gzip.compress(numbers, mtime=0))
             return {"identifier": ident, "kind": "hocr" if index is not None else "searchtext_only", "files": files}
     djvu = next((f for f in names if f.endswith(DJVU)), None)
     data = _try(get, ident, djvu, refusals) if djvu else None

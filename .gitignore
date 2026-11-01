@@ -305,3 +305,7 @@ worker/site/release/
 
 # Private working notes for v2 (baseline, decisions, runbooks): kept locally, never published.
 docs/v2/
+
+# Phase G: rendered manifests and the filled-in values file stay local
+k8s/out/
+k8s/values.toml
