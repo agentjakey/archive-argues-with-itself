@@ -5,6 +5,7 @@ import { recordedLine } from "../lib/recorded";
 import type { Answer, EditorialNote, EvidenceRow } from "../types";
 import { CitationMark } from "./CitationMark";
 import { EditorialNotes } from "./EditorialNotes";
+import { StateBadge } from "./StateBadge";
 import { Sources } from "./Sources";
 import { UnsupportedRow } from "./UnsupportedRow";
 
@@ -34,6 +35,7 @@ export function AnswerCard({ answer, byId, onOpen, notes }: Props) {
         Answer from the record
       </h2>
       <EditorialNotes notes={notes} className="mt-3" />
+      <StateBadge answer={answer} />
       <p className="mt-2 text-sm text-muted" data-testid="ai-line">
         {AI_LINE}
       </p>

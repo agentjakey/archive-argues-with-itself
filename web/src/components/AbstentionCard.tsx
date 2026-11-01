@@ -1,5 +1,6 @@
 import { recordedLine } from "../lib/recorded";
 import type { Answer } from "../types";
+import { StateBadge } from "./StateBadge";
 import { Term } from "./Term";
 import { UnsupportedRow } from "./UnsupportedRow";
 
@@ -20,6 +21,7 @@ export function AbstentionCard({ answer }: Props) {
         without guessing, so the tool declines. The nearest evidence it does hold is below.
       </p>
       <p className="mt-3 max-w-prose text-ink">{answer.abstention_text}</p>
+      <StateBadge answer={answer} />
       {terms.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2" aria-label="Terms no passage mentions">
           {terms.map((t) => (

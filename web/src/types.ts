@@ -103,6 +103,12 @@ export interface Answer {
   abstention_text: string | null;
   generation: Generation;
   cached?: { created_at: string } | null;
+  // v2 answers (generate/answer_v2.py): the evidence state and why; absent on v1 answers
+  state?: string;
+  state_reason?: string;
+  coverage_state?: string | null;
+  gate_notes?: string[];
+  reviewed?: { answer_version: string; note: string };
 }
 
 export interface EvidenceRow {
