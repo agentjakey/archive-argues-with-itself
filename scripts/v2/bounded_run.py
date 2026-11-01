@@ -8,7 +8,7 @@
   upload    shard databases, vectors and coverage files to R2 under bounded/<slice>/<shard>/
   answer    questions through the router: choose shards from coverage only, wake (load) them,
             merge with collection-wide BM25 and dense scores, one model call each (metered)
-  items     the answers' sentences as audit items, for the Phase 2 audit pipeline
+  audit     the Phase 2 audit pipeline on the answers: gates against each cited shard, the panel
 
     python scripts/v2/bounded_run.py compile --slice bc_govpubs
     python scripts/v2/bounded_run.py pack --slice bc_govpubs --target 12000
@@ -16,7 +16,7 @@
     python scripts/v2/bounded_run.py coverage --slice bc_govpubs
     python scripts/v2/bounded_run.py upload --slice bc_govpubs
     python scripts/v2/bounded_run.py answer --slice bc_govpubs --questions config/bounded/bc_govpubs_questions.txt
-    python scripts/v2/bounded_run.py items --slice bc_govpubs
+    python scripts/v2/bounded_run.py audit --slice bc_govpubs --cap 1.00
 
 The staging engines are not used: engine Worker changes for many shards wait for Phase 3's Gate 3.
 A local engine (this script) loads each woken shard and measures that load as its wake time.
@@ -300,9 +300,92 @@ def cmd_answer(args) -> int:
     return 0
 
 
+def audit_items(slice_name: str, run: str) -> list:
+    """The answers' kept sentences and the answers themselves, as Phase 2 audit items."""
+    from archive_debugger.audit.items import CITATION_FIELDS, ITEM_FORMAT
+    answers = json.loads((slice_dir(slice_name) / f"answers-{run}.json").read_text(encoding="utf-8"))
+    items = []
+    for n, a in enumerate(answers, 1):
+        ans = a.get("answer") or {}
+        sentences = ans.get("sentences") or []
+        if not sentences:
+            continue
+        evidence = {e["passage_id"]: e for e in a["evidence"]}
+        qid = f"{slice_name}-q{n:02d}"
+        text = " ".join(s["text"] for s in sentences)
+        for k, s in enumerate(sentences, 1):
+            cites = []
+            for pid in s.get("cited_ids") or []:
+                e = evidence.get(pid)
+                if e is None:
+                    continue
+                cite = {f: e.get(f) for f in CITATION_FIELDS if f != "deep_link"}
+                cite["deep_link"] = e["page_deep_link"]
+                cite["text"] = e["text"]
+                cites.append(cite)
+            items.append({"format": ITEM_FORMAT, "kind": "sentence", "item_id": f"{qid}:s{k}", "collection": slice_name,
+                          "qid": qid, "question": a["question"], "filters": {}, "sentence_no": k, "sentence": s["text"],
+                          "answer_text": text, "citations": cites, "retrieved_ids": list(evidence), "source": run,
+                          "writer_model": ans.get("generation", {}).get("model"), "shards": {c["passage_id"]: evidence[c["passage_id"]]["shard_id"] for c in cites}})
+        items.append({"format": ITEM_FORMAT, "kind": "answer", "item_id": f"{qid}:answer", "collection": slice_name,
+                      "qid": qid, "question": a["question"], "filters": {}, "answer_text": text,
+                      "sentences": [s["text"] for s in sentences], "source": run,
+                      "writer_model": ans.get("generation", {}).get("model")})
+    return items
+
+
+def cmd_audit(args) -> int:
+    """The Phase 2 audit pipeline on the slice: the deterministic gates against each cited shard, the
+    panel's two judges (never the model that wrote the answers), each check decided by agreement;
+    disagreements go to a person (no escalation run here). Metered in the scale ledger."""
+    env()
+    from archive_debugger.audit import gates, judges, panel
+    from archive_debugger.audit.budget import Ledger
+    items = audit_items(args.slice, args.run)
+    cfg = judges.load_panel()
+    conflicts = judges.writer_conflicts(cfg, items)
+    names = [n for n in cfg.judges if n not in conflicts]
+    if len(names) < 2:
+        print(f"refused: the panel {cfg.judges} includes the writer ({conflicts})")
+        return 1
+    folders = {sid: slice_dir(args.slice) / "shards" / sid for sid in shard_ids(args.slice)}
+    conns = {sid: sqlite3.connect(f) for sid, f in ((s, folders[s] / "civic.db") for s in folders)}
+    for c in conns.values():
+        c.row_factory = sqlite3.Row
+    gate_rows = {}
+    for it in items:
+        shard = next(iter((it.get("shards") or {}).values()), next(iter(conns)))
+        gate_rows[it["item_id"]] = gates.run_gates(conns[shard], it)
+    ledger = Ledger(LEDGER, phase_cap=PHASE_CAP)
+    run_id = f"bounded-audit-{args.run}"
+    records: dict = {}
+    for name in names:
+        spec = cfg.specs[name]
+        if spec.provider == "anthropic":
+            got = judges.run_anthropic_batch(spec, items, ledger, run_id, args.cap,
+                                             slice_dir(args.slice) / f"audit_batch_{name}.json")
+        else:
+            got = judges.run_workers_ai_many(spec, items, ledger, run_id, args.cap, gateway=cfg.workers_ai_gateway)
+        for r in got:
+            records.setdefault(r["item_id"], {})[name] = r
+    decisions = [panel.decide(it, gate_rows[it["item_id"]], tuple(names), records.get(it["item_id"], {}), None) for it in items]
+    out = slice_dir(args.slice) / f"audit-{args.run}.json"
+    out.write_text(json.dumps({"items": items, "gates": gate_rows, "judgments": records, "decisions": decisions},
+                              indent=1, default=str), encoding="utf-8")
+    tally: dict = {}
+    for d in decisions:
+        for check, v in (d.get("checks") or {}).items():
+            key = f"{check}:{v.get('verdict') or v.get('decision') or v}"
+            tally[key] = tally.get(key, 0) + 1
+    from collections import Counter
+    print(json.dumps({"items": len(items), "valid": dict(Counter(g["valid"] for g in gate_rows.values())),
+                      "decisions": tally, "spent": round(ledger.totals(run_id).spent, 4)}, indent=1))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["compile", "pack", "embed", "coverage", "upload", "answer"])
+    ap.add_argument("command", choices=["compile", "pack", "embed", "coverage", "upload", "answer", "audit"])
     ap.add_argument("--slice", required=True)
     ap.add_argument("--target", type=int, default=12000)
     ap.add_argument("--pool-below", type=int, default=5000)
@@ -313,7 +396,7 @@ def main(argv=None) -> int:
     ap.add_argument("--cap", type=float, default=1.00)
     args = ap.parse_args(argv)
     return {"compile": cmd_compile, "pack": cmd_pack, "embed": cmd_embed, "coverage": cmd_coverage,
-            "upload": cmd_upload, "answer": cmd_answer}[args.command](args)
+            "upload": cmd_upload, "answer": cmd_answer, "audit": cmd_audit}[args.command](args)
 
 
 if __name__ == "__main__":
