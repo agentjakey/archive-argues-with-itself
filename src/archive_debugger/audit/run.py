@@ -55,6 +55,31 @@ def good_judgments(path: Path) -> dict:
     return out
 
 
+BATCH_CHUNK = 60    # items per Anthropic batch, so one batch's worst case stays well under a run cap
+
+
+def run_batches(spec: judges.JudgeSpec, pending: list, run_dir: Path, ledger: Ledger, run_id: str, cap: float,
+                log=print, chunk: int = BATCH_CHUNK, batch_runner=None) -> None:
+    """Judge `pending` in Anthropic batches of at most `chunk` items. A batch already submitted by a
+    stopped run (its state file still holds a batch id) is collected first, so nothing is sent twice;
+    then the rest go in new batches, each reserved and collected before the next is sent."""
+    batch_runner = batch_runner or judges.run_anthropic_batch
+    out = run_dir / "judgments.jsonl"
+    by_id = {it["item_id"]: it for it in pending}
+    for state_path in sorted(run_dir.glob(f"batch_{spec.name}*.json")):
+        if judges.BatchState(state_path).load().get("batch_id"):
+            for rec in batch_runner(spec, list(by_id.values()), ledger, run_id, cap, state_path, log=log):
+                append_jsonl(out, rec)
+                by_id.pop(rec["item_id"], None)
+    rest = list(by_id.values())
+    for start in range(0, len(rest), chunk):
+        part = rest[start:start + chunk]
+        state_path = run_dir / f"batch_{spec.name}_{int(time.time() * 1000)}.json"
+        for rec in batch_runner(spec, part, ledger, run_id, cap, state_path, log=log):
+            append_jsonl(out, rec)
+        state_path.unlink(missing_ok=True)
+
+
 def run_judge(spec: judges.JudgeSpec, pending: list, run_dir: Path, ledger: Ledger, run_id: str, cap: float,
               log=print, gateway=None) -> None:
     out = run_dir / "judgments.jsonl"
@@ -62,9 +87,7 @@ def run_judge(spec: judges.JudgeSpec, pending: list, run_dir: Path, ledger: Ledg
         return
     log(f"[{spec.name}] {len(pending)} items to judge")
     if spec.provider == "anthropic" and spec.batch:
-        records = judges.run_anthropic_batch(spec, pending, ledger, run_id, cap, run_dir / f"batch_{spec.name}.json", log=log)
-        for rec in records:
-            append_jsonl(out, rec)
+        run_batches(spec, pending, run_dir, ledger, run_id, cap, log=log)
     elif spec.provider == "anthropic":
         for it in pending:
             append_jsonl(out, judges.run_anthropic_direct(spec, it, ledger, run_id, cap))

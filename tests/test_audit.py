@@ -545,3 +545,28 @@ def test_post_json_hands_back_the_reply_headers(monkeypatch):
     seen = {}
     assert net.post_json("https://x.test", {}, {}, response_headers=seen) == {"ok": 1}
     assert seen == {"cf-aig-cache-status": "HIT"}
+
+
+
+def test_batches_are_chunked_and_a_submitted_batch_is_collected_before_anything_new(tmp_path):
+    from archive_debugger.audit import run as run_mod
+    ledger = budget.Ledger(tmp_path / "l.jsonl")
+    haiku = spec("h", "anthropic", "claude-haiku-5-5", "anthropic", batch=True)
+    pending = [item(f"c:q1:s{n}") for n in range(1, 8)]
+    judges.BatchState(tmp_path / "batch_h_1.json").save({"batch_id": "old", "reservation": "x"})
+    calls = []
+
+    def runner(spec_, items_, ledger_, run_id, cap, state_path, log=print):
+        if judges.BatchState(state_path).load().get("batch_id"):
+            calls.append(("resume", len(items_)))
+            judges.BatchState(state_path).save({})
+            return [{"item_id": "c:q1:s1"}, {"item_id": "c:q1:s2"}]     # what the stopped batch held
+        calls.append(("new", [it["item_id"] for it in items_]))
+        return [{"item_id": it["item_id"]} for it in items_]
+
+    run_mod.run_batches(haiku, pending, tmp_path, ledger, "r", 1.0, log=lambda m: None, chunk=2, batch_runner=runner)
+    assert calls[0] == ("resume", 7)
+    sent = [ids for kind, ids in calls[1:]]
+    assert sent == [["c:q1:s3", "c:q1:s4"], ["c:q1:s5", "c:q1:s6"], ["c:q1:s7"]]
+    written = [json.loads(line)["item_id"] for line in (tmp_path / "judgments.jsonl").read_text().splitlines()]
+    assert sorted(written) == sorted(it["item_id"] for it in pending)
