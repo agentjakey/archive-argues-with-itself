@@ -117,6 +117,26 @@ def canonical_filters(filters: Optional[dict]) -> dict:
     return out
 
 
+def applied_filters(filters: Optional[dict]) -> dict:
+    """The filters a request is answered with: exactly the values the key sees (canonical_filters),
+    with min_ocr as a number. Answering with the raw values let two requests share one key and get
+    different answers: " ontario" keyed like "ontario" but matched nothing, and its empty answer was
+    then served for "ontario" (found by the Phase 2 security fixtures)."""
+    canonical = canonical_filters(filters)
+    out: dict = {k: v for k, v in canonical.items() if k in _FILTER_TEXT}
+    if "min_ocr" in canonical:
+        out["min_ocr"] = float(canonical["min_ocr"])
+    return out
+
+
+_PERIOD = re.compile(r"^(undated|pre-1960|post-2009|[0-9]+s)$")
+
+
+def known_period(period: Optional[str]) -> bool:
+    """A period filter the retriever can apply (retrieve/filters.py period_predicate)."""
+    return period is None or bool(_PERIOD.match(period))
+
+
 def retrieve_settings(cfg: RetrieveConfig) -> dict:
     """The retrieve config with the host paths removed, so moving the data never moves the key."""
     out = {}

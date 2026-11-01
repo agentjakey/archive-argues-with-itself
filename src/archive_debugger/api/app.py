@@ -1204,6 +1204,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                evidence_only: bool = False):
         r = b.retriever
         gcfg = b.gcfg
+        # Answer with exactly the filter values the key sees, so one key never holds two answers.
+        try:
+            filters = answer_cache.applied_filters(filters)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="min_ocr must be a number")
+        if not answer_cache.known_period(filters.get("period")):
+            raise HTTPException(status_code=422, detail="unknown period")
         kind = req_provider or b.provider or gcfg["provider"]
         model_id = req_model or gcfg["model"]
         temp = sent_temperature(kind, gcfg)
@@ -1480,7 +1487,12 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                       jurisdiction: Optional[str] = None, doc_type: Optional[str] = None,
                       scope: Optional[str] = None) -> dict:
         b = _bundle(scope)
-        filters = _clean_filters(period, jurisdiction, doc_type)
+        try:
+            filters = answer_cache.applied_filters(_clean_filters(period, jurisdiction, doc_type))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="min_ocr must be a number")
+        if not answer_cache.known_period(filters.get("period")):
+            raise HTTPException(status_code=422, detail="unknown period")
         ck = (q, tuple(sorted(filters.items())))
         private = answer_cache.has_contact_details(q)   # never kept, as for /ask
         cached = None if private else b.coverage_cache.get(ck)
