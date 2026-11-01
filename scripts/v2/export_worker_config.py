@@ -30,7 +30,7 @@ def build() -> dict:
         raise SystemExit("unset CIVIC_EMBEDDER: the exported contexts must match the production embedder")
     from archive_debugger import editorial, release_files, scopes
     from archive_debugger.api import cache as answer_cache
-    from archive_debugger.api.app import EXTRAS_VERSION, scope_cache_context
+    from archive_debugger.api.app import EXTRAS_VERSION, curated_cache_context, scope_cache_context
     from archive_debugger.generate.cli import load_generate_config
     from archive_debugger.stopwords import STOPWORDS
 
@@ -40,6 +40,7 @@ def build() -> dict:
         resolved = scopes.resolve_scope(name)
         gcfg = load_generate_config(Path(resolved.config_path))
         scope_rows[name] = {"context": scope_cache_context(name, registry=registry),
+                            "curated_context": curated_cache_context(name, registry=registry),
                             "provider": gcfg["provider"], "model": gcfg["model"]}
     keys = [f.key for f in release_files.all_files(registry)]
     notes = editorial.load_notes(editorial.DEFAULT_NOTES)

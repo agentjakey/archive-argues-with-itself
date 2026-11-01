@@ -34,6 +34,7 @@ export interface Env {
 
 export interface ScopeConfig {
   context: string;
+  curated_context?: string;   // the v1 context reviewed answers were stored under
   provider: string;
   model: string;
 }

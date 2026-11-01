@@ -317,3 +317,27 @@ describe("instance size per engine", () => {
     expect(instanceFor("pilot", "", "standard-3")).toBe("standard-3");
   });
 });
+
+describe("reviewed answers under a later pipeline", () => {
+  it("serves a curated row stored under the v1 context, labelled, and never a visitor row that way", async () => {
+    const scope = ENGINE_CONFIG.scopes.pilot as { context: string; curated_context?: string };
+    const saved = { context: scope.context, curated: scope.curated_context };
+    try {
+      scope.curated_context = saved.context;
+      scope.context = "0".repeat(64);          // the pipeline moved on: a new context
+      const env = fakeEnv();
+      const curatedKey = (await contentKey(saved.context, "tobacco", {})) as string;
+      await writeRow(env.DB, await storedRow("tobacco", { key: curatedKey }));
+      const hit = (await servedHit(env.DB, { scope: "pilot", question: "tobacco", filters: {} })) as any;
+      expect(hit.answer.reviewed.answer_version).toBe("v1");
+      const visitorKey = (await contentKey(saved.context, "ontario tobacco control", {})) as string;
+      await writeRow(env.DB, await storedRow("ontario tobacco control", {
+        key: visitorKey, curated: 0, question: null, expires_at: "2099-01-01T00:00:00+00:00",
+      }));
+      expect(await servedHit(env.DB, { scope: "pilot", question: "ontario tobacco control", filters: {} })).toBeNull();
+    } finally {
+      scope.context = saved.context;
+      scope.curated_context = saved.curated;
+    }
+  });
+});

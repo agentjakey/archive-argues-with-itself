@@ -34,11 +34,13 @@
  "scopes": {
   "microlog": {
    "context": "f8f179ef53522710552b7984c68c93f712f91971e83db2529c50248fe6431248",
+   "curated_context": "f8f179ef53522710552b7984c68c93f712f91971e83db2529c50248fe6431248",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic"
   },
   "pilot": {
    "context": "df10d4aacd93d46e63899e4b693eb278671e186c8c4bf2274e6d5d1c95db8f59",
+   "curated_context": "df10d4aacd93d46e63899e4b693eb278671e186c8c4bf2274e6d5d1c95db8f59",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic"
   }

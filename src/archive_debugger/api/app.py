@@ -243,6 +243,22 @@ def scope_cache_context(scope: str, *, kind: Optional[str] = None, model_id: Opt
                          governance.load(env_path(ENV_GOVERNANCE_PATH, governance.DEFAULT_REGISTER)).digest)
 
 
+def curated_cache_context(scope: str, *, registry: Optional[dict] = None) -> str:
+    """The context the reviewed (curated) answers were stored under: the v1 pipeline with the
+    collection's configured model. Under a later pipeline a curated question still gets its reviewed
+    answer, labelled with that version, instead of a new one nobody reviewed."""
+    resolved = scopes.resolve_scope(scope)
+    active = None if resolved.inherit else resolved
+    with scopes.activate(active):
+        rcfg = load_retrieve_config(Path(resolved.config_path))
+        gcfg = dict(load_generate_config(Path(resolved.config_path)))
+    gcfg["answer_version"] = "v1"
+    model = gcfg.get("reviewed_model") or gcfg["model"]
+    return cache_context(scope, answer_cache.canonical_data_sha256(scope, registry), answer_cache.retrieve_settings(rcfg),
+                         gcfg, gcfg["provider"], model,
+                         governance.load(env_path(ENV_GOVERNANCE_PATH, governance.DEFAULT_REGISTER)).digest)
+
+
 def answer_cache_key(context: str, question: str, filters: Optional[dict]) -> str:
     """The exact key /ask uses, shared with scripts that need to know what is cached."""
     return answer_cache.content_key(context, question, filters)
@@ -912,6 +928,16 @@ class Bundle:
                                                              self.gcfg, kind, model_id, self.governance.digest)
         return self._contexts[(kind, model_id)]
 
+    def curated_context(self) -> str:
+        """The v1 context the reviewed answers were stored under (see curated_cache_context)."""
+        if "curated" not in self._contexts:
+            g = dict(self.gcfg)
+            g["answer_version"] = "v1"
+            model = g.get("reviewed_model") or g["model"]
+            self._contexts["curated"] = cache_context(self.name, self.data_sha256, self.retrieve_settings, g,
+                                                      g["provider"], model, self.governance.digest)
+        return self._contexts["curated"]
+
     def curated_question(self, question: str, filters: Optional[dict]) -> Optional[str]:
         """The normalized question text when it is a curated one, else None (never stored)."""
         if curated_identity(question, filters) in self.curated:
@@ -1349,6 +1375,12 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         if not nocache and not evidence_only and not private:
             # The key's context carries the register's digest, so a stored answer predates no policy.
             hit = b.cache.get(key)
+            reviewed_v1 = False
+            if hit is None and gcfg.get("answer_version", "v1") != "v1" and b.curated_question(question, filters):
+                # A curated question keeps its reviewed answer under a later pipeline, labelled v1.
+                old = b.cache.get(answer_cache_key(b.curated_context(), question, filters))
+                if old is not None and old.get("curated"):
+                    hit, reviewed_v1 = old, True
             served = copy.deepcopy(hit["response"]) if hit is not None else None
             # A visitor's row holds no words of the question; put them back from this request's own
             # question. The count always matches here (same function, same text), but if it ever does
@@ -1357,6 +1389,9 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 served = None
             if served is not None:
                 served["answer"]["cached"] = {"created_at": hit["created_at"]}
+                if reviewed_v1:
+                    served["answer"]["reviewed"] = {"answer_version": "v1",
+                                                    "note": "a reviewed answer from the earlier pipeline, kept as reviewed"}
                 for row in served["evidence"]:   # the offline pack may have grown since the answer was cached
                     thumb = local_page(b.pages_dir, row["item_id"], row["leaf_index"], "thumb")
                     image = local_page(b.pages_dir, row["item_id"], row["leaf_index"], "medium")

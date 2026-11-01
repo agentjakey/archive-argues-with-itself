@@ -86,11 +86,25 @@ export async function servedHit(db: D1Database, input: AskInput): Promise<Record
   if (!scope) return null;
   const key = await contentKey(scope.context, input.question, input.filters);
   if (key === null) return null;
-  const row = await readRow(db, key);
+  let row = await readRow(db, key);
+  let reviewed = false;
+  // Under a later pipeline a curated question keeps its reviewed answer, stored under the v1 context
+  // and labelled as such; only curated rows are served this way, never a visitor's.
+  if (!row && scope.curated_context && scope.curated_context !== scope.context) {
+    const oldKey = await contentKey(scope.curated_context, input.question, input.filters);
+    const old = oldKey === null ? null : await readRow(db, oldKey);
+    if (old && Number(old.curated) === 1) {
+      row = old;
+      reviewed = true;
+    }
+  }
   if (!row || row.extras_version !== ENGINE_CONFIG.extras_version) return null;
   const response = JSON.parse(String(row.response_json)) as Record<string, any>;
   if (!restoreTerms(response, salientTerms(cleanQuestion(input.question), STOPWORDS))) return null;
   response.answer = { ...response.answer, cached: { created_at: row.created_at } };
+  if (reviewed) {
+    response.answer.reviewed = { answer_version: "v1", note: "a reviewed answer from the earlier pipeline, kept as reviewed" };
+  }
   response.editorial_notes = notesForAnswer(input.scope, input.question, true);
   return response;
 }
