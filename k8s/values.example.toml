@@ -1,0 +1,65 @@
+# The one file to fill in when cluster access arrives (docs/CLUSTER.md). Copy it to k8s/values.toml
+# (gitignored), set the values the cluster's owner gives you, then:
+#   python scripts/v2/cluster.py up --values k8s/values.toml --job embed-sample
+# Removing everything this project created is one command:
+#   python scripts/v2/cluster.py down --values k8s/values.toml
+
+[cluster]
+namespace = "archive-argues"           # a namespace the owner gives us, or one we may create
+create_namespace = true                # false when the owner created it; down then leaves it alone
+owner_label = "archive-argues"         # every object carries app.kubernetes.io/part-of=<this>
+contact = "hello@archiveargues.org"    # put on every object as an annotation, for the owner
+
+[images]
+cpu = "ghcr.io/agentjakey/archive-argues-jobs:cpu-1"     # docker/jobs/Dockerfile, target cpu
+gpu = "ghcr.io/agentjakey/archive-argues-jobs:gpu-1"     # docker/jobs/Dockerfile, target gpu
+pull_policy = "IfNotPresent"
+pull_secret = ""                       # the name of an image pull Secret, if the registry is private
+
+[secrets]
+# Kubernetes Secrets the owner (or Jake) creates, referenced here by NAME only. Their keys become
+# environment variables in the pods. Values never appear in this repository.
+r2 = "archive-argues-r2"               # R2_ENDPOINT, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+workers_ai = ""                        # CF_ACCOUNT_ID, CF_AI_TOKEN (only for the workers_ai executor)
+
+[quota]
+# A ResourceQuota on the namespace, so the project can never take more than this.
+cpu = "64"
+memory = "256Gi"
+gpus = 4
+storage = "500Gi"
+
+[gpu]
+resource = "nvidia.com/gpu"            # the extended resource name the cluster's device plugin uses
+type_label = "nvidia.com/gpu.product"  # node label that names the GPU model
+type = ""                              # for example "NVIDIA-A100-SXM4-80GB"; empty means any GPU
+node_selector = {}                     # extra node labels, for example { "pool" = "gpu" }
+tolerations = []                       # for example [{ key = "nvidia.com/gpu", operator = "Exists", effect = "NoSchedule" }]
+
+[job]
+parallelism = 4                        # pods at once
+completions = 4                        # how many workers share the units (Indexed Job)
+backoff_limit = 6                      # retries per worker index before the Job gives up
+ttl_seconds_after_finished = 86400
+store = "r2"                           # where inputs are read and outputs written
+
+[job.resources.cpu]
+requests = { cpu = "2", memory = "8Gi" }
+limits = { cpu = "4", memory = "12Gi" }
+
+[job.resources.gpu]
+requests = { cpu = "4", memory = "24Gi" }
+limits = { cpu = "8", memory = "48Gi" }
+gpus = 1
+
+[scratch]
+size = "50Gi"                          # a scratch volume for model caches and staged inputs
+storage_class = ""                     # empty: the cluster's default
+
+[judge_server]
+# An optional vLLM server (OpenAI-compatible) for the judge job's k8s executor.
+enabled = false
+model = "Qwen/Qwen2.5-7B-Instruct"
+image = "vllm/vllm-openai:v0.10.1"
+gpus = 1
+max_model_len = 16384

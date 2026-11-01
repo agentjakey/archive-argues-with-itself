@@ -1,0 +1,22 @@
+# The index format the embed job writes (docs/formats/jobs.md). This is today's production dense
+# index (config/pilot.toml and config/microlog.toml [index]): the embed job reads its model and
+# settings from here and never from code. When Phase 3 settles the v2 index (run A, Gate 3), its
+# spec replaces this file and every embed job's build key changes with it.
+
+[index]
+name = "minilm-l12-v1"
+model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+licence = "Apache-2.0"
+dim = 384
+max_seq_length = 128          # tokens; longer passages are cut by the model (docs/v2/SCALING.md)
+normalize = true              # unit vectors, so a dot product is the cosine
+dtype = "float32"
+passage_prefix = ""           # some models want "passage: " before each passage; this one does not
+query_prefix = ""
+
+[backends]
+# How each executor computes the same embedding. fastembed runs the model's ONNX export on CPU;
+# sentence_transformers runs it on a GPU. Vectors from two backends agree to about 1e-3 cosine,
+# not bit for bit: the manifest records the backend of every unit.
+local = "fastembed"
+k8s = "sentence_transformers"

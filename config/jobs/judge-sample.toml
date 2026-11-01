@@ -1,0 +1,33 @@
+# Bulk judging with an open-weight judge through an OpenAI-compatible endpoint: Ollama on this
+# machine, gpt-oss-120b on Workers AI (metered), or a vLLM server in the cluster.
+[job]
+name = "judge-sample"
+kind = "judge"
+code_version = "1"
+
+[input]
+prefix = "jobs-input/judge-sample"
+
+[output]
+prefix = "jobs"
+
+[model]
+name = "qwen2.5-7b-instruct"
+licence = "Apache-2.0"
+
+[params]
+max_tokens = 1500
+
+[executor.local]
+endpoint = "http://127.0.0.1:11434/v1"
+model = "qwen2.5:7b-instruct"
+
+[executor.workers_ai]
+model = "@cf/openai/gpt-oss-120b"
+price_model = "@cf/openai/gpt-oss-120b"
+run_cap_usd = 1.00
+
+[executor.k8s]
+endpoint = "http://judge-server:8000/v1"
+model = "Qwen/Qwen2.5-7B-Instruct"
+gpu = true
