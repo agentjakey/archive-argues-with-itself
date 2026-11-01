@@ -21,7 +21,7 @@ class Filters:
     year_from: Optional[int] = None
     year_to: Optional[int] = None
     # "As of" a year: what the record held by then, so items catalogued in that year or before. The
-    # same predicate as year_to; the engine also prefers the most recent of them when it ranks.
+    # same predicate as year_to; kept apart so a ranking feature can treat it differently.
     as_of_year: Optional[int] = None
     issuer: Optional[str] = None          # exact issuer_norm (the catalogue's normalized issuer)
     # Documents a governance policy restricts from retrieval (governance.py). Set by the engine from

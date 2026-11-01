@@ -42,7 +42,7 @@ from archive_debugger.generate import answer_v2
 from archive_debugger.generate.cli import build_filters, load_generate_config, retrieve_pool, sent_temperature
 from archive_debugger.generate.llm import LLM, AnthropicLLM, make_llm
 from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path
-from archive_debugger.retrieve import citation, dense
+from archive_debugger.retrieve import citation, dense, meta_rank
 from archive_debugger.retrieve.config import load_retrieve_config
 from archive_debugger.retrieve.search import Retriever
 
@@ -226,6 +226,10 @@ def cache_context(scope: str, data_sha256: dict, retrieve: dict, gcfg: dict, kin
                                         top_k=gcfg["top_k"], temperature=temp)
     if governance_digest:
         context = hashlib.sha256(f"{context}|governance:{governance_digest}".encode("utf-8")).hexdigest()
+    rank_digest = meta_rank.digest(gcfg.get("rank"))
+    if rank_digest:
+        # Ranking weights change which passages the model sees; all zero leaves every key as it was.
+        context = hashlib.sha256(f"{context}|rank:{rank_digest}".encode("utf-8")).hexdigest()
     return context
 
 
@@ -253,6 +257,7 @@ def curated_cache_context(scope: str, *, registry: Optional[dict] = None) -> str
         rcfg = load_retrieve_config(Path(resolved.config_path))
         gcfg = dict(load_generate_config(Path(resolved.config_path)))
     gcfg["answer_version"] = "v1"
+    gcfg["rank"] = None      # the reviewed answers were ranked without [rank] weights
     model = gcfg.get("reviewed_model") or gcfg["model"]
     return cache_context(scope, answer_cache.canonical_data_sha256(scope, registry), answer_cache.retrieve_settings(rcfg),
                          gcfg, gcfg["provider"], model,
@@ -935,6 +940,7 @@ class Bundle:
         if "curated" not in self._contexts:
             g = dict(self.gcfg)
             g["answer_version"] = "v1"
+            g["rank"] = None
             model = g.get("reviewed_model") or g["model"]
             self._contexts["curated"] = cache_context(self.name, self.data_sha256, self.retrieve_settings, g,
                                                       g["provider"], model, self.governance.digest)
@@ -1430,7 +1436,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             try:
                 pool_rows, hits = _bounded_retrieve(
                     pr.conn, RETRIEVAL_DEADLINE_S,
-                    lambda: retrieve_pool(pr, clean, fobj, gcfg["top_k"]))
+                    lambda: retrieve_pool(pr, clean, fobj, gcfg["top_k"], gcfg.get("rank")))
             except _RetrievalTimeout:
                 _log_timing(b.name, time.monotonic() - t_start, 0.0, "degraded:retrieval_slow", 0)
                 return degraded("retrieval_slow", [], [], pr.conn)

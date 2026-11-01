@@ -19,6 +19,7 @@ from archive_debugger.eval.questions import load_seed
 from archive_debugger.generate.answer import compose, coverage_of, generation_meta, is_thin
 from archive_debugger.generate.llm import make_llm
 from archive_debugger.retrieve import citation
+from archive_debugger.retrieve import meta_rank
 from archive_debugger.retrieve.filters import Filters
 from archive_debugger.retrieve.search import Retriever
 
@@ -38,6 +39,8 @@ def load_generate_config(config_path: Path) -> dict:
         # (generate/answer_v2.py: evidence states). effort is sent only by v2, to models that take it.
         "answer_version": str(g.get("answer_version", "v1")),
         "effort": g.get("effort") or None,
+        # Year, place and issuer ranking weights ([rank], retrieve/meta_rank.py); all zero by default.
+        "rank": meta_rank.load_weights(config_path),
     }
 
 
@@ -67,11 +70,15 @@ def sent_temperature(kind: str, gcfg: dict) -> Optional[float]:
     return gcfg["temperature"] if kind == "anthropic" else None
 
 
-def retrieve_pool(retriever: Retriever, question: str, filters: Filters, top_k: int) -> tuple[list[dict], list[dict]]:
+def retrieve_pool(retriever: Retriever, question: str, filters: Filters, top_k: int,
+                  rank: Optional[dict] = None) -> tuple[list[dict], list[dict]]:
     """ONE ranking, two views: the pool of [retrieve].pool_size hits for the evidence
     trail, and its top_k prefix for the model. The model never sees a passage the
-    trail does not show, and the trail never shows a different ranking."""
+    trail does not show, and the trail never shows a different ranking. With [rank]
+    weights set, the pool is reordered by year, place and issuer (meta_rank) before the
+    prefix is taken; the pool's membership never changes."""
     pool = retriever.search(question, filters=filters, top_k=max(retriever.cfg.pool_size, top_k))
+    pool = meta_rank.rerank(pool, question, rank, filters)
     return pool, pool[:top_k]
 
 

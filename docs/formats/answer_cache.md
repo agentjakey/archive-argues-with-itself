@@ -12,6 +12,8 @@ them in the same commit, regenerates `config/cache_key_vectors.json`, and re-exp
 context = sha256 of Python json.dumps(sort_keys=True, ensure_ascii=False) of
     { scope, data_sha256: {db, index} (from config/scopes.toml), retrieve: the retrieve config
       without db_path and index_path, provider, model, prompt_sha256, top_k, temperature }
+  then, only when set: context = sha256("<context>|governance:<register digest>")
+  then, only when any [rank] weight is not zero: context = sha256("<context>|rank:<weights digest>")
 key = sha256 of canonical JSON (sorted keys, no spaces, non-ASCII kept) of
     { "v": "2", "context": context, "question": normalize(question), "filters": canonical(filters) }
 ```
