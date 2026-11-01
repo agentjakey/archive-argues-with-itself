@@ -82,16 +82,22 @@ def ledger_for(s: settings.Settings) -> Ledger:
 # --- mine -----------------------------------------------------------------------------------------
 
 def cmd_mine(args, s: settings.Settings) -> int:
-    cfg = tomllib.loads((DECK_SOURCE / "mining.toml").read_text(encoding="utf-8"))
+    """Mine candidates with one mining file; candidates from earlier rounds are kept and their items
+    are not mined again."""
+    cfg = tomllib.loads((DECK_SOURCE / args.config).read_text(encoding="utf-8"))
     corpora = Corpora()
-    when, pairs, seen_items = [], [], set()
+    earlier = read_json(WORK / "candidates.json") or {"when": [], "pairs": []}
+    seen_items = {c["item_id"] for c in earlier["when"]}
+    seen_items |= {p[k]["item_id"] for p in earlier["pairs"] for k in ("a", "b")}
+    when, pairs = list(earlier["when"]), list(earlier["pairs"])
     for name in s.collections:
         conn = corpora(name)
         found = candidates.when_candidates(conn, name, s.care, cfg["when_was_this"], seed=cfg["seed"],
                                            exclude_items=seen_items)
         seen_items.update(c["item_id"] for c in found)
         when += found
-        pairs += candidates.pair_candidates(conn, name, s.care, cfg["same_or_not"], seed=cfg["seed"])
+        pairs += [p for p in candidates.pair_candidates(conn, name, s.care, cfg["same_or_not"], seed=cfg["seed"])
+                  if p["a"]["item_id"] not in seen_items and p["b"]["item_id"] not in seen_items]
     write_json(WORK / "candidates.json", {"when": when, "pairs": pairs, "mined_at": now(), "seed": cfg["seed"]})
     print(f"when {len(when)}, pairs {len(pairs)} -> {WORK / 'candidates.json'}")
     return 0
@@ -161,6 +167,8 @@ def cmd_draft(args, s: settings.Settings) -> int:
     ledger = ledger_for(s)
     requests, meta = {}, {}
     done = {r["draft_key"] for r in read_jsonl(WORK / "drafts.jsonl")} if (WORK / "drafts.jsonl").exists() else set()
+    if args.redo_refused:
+        done -= redo_keys()
     modes = args.modes.split(",")
     if "when" in modes:
         pages = _when_pages(corpora, s, cand["when"][: args.limit or None])
@@ -215,6 +223,27 @@ def cmd_draft(args, s: settings.Settings) -> int:
         return 2
     print(f"{total} replies, {errors} errors; spent ${ledger.totals(args.run).spent:.4f} this run")
     return 0
+
+
+def redo_keys() -> set:
+    """Draft keys to draft again: every Time Dial step, and every card or pair, that the builder
+    refused only because a quote was not on its page. A new draft replaces the old one as a new
+    model draft; nothing a model wrote is edited."""
+    keys = set()
+    for rnd in read_json(WORK / "checked.json") or []:
+        reasons = rnd["checks"]["refusals"]
+        if not reasons or not all(r.startswith("quote_not_on_page:") for r in reasons):
+            continue
+        if rnd["mode"] == "time_dial":
+            for reason in reasons:
+                qid = reason.split(":", 1)[1]
+                year = qid[1:qid.index("q")]
+                keys.add(f"dial|{rnd['play']['question_id']}|{year}")
+        elif rnd["mode"] == "when_was_this":
+            keys.add(f"when|{rnd['pages'][0]['ref']}")
+        else:
+            keys.add(f"same|{rnd['pages'][0]['ref']}|{rnd['pages'][1]['ref']}")
+    return keys
 
 
 def chunks(requests: dict, size: int) -> list:
@@ -552,7 +581,8 @@ def cmd_status(args, s: settings.Settings) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("mine")
+    m = sub.add_parser("mine")
+    m.add_argument("--config", default="mining.toml", help="a mining file in exhibit/decks/starter/")
     sub.add_parser("pools")
     d = sub.add_parser("draft")
     d.add_argument("--run", required=True)
@@ -560,6 +590,7 @@ def main(argv=None) -> int:
     d.add_argument("--limit", type=int, default=0)
     d.add_argument("--modes", default="when,same,dial")
     d.add_argument("--chunk", type=int, default=50)
+    d.add_argument("--redo-refused", action="store_true", help="draft again what the builder refused for an off-page quote")
     sub.add_parser("check")
     p = sub.add_parser("panel")
     p.add_argument("--run", required=True)

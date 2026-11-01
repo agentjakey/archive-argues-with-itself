@@ -1,0 +1,36 @@
+# Round 2 of mining for the starter deck (after round 1, mining.toml). Round 1 showed that pages
+# sharing a phrase across issuers almost never make a fair Same or Not? round (1 usable of about
+# 140), while the same issuer years apart often does (18 of 26); and that cards fail on pages full
+# of dates or figures. Round 2 mines only same-issuer pairs, with both dates verifiable, and skips
+# busy pages. Candidates already drafted are skipped.
+
+seed = 20261102
+
+[when_was_this]
+per_decade = 26
+decades = [1960, 1970, 1980, 1990, 2000, 2010]
+min_page_chars = 900
+max_page_chars = 2400
+min_leaf = 3
+max_years_on_page = 2
+max_digit_share = 0.12
+
+[same_or_not]
+kinds = ["change"]
+phrases = [
+  "hospital beds", "per 1,000 population", "per 100,000 population", "number of physicians",
+  "registered nurses", "claims accepted", "workers compensation", "compensation board",
+  "water supply", "fluoridation", "air pollution", "sulphur dioxide", "cigarette smoking",
+  "seat belts", "motor vehicle accidents", "nursing homes", "home care program",
+  "dental health", "school health", "nutrition program", "health insurance plan",
+  "medical care insurance", "population served", "public health laboratory",
+  "sewage treatment", "food premises", "rabies", "tuberculosis", "physical fitness",
+  "per capita", "hospital days", "average length of stay", "out-patient", "ambulance service",
+  "insured services", "health units", "annual report", "expenditures", "total cost", "staff",
+  "inspections", "visits", "admissions", "enrolment", "premiums", "beneficiaries", "applications received",
+  "number of cases", "accidents", "fatalities", "licences issued", "complaints received",
+]
+hits_per_phrase = 200
+pairs_per_phrase = 5
+change_min_years = 5
+compare_max_years = 3

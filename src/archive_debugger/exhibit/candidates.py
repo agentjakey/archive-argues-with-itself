@@ -16,6 +16,19 @@ from archive_debugger.exhibit import pages as pages_mod
 from archive_debugger.exhibit.settings import CareRules
 
 
+def busy_with_dates_or_numbers(text: str, max_years: int, max_digit_share: float) -> bool:
+    """A page whose every useful line carries a date, or that is mostly a table of figures, makes no
+    fair When Was This? card (the drafting model said so for three cards in four of round 1)."""
+    years = len(pages_mod.YEAR.findall(text or ""))
+    chars = [c for c in (text or "") if not c.isspace()]
+    digits = sum(c.isdigit() for c in chars)
+    return years > max_years or (bool(chars) and digits / len(chars) > max_digit_share)
+
+
+def _date_agrees(conn: sqlite3.Connection, item_id: str, leaf: int, year) -> bool:
+    return year is not None and pages_mod.read_date(conn, item_id, leaf, year)["year"] == year
+
+
 def _body_page(conn: sqlite3.Connection, item_id: str, min_chars: int, max_chars: int, min_leaf: int) -> Optional[int]:
     """The middle body page of an item whose length fits, or None."""
     rows = conn.execute("SELECT leaf_index FROM pages WHERE item_id = ? AND char_count BETWEEN ? AND ? "
@@ -59,6 +72,8 @@ def when_candidates(conn: sqlite3.Connection, collection: str, rules: CareRules,
                 continue
             page = pages_mod.page_text(conn, r["item_id"], leaf)
             if page is None or care_mod.care_flags([page.text], rules):
+                continue
+            if busy_with_dates_or_numbers(page.text, cfg.get("max_years_on_page", 99), cfg.get("max_digit_share", 1.0)):
                 continue
             date = pages_mod.read_date(conn, r["item_id"], leaf, r["year"])
             if date["year"] != r["year"]:
@@ -105,7 +120,7 @@ def pair_candidates(conn: sqlite3.Connection, collection: str, rules: CareRules,
                 same_issuer = a["issuer_norm"] and a["issuer_norm"] == b["issuer_norm"]
                 if same_issuer and gap >= cfg["change_min_years"]:
                     pairs.append(("change", a, b))
-                elif not same_issuer and gap <= cfg["compare_max_years"] and \
+                elif "compare" in cfg.get("kinds", ("change", "compare")) and not same_issuer and gap <= cfg["compare_max_years"] and \
                         (a["jurisdiction_norm"] != b["jurisdiction_norm"] or a["issuer_norm"] != b["issuer_norm"]):
                     pairs.append(("compare", a, b))
         # Change pairs (the same issuer years apart) are rarer than comparison pairs; take them first.
@@ -115,6 +130,8 @@ def pair_candidates(conn: sqlite3.Connection, collection: str, rules: CareRules,
             if kept >= cfg["pairs_per_phrase"]:
                 break
             if a["item_id"] in used_items or b["item_id"] in used_items:
+                continue
+            if not all(_date_agrees(conn, h["item_id"], h["leaf_index"], h["year"]) for h in (a, b)):
                 continue
             texts = []
             for h in (a, b):

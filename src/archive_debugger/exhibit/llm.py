@@ -99,7 +99,15 @@ def run_anthropic_batch(requests: dict, ledger: Ledger, run_id: str, run_cap: fl
         log(f"[{what}] batch {batch.id}: {len(requests)} requests, up to ${worst:.4f} reserved")
     waited = 0.0
     while True:
-        batch = client.messages.batches.retrieve(state["batch_id"])
+        try:
+            batch = client.messages.batches.retrieve(state["batch_id"])
+        except Exception as exc:     # a dropped poll is not a failed batch: the batch keeps running
+            if type(exc).__name__ not in ("APITimeoutError", "APIConnectionError", "InternalServerError"):
+                raise
+            log(f"[{what}] poll failed ({type(exc).__name__}); trying again")
+            sleep(BATCH_POLL_S)
+            waited += BATCH_POLL_S
+            continue
         if batch.processing_status == "ended":
             break
         if waited > BATCH_WAIT_LIMIT_S:
