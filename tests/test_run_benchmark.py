@@ -321,6 +321,52 @@ def test_scores_on_hand_made_rows():
     assert s["state_accuracy_by_category"]["answerable"]["value"] == 0.5
 
 
+def test_recall_at_10_counts_the_source_page_among_the_first_ten():
+    found = {**row("i1", "answerable", "SUPPORTED", "SUPPORTED", False),
+             "source_pages": ["x#4"], "top10": ["y#1:0", "x#4:2"]}
+    missed = {**row("i2", "answerable", "SUPPORTED", "INSUFFICIENT_EVIDENCE", False),
+              "source_pages": ["x#5"], "top10": ["x#4:0", "x#50:1"]}
+    no_source = {**row("i3", "answerable", "SUPPORTED", "SUPPORTED", False), "source_pages": [], "top10": ["x#4:0"]}
+    refuse = {**row("i4", "false_premise", "INSUFFICIENT_EVIDENCE", "INSUFFICIENT_EVIDENCE", True),
+              "source_pages": ["x#4"], "top10": ["x#4:0"]}
+    m = rb.score_run([found, missed, no_source, refuse], [], {})["metrics"]
+    assert (m["recall_at_10"]["num"], m["recall_at_10"]["den"]) == (1, 2)
+    assert rb.source_pages({"sources": [{"passage_id": "a#3:1"}, {"passage_id": "a#3:2"}, {"item_id": "b", "leaf_index": 0}]}) == ["a#3", "b#0"]
+
+
+def test_score_fills_source_pages_from_the_split_for_older_rows(tmp_path, corpus):
+    items = [dict(bench_item(1), sources=[{"passage_id": "a#0:0"}]), bench_item(2)]
+    bench = make_bench(tmp_path, items=items)
+    assert run(tmp_path, corpus, run_id="r1", bench=bench) == 0
+    path = tmp_path / "out" / "runs" / "r1" / "answers.jsonl"
+    rows = read_jsonl(path)
+    assert rows[0]["source_pages"] == ["a#0"]
+    for r in rows:
+        r.pop("source_pages")
+    write_jsonl(path, rows)
+    write_jsonl(tmp_path / "out" / "runs" / "r1" / "judge_items.jsonl", [])
+    lock, splits = bench
+    result = rb.score(["r1"], [], "s", out_root=tmp_path / "out", audit_dir=tmp_path / "audit",
+                      lock_path=lock, splits_dir=splits)
+    assert result["runs"]["r1"]["metrics"]["recall_at_10"]["den"] == 1
+
+
+def test_rank_weights_reach_the_engine_config_and_the_label(tmp_path, corpus):
+    assert rb.parse_rank(None) is None and rb.parse_rank("year=0") is None
+    weights = rb.parse_rank("year=0.3, place=0.2")
+    assert weights == {"year": 0.3, "place": 0.2, "issuer": 0.0, "recency": 0.0}
+    with pytest.raises(rb.Refused):
+        rb.parse_rank("years=0.3")
+    seen = []
+    assert run(tmp_path, corpus, seen=seen, run_id="rk", rank=weights) == 0
+    assert "[rank]" in seen[0]["cfg"] and "year = 0.3" in seen[0]["cfg"]
+    info = json.loads((tmp_path / "out" / "runs" / "rk" / "run.json").read_text(encoding="utf-8"))
+    assert info["config"]["rank"] == weights and "-rank" in info["pipeline_label"]
+    # Resuming with other weights is refused.
+    with pytest.raises(rb.Refused):
+        run(tmp_path, corpus, run_id="rk", rank=rb.parse_rank("year=0.5"))
+
+
 def test_paired_bootstrap():
     first = [row(f"i{n}", "answerable", "SUPPORTED", "SUPPORTED" if n % 2 else "INSUFFICIENT_EVIDENCE", False)
              for n in range(40)]

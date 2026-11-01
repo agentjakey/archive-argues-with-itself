@@ -59,6 +59,7 @@ from archive_debugger.audit.budget import BudgetExceeded, Ledger  # noqa: E402
 from archive_debugger.audit.records import append_jsonl, read_jsonl, write_jsonl  # noqa: E402
 from archive_debugger.generate import answer_v2  # noqa: E402
 from archive_debugger.generate.cli import load_generate_config, sent_temperature  # noqa: E402
+from archive_debugger.retrieve import meta_rank  # noqa: E402
 
 NL = chr(10)
 DEFAULT_OUT = REPO / "reports" / "v2" / "benchmark"
@@ -77,7 +78,7 @@ LIMIT_SEED = 20261104
 BOOTSTRAP_RESAMPLES = 2000
 BOOTSTRAP_SEED = 20261105
 RUN_ID = re.compile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
-RESUME_KEYS = ("split", "pipeline", "writer", "effort", "stub", "collections", "limit", "seed")
+RESUME_KEYS = ("split", "pipeline", "writer", "effort", "stub", "collections", "limit", "seed", "rank")
 
 
 class Refused(Exception):
@@ -158,10 +159,29 @@ def price_model(writer: str) -> str:
     return re.sub("-[0-9]{8}$", "", writer)
 
 
-def pipeline_label(pipeline: str, writer: str, effort: Optional[str], stub: bool) -> str:
+def parse_rank(spec: Optional[str]) -> Optional[dict]:
+    """--rank "year=0.3,place=0.2" -> the [rank] weights (meta_rank); None when no weight is set."""
+    if not spec:
+        return None
+    weights = {name: 0.0 for name in meta_rank.WEIGHT_NAMES}
+    for part in spec.split(","):
+        name, _, value = part.partition("=")
+        name = name.strip()
+        if name not in weights:
+            raise Refused(f"--rank: unknown weight {name!r} (known: {', '.join(meta_rank.WEIGHT_NAMES)})")
+        try:
+            weights[name] = float(value)
+        except ValueError:
+            raise Refused(f"--rank: {name} needs a number, not {value!r}")
+    return weights if meta_rank.active(weights) else None
+
+
+def pipeline_label(pipeline: str, writer: str, effort: Optional[str], stub: bool, rank: Optional[dict] = None) -> str:
     label = f"{pipeline}-{price_model(writer)}"
     if effort:
         label += f"-{effort}"
+    if rank:
+        label += f"-rank{meta_rank.digest(rank)[:8]}"
     if stub:
         label += "-stub"
     return label
@@ -262,9 +282,10 @@ def collection_config(collection: str) -> Path:
     return REPO / entry["config"]
 
 
-def write_engine_config(source: Path, dest: Path, *, answer_version: str, model: str, effort: Optional[str]) -> Path:
-    """A copy of a collection config with [generate] answer_version, model and effort set. Every
-    other line is kept as it is."""
+def write_engine_config(source: Path, dest: Path, *, answer_version: str, model: str, effort: Optional[str],
+                        rank: Optional[dict] = None) -> Path:
+    """A copy of a collection config with [generate] answer_version, model and effort set, and with
+    rank weights a [rank] section in place of any the config had. Every other line is kept as it is."""
     out, section, placed = [], None, False
     for line in Path(source).read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
@@ -282,9 +303,14 @@ def write_engine_config(source: Path, dest: Path, *, answer_version: str, model:
             key = stripped.split("=", 1)[0].strip() if "=" in stripped else ""
             if key in ("answer_version", "model", "effort"):
                 continue
+        if section == "[rank]" and rank:
+            continue
         out.append(line)
     if not placed:
         raise Refused(f"{source} has no [generate] section")
+    if rank:
+        out = [line for line in out if line.strip() != "[rank]"]
+        out += ["", "[rank]"] + [f"{name} = {float(rank.get(name, 0.0))}" for name in meta_rank.WEIGHT_NAMES]
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     with dest.open("w", encoding="utf-8", newline=NL) as fh:
@@ -394,6 +420,22 @@ def fixture_register(items: list):
     return governance.from_records(list(records.values()), fixtures=True)
 
 
+def page_of(passage_id: str) -> str:
+    """The page a passage is on: item#leaf:n -> item#leaf."""
+    return str(passage_id).rsplit(":", 1)[0]
+
+
+def source_pages(item: dict) -> list:
+    """The pages an item was drafted from (its sources), for recall@10."""
+    pages = set()
+    for s in item.get("sources") or []:
+        if s.get("passage_id"):
+            pages.add(page_of(s["passage_id"]))
+        elif s.get("item_id") and s.get("leaf_index") is not None:
+            pages.add(f"{s['item_id']}#{s['leaf_index']}")
+    return sorted(pages)
+
+
 def answer_row(item: dict, body: Optional[dict], error: Optional[str], *, pipeline: str, writer: str,
                effort: Optional[str], latency: float, usage: dict, usd: float, model_called: bool) -> dict:
     state, state_error = (None, error) if error else state_of(pipeline, body)
@@ -412,7 +454,7 @@ def answer_row(item: dict, body: Optional[dict], error: Optional[str], *, pipeli
         "governance_policies": [n.get("policy_id") for n in ((body or {}).get("governance") or {}).get("restricted") or []],
         "answer": answer.get("text"), "sentences": answer.get("sentences") or [],
         "verified_citations": answer.get("verified_citations") or [],
-        "retrieved_ids": retrieved, "top10": retrieved[:10],
+        "retrieved_ids": retrieved, "top10": retrieved[:10], "source_pages": source_pages(item),
         "latency_s": round(latency, 3), "usage": usage, "usd": round(usd, 6), "model_called": model_called,
         "error": state_error, "answered_at": now_iso(),
     }
@@ -431,7 +473,7 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
                   collections: Optional[list] = None, stub: bool = False, final: bool = False,
                   out_root: Path = DEFAULT_OUT, lock_path: Path = DEFAULT_LOCK, splits_dir: Path = DEFAULT_SPLITS,
                   ledger: Optional[Ledger] = None, engine_factory: Optional[Callable] = None,
-                  writer_factory: Callable = real_writer, log: Callable = print) -> int:
+                  writer_factory: Callable = real_writer, log: Callable = print, rank: Optional[dict] = None) -> int:
     """Answer the split's items; 0 when every item was answered, 1 when some came back with an
     error (a rerun asks them again), 2 when the run stopped before a call that could cross a cap."""
     if not RUN_ID.match(run_id or ""):
@@ -459,7 +501,7 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
         raise Refused(f"--effort applies to {EFFORT_MODELS}, not {writer}")
     if not stub:
         prices.price(model)       # an unpriced writer is refused before anything is asked
-    label = pipeline_label(pipeline, writer, effort, stub)
+    label = pipeline_label(pipeline, writer, effort, stub, rank)
     out_root = Path(out_root)
     marker = out_root / "test_runs" / f"{label}.json"
     if split == "test":
@@ -477,7 +519,7 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
     run_json = run_dir / "run.json"
     answers_path = run_dir / "answers.jsonl"
     config = {"split": split, "pipeline": pipeline, "writer": writer, "effort": effort, "stub": stub,
-              "collections": names, "limit": limit, "seed": seed}
+              "collections": names, "limit": limit, "seed": seed, "rank": rank or None}
     if run_json.exists():
         before = json.loads(run_json.read_text(encoding="utf-8"))
         changed = [k for k in RESUME_KEYS if before.get("config", {}).get(k) != config[k]]
@@ -517,7 +559,7 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
                 if not pending:
                     continue
                 cfg_path = write_engine_config(configs[collection], Path(work) / f"{collection}.toml",
-                                               answer_version=pipeline, model=writer, effort=effort)
+                                               answer_version=pipeline, model=writer, effort=effort, rank=rank)
                 gcfg = load_generate_config(cfg_path)
                 restricted = restricted_items(pending)
                 groups = [(None, [it for it in pending if not it.get("governance")])]
@@ -724,7 +766,11 @@ def contributions(row: dict, supports: dict, answers: dict) -> dict:
     refused = 1 if ok and row.get("refused") else 0
     s = supports.get(row["item_id"], [])
     a = answers.get(row["item_id"], [])
+    pages = set(row.get("source_pages") or [])
+    found = 1 if pages & {page_of(p) for p in row.get("top10") or []} else 0
     return {
+        # An answerable item's source page among the first ten passages the writer was given.
+        "recall_at_10": (found, 1) if ok and pages and not row["should_refuse"] else (0, 0),
         "refusal_rate_should_refuse": (refused, 1) if ok and row["should_refuse"] else (0, 0),
         "false_refusal_rate": (refused, 1) if ok and not row["should_refuse"] else (0, 0),
         "state_accuracy": (1 if ok and row["state"] == row["expected_verdict"] else 0, 1 if ok else 0),
@@ -734,7 +780,8 @@ def contributions(row: dict, supports: dict, answers: dict) -> dict:
     }
 
 
-RATES = ("refusal_rate_should_refuse", "false_refusal_rate", "state_accuracy", "supports_strict", "answers_failure")
+RATES = ("refusal_rate_should_refuse", "false_refusal_rate", "state_accuracy", "supports_strict", "answers_failure",
+         "recall_at_10")
 METRICS = RATES + ("cost_per_answer",)
 
 
@@ -834,8 +881,20 @@ def load_decisions(audit_runs: list, audit_dir: Path) -> dict:
     return decisions
 
 
+def fill_source_pages(rows: list, split: Optional[str], lock_path: Path, splits_dir: Path) -> None:
+    """Rows answered before answer rows carried source_pages get them from the frozen split."""
+    missing = [r for r in rows if "source_pages" not in r]
+    if not missing or not split:
+        return
+    items, _ = load_split(split, lock_path, splits_dir)
+    pages = {it["item_id"]: source_pages(it) for it in items}
+    for r in missing:
+        r["source_pages"] = pages.get(r["item_id"], [])
+
+
 def score(runs: list, audit_runs: list, name: str, *, out_root: Path = DEFAULT_OUT,
-          audit_dir: Path = DEFAULT_AUDIT_DIR) -> dict:
+          audit_dir: Path = DEFAULT_AUDIT_DIR, lock_path: Path = DEFAULT_LOCK,
+          splits_dir: Path = DEFAULT_SPLITS) -> dict:
     decisions = load_decisions(audit_runs, audit_dir)
     loaded = {}
     for run_id in runs:
@@ -845,12 +904,15 @@ def score(runs: list, audit_runs: list, name: str, *, out_root: Path = DEFAULT_O
         rows = read_jsonl(run_dir / "answers.jsonl")
         judge_items = read_jsonl(run_dir / "judge_items.jsonl")
         info = json.loads((run_dir / "run.json").read_text(encoding="utf-8")) if (run_dir / "run.json").exists() else {}
+        fill_source_pages(rows, (info.get("config") or {}).get("split"), lock_path, splits_dir)
         loaded[run_id] = (rows, judge_items, info)
     result = {"format": 1, "name": name, "runs": {}, "comparisons": [], "audit_runs": list(audit_runs or []),
               "scored_at": now_iso(),
               "notes": ["Rates are over items answered without an error; Wilson 95% intervals.",
                         "SUPPORTS and ANSWERS come from the audit panel's final verdicts; a check left to a "
                         "person has no final verdict and is counted in left_to_person, not in the rate.",
+                        "Recall@10: answerable items (not should-refuse) whose source page is among the first "
+                        "ten passages given to the writer.",
                         "Cost per answer is the mean ledger cost over items whose ask reached the writer; v1 "
                         "costs are worst-case estimates (v1 reports no token usage)."]}
     extras = {}
@@ -898,6 +960,7 @@ def scores_markdown(result: dict) -> str:
                   f"| State accuracy | {_fmt(m['state_accuracy'])} |",
                   f"| Strict SUPPORTS (sentence items passing) | {_fmt(m['supports_strict'])} |",
                   f"| ANSWERS failure (answer items not passing) | {_fmt(m['answers_failure'])} |",
+                  f"| Recall@10 (source page in the first ten passages) | {_fmt(m['recall_at_10'])} |",
                   f"| Judge items left to a person | {_fmt(s['left_to_person'])} |",
                   f"| Cost per answer (USD) | {m['cost_per_answer']['value'] if m['cost_per_answer']['value'] is not None else 'n/a'} |",
                   f"| Latency p50 / p95 (s) | {s['latency_s']['p50']} / {s['latency_s']['p95']} |",
@@ -941,6 +1004,7 @@ def main(argv=None) -> int:
     p_run.add_argument("--collections", nargs="*", default=None)
     p_run.add_argument("--stub", action="store_true", help="stub writer: no paid calls, no ledger entries")
     p_run.add_argument("--final", action="store_true", help="required for the test split (once per pipeline label)")
+    p_run.add_argument("--rank", default=None, help='[rank] weights for this run, e.g. "year=0.3,place=0.2" (meta_rank)')
     p_run.add_argument("--lock", type=Path, default=DEFAULT_LOCK)
     p_run.add_argument("--splits-dir", type=Path, default=DEFAULT_SPLITS)
     p_run.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
@@ -962,7 +1026,8 @@ def main(argv=None) -> int:
             return run_benchmark(split=args.split, pipeline=args.pipeline, run_id=args.run_id, cap=args.cap,
                                  writer=args.writer, effort=args.effort, limit=args.limit, seed=args.seed,
                                  collections=args.collections, stub=args.stub, final=args.final, out_root=out_root,
-                                 lock_path=args.lock, splits_dir=args.splits_dir, ledger=ledger)
+                                 lock_path=args.lock, splits_dir=args.splits_dir, ledger=ledger,
+                                 rank=parse_rank(args.rank))
         if args.command == "judge-items":
             from archive_debugger.local_env import load_local_env
             load_local_env()
