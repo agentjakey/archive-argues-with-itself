@@ -603,3 +603,33 @@ def test_reference_judges_come_from_two_families_and_are_never_on_the_panel(tmp_
     path.write_text(bad, encoding="utf-8")
     with pytest.raises(ValueError, match="cannot also be"):
         judges.load_panel(path)
+
+
+def _append_many(path, tag, n):
+    from archive_debugger.audit.records import append_jsonl
+    for i in range(n):
+        append_jsonl(path, {"tag": tag, "i": i, "pad": "x" * 2000})
+
+
+def test_appends_from_several_processes_never_interleave(tmp_path):
+    import multiprocessing
+    from archive_debugger.audit.records import read_jsonl
+    path = tmp_path / "ledger.jsonl"
+    ctx = multiprocessing.get_context("spawn")
+    procs = [ctx.Process(target=_append_many, args=(path, t, 150)) for t in ("a", "b", "c")]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join(60)
+    rows = read_jsonl(path)
+    assert len(rows) == 450 and {r["tag"] for r in rows} == {"a", "b", "c"}
+
+
+def test_a_last_line_still_being_written_is_not_read_yet(tmp_path):
+    from archive_debugger.audit.records import read_jsonl
+    path = tmp_path / "l.jsonl"
+    path.write_text('{"a": 1}' + chr(10) + '{"b": ', encoding="utf-8")
+    assert read_jsonl(path) == [{"a": 1}]
+    path.write_text('{"a": 1}' + chr(10) + '{"b": ' + chr(10) + '{"c": 3}' + chr(10), encoding="utf-8")
+    with pytest.raises(ValueError):
+        read_jsonl(path)
