@@ -57,13 +57,14 @@ export function GapHunt({ grid, lang, t, attract = false, reducedMotion, onStart
                   const cell = grid.cells.find((c) => c.place === place && c.decade === d);
                   if (!cell) return <td key={d} />;
                   const active = shown === cell;
+                  const count = cell.indexed_items > 0 ? cell.indexed_items.toLocaleString(lang === "fr" ? "fr-CA" : "en-CA") : "";
                   return (
                     <td key={d}>
                       <button
                         type="button"
                         className={`cell cell-${cell.state}${active ? " cell-active" : ""}`}
                         aria-pressed={picked === cell}
-                        aria-label={`${names[place] ?? place}, ${t.gap.decade(d)}: ${t.gap.states[cell.state]}`}
+                        aria-label={`${count ? count + " " : ""}${names[place] ?? place}, ${t.gap.decade(d)}: ${t.gap.states[cell.state]}`}
                         tabIndex={attract ? -1 : 0}
                         onClick={(e) => {
                           if (attract) return;
@@ -71,9 +72,7 @@ export function GapHunt({ grid, lang, t, attract = false, reducedMotion, onStart
                           setPicked(cell);
                         }}
                       >
-                        <span className="cell-count" aria-hidden="true">
-                          {cell.indexed_items > 0 ? cell.indexed_items.toLocaleString(lang === "fr" ? "fr-CA" : "en-CA") : ""}
-                        </span>
+                        <span className="cell-count">{count}</span>
                       </button>
                     </td>
                   );

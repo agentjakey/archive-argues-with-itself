@@ -102,6 +102,7 @@ test("French", async ({ page }, info) => {
 
 test("keyboard only: every mode", async ({ page }) => {
   await page.goto("/exhibit/");
+  await expect(page.getByRole("button", { name: "Touch the screen or turn the dial to start" })).toBeVisible();
   await page.keyboard.press("Enter");                       // the dial's press starts the visit
   await expect(page.getByRole("heading", { name: "Choose a game" })).toBeVisible();
   for (const mode of ["Time Dial", "Same or Not?", "When Was This?", "Gap Hunt"]) {

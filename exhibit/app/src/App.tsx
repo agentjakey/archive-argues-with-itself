@@ -90,7 +90,7 @@ export function App({ initialDeck, initialKiosk }: { initialDeck?: Deck; initial
   return (
     <div className="shell" key={visit}>
       <header className="top">
-        <button type="button" className="brand" onClick={() => go("menu")} aria-label={t.home}>
+        <button type="button" className="brand" onClick={() => go("menu")}>
           <span className="brand-title">{t.title}</span>
           <span className="brand-sub">{t.subtitle}</span>
         </button>

@@ -51,7 +51,13 @@ export function PageView({ page, label, t, marks = [], masks = [], hideTitleYear
           {imageOpen && imageFailed && <p className="note" role="status">{t.imageOffline}</p>}
         </div>
       )}
-      <div className="page-text" lang={page.language?.startsWith("fr") ? "fr" : "en"}>
+      <div
+        className="page-text"
+        lang={page.language?.startsWith("fr") ? "fr" : "en"}
+        tabIndex={0}
+        role="region"
+        aria-label={`${label}: ${t.pageText}`}
+      >
         {segments.map((s, i) => {
           if (s.kind === "mask") return <span key={i} className="mask" role="img" aria-label={t.when.hidden}>{"\u2588\u2588\u2588\u2588"}</span>;
           if (s.kind === "mark")

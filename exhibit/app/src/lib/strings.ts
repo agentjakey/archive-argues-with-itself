@@ -22,6 +22,7 @@ const en = {
   imageAlt: (title: string, leaf: number) => `Scanned page ${leaf} of "${title}"`,
   textNote: "Text as the scanner read it. Spelling errors are the scanner's, not ours.",
   textCut: "Part of a longer page.",
+  pageText: "the page's text",
   reducedMotion: "Less motion",
   modesHeading: "Choose a game",
   modes: {
@@ -170,6 +171,7 @@ const fr: Strings = {
   imageAlt: (title: string, leaf: number) => `Page num\u00e9ris\u00e9e ${leaf} de \u00ab ${title} \u00bb`,
   textNote: "Texte tel que lu par le num\u00e9riseur. Les fautes sont les siennes, pas les n\u00f4tres.",
   textCut: "Extrait d'une page plus longue.",
+  pageText: "le texte de la page",
   reducedMotion: "Moins d'animation",
   modesHeading: "Choisissez un jeu",
   modes: {
