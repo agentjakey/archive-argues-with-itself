@@ -3,8 +3,13 @@ format documented under docs/formats/."""
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Iterable, Iterator
+
+# One lock for every append in this process: judges run in threads, and two appends to the same
+# file must never interleave (a run once left half a ledger line behind).
+_APPEND_LOCK = threading.Lock()
 
 
 def read_jsonl(path: Path) -> list[dict]:
@@ -40,5 +45,8 @@ def write_jsonl(path: Path, records: Iterable[dict]) -> int:
 def append_jsonl(path: Path, record: dict) -> None:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+    line = json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
+    with _APPEND_LOCK:
+        with path.open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write(line)
+            fh.flush()

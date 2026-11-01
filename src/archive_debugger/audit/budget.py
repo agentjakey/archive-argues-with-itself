@@ -40,10 +40,13 @@ class Ledger:
         self.path = Path(path)
         self.phase_cap = phase_cap
         self.clock = clock
-        self._lock = threading.Lock()   # a check and the reservation it allows are one step
+        # A check and the reservation it allows are one step, and no entry is read while another
+        # thread is writing one.
+        self._lock = threading.RLock()
 
     def _entries(self) -> list:
-        return list(iter_jsonl(self.path))
+        with self._lock:
+            return list(iter_jsonl(self.path))
 
     def totals(self, run_id: Optional[str] = None) -> Totals:
         spent = 0.0
@@ -76,7 +79,8 @@ class Ledger:
     def _write(self, entry: dict) -> None:
         entry.setdefault("at", round(self.clock(), 3))
         entry.setdefault("price_version", prices.PRICE_VERSION)
-        append_jsonl(self.path, entry)
+        with self._lock:
+            append_jsonl(self.path, entry)
 
     def spend(self, run_id: str, provider: str, model: str, input_tokens: int, output_tokens: int, *,
               batch: bool = False, what: str = "") -> float:
