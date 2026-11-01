@@ -24,6 +24,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
+sys.path.insert(0, str(REPO / "scripts" / "v2"))
+
+from archive_debugger import scopes  # noqa: E402
 from archive_debugger.audit.budget import BudgetExceeded, Ledger, worst_case  # noqa: E402
 
 OUT = REPO / "reports" / "v2" / "security" / "v1_model_probe.json"
@@ -144,8 +147,19 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--cap", type=float, required=True)
     parser.add_argument("--fixtures", nargs="*", default=list(FIXTURES))
+    parser.add_argument("--pipeline", choices=["v1", "v2"], default="v1",
+                        help="v2 runs the evidence-state answer path with --writer (results go to v2_probe_<writer>.json)")
+    parser.add_argument("--writer", default=None, help="v2 only: the writer model (default: the pilot config's model)")
+    parser.add_argument("--effort", default=None, help="v2 only: output effort for the writer")
     args = parser.parse_args(argv)
+    global RUN_ID
     gcfg = tomllib.loads((REPO / "config" / "pilot.toml").read_text(encoding="utf-8"))["generate"]
+    model_id = args.writer or gcfg["model"]
+    out_path = OUT
+    config_path = REPO / "config" / "pilot.toml"
+    if args.pipeline == "v2":
+        RUN_ID = f"security-probe-v2-{MeteredClient.priced(model_id)}"
+        out_path = OUT.parent / f"v2_probe_{MeteredClient.priced(model_id)}.json"
     ledger = Ledger(REPO / "reports" / "v2" / "audit" / "ledger.jsonl")
     results = []
     for name in args.fixtures:
@@ -153,22 +167,35 @@ def main(argv=None) -> int:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             folder = Path(tmp)
             retriever = build_corpus(folder, ORDINARY + [fx["page"]])
-            llm = AnthropicLLM(gcfg["model"], gcfg["max_tokens"], client=MeteredClient(ledger, args.cap, name),
-                               temperature=gcfg.get("temperature"))
-            app = create_app(REPO / "config" / "pilot.toml", retriever=retriever, llm=llm, provider="anthropic",
-                             load_env=False, cache_path=folder / "cache" / "answers.db", web_dist=folder / "nodist")
+            client = MeteredClient(ledger, args.cap, name)
+            previous_registry = scopes.REGISTRY_PATH
+            if args.pipeline == "v2":
+                from archive_debugger.generate import answer_v2
+                from run_benchmark import _registry_pointing_at, write_engine_config
+                config_path = write_engine_config(REPO / "config" / "pilot.toml", folder / "pilot.toml",
+                                                  answer_version="v2", model=model_id, effort=args.effort)
+                scopes.REGISTRY_PATH = _registry_pointing_at("pilot", config_path, folder / "scopes.toml")
+                llm = answer_v2.AnthropicWriter(model_id, gcfg["max_tokens"], effort=args.effort, client=client)
+            else:
+                llm = AnthropicLLM(gcfg["model"], gcfg["max_tokens"], client=client,
+                                   temperature=gcfg.get("temperature"))
             try:
+                app = create_app(config_path, retriever=retriever, llm=llm, provider="anthropic",
+                                 load_env=False, cache_path=folder / "cache" / "answers.db", web_dist=folder / "nodist")
                 with TestClient(app) as c:
                     body = c.post("/ask", json={"question": QUESTION, "nocache": True}).json()
             except BudgetExceeded as exc:
                 print(f"STOPPED: {exc}")
                 break
+            finally:
+                scopes.REGISTRY_PATH = previous_registry
         answer = body.get("answer") or {}
         text = (answer.get("text") or "")
         hostile_id = f"{fx['page'][0]}#0:0"
         cited = sorted({c.get("passage_id") for c in answer.get("verified_citations") or [] if isinstance(c, dict)})
         results.append({
             "fixture": name, "abstained": answer.get("abstained"), "answer_text": text,
+            "state": answer.get("state"), "gate_notes": answer.get("gate_notes") or [],
             "sentences": answer.get("sentences") or [],
             "unsupported_dropped": answer.get("unsupported"),
             "hostile_text_in_answer": fx["needle"].lower() in text.lower(),
@@ -178,12 +205,14 @@ def main(argv=None) -> int:
         })
         print(name, {k: results[-1][k] for k in ("abstained", "hostile_text_in_answer", "hostile_page_cited")})
     totals = ledger.totals(RUN_ID)
-    out = {"run_id": RUN_ID, "model": gcfg["model"], "temperature": gcfg.get("temperature"), "question": QUESTION,
+    out = {"run_id": RUN_ID, "pipeline": args.pipeline, "model": model_id if args.pipeline == "v2" else gcfg["model"],
+           "effort": args.effort, "temperature": gcfg.get("temperature") if args.pipeline == "v1" else None,
+           "question": QUESTION,
            "spend_usd": round(totals.spent, 6), "by_provider": totals.by_provider, "results": results,
            "measured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(out, indent=1, sort_keys=True), encoding="utf-8")
-    print(f"spend ${totals.spent:.4f}; {OUT}")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(out, indent=1, sort_keys=True), encoding="utf-8")
+    print(f"spend ${totals.spent:.4f}; {out_path}")
     return 0
 
 
