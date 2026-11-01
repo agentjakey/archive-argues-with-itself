@@ -1,0 +1,34 @@
+# Where the starter deck looks for candidate pages (src/archive_debugger/exhibit/candidates.py).
+# Candidates are only places to look: every round is then drafted, checked by the builder, judged
+# by the panel and read by the reviewer before it can reach a visitor.
+
+seed = 20261101
+
+[when_was_this]
+# Candidate cards drawn per decade, spread over jurisdictions. More are drawn than the deck keeps,
+# because the builder, the care rules and the reviewers drop some.
+per_decade = 14
+decades = [1960, 1970, 1980, 1990, 2000, 2010]
+min_page_chars = 900
+max_page_chars = 2400
+min_leaf = 3
+
+[same_or_not]
+# Phrases that name a measure or a program, searched in the corpus text. Pages that share a phrase
+# are paired: the same issuer years apart (did the thing change?) and different jurisdictions or
+# issuers within a few years (are these comparable?).
+phrases = [
+  "hospital beds", "per 1,000 population", "per 100,000 population", "number of physicians",
+  "registered nurses", "claims accepted", "workers compensation", "compensation board",
+  "water supply", "fluoridation", "air pollution", "sulphur dioxide", "cigarette smoking",
+  "seat belts", "motor vehicle accidents", "nursing homes", "home care program",
+  "dental health", "school health", "nutrition program", "health insurance plan",
+  "premium", "medical care insurance", "population served", "public health laboratory",
+  "sewage treatment", "food premises", "rabies", "tuberculosis", "physical fitness",
+  "per capita", "hospital days", "average length of stay", "out-patient", "ambulance service",
+  "milk", "noise", "restaurants", "insured services", "health units",
+]
+hits_per_phrase = 120
+pairs_per_phrase = 2
+change_min_years = 5
+compare_max_years = 3

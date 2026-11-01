@@ -13,15 +13,9 @@ import sys
 from pathlib import Path
 
 COMPONENT = Path("web/src/components/KioskQr.tsx")
-BORDER = 4
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-
-def qr_path(url: str) -> tuple[int, str]:
-    import segno
-    matrix = segno.make(url, error="m").matrix
-    path = "".join(f"M{c + BORDER} {r + BORDER}h1v1h-1z"
-                   for r, row in enumerate(matrix) for c, value in enumerate(row) if value)
-    return len(matrix) + 2 * BORDER, path
+from archive_debugger.qr import qr_path  # noqa: E402
 
 
 def main(argv=None) -> int:

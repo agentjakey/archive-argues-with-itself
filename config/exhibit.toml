@@ -1,0 +1,73 @@
+# The library exhibit (docs/formats/exhibit-deck.md). The deck builder and the exhibit app read
+# their settings here; no collection is named in code. Collections are the audit's collection
+# configs (config/collections/<name>.toml).
+
+[deck]
+# Collections the starter deck draws from, in order of preference.
+collections = ["microlog", "pilot"]
+# Dial range shown on every mode. Years outside a collection's own period are shown as not indexed,
+# never as quiet.
+dial_first_year = 1960
+dial_last_year = 2018
+# Starter deck sizes.
+same_or_not_rounds = 20
+when_was_this_cards = 40
+time_dial_questions = [3, 6]
+# Page text kept per page in the deck (characters). Longer pages are cut at a passage boundary
+# around the quoted lines, and the cut is recorded.
+max_page_chars = 2400
+
+[images]
+# Page images load from archive.org's image service. Caching them for offline use waits for the
+# Internet Archive Canada's permission: while this is false the builder refuses to bundle images
+# and the kiosk shows page text with "page image needs a connection".
+offline_cache = false
+
+[care]
+# A round is refused when any of its pages, quotes, claims or explanation touches one of these.
+# Every care tier in archive_debugger.flags is excluded from the game, not only the crisis tier:
+# a game round is never the place for a harm-related record or for advice a visitor could mistake
+# for current guidance.
+excluded_tiers = ["A", "B", "C"]
+# Records about Indigenous peoples stay out of the game until the Internet Archive Canada answers
+# the care question (Jake, 2026-11-01). Matched with the same accent-insensitive patterns the site
+# uses to decide the Indigenous context (archive_debugger.flags).
+exclude_indigenous_context = true
+# Further topics a game round must not touch. Plain words, matched case- and accent-insensitively
+# at word boundaries.
+excluded_terms = [
+  "suicide", "euthanasia", "abuse", "abused", "assault", "rape", "incest", "molestation",
+  "eugenics", "sterilization", "sterilisation", "residential school", "internment", "deportation",
+  "execution", "capital punishment", "massacre", "genocide", "famine", "war dead", "casualties",
+  "homicide", "murder", "overdose", "abortion", "stillbirth", "infanticide", "sudden infant death",
+  "institutionalized", "asylum", "lobotomy", "electroshock", "thalidomide", "tainted blood",
+  "aids", "hiv", "krever",
+]
+# Period terms that are now offensive. A page carrying one is never a clue, a prompt or a label:
+# the round is refused.
+period_terms = [
+  "eskimo", "half-breed", "halfbreed", "squaw", "mongolism", "mongoloid", "feeble-minded",
+  "feebleminded", "imbecile", "imbeciles", "idiot", "idiots", "idiocy", "moron", "morons",
+  "retarded", "retardation", "cripple", "crippled", "lunatic", "lunatics", "insane",
+  "oriental", "negro", "coloured", "deaf and dumb", "deaf-mute", "spastic", "invalids",
+]
+
+[models]
+# Sonnet 5.5 drafts the rounds; the audit panel (config/audit.toml) judges them; the reviewer
+# reads every round. The panel never includes the model that wrote what it judges, so while
+# Sonnet 5.5 drafts, the escalation judge for exhibit rounds is the reviewer model.
+writer = "claude-sonnet-5-5"
+reviewer = ["claude-fable-5-1", "claude-opus-5-5"]   # the first the account can call
+writer_effort = "medium"
+reviewer_effort = "medium"
+
+[budget]
+# Phase 2E's own hard cap, in its own ledger (Jake, 2026-11-01).
+phase_cap_usd = 10.00
+ledger = "reports/v2/exhibit/ledger.jsonl"
+
+[kiosk]
+idle_reset_seconds = 60
+# Daily totals only, on the kiosk only: rounds started and finished per mode and the tally of
+# choices. Nothing per visit, nothing finer than a day, nothing online.
+counts_dir = "kiosk-counts"

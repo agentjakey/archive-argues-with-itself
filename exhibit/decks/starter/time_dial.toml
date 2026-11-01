@@ -1,0 +1,37 @@
+# Time Dial questions for the starter deck. Each question is searched with the frozen retrieval once
+# per decade; `terms` is the full-text query whose yearly item counts draw the dial's quiet years.
+# Question wording is model-drafted (marked so in the deck) until Jake reviews it.
+
+collection = "microlog"
+decades = [1960, 1970, 1980, 1990, 2000, 2010]
+pages_per_decade = 2
+
+[[questions]]
+id = "tobacco"
+en = "What did governments in Canada say about smoking and tobacco?"
+fr = "Qu'ont dit les gouvernements au Canada sur le tabac et le tabagisme?"
+terms = "smoking OR tobacco OR cigarettes"
+
+[[questions]]
+id = "fluoride"
+en = "What did the record say about fluoride in drinking water?"
+fr = "Que disent les documents sur le fluor dans l'eau potable?"
+terms = "fluoride OR fluoridation"
+
+[[questions]]
+id = "air"
+en = "What did the record say about air pollution?"
+fr = "Que disent les documents sur la pollution de l'air?"
+terms = "\"air pollution\" OR \"air quality\""
+
+[[questions]]
+id = "seatbelts"
+en = "What did the record say about seat belts?"
+fr = "Que disent les documents sur la ceinture de s\u00e9curit\u00e9?"
+terms = "\"seat belt\" OR \"seat belts\" OR seatbelt OR seatbelts"
+
+[[questions]]
+id = "fitness"
+en = "What did the record say about physical fitness?"
+fr = "Que disent les documents sur la condition physique?"
+terms = "\"physical fitness\" OR fitness"
