@@ -15,6 +15,8 @@
             text that looks like a secret; the web source renders no raw HTML; the CSP stays strict
             (no inline or eval scripts, no analytics host); robots.txt allows crawling and names the
             sitemap, which lists every page; and security.txt is complete and not expired.
+            With --exhibit-app and --exhibit-deck, the library exhibit goes in too, at /exhibit/
+            (src/archive_debugger/exhibit/release.py), and the gate reads every round of its deck.
   publish   gate, then upload the release as a new version of the site Worker and deploy it
             (npx wrangler, with the account owner's credentials).
   rollback  deploy an earlier version again: one command.
@@ -97,7 +99,8 @@ def empty_folder(folder: Path) -> None:
         else:
             child.unlink()
 
-def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, api_origin: str) -> Path:
+def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, api_origin: str,
+             exhibit_app: Path | None = None, exhibit_deck: Path | None = None) -> Path:
     if not (web / "index.html").exists():
         raise SystemExit(f"{web} has no index.html: build the web app first (npm run build:static)")
     if not (data / "export.json").exists():
@@ -122,6 +125,13 @@ def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, ap
     (out / "_headers").write_text(headers, encoding="utf-8")
     shutil.copyfile(static / "_redirects", out / "_redirects")
     shutil.copytree(static / ".well-known", out / ".well-known", dirs_exist_ok=True)
+    exhibit = None
+    if exhibit_app is not None or exhibit_deck is not None:
+        if exhibit_app is None or exhibit_deck is None:
+            raise SystemExit("the exhibit needs both --exhibit-app and --exhibit-deck")
+        sys.path.insert(0, str(REPO / "src"))
+        from archive_debugger.exhibit.release import assemble_exhibit
+        exhibit = assemble_exhibit(exhibit_app, exhibit_deck, out)
     export = json.loads((data / "export.json").read_text(encoding="utf-8"))
     manifest = {
         "release_id": release_id,
@@ -130,6 +140,7 @@ def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, ap
         "data_export": export,
         "data_version": version,
         "api_origin": api_origin,
+        "exhibit": exhibit,
         "files": file_table(out),
     }
     (out / MANIFEST).write_text(json.dumps(manifest, indent=1, sort_keys=True) + "\n", encoding="utf-8")
@@ -182,12 +193,16 @@ def gate(release: Path, allow_missing_path: Path) -> list[str]:
             if pattern.search(text):
                 problems.append(f"{rel}: text that looks like a secret ({pattern.pattern[:24]}...)")
 
-    # The web source never renders raw HTML (archival text is untrusted).
-    for path in (REPO / "web" / "src").rglob("*.tsx"):
+    # The web and exhibit sources never render raw HTML (archival text is untrusted).
+    for path in [*(REPO / "web" / "src").rglob("*.tsx"), *(REPO / "exhibit" / "app" / "src").rglob("*.tsx")]:
         if "dangerouslySetInnerHTML" in path.read_text(encoding="utf-8"):
             problems.append(f"{path.relative_to(REPO).as_posix()}: renders raw HTML")
 
     problems += site_file_problems(release)
+
+    from archive_debugger.exhibit import settings as exhibit_settings
+    from archive_debugger.exhibit.release import exhibit_problems
+    problems += exhibit_problems(release, exhibit_settings.load())
 
     version = manifest.get("data_version") or ""
     data = release / "data" / version
@@ -403,6 +418,8 @@ def main(argv=None) -> int:
     a.add_argument("--static", type=Path, default=REPO / "site" / "static")
     a.add_argument("--out", type=Path, default=REPO / "build" / "release")
     a.add_argument("--api-origin", required=True, help="the engine Worker, e.g. https://api.archiveargues.org")
+    a.add_argument("--exhibit-app", type=Path, default=None, help="the built exhibit app (build/exhibit-app)")
+    a.add_argument("--exhibit-deck", type=Path, default=None, help="the published deck (site/exhibit/deck.json)")
     g = sub.add_parser("gate")
     g.add_argument("--release", type=Path, default=REPO / "build" / "release")
     g.add_argument("--allow-missing", type=Path, default=REPO / "config" / "release_allow_missing.json")
@@ -416,7 +433,8 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "assemble":
-        assemble(args.release_id, args.web, args.data, args.static, args.out, args.api_origin)
+        assemble(args.release_id, args.web, args.data, args.static, args.out, args.api_origin,
+                 args.exhibit_app, args.exhibit_deck)
         return 0
     if args.command == "gate":
         problems = gate(args.release, args.allow_missing)

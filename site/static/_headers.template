@@ -26,3 +26,20 @@
 
 /release-manifest.json
   Cache-Control: no-cache
+
+# The exhibit (/exhibit/): its built assets and its decks are named by their content and cached for
+# a year; its page and the pointer to the current deck are always revalidated.
+/exhibit/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/exhibit/decks/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/exhibit/
+  Cache-Control: no-cache
+
+/exhibit/index.html
+  Cache-Control: no-cache
+
+/exhibit/current-deck.json
+  Cache-Control: no-cache
