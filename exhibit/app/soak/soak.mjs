@@ -104,11 +104,17 @@ const rand = (n) => Math.floor(Math.random() * n);
 
 async function visit() {
   const start = page.getByRole("button", { name: "Touch the screen or turn the dial to start" });
+  const menu = page.getByRole("heading", { name: "Choose a game" });
+  // The kiosk settings load after the page: wait for either the attract screen or the menu.
+  await start.or(menu).first().waitFor({ timeout: 20_000 });
   if (await start.isVisible().catch(() => false)) await start.click();
+  await menu.waitFor({ timeout: 10_000 });
   const mode = ["Time Dial", "Same or Not?", "When Was This?", "Gap Hunt"][events.visits % 4];
   await page.getByRole("button", { name: new RegExp(mode.replace("?", "\\?")) }).click();
   if (mode === "Time Dial") {
-    await page.locator(".choice-list button").nth(rand(3)).click();
+    const questions = page.locator(".choice-list button");
+    await questions.first().waitFor();
+    await questions.nth(rand(await questions.count())).click();
     for (let i = 0; i < 30; i++) {
       await page.keyboard.press(i % 7 === 6 ? "ArrowLeft" : "ArrowRight");
       await pause(150);
@@ -132,8 +138,11 @@ async function visit() {
       await pause(500);
     }
   } else {
+    const cells = page.locator("button.cell");
+    await cells.first().waitFor();
+    const n = await cells.count();
     for (let i = 0; i < 6; i++) {
-      await page.locator("button.cell").nth(rand(80)).click();
+      await cells.nth(rand(n)).click();
       await pause(700);
     }
   }
