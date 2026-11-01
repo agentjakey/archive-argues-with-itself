@@ -84,7 +84,7 @@ DRAFT_PROMPT_VERSION = __import__("hashlib").sha256(
     (DRAFT_SYSTEM + json.dumps(DRAFT_TASKS, sort_keys=True)).encode("utf-8")).hexdigest()[:12]
 
 JURISDICTION_NAMES = {
-    "federal": "Canada (federal)", "ontario": "Ontario", "alberta": "Alberta", "quebec": "Quebec",
+    "federal": "Canadian federal", "ontario": "Ontario", "alberta": "Alberta", "quebec": "Quebec",
     "british_columbia": "British Columbia", "manitoba": "Manitoba", "saskatchewan": "Saskatchewan",
     "nova_scotia": "Nova Scotia", "new_brunswick": "New Brunswick", "newfoundland": "Newfoundland and Labrador",
     "prince_edward_island": "Prince Edward Island", "yukon": "Yukon", "northwest_territories": "Northwest Territories",
@@ -277,7 +277,7 @@ def question_gate(question: str) -> dict:
 
 def templated(kind: str, topic: str, *, place: str = None, decade: str = None, year: int = None) -> str:
     """Trap questions built from the drafted topic, so the label never depends on the model's wording."""
-    topic = topic.rstrip(" .?").lower()
+    topic = topic.rstrip(" .?")
     if kind == "wrong_period":
         return f"What did {place} government publications from the {decade} report about {topic}?"
     if kind == "wrong_jurisdiction":

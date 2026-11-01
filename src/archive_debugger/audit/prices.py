@@ -29,6 +29,12 @@ PRICES = {
     "@cf/deepseek-ai/deepseek-v4-flash-0731": Price("workers-ai", "@cf/deepseek-ai/deepseek-v4-flash-0731", 0.44, 1.32, 1.0,
                                                     "workers ai catalogue 2026-10-31"),
     "@cf/moonshotai/kimi-k2.6": Price("workers-ai", "@cf/moonshotai/kimi-k2.6", 0.95, 4.00, 1.0, "workers ai catalogue 2026-10-31"),
+    # Workers AI embedding models: input tokens only, so the output price is 0. Read from each
+    # model's page under developers.cloudflare.com/workers-ai/models/ on 2026-10-31.
+    "@cf/baai/bge-m3": Price("workers-ai", "@cf/baai/bge-m3", 0.0118, 0.0, 1.0,
+                             "developers.cloudflare.com/workers-ai/models/bge-m3 2026-10-31"),
+    "@cf/qwen/qwen3-embedding-0.6b": Price("workers-ai", "@cf/qwen/qwen3-embedding-0.6b", 0.0118, 0.0, 1.0,
+                                           "developers.cloudflare.com/workers-ai/models/qwen3-embedding-0.6b 2026-10-31"),
 }
 
 

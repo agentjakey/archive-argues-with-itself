@@ -69,7 +69,7 @@ def test_gates_and_labels():
     assert item["item_id"] == "c:gen:wrong_period:0003" and item["label"]["should_refuse"]
     assert item["status"] == "model-drafted" and item["kind"] == "benchmark"
     assert generator.templated("wrong_jurisdiction", "School Clinics.", place="Manitoba") == \
-        "What did Manitoba government publications report about school clinics?"
+        "What did Manitoba government publications report about School Clinics?"
 
 
 def test_a_benchmark_item_is_judged_on_its_own_checks_and_prompt_version():
