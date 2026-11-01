@@ -535,3 +535,13 @@ def test_a_batch_that_fails_to_submit_releases_its_reservation(tmp_path):
         judges.run_anthropic_batch(haiku, [item()], ledger, "r", 1.0, tmp_path / "state.json",
                                    client_factory=lambda: client, sleep=lambda s: None, log=lambda m: None)
     assert ledger.open_reservations() == [] and ledger.totals().committed == 0
+
+
+def test_post_json_hands_back_the_reply_headers(monkeypatch):
+    class WithHeaders(FakeResponse):
+        headers = {"CF-AIG-Cache-Status": "HIT"}
+
+    monkeypatch.setattr(net.urllib.request, "urlopen", lambda req, timeout: WithHeaders(b'{"ok": 1}'))
+    seen = {}
+    assert net.post_json("https://x.test", {}, {}, response_headers=seen) == {"ok": 1}
+    assert seen == {"cf-aig-cache-status": "HIT"}

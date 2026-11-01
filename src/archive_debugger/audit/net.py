@@ -30,7 +30,9 @@ def _retryable(status: int) -> bool:
 
 
 def post_json(url: str, headers: dict, body: dict, *, timeout_s: float = 120.0,
-              sleep: Callable[[float], None] = time.sleep) -> dict:
+              sleep: Callable[[float], None] = time.sleep, response_headers: dict | None = None) -> dict:
+    """The decoded JSON reply. When response_headers is given, the reply's headers are copied into
+    it, with lower-case names."""
     data = json.dumps(body).encode("utf-8")
     last: Exception | None = None
     for attempt in range(ATTEMPTS):
@@ -38,6 +40,8 @@ def post_json(url: str, headers: dict, body: dict, *, timeout_s: float = 120.0,
                                      headers={"content-type": "application/json", "user-agent": USER_AGENT, **headers})
         try:
             with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+                if response_headers is not None:
+                    response_headers.update({k.lower(): v for k, v in resp.headers.items()})
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             text = exc.read().decode("utf-8", errors="replace")
