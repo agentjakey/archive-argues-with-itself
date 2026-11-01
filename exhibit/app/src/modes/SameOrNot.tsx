@@ -117,6 +117,7 @@ export function SameOrNot({ rounds, lang, t, canPrint, onEvent, onDone }: Props)
           <button
             type="button"
             className="btn btn-big"
+            data-primary
             onClick={() => {
               setPicked(null);
               if (index + 1 < rounds.length) setIndex(index + 1);

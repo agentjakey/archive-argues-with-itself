@@ -47,7 +47,7 @@ export function WhenWasThis({ rounds, lang, t, first, last, canPrint, onEvent, o
       <p className="lede">{round.play.label[lang]}</p>
       <Dial year={locked ?? year} first={first} last={last} onChange={(y) => locked === null && setYear(y)} t={t} />
       {locked === null ? (
-        <button type="button" className="btn btn-big" onClick={lock}>
+        <button type="button" className="btn btn-big" data-primary onClick={lock}>
           {t.when.guess}
         </button>
       ) : (
@@ -72,6 +72,7 @@ export function WhenWasThis({ rounds, lang, t, first, last, canPrint, onEvent, o
           <button
             type="button"
             className="btn btn-big"
+            data-primary
             onClick={() => {
               setLocked(null);
               setYear(mid);

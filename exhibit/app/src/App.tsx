@@ -6,6 +6,7 @@ import type { Deck, Lang, WhenRound } from "./lib/deck";
 import { loadDeck, roundsOf } from "./lib/deck";
 import { countEvent, loadKiosk, type KioskConfig } from "./lib/kiosk";
 import { useIdleReset } from "./lib/idle";
+import { usePrimaryEnter } from "./lib/input";
 import { STRINGS } from "./lib/strings";
 import { GapHunt } from "./modes/GapHunt";
 import { SameOrNot } from "./modes/SameOrNot";
@@ -67,6 +68,7 @@ export function App({ initialDeck, initialKiosk }: { initialDeck?: Deck; initial
     window.scrollTo(0, 0);
   }, [kiosk.kiosk]);
   const warning = useIdleReset(kiosk.idle_reset_seconds, reset, kiosk.kiosk && screen !== "attract");
+  usePrimaryEnter();
   const onEvent = useCallback((e: string) => countEvent(kiosk, e), [kiosk]);
   const go = (s: Screen) => {
     if (s !== "menu" && s !== "attract") onEvent(`${s}:start`);
@@ -110,13 +112,13 @@ export function App({ initialDeck, initialKiosk }: { initialDeck?: Deck; initial
         {screen === "attract" && deck.gap_hunt && (
           <>
             <GapHunt grid={deck.gap_hunt} lang={lang} t={t} attract reducedMotion={reducedMotion} onStart={() => go("menu")} />
-            <button type="button" className="btn btn-big start" onClick={() => go("menu")}>
+            <button type="button" className="btn btn-big start" data-primary onClick={() => go("menu")}>
               {t.touchToStart}
             </button>
           </>
         )}
         {screen === "attract" && !deck.gap_hunt && (
-          <button type="button" className="btn btn-big start" onClick={() => go("menu")}>
+          <button type="button" className="btn btn-big start" data-primary onClick={() => go("menu")}>
             {t.touchToStart}
           </button>
         )}

@@ -48,3 +48,23 @@ export function useDial(onStep: (step: DialStep) => void, enabled = true): void 
     return () => window.removeEventListener("keydown", onKey);
   }, [enabled]);
 }
+
+// The dial's press sends Enter. When nothing is focused (the visitor has only turned the dial), Enter
+// presses the screen's main action: the button marked data-primary. A focused control keeps its own
+// Enter.
+export function usePrimaryEnter(): void {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Enter") return;
+      const active = document.activeElement;
+      if (active && active !== document.body && active.tagName !== "MAIN") return;
+      const primary = document.querySelector<HTMLButtonElement>("[data-primary]:not(:disabled)");
+      if (primary) {
+        e.preventDefault();
+        primary.click();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+}
