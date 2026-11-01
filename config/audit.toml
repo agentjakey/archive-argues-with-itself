@@ -21,7 +21,15 @@ phase3 = 120.00
 [panel]
 judges = ["claude-haiku-5-5", "gpt-oss-120b"]
 escalation = "claude-sonnet-5-5"
-candidates = ["claude-haiku-4-5", "deepseek-v4-flash"]   # kimi-k2.6 dropped after probe-1: eight times the cost, slow, a third of replies cut off
+candidates = ["claude-haiku-4-5"]   # kimi-k2.6 dropped after probe-1: eight times the cost, slow, a third of replies cut off
+
+# Chosen 2026-11-01 against the silver labels (scripts/v2/choose_panel.py, reports/v2/audit/reference/
+# panel_choice.md): no two-judge pair met the bar on SUPPORTS, so SUPPORTS uses Sonnet 5.5 as its second
+# judge beside DeepSeek V4 Flash (two families), disagreements to a person. ANSWERS and IN SCOPE keep the
+# default pair above and stay human-reviewed: nothing met the bar on them.
+[panel.checks.supports]
+judges = ["deepseek-v4-flash", "claude-sonnet-5-5"]
+escalation = ""
 review_share = 0.10      # the escalation judge re-reads this share of the agreed passes in every run
 lenient_above = 0.10     # and flags a check when it does not pass more than this share of them
 

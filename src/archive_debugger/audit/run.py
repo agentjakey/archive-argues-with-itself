@@ -289,16 +289,21 @@ def main(argv=None) -> int:
         write_jsonl(gate_path, gate_rows.values())
 
     judgments_path = run_dir / "judgments.jsonl"
-    judge_names = args.judges or (list(cfg.judges) + list(cfg.candidates))
+    deciding_pairs = list(dict.fromkeys(n for c in prompts.ALL_CHECKS for n in cfg.route(c)[0]))
+    judge_names = args.judges or list(dict.fromkeys(deciding_pairs + list(cfg.candidates)))
 
     def judge(name: str, pending: list) -> None:
         run_judge(cfg.specs[name], pending, run_dir, ledger, args.run_id, args.cap, gateway=cfg.workers_ai_gateway)
 
     def decide_all() -> list:
         done = good_judgments(judgments_path)
-        return [panel.decide(it, gate_rows[it["item_id"]], cfg.judges,
-                             {n: done.get((it["item_id"], n)) for n in cfg.judges},
-                             done.get((it["item_id"], cfg.escalation))) for it in items]
+        out = []
+        for it in items:
+            routes = {c: cfg.route(c) for c in prompts.KIND_CHECKS[prompts.kind_of(it)]}
+            names = {n for pair, esc in routes.values() for n in list(pair) + ([esc] if esc else [])}
+            out.append(panel.decide_routes(it, gate_rows[it["item_id"]], routes,
+                                           {n: done.get((it["item_id"], n)) for n in names}))
+        return out
 
     review_ids: list = []
     try:
@@ -307,11 +312,15 @@ def main(argv=None) -> int:
             judge(name, [it for it in items if (it["item_id"], name) not in done])
         if not args.no_escalation:
             done = good_judgments(judgments_path)
-            a, b = cfg.judges
-            judge(cfg.escalation, [it for it in items
-                                   if panel.needs_escalation(done.get((it["item_id"], a)), done.get((it["item_id"], b)),
-                                                             prompts.KIND_CHECKS[prompts.kind_of(it)])
-                                   and (it["item_id"], cfg.escalation) not in done])
+            wanted: dict = {}
+            for it in items:
+                for c in prompts.KIND_CHECKS[prompts.kind_of(it)]:
+                    (a, b), esc = cfg.route(c)
+                    if esc and panel.needs_escalation(done.get((it["item_id"], a)), done.get((it["item_id"], b)), (c,)) \
+                            and (it["item_id"], esc) not in done:
+                        wanted.setdefault(esc, {})[it["item_id"]] = it
+            for esc, pending in wanted.items():
+                judge(esc, list(pending.values()))
         if not args.no_review:
             # The sample is drawn from the panel's agreed passes before the review, seeded by the run id.
             review_ids = panel.review_sample(decide_all(), cfg.review_share, args.run_id)
@@ -325,6 +334,8 @@ def main(argv=None) -> int:
     done = good_judgments(judgments_path)
     reviews = {i: done.get((i, cfg.escalation)) for i in review_ids}
     lenient = panel.leniency([d for d in decisions if d["item_id"] in reviews], reviews, cfg.lenient_above)
+    # A check whose own panel includes the escalation judge cannot be reviewed by it.
+    lenient = {c: v for c, v in lenient.items() if cfg.escalation not in cfg.route(c)[0]}
     write_jsonl(run_dir / "panel.jsonl", decisions)
     write_jsonl(run_dir / "human_queue.jsonl", [d for d in decisions if d["human_queue"]])
     r = report(args.run_id, run_dir, items, labels, gate_rows, cfg, ledger, decisions, lenient, review_ids)

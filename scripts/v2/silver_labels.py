@@ -127,7 +127,21 @@ def cmd_queue(args) -> int:
                 "sections": {i: s for i, s in ordered}, "max_items": silver.QUEUE_MAX,
                 "random_agreed": silver.RANDOM_AGREED, "approval_max": silver.APPROVAL_MAX}
     (REVIEW_DIR / "queue.json").write_text(json.dumps(manifest, indent=1, sort_keys=True), encoding="utf-8")
-    print(f"queue {version}: {len(out)} items {counts}")
+    # Whatever the 80-item cap left out (disagreements cut to make room for the random sample, and
+    # approval items that did not fit) goes to an optional second file, never silently dropped.
+    queued = {i for i, _ in ordered}
+    left = [kit[r["item_id"]] for r in kit_rows if not r["agreed"] and r["item_id"] not in queued]
+    left += [it for it in approval if it["item_id"] not in queued
+             and silver.approval_flagged(it["item_id"], approval_silver.get(it["item_id"]), None)]
+    extra = []
+    for n, it in enumerate(left, 1):
+        row = dict(it)
+        row.update({"kit_position": n, "kit_batch": 1, "kit_version": version + "-extra", "queue_format": silver.QUEUE_FORMAT})
+        extra.append(row)
+    write_jsonl(REVIEW_DIR / "queue_extra.jsonl", extra)
+    manifest["extra_items"] = len(extra)
+    (REVIEW_DIR / "queue.json").write_text(json.dumps(manifest, indent=1, sort_keys=True), encoding="utf-8")
+    print(f"queue {version}: {len(out)} items {counts}; optional extra file: {len(extra)} items")
     print("open it with: python scripts/v2/calibration_form.py --kit reports/v2/audit/review/queue.jsonl")
     return 0
 
@@ -144,12 +158,15 @@ def author_labels(path: Path) -> dict:
     return out
 
 
-def panel_finals(done: dict, items: list, judges_used: tuple, escalation: str) -> dict:
+def panel_finals(done: dict, items: list, cfg, override: tuple = None) -> dict:
+    """{check: {item_id: final}} under the configured per-check routes, or one pair for every check."""
     out = {c: {} for c in prompts.ALL_CHECKS}
     gate = {"valid": None, "flags": []}
     for it in items:
-        d = panel.decide(it, gate, judges_used, {n: done.get((it["item_id"], n)) for n in judges_used},
-                         done.get((it["item_id"], escalation)))
+        checks = prompts.KIND_CHECKS[prompts.kind_of(it)]
+        routes = {c: ((tuple(override), cfg.escalation) if override else cfg.route(c)) for c in checks}
+        names = {n for pair, esc in routes.values() for n in list(pair) + ([esc] if esc else [])}
+        d = panel.decide_routes(it, gate, routes, {n: done.get((it["item_id"], n)) for n in names})
         for c, v in d["checks"].items():
             out[c][it["item_id"]] = v["final"]
     return out
@@ -171,8 +188,10 @@ def cmd_recompute(args) -> int:
     best = {c: {**silver_l.get(c, {}), **author.get(c, {})} for c in prompts.CHECKS}
     items = read_jsonl(AUDIT_DIR / "runs" / args.panel_run / "items.jsonl")
     done = good_judgments(AUDIT_DIR / "runs" / args.panel_run / "judgments.jsonl")
-    chosen = tuple(args.panel or cfg.judges)
-    finals = panel_finals(done, items, chosen, cfg.escalation)
+    finals = panel_finals(done, items, cfg, args.panel)
+    chosen = tuple(args.panel) if args.panel else tuple(
+        f"{c}: {' + '.join(cfg.route(c)[0])}" + (f" (escalation {cfg.route(c)[1]})" if cfg.route(c)[1] else "")
+        for c in prompts.CHECKS)
 
     report = {"panel": list(chosen), "escalation": cfg.escalation, "panel_run": args.panel_run,
               "queue_version": manifest["queue_version"], "author_labelled_items": len(labelled),
@@ -203,7 +222,7 @@ def cmd_recompute(args) -> int:
         return (f"n={m['items_decided']}, kappa {k}, error {m['error_rate']:.3f} (to {m['error_wilson'][1]:.3f}), "
                 f"false-pass {fpr}, not-pass recall {m['not_pass_recall']['hits']}/{m['not_pass_recall']['n']}")
 
-    lines = [f"# Audit status: panel {' + '.join(chosen)}", "",
+    lines = [f"# Audit status: panel {'; '.join(chosen)}", "",
              f"Queue {manifest['queue_version']}; author labels on {len(labelled)} items; random agreed sample "
              f"{len(random_labelled)} of {len(random_ids)} labelled.", ""]
     if not author_ready:

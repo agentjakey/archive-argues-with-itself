@@ -8,8 +8,8 @@ kit item (kit2-judges), so any panel can be simulated without new calls. Panels 
              person (the configured panel rule);
   majority   three judges from three families, the majority class decides, the escalation judge
              breaks a three-way split, then a person;
-  sonnet2    for SUPPORTS only: one candidate with the escalation judge as the second judge, and
-             their disagreements to a person.
+  sonnet2    for SUPPORTS only: one candidate from another family with the escalation judge as the
+             second judge, and their disagreements to a person.
 Candidates exclude the model that wrote the answers and any reference judge. Each panel is measured
 per check with audit/calibration.py compare (kappa, not-pass recall, false-pass and error bounds, the
 bar) against the labels, against each reference judge alone (to show any family lean), and costed per
@@ -140,6 +140,8 @@ def main(argv=None) -> int:
                             "escalated_share": escalated / n_items, **measure(labels[c], finals, refs[c])})
         if c == "supports":
             for a in candidates:
+                if cfg.specs[a].family == cfg.specs[esc].family:
+                    continue        # a panel is two families (the brief's judge-panel rule)
                 finals, _ = pair_finals(done, items, a, esc, None, c)
                 options.append({"check": c, "kind": "sonnet2", "judges": [a, esc], "escalation": None,
                                 "usd_per_item": cost.get(a, 0) + cost.get(esc, 0), "escalated_share": 0.0,

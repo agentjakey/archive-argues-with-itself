@@ -33,11 +33,21 @@ def needs_escalation(first: Optional[dict], second: Optional[dict], checks: tupl
 
 def decide(item: dict, gate: dict, panel_judges: tuple, judgments: dict, escalation: Optional[dict]) -> dict:
     """judgments: {judge name: judgment record} for the two panel judges; escalation: the escalation
-    judge's record, or None when it was not needed or not run."""
-    a_name, b_name = panel_judges
-    a, b = judgments.get(a_name), judgments.get(b_name)
+    judge's record, or None when it was not needed or not run. One pair decides every check."""
+    routes = {check: (panel_judges, "escalation") for check in KIND_CHECKS[kind_of(item)]}
+    return decide_routes(item, gate, routes, {**judgments, "escalation": escalation})
+
+
+def decide_routes(item: dict, gate: dict, routes: dict, records: dict) -> dict:
+    """Each check decided by its own route: routes maps check to (two judge names, escalation judge
+    name or None); records maps judge name to its judgment record for this item. Agreement decides;
+    a disagreement goes to the route's escalation judge, which must side with one of the two, and
+    otherwise (or with no escalation judge) to a person."""
     checks = {}
     for check in KIND_CHECKS[kind_of(item)]:
+        (a_name, b_name), esc_name = routes[check]
+        a, b = records.get(a_name), records.get(b_name)
+        escalation = records.get(esc_name) if esc_name else None
         va, vb = vote(a, check), vote(b, check)
         votes = {a_name: va, b_name: vb}
         if va is not None and va == vb:

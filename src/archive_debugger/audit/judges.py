@@ -50,6 +50,21 @@ class PanelConfig:
     review_share: float = 0.10            # share of agreed passes the escalation judge re-reads
     lenient_above: float = 0.10           # escalation disagreement on that sample that flags a check
     references: tuple = ()                # reference judges (silver labels); never panel, escalation or candidate
+    check_panels: dict = None             # {check: (judges, escalation or None)} where a check has its own panel
+
+    def route(self, check: str) -> tuple:
+        """(the two judges, the escalation judge or None) that decide one check."""
+        if self.check_panels and check in self.check_panels:
+            return self.check_panels[check]
+        return self.judges, self.escalation
+
+    def deciding_judges(self) -> list:
+        """Every judge whose verdict can decide a check: the default pair, the per-check pairs and
+        every escalation judge in use, in a stable order."""
+        names = list(self.judges) + [self.escalation]
+        for judges_, esc in (self.check_panels or {}).values():
+            names += list(judges_) + ([esc] if esc else [])
+        return list(dict.fromkeys(names))
 
 
 def load_panel(path: Path = AUDIT_CONFIG) -> PanelConfig:
@@ -61,7 +76,19 @@ def load_panel(path: Path = AUDIT_CONFIG) -> PanelConfig:
                              prompt=j.get("prompt", "panel"))
              for name, j in (raw.get("judges") or {}).items()}
     panel = raw["panel"]
+    check_panels = {}
+    for check, row in (panel.get("checks") or {}).items():
+        pair = tuple(row["judges"])
+        esc = row.get("escalation") or None
+        if len(pair) != 2 or any(n not in specs for n in pair) or (esc and esc not in specs):
+            raise ValueError(f"{path}: [panel.checks.{check}] needs two defined judges and a defined escalation or none")
+        if specs[pair[0]].family == specs[pair[1]].family:
+            raise ValueError(f"{path}: [panel.checks.{check}] needs two judges from two different model families")
+        if esc in pair:
+            raise ValueError(f"{path}: [panel.checks.{check}] escalation cannot be one of its own judges")
+        check_panels[check] = (pair, esc)
     names = list(panel["judges"]) + [panel["escalation"]] + list(panel.get("candidates") or [])
+    names += [n for pair, esc in check_panels.values() for n in list(pair) + ([esc] if esc else [])]
     missing = [n for n in names if n not in specs]
     if missing:
         raise ValueError(f"{path}: judges named in [panel] but not defined: {missing}")
@@ -77,7 +104,7 @@ def load_panel(path: Path = AUDIT_CONFIG) -> PanelConfig:
         raise ValueError(f"{path}: a reference judge cannot also be a panel, escalation or candidate judge: {on_panel}")
     if len({specs[n].family for n in references}) != len(references):
         raise ValueError(f"{path}: the reference judges must come from different model families")
-    return PanelConfig(references=references,judges=tuple(panel["judges"]), escalation=panel["escalation"],
+    return PanelConfig(check_panels=check_panels, references=references,judges=tuple(panel["judges"]), escalation=panel["escalation"],
                        candidates=tuple(panel.get("candidates") or ()), specs=specs, workers_ai_gateway=gateway,
                        review_share=float(panel.get("review_share", 0.10)),
                        lenient_above=float(panel.get("lenient_above", 0.10)))
@@ -94,7 +121,8 @@ def writer_conflicts(cfg: PanelConfig, items: list, *, include_escalation: bool 
     the model that wrote the answers it judges; candidates may, since they decide nothing. A run
     that never calls the escalation judge (no escalation, no leniency review) does not check it."""
     writers = {it.get("writer_model") for it in items if it.get("writer_model")}
-    deciding = list(cfg.judges) + ([cfg.escalation] if include_escalation else [])
+    deciding = [n for n in cfg.deciding_judges() if include_escalation or n != cfg.escalation
+                or any(n in pair for pair, _ in (cfg.check_panels or {}).values())]
     return sorted({name for name in deciding
                    for w in writers if same_model(cfg.specs[name].model, w)})
 

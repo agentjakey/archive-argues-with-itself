@@ -633,3 +633,17 @@ def test_a_last_line_still_being_written_is_not_read_yet(tmp_path):
     path.write_text('{"a": 1}' + chr(10) + '{"b": ' + chr(10) + '{"c": 3}' + chr(10), encoding="utf-8")
     with pytest.raises(ValueError):
         read_jsonl(path)
+
+
+def test_a_check_can_have_its_own_two_family_panel_and_no_escalation():
+    cfg = judges.load_panel()
+    pair, esc = cfg.route("supports")
+    assert len({cfg.specs[n].family for n in pair}) == 2
+    item = {"item_id": "c:q1:s1", "kind": "sentence"}
+    rec = lambda s, i: {"verdicts": {"supports": {"verdict": s, "reason": ""}, "in_scope": {"verdict": i, "reason": ""}}}
+    a, b = cfg.route("in_scope")[0]
+    routes = {"supports": (pair, esc), "in_scope": cfg.route("in_scope")}
+    records = {pair[0]: rec("pass", "pass"), pair[1]: rec("partial", "pass"), a: rec("pass", "pass"), b: rec("pass", "pass")}
+    d = panel.decide_routes(item, {"valid": None, "flags": []}, routes, records)
+    assert d["checks"]["supports"]["route"] == "human" and d["human_queue"] == ["supports"]
+    assert d["checks"]["in_scope"]["final"] == "pass"
