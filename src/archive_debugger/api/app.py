@@ -31,7 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
-from archive_debugger import crisis, editorial, flags, provision, release_files, scopes
+from archive_debugger import crisis, editorial, flags, governance, provision, release_files, scopes
 from archive_debugger.scopes import parse_enabled_scopes
 from archive_debugger.api import cache as answer_cache
 from archive_debugger.api.coverage import coverage as compute_coverage
@@ -107,6 +107,24 @@ _DEGRADE_MSG = {
                          "Pick a story below, or try the other collection.",
 }
 _EVIDENCE_ONLY_MSG = "the record for this question, without an answer."
+_RESTRICTED_MSG = ("records that match this question are restricted by the authority named below; they are not "
+                   "searched, quoted or summarized here.")
+ENV_GOVERNANCE_PATH = "CIVIC_GOVERNANCE_PATH"
+
+
+def restricted_reach(conn, fts_query: str, item_ids: set) -> set:
+    """Which restricted documents the question's words reach in the full-text index: only their
+    ids, so the reader can be told a restriction applies without anything from the records."""
+    if not item_ids or fts_query in ('""', ""):
+        return set()
+    ids = sorted(item_ids)
+    marks = ",".join("?" * len(ids))
+    try:
+        rows = conn.execute("SELECT DISTINCT p.item_id FROM passages_fts f JOIN passages p ON p.rowid = f.rowid "
+                            f"WHERE passages_fts MATCH ? AND p.item_id IN ({marks}) LIMIT 50", [fts_query, *ids]).fetchall()
+    except sqlite3.Error:
+        return set()
+    return {r[0] for r in rows}
 
 
 class _RetrievalTimeout(Exception):
@@ -176,15 +194,21 @@ def local_page(pages_dir: Optional[Path], item_id: str, leaf: int, kind: str) ->
     return f"/pages/{item_id}/{name}" if (Path(pages_dir) / item_id / name).is_file() else None
 
 
-def cache_context(scope: str, data_sha256: dict, retrieve: dict, gcfg: dict, kind: str, model_id: str) -> str:
+def cache_context(scope: str, data_sha256: dict, retrieve: dict, gcfg: dict, kind: str, model_id: str,
+                  governance_digest: str = "") -> str:
     """The cache context of one scope under one provider and model (api/cache.py): the published
-    data hashes, the retrieve settings without host paths, and the generation settings."""
+    data hashes, the retrieve settings without host paths, and the generation settings. A non-empty
+    governance register joins it (its digest), so a changed register never serves an answer stored
+    under the old one; an empty register leaves every key as it was."""
     temp = sent_temperature(kind, gcfg)
     gen = generation_meta(provider=kind, model=model_id, temperature=temp,
                           max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
-    return answer_cache.context_hash(scope=scope, data_sha256=data_sha256, retrieve=retrieve,
-                                     provider=kind, model=model_id, prompt_sha256=gen["prompt_sha256"],
-                                     top_k=gcfg["top_k"], temperature=temp)
+    context = answer_cache.context_hash(scope=scope, data_sha256=data_sha256, retrieve=retrieve,
+                                        provider=kind, model=model_id, prompt_sha256=gen["prompt_sha256"],
+                                        top_k=gcfg["top_k"], temperature=temp)
+    if governance_digest:
+        context = hashlib.sha256(f"{context}|governance:{governance_digest}".encode("utf-8")).hexdigest()
+    return context
 
 
 def scope_cache_context(scope: str, *, kind: Optional[str] = None, model_id: Optional[str] = None,
@@ -197,7 +221,8 @@ def scope_cache_context(scope: str, *, kind: Optional[str] = None, model_id: Opt
         rcfg = load_retrieve_config(Path(resolved.config_path))
         gcfg = load_generate_config(Path(resolved.config_path))
     return cache_context(scope, answer_cache.canonical_data_sha256(scope, registry), answer_cache.retrieve_settings(rcfg),
-                         gcfg, kind or gcfg["provider"], model_id or gcfg["model"])
+                         gcfg, kind or gcfg["provider"], model_id or gcfg["model"],
+                         governance.load(env_path(ENV_GOVERNANCE_PATH, governance.DEFAULT_REGISTER)).digest)
 
 
 def answer_cache_key(context: str, question: str, filters: Optional[dict]) -> str:
@@ -808,8 +833,10 @@ class Bundle:
     so the pilot request path and offline_walkthrough see it exactly as before."""
 
     def __init__(self, *, name, retriever, pool, gcfg, pilot_window, cache, data_sha256, retrieve_settings,
-                 corpus, facts, stories, seed_path, pages_dir, provider, llm, own_retriever):
+                 corpus, facts, stories, seed_path, pages_dir, provider, llm, own_retriever,
+                 governance_register=None):
         self.name = name
+        self.governance = governance_register if governance_register is not None else governance.Register()
         self.retriever = retriever
         self.pool = pool           # read-only connection pool for the /ask miss path (no lock across the model call)
         self.gcfg = gcfg
@@ -864,7 +891,7 @@ class Bundle:
         """The cache context for one provider and model, computed once."""
         if (kind, model_id) not in self._contexts:
             self._contexts[(kind, model_id)] = cache_context(self.name, self.data_sha256, self.retrieve_settings,
-                                                             self.gcfg, kind, model_id)
+                                                             self.gcfg, kind, model_id, self.governance.digest)
         return self._contexts[(kind, model_id)]
 
     def curated_question(self, question: str, filters: Optional[dict]) -> Optional[str]:
@@ -882,12 +909,17 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                serve_scopes: Optional[list[str]] = None,
                enabled_scopes: Optional[list[str]] = None,
                default_scope: Optional[str] = None,
-               notes_path: Path = editorial.DEFAULT_NOTES) -> FastAPI:
+               notes_path: Path = editorial.DEFAULT_NOTES,
+               governance_register: Optional[governance.Register] = None) -> FastAPI:
     if load_env:
         from archive_debugger.local_env import load_local_env
         load_local_env()   # environment wins over .env; secret values are never logged
     # Dated editorial notes (corrections), loaded once; malformed notes fail the start, never serve.
     notes = editorial.load_notes(notes_path)
+    # The governance register (docs/formats/governance.md): empty by default; a malformed register
+    # or a test fixture in it fails the start, never serves.
+    register = governance_register if governance_register is not None else governance.load(
+        env_path(ENV_GOVERNANCE_PATH, governance.DEFAULT_REGISTER))
     # Scope layer (additive): with no scope and no serve_scopes this serves the pilot exactly
     # as before. A named scope serves that scope's config + registry databases. serve_scopes
     # serves several scopes from one process, routed per request by a `scope` parameter, with
@@ -957,7 +989,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             corpus = data["corpus"]
             facts = scope_facts(name, cfg_path, corpus)
             facts["composition"] = data["composition"]   # real numbers for the sources view
-        return Bundle(name=name, retriever=r, pool=pool, gcfg=gcfg, pilot_window=pilot_window,
+        return Bundle(governance_register=register, name=name, retriever=r, pool=pool, gcfg=gcfg, pilot_window=pilot_window,
                       cache=answer_cache.open_store(cache_p, remote_url=os.environ.get(ENV_CACHE_URL),
                                                     remote_token=os.environ.get(ENV_CACHE_TOKEN)),
                       data_sha256=answer_cache.canonical_data_sha256(name), retrieve_settings=settings, corpus=corpus,
@@ -1270,13 +1302,28 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             out["degraded"] = {"reason": reason, "live_url": PUBLIC_URL}
             return out
 
+        reg = b.governance
+
+        def restricted(notices: list, pool_rows: list, conn) -> dict:
+            """Records the question needs are restricted: the policy notice, the allowed record (if
+            any), no model call, never stored."""
+            out = record_only(_RESTRICTED_MSG, pool_rows, [], conn)
+            out["governance"] = {"restricted": notices}
+            return out
+
         if not clean:
             with b.lock:
                 return degraded("empty", [], [], r.conn)
+        # Governance before anything is read: a collection restricted from retrieval is never searched.
+        whole = reg.collection_restricted("retrieve", b.name) if not reg.empty else []
+        if whole:
+            with b.lock:
+                return restricted([p.notice() for p in whole], [], r.conn)
         if not b.answers_allowed:
             with b.lock:
                 return degraded("index_unavailable", [], [], r.conn)
         if not nocache and not evidence_only and not private:
+            # The key's context carries the register's digest, so a stored answer predates no policy.
             hit = b.cache.get(key)
             served = copy.deepcopy(hit["response"]) if hit is not None else None
             # A visitor's row holds no words of the question; put them back from this request's own
@@ -1315,14 +1362,33 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             # Retrieval under its own hard deadline: a cold/overlong dense scan is interrupted and we
             # return limited mode (a 200) before the client's 30s abort, instead of sitting inside one
             # uninterruptible SQLite call while the client gives up and shows the scary timeout.
+            fobj = build_filters(filters)
+            blocked = reg.restricted_items("retrieve") if not reg.empty else set()
+            if blocked:
+                fobj.exclude_items = tuple(sorted(blocked))      # before retrieval: not searched at all
             try:
                 pool_rows, hits = _bounded_retrieve(
                     pr.conn, RETRIEVAL_DEADLINE_S,
-                    lambda: retrieve_pool(pr, clean, build_filters(filters), gcfg["top_k"]))
+                    lambda: retrieve_pool(pr, clean, fobj, gcfg["top_k"]))
             except _RetrievalTimeout:
                 _log_timing(b.name, time.monotonic() - t_start, 0.0, "degraded:retrieval_slow", 0)
                 return degraded("retrieval_slow", [], [], pr.conn)
             t_ret = time.monotonic() - t_start
+            notices: list = []
+            if not reg.empty:
+                # Before export: nothing restricted from export is shown or stored. Before generation:
+                # nothing restricted from generation reaches the model.
+                pool_rows, export_pols = reg.split(pool_rows, "export", b.name)
+                hits, gen_pols = reg.split([h for h in hits if h in pool_rows], "generate", b.name)
+                reached = restricted_reach(pr.conn, r._fts_query(clean), blocked)
+                reach_pols = reg.policies_for(reached, b.name)
+                seen_ids: dict = {}
+                for p in export_pols + gen_pols + reach_pols:
+                    seen_ids.setdefault(p.policy_id, p.notice())
+                notices = list(seen_ids.values())
+                if notices and not hits:
+                    _log_timing(b.name, t_ret, 0.0, "restricted", 0)
+                    return restricted(notices, pool_rows, pr.conn)
 
             # Retrieval only (the site's period fill for a comparison): the record, no model call,
             # nothing stored.
@@ -1369,6 +1435,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             result = {"answer": ans.to_dict(),
                       "evidence": evidence_rows(pool_rows, ans.verified_citations, {h["passage_id"] for h in hits}, b.pages_dir)}
             add_extras(result, pr.conn)
+            if notices:
+                result["governance"] = {"restricted": notices}
             if not private:
                 store(result)
             result["answer"]["cached"] = None

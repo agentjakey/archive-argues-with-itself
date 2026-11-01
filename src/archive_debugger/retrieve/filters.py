@@ -16,6 +16,9 @@ class Filters:
     jurisdiction: Optional[str] = None
     doc_type: Optional[str] = None
     min_ocr: float = 0.0
+    # Documents a governance policy restricts from retrieval (governance.py). Set by the engine from
+    # the register, never from a request, and applied to both arms before the search.
+    exclude_items: tuple = ()
 
 
 def period_predicate(period: str) -> tuple[str, list]:
@@ -60,5 +63,8 @@ def build_where(f: Filters, *, doc_type_families: Optional[dict] = None) -> tupl
     if f.min_ocr and f.min_ocr > 0:
         clauses.append("CAST(p.ocr_quality AS REAL) >= ?")
         params.append(f.min_ocr)
+    if f.exclude_items:
+        clauses.append("i.item_id NOT IN (" + ",".join("?" * len(f.exclude_items)) + ")")
+        params += list(f.exclude_items)
     where = (" AND " + " AND ".join(clauses)) if clauses else ""
     return where, params
