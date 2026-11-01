@@ -12,8 +12,9 @@ a judge's verdict. Archival text is shown as text and never interpreted as HTML.
 on this computer only.
 
 Keys: on an answer, q w e answers (pass, partial, fail); on a sentence, 1 2 3 supports (pass,
-partial, fail) and a s d in scope (pass, fail, unclear). n note; Enter save and next; Left and Right
-move; ? help."""
+partial, fail) and a s d in scope (pass, fail, unclear); on a drafted benchmark item (the approval
+sample), z x well formed (pass, fail) and c v label correct (pass, fail). n note; Enter save and
+next; Left and Right move; ? help."""
 from __future__ import annotations
 
 import argparse
@@ -33,8 +34,10 @@ from archive_debugger.audit.run import AUDIT_DIR  # noqa: E402
 
 KIT_DIR = AUDIT_DIR / "calibration"
 CLASSES = {"supports": ("pass", "partial", "fail"), "answers": ("pass", "partial", "fail"),
-           "in_scope": ("pass", "fail", "unclear")}
-KIND_CHECKS = {"sentence": ("supports", "in_scope"), "answer": ("answers",)}
+           "in_scope": ("pass", "fail", "unclear"), "well_formed": ("pass", "fail"),
+           "label_correct": ("pass", "fail")}
+KIND_CHECKS = {"sentence": ("supports", "in_scope"), "answer": ("answers",),
+               "benchmark": ("well_formed", "label_correct")}
 LABELER = "author"
 
 
@@ -195,11 +198,17 @@ textarea { width:100%; box-sizing:border-box; min-height:60px; font:inherit; }
 </style></head><body>
 <header><h1>Calibration labels (__MODE__)</h1><span id="progress" class="muted"></span>
 <span class="muted">Keys: answer <kbd>q</kbd><kbd>w</kbd><kbd>e</kbd>; sentence <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> supports,
-<kbd>a</kbd><kbd>s</kbd><kbd>d</kbd> in scope; <kbd>n</kbd> note, <kbd>Enter</kbd> save and next, <kbd>&larr;</kbd><kbd>&rarr;</kbd> move</span></header>
+<kbd>a</kbd><kbd>s</kbd><kbd>d</kbd> in scope; benchmark item <kbd>z</kbd><kbd>x</kbd> well formed, <kbd>c</kbd><kbd>v</kbd> label; <kbd>n</kbd> note, <kbd>Enter</kbd> save and next, <kbd>&larr;</kbd><kbd>&rarr;</kbd> move</span></header>
 <main>
 <section aria-label="Item">
   <div class="card"><div class="label">Question</div><div id="question"></div><div id="filters" class="meta"></div></div>
   <div id="answer-unit" class="card" hidden><div class="label unit">Whole answer: does it answer the question?</div><div id="whole" class="whole"></div></div>
+  <div id="bench-unit" hidden>
+    <div class="card"><div class="label unit">Drafted label</div><div id="bench-label" class="sentence"></div>
+      <div id="bench-behaviour"></div><div id="bench-category" class="meta"></div></div>
+    <div class="card"><div class="label">Corpus checks</div><pre id="bench-checks" class="meta" style="white-space:pre-wrap"></pre></div>
+    <div id="bench-pages"></div>
+  </div>
   <div id="sentence-unit" hidden>
     <div class="card"><div class="label unit">Sentence to judge</div><div id="sentence" class="sentence"></div></div>
     <div id="pages"></div>
@@ -211,6 +220,8 @@ textarea { width:100%; box-sizing:border-box; min-height:60px; font:inherit; }
     <fieldset id="f-answers"><legend>Answers</legend><div id="g-answers"></div><div class="meta">Does the whole answer answer the question asked?</div></fieldset>
     <fieldset id="f-supports"><legend>Supports</legend><div id="g-supports"></div><div class="meta">Is every claim in the sentence on the cited page?</div></fieldset>
     <fieldset id="f-in_scope"><legend>In scope</legend><div id="g-in_scope"></div><div class="meta">Does the page fit the question's period, place, population, program and measure?</div></fieldset>
+    <fieldset id="f-well_formed"><legend>Well formed</legend><div id="g-well_formed"></div><div class="meta">Is the question clear, as a researcher would ask it, with no hint of its label?</div></fieldset>
+    <fieldset id="f-label_correct"><legend>Label correct</legend><div id="g-label_correct"></div><div class="meta">Do the pages and checks support the drafted verdict and behaviour?</div></fieldset>
     <label for="note" class="label">Note (optional)</label><textarea id="note"></textarea>
     <p><button class="opt" id="save">Save and next (Enter)</button> <button class="opt" id="prev">Previous</button> <button class="opt" id="next">Next</button></p>
     <div id="status" role="status" aria-live="polite"></div>
@@ -219,9 +230,10 @@ textarea { width:100%; box-sizing:border-box; min-height:60px; font:inherit; }
 </main>
 <script>
 "use strict";
-const KEYS = { supports: ["1","2","3"], answers: ["q","w","e"], in_scope: ["a","s","d"] };
-const CLASSES = { supports: ["pass","partial","fail"], answers: ["pass","partial","fail"], in_scope: ["pass","fail","unclear"] };
-const KIND_CHECKS = { sentence: ["supports","in_scope"], answer: ["answers"] };
+const KEYS = { supports: ["1","2","3"], answers: ["q","w","e"], in_scope: ["a","s","d"], well_formed: ["z","x"], label_correct: ["c","v"] };
+const CLASSES = { supports: ["pass","partial","fail"], answers: ["pass","partial","fail"], in_scope: ["pass","fail","unclear"],
+                  well_formed: ["pass","fail"], label_correct: ["pass","fail"] };
+const KIND_CHECKS = { sentence: ["supports","in_scope"], answer: ["answers"], benchmark: ["well_formed","label_correct"] };
 let items = [], labels = {}, index = 0, current = {};
 function kindOf(it) { return it.kind || "sentence"; }
 function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
@@ -250,6 +262,26 @@ function showAnswer(it) {
   (it.sentences || [it.answer_text]).forEach(s => list.appendChild(el("li", s)));
   whole.appendChild(list);
 }
+function pageCards(target, sources) {
+  target.replaceChildren();
+  (sources || []).forEach((c, n) => {
+    const card = el("div", undefined, "card");
+    card.appendChild(el("div", "Source page " + (n + 1), "label"));
+    card.appendChild(el("div", (c.title || "") + " (" + (c.year || "undated") + ", " + (c.jurisdiction || "unknown") + ", leaf " + c.leaf_index + ")", "meta"));
+    const link = el("a", "Open this page on archive.org"); link.href = c.deep_link; link.target = "_blank"; link.rel = "noopener noreferrer";
+    card.appendChild(link);
+    card.appendChild(el("div", c.text || "", "page"));
+    target.appendChild(card);
+  });
+}
+function showBench(it) {
+  const label = it.label || {};
+  document.getElementById("bench-label").textContent = label.verdict || "";
+  document.getElementById("bench-behaviour").textContent = label.behaviour || "";
+  document.getElementById("bench-category").textContent = "Category: " + (it.category || "");
+  document.getElementById("bench-checks").textContent = JSON.stringify(it.corpus_checks || [], null, 1);
+  pageCards(document.getElementById("bench-pages"), it.sources);
+}
 function showSentence(it) {
   document.getElementById("sentence").textContent = it.sentence;
   const ans = document.getElementById("answer"); ans.replaceChildren();
@@ -276,7 +308,8 @@ function show(i) {
   const f = it.filters || {}; document.getElementById("filters").textContent = Object.keys(f).length ? "Filters: " + JSON.stringify(f) : "";
   document.getElementById("answer-unit").hidden = kind !== "answer";
   document.getElementById("sentence-unit").hidden = kind !== "sentence";
-  if (kind === "answer") showAnswer(it); else showSentence(it);
+  document.getElementById("bench-unit").hidden = kind !== "benchmark";
+  if (kind === "answer") showAnswer(it); else if (kind === "benchmark") showBench(it); else showSentence(it);
   const prior = labels[it.item_id];
   current = {};
   buildGroups(kind);
