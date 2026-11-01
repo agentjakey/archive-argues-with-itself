@@ -30,6 +30,7 @@ from archive_debugger.audit.generator import (JURISDICTION_NAMES, _source, key_t
 
 EXTRA_VERSION = 1
 CATEGORIES = ("conflicting", "restricted", "false_premise")
+ID_TAG = [""]          # set from --id-tag, so a second drafting round never reuses an item id
 LABELS = {
     "conflicting": ("CONFLICTING", "Report both values with their sources and say that the two records disagree; "
                                    "do not pick one or average them."),
@@ -139,7 +140,7 @@ class SonnetDrafter:
 def make_item(collection: str, category: str, n: int, question: str, sources: list, checks: list, drafter: str,
               quotes: list, extra: Optional[dict] = None, governance: Optional[list] = None) -> dict:
     verdict, behaviour = LABELS[category]
-    return {"format": 2, "kind": "benchmark2", "item_id": f"{collection}:gen2:{category}:{n:04d}",
+    return {"format": 2, "kind": "benchmark2", "item_id": f"{collection}:gen2{ID_TAG[0]}:{category}:{n:04d}",
             "collection": collection, "category": category, "question": question, "filters": {},
             "label": {"verdict": verdict, "behaviour": behaviour, "should_refuse": SHOULD_REFUSE[category]},
             "sources": sources, "quotes": quotes, "governance": governance or [], "corpus_checks": checks,
@@ -311,7 +312,9 @@ def main(argv=None) -> int:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--drafter", default="claude-sonnet-5-5", help="an anthropic judge name in config/audit.toml")
     parser.add_argument("--suffix", default="", help="output file suffix, so a second round does not overwrite the first")
+    parser.add_argument("--id-tag", default="", help="joins every item id (for example r3), so rounds never share ids")
     args = parser.parse_args(argv)
+    ID_TAG[0] = args.id_tag
     cfg = judges.load_panel()
     spec = cfg.specs[args.drafter]
     if spec.provider != "anthropic":

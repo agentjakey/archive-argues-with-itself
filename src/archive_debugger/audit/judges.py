@@ -120,11 +120,16 @@ def writer_conflicts(cfg: PanelConfig, items: list, *, include_escalation: bool 
     """Panel and escalation judges whose model wrote some of these answers. The panel never includes
     the model that wrote the answers it judges; candidates may, since they decide nothing. A run
     that never calls the escalation judge (no escalation, no leniency review) does not check it."""
-    writers = {it.get("writer_model") for it in items if it.get("writer_model")}
-    deciding = [n for n in cfg.deciding_judges() if include_escalation or n != cfg.escalation
-                or any(n in pair for pair, _ in (cfg.check_panels or {}).values())]
-    return sorted({name for name in deciding
-                   for w in writers if same_model(cfg.specs[name].model, w)})
+    out = set()
+    for it in items:
+        writer = it.get("writer_model")
+        if not writer:
+            continue
+        for check in prompts.KIND_CHECKS[prompts.kind_of(it)]:
+            pair, esc = cfg.route(check)
+            deciding = list(pair) + ([esc] if esc and include_escalation else [])
+            out |= {name for name in deciding if same_model(cfg.specs[name].model, writer)}
+    return sorted(out)
 
 
 def custom_id(item_id: str) -> str:
