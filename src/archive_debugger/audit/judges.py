@@ -89,11 +89,13 @@ def same_model(a: str, b: str) -> bool:
     return bool(a and b) and (a == b or a.startswith(b + "-") or b.startswith(a + "-"))
 
 
-def writer_conflicts(cfg: PanelConfig, items: list) -> list:
+def writer_conflicts(cfg: PanelConfig, items: list, *, include_escalation: bool = True) -> list:
     """Panel and escalation judges whose model wrote some of these answers. The panel never includes
-    the model that wrote the answers it judges; candidates may, since they decide nothing."""
+    the model that wrote the answers it judges; candidates may, since they decide nothing. A run
+    that never calls the escalation judge (no escalation, no leniency review) does not check it."""
     writers = {it.get("writer_model") for it in items if it.get("writer_model")}
-    return sorted({name for name in list(cfg.judges) + [cfg.escalation]
+    deciding = list(cfg.judges) + ([cfg.escalation] if include_escalation else [])
+    return sorted({name for name in deciding
                    for w in writers if same_model(cfg.specs[name].model, w)})
 
 

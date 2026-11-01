@@ -269,7 +269,7 @@ def main(argv=None) -> int:
         items = items_mod.select_answers(all_items, args.answers, args.seed)
     else:
         items = all_items
-    conflicts = judges.writer_conflicts(cfg, items)
+    conflicts = judges.writer_conflicts(cfg, items, include_escalation=not (args.no_escalation and args.no_review))
     if conflicts:
         raise SystemExit(f"refused: panel or escalation judges {conflicts} use the model that wrote these answers; "
                          "change [panel] in config/audit.toml")
