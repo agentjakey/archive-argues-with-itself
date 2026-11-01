@@ -107,8 +107,17 @@ def cmd_pack(args) -> int:
             keep = [l for l in gzip.decompress(raw).decode("utf-8").splitlines()
                     if (json.loads(l).get("identifier") or json.loads(l).get("item_id")) in members]
             filtered.append(gzip.compress(("\n".join(keep) + "\n").encode("utf-8")))
-        got = compile_job.pack_shard(filtered, db_path, init_db=ingest_db.init_db,
-                                     normalize=lambda conn: normalize.normalize_items(conn, REPO / "config"))
+        def normalize_from_registry(conn):
+            # The corpus normalizer fills issuer, dates and document type; the place is the
+            # registry's (one source of truth, read with the merged rules), never re-guessed here.
+            normalize.normalize_items(conn, REPO / "config")
+            for ident, in conn.execute("SELECT item_id FROM items").fetchall():
+                place, method = registry.execute("SELECT jurisdiction, jurisdiction_method FROM documents WHERE doc_id = ?",
+                                                 (f"ia:{ident}",)).fetchone() or ("unknown", "unknown")
+                conn.execute("UPDATE items SET jurisdiction_norm = ?, jurisdiction_method = ? WHERE item_id = ?",
+                             (place or "unknown", f"registry:{method}", ident))
+            conn.commit()
+        got = compile_job.pack_shard(filtered, db_path, init_db=ingest_db.init_db, normalize=normalize_from_registry)
         summary.append({**s.summary(), **{f"built_{k}": v for k, v in got.items()}})
     (slice_dir(args.slice) / "shards.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(json.dumps([{k: s[k] for k in ("shard_id", "first_year", "last_year", "undated", "built_items", "built_passages")}
