@@ -38,6 +38,7 @@ from archive_debugger.api.coverage import coverage as compute_coverage
 from archive_debugger.eval import store
 from archive_debugger.eval.questions import load_seed
 from archive_debugger.generate.answer import Answer, compose, coverage_of, generation_meta, salient_terms
+from archive_debugger.generate import answer_v2
 from archive_debugger.generate.cli import build_filters, load_generate_config, retrieve_pool, sent_temperature
 from archive_debugger.generate.llm import LLM, AnthropicLLM, make_llm
 from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path
@@ -110,6 +111,17 @@ _EVIDENCE_ONLY_MSG = "the record for this question, without an answer."
 _RESTRICTED_MSG = ("records that match this question are restricted by the authority named below; they are not "
                    "searched, quoted or summarized here.")
 ENV_GOVERNANCE_PATH = "CIVIC_GOVERNANCE_PATH"
+
+
+def collection_bounds(name: str) -> tuple:
+    """(dated window, jurisdictions) from the collection config, for the v2 coverage state; (None,
+    None) when the scope has no collection config."""
+    try:
+        from archive_debugger.audit import collections as audit_collections
+        c = audit_collections.load(name)
+        return tuple(c.period), tuple(c.jurisdictions)
+    except Exception:  # noqa: BLE001 - a scope without an audit config simply has no bounds
+        return None, None
 
 
 def restricted_reach(conn, fts_query: str, item_ids: set) -> set:
@@ -201,8 +213,14 @@ def cache_context(scope: str, data_sha256: dict, retrieve: dict, gcfg: dict, kin
     governance register joins it (its digest), so a changed register never serves an answer stored
     under the old one; an empty register leaves every key as it was."""
     temp = sent_temperature(kind, gcfg)
-    gen = generation_meta(provider=kind, model=model_id, temperature=temp,
-                          max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
+    if gcfg.get("answer_version", "v1") == "v2":
+        # The v2 prompt hash carries ANSWER_VERSION, so no v1 answer is ever served under v2.
+        gen = answer_v2.generation_meta(provider=kind, model=model_id, effort=gcfg.get("effort"),
+                                        max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
+        temp = None
+    else:
+        gen = generation_meta(provider=kind, model=model_id, temperature=temp,
+                              max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
     context = answer_cache.context_hash(scope=scope, data_sha256=data_sha256, retrieve=retrieve,
                                         provider=kind, model=model_id, prompt_sha256=gen["prompt_sha256"],
                                         top_k=gcfg["top_k"], temperature=temp)
@@ -1246,8 +1264,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         kind = req_provider or b.provider or gcfg["provider"]
         model_id = req_model or gcfg["model"]
         temp = sent_temperature(kind, gcfg)
-        gen = generation_meta(provider=kind, model=model_id, temperature=temp,
-                              max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
+        v2 = gcfg.get("answer_version", "v1") == "v2"
+        if v2:
+            gen = answer_v2.generation_meta(provider=kind, model=model_id, effort=gcfg.get("effort"),
+                                            max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
+        else:
+            gen = generation_meta(provider=kind, model=model_id, temperature=temp,
+                                  max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"])
         # The key is content-addressed (api/cache.py): the scope's published data hashes, its
         # retrieve and generation settings, and the normalized question and filters. No path, size
         # or mtime, so a fresh download on an empty disk still hits; no answer crosses scopes.
@@ -1309,6 +1332,7 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             any), no model call, never stored."""
             out = record_only(_RESTRICTED_MSG, pool_rows, [], conn)
             out["governance"] = {"restricted": notices}
+            out["answer"]["state"] = "RESTRICTED"
             return out
 
         if not clean:
@@ -1427,7 +1451,21 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     client = anthropic.Anthropic(timeout=model_budget, max_retries=0)
                     model = AnthropicLLM(model_id, gcfg["max_tokens"], client=client, temperature=temp)
                 verify = functools.partial(citation.verify_citations, pr.conn)
-                ans = compose(clean, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
+                if v2:
+                    if b.llm is not None and isinstance(b.llm, (answer_v2.StubWriter, answer_v2.AnthropicWriter)):
+                        writer = b.llm
+                    elif kind == "stub":
+                        writer = answer_v2.StubWriter(answer_v2.Draft2(sentences=[], evidence_state="insufficient",
+                                                                       state_reason="stub writer"))
+                    else:
+                        writer = answer_v2.AnthropicWriter(model_id, gcfg["max_tokens"], effort=gcfg.get("effort"),
+                                                           timeout=model_budget)
+                    window, jurisdictions = collection_bounds(b.name)
+                    ans = answer_v2.compose_v2(clean, hits, writer, verify, min_passages=gcfg["min_passages"],
+                                               generation=gen, filters=filters, window=window,
+                                               jurisdictions=jurisdictions)
+                else:
+                    ans = compose(clean, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
             except Exception:  # noqa: BLE001 - offline / timeout / provider error -> show the record, not a raw error (N6)
                 _log_timing(b.name, t_ret, time.monotonic() - t_model, "degraded:model_unreachable", len(hits))
                 return degraded("model_unreachable", pool_rows, hits, pr.conn)

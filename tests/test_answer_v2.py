@@ -76,3 +76,21 @@ def test_the_v2_prompt_has_its_own_version():
     assert v2.prompt_material() != v1()
     meta = v2.generation_meta(provider="anthropic", model="m", effort="low", max_tokens=10, top_k=5)
     assert meta["answer_version"] == v2.ANSWER_VERSION and len(meta["prompt_sha256"]) == 64
+
+
+def test_the_engine_serves_v2_states_under_its_own_cache_key(tmp_path):
+    from fastapi.testclient import TestClient
+    from archive_debugger.api.app import create_app
+    from tests.test_api import _retriever
+    cfg = tmp_path / "pilot_v2.toml"
+    text = open("config/pilot.toml", encoding="utf-8").read()
+    lines = [ln + (chr(10) + 'answer_version = "v2"' if ln.strip() == "[generate]" else "") for ln in text.splitlines()]
+    cfg.write_text(chr(10).join(lines) + chr(10), encoding="utf-8")
+    r, _ = _retriever(tmp_path, [("a", 1990, "ontario"), ("b", 1991, "ontario")])
+    writer = v2.StubWriter(draft("conflicting", [("A count.", ["a#0:0"]), ("Another count.", ["b#0:0"])]))
+    app = create_app(cfg, retriever=r, load_env=False, provider="stub", llm=writer, web_dist=tmp_path / "nodist",
+                     cache_path=tmp_path / "cache" / "answers.db")
+    with TestClient(app) as c:
+        body = c.post("/ask", json={"question": "vaccination hospital"}).json()
+    assert body["answer"]["state"] == "CONFLICTING" and writer.calls == 1
+    assert body["answer"]["generation"]["answer_version"] == v2.ANSWER_VERSION

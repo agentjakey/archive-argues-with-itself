@@ -34,6 +34,10 @@ def load_generate_config(config_path: Path) -> dict:
         "temperature": None if temp is None else float(temp),
         "top_k": int(g.get("top_k", 12)),
         "min_passages": int(g.get("min_passages", 3)),
+        # The answer pipeline version: "v1" (frozen baseline, generate/answer.py) or "v2"
+        # (generate/answer_v2.py: evidence states). effort is sent only by v2, to models that take it.
+        "answer_version": str(g.get("answer_version", "v1")),
+        "effort": g.get("effort") or None,
     }
 
 
