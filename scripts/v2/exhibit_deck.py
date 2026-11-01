@@ -43,6 +43,8 @@ WORK = REPO / "reports" / "v2" / "exhibit" / "work"
 PUBLISHED = REPO / "site" / "exhibit"
 AUTHOR_REVIEWS = DECK_SOURCE / "author_reviews.jsonl"
 BUILDER_VERSION = "1"
+# The prompt each draft was written under, stamped on the draft when it is written.
+PROMPT_VERSIONS = {"when": prompts.WHEN_VERSION, "same": prompts.SAME_VERSION, "dial": prompts.DIAL_VERSION}
 
 
 def now() -> str:
@@ -217,7 +219,8 @@ def cmd_draft(args, s: settings.Settings) -> int:
             replies = llm.run_anthropic_batch(chunk, ledger, args.run, args.cap, WORK / f"batch_{args.run}_{n}.json",
                                               what="draft")
             for key, result in replies.items():
-                append_jsonl(WORK / "drafts.jsonl", {"draft_key": key, "meta": meta.get(key), **result, "drafted_at": now()})
+                append_jsonl(WORK / "drafts.jsonl", {"draft_key": key, "meta": meta.get(key), **result, "drafted_at": now(),
+                                                     "prompt_version": PROMPT_VERSIONS[key.split("|")[0]]})
             errors += sum(1 for r in replies.values() if r["error"])
             total += len(replies)
     except BudgetExceeded as exc:
@@ -249,7 +252,11 @@ def redo_keys() -> set:
 
 
 def kept_keys() -> set:
-    """Draft keys of every round the builder kept, to draft again under a new prompt version."""
+    """Draft keys of every round the builder kept whose latest draft was written under an earlier
+    prompt version, to draft again under the current one."""
+    latest_version = {}
+    for r in read_jsonl(WORK / "drafts.jsonl"):
+        latest_version[r["draft_key"]] = r.get("prompt_version")
     keys = set()
     for rnd in read_json(WORK / "checked.json") or []:
         if rnd["status"] == "refused":
@@ -260,7 +267,7 @@ def kept_keys() -> set:
             keys.add(f"when|{rnd['pages'][0]['ref']}")
         else:
             keys.add(f"same|{rnd['pages'][0]['ref']}|{rnd['pages'][1]['ref']}")
-    return keys
+    return {k for k in keys if latest_version.get(k) != PROMPT_VERSIONS[k.split("|")[0]]}
 
 
 def chunks(requests: dict, size: int) -> list:
@@ -284,11 +291,13 @@ def assemble_rounds() -> list:
         if m["mode"] == "when":
             if not d["reply"].get("usable"):
                 continue
-            out.append(rounds.when_round(m["page"], d["reply"], model=d["model"], drafted_at=d["drafted_at"]))
+            out.append(rounds.when_round(m["page"], d["reply"], model=d["model"], drafted_at=d["drafted_at"],
+                                         prompt_version=d["prompt_version"]))
         elif m["mode"] == "same":
             if not d["reply"].get("usable"):
                 continue
-            out.append(rounds.same_round(m["pair"], m["a"], m["b"], d["reply"], model=d["model"], drafted_at=d["drafted_at"]))
+            out.append(rounds.same_round(m["pair"], m["a"], m["b"], d["reply"], model=d["model"], drafted_at=d["drafted_at"],
+                                         prompt_version=d["prompt_version"]))
         elif m["mode"] == "dial":
             dial_steps.setdefault(m["question_id"], []).append((m, d))
     pools = {e["question"]["id"]: e for e in (read_json(WORK / "dial_pools.json") or [])}
@@ -299,7 +308,8 @@ def assemble_rounds() -> list:
                   for m, d in sorted(steps, key=lambda md: md[0]["year"])]
         model = steps[0][1]["model"]
         out.append(rounds.dial_round(entry["question"], entry["pool"], epochs, model=model,
-                                     drafted_at=max(d["drafted_at"] for _, d in steps), extra=entry["extra"]))
+                                     drafted_at=max(d["drafted_at"] for _, d in steps), extra=entry["extra"],
+                                     prompt_version="+".join(sorted({d["prompt_version"] for _, d in steps}))))
     return sorted(out, key=lambda r: r["id"])
 
 

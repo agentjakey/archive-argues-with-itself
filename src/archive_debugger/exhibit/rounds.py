@@ -26,7 +26,7 @@ def _provenance(model: str, prompt_version: str, drafted_at: str) -> dict:
             "draft_kind": "model-drafted", "edits": []}
 
 
-def when_round(page: dict, reply: dict, *, model: str, drafted_at: str) -> dict:
+def when_round(page: dict, reply: dict, *, model: str, drafted_at: str, prompt_version: str = prompts.WHEN_VERSION) -> dict:
     quotes = [{"id": f"c{n}", "page_ref": page["ref"], "role": "clue", "text": text}
               for n, text in enumerate(reply.get("clues") or [], 1)]
     return {
@@ -46,11 +46,12 @@ def when_round(page: dict, reply: dict, *, model: str, drafted_at: str) -> dict:
         "care_flags": [],
         "status": "draft",
         "review": {},
-        "provenance": _provenance(model, prompts.WHEN_VERSION, drafted_at),
+        "provenance": _provenance(model, prompt_version, drafted_at),
     }
 
 
-def same_round(pair: dict, page_a: dict, page_b: dict, reply: dict, *, model: str, drafted_at: str) -> dict:
+def same_round(pair: dict, page_a: dict, page_b: dict, reply: dict, *, model: str, drafted_at: str,
+               prompt_version: str = prompts.SAME_VERSION) -> dict:
     refs = {"A": page_a["ref"], "B": page_b["ref"]}
     quotes = [{"id": "a1", "page_ref": page_a["ref"], "role": "claim", "text": reply.get("quote_a", "")},
               {"id": "b1", "page_ref": page_b["ref"], "role": "claim", "text": reply.get("quote_b", "")}]
@@ -80,11 +81,12 @@ def same_round(pair: dict, page_a: dict, page_b: dict, reply: dict, *, model: st
         "care_flags": [],
         "status": "draft",
         "review": {},
-        "provenance": _provenance(model, prompts.SAME_VERSION, drafted_at),
+        "provenance": _provenance(model, prompt_version, drafted_at),
     }
 
 
-def dial_round(question: dict, pool: list, epochs: list, *, model: str, drafted_at: str, extra: dict) -> dict:
+def dial_round(question: dict, pool: list, epochs: list, *, model: str, drafted_at: str, extra: dict,
+               prompt_version: str = prompts.DIAL_VERSION) -> dict:
     """question: {"id", "en", "fr", "jurisdiction"}; pool: page records with their years; epochs:
     [{"year", "reply", "pages": [page records shown to the writer, in order]}]."""
     quotes, out_epochs = [], []
@@ -117,5 +119,5 @@ def dial_round(question: dict, pool: list, epochs: list, *, model: str, drafted_
         "care_flags": [],
         "status": "draft",
         "review": {},
-        "provenance": _provenance(model, prompts.DIAL_VERSION, drafted_at),
+        "provenance": _provenance(model, prompt_version, drafted_at),
     }

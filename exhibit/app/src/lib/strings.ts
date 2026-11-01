@@ -107,7 +107,7 @@ const en = {
     } as Record<string, string>,
     explain: {
       recorded: (place: string, d: number, idx: number, cat: string) =>
-        `${place}, ${d}s: ${idx} indexed ${idx === 1 ? "item" : "items"} you can search here. The archive's catalogue lists ${cat} items that name ${place} as publisher or creator.`,
+        `${place}, ${d}s: ${idx} ${idx === 1 ? "item is" : "items are"} indexed here, from the collections this exhibit draws on. Separately, Internet Archive Canada's government publications collection holds ${cat} items that name ${place} as publisher or creator.`,
       not_indexed: (place: string, d: number, _idx: number, cat: string) =>
         `${place}, ${d}s: the archive's catalogue lists ${cat} items that name ${place}, but none are indexed here yet. Not indexed is not the same as missing.`,
       quiet_examined: (place: string, d: number) =>
@@ -255,7 +255,7 @@ const fr: Strings = {
     },
     explain: {
       recorded: (place: string, d: number, idx: number, cat: string) =>
-        `${place}, ann\u00e9es ${d} : ${idx} document${idx > 1 ? "s" : ""} index\u00e9${idx > 1 ? "s" : ""} \u00e0 consulter ici. Le catalogue des archives compte ${cat} documents dont l'\u00e9diteur ou l'auteur nomme ${place}.`,
+        `${place}, ann\u00e9es ${d} : ${idx} document${idx > 1 ? "s" : ""} index\u00e9${idx > 1 ? "s" : ""} ici, tir\u00e9${idx > 1 ? "s" : ""} des collections de cette exposition. Par ailleurs, la collection des publications gouvernementales d'Internet Archive Canada compte ${cat} documents dont l'\u00e9diteur ou l'auteur nomme ${place}.`,
       not_indexed: (place: string, d: number, _idx: number, cat: string) =>
         `${place}, ann\u00e9es ${d} : le catalogue des archives compte ${cat} documents qui nomment ${place}, mais aucun n'est encore index\u00e9 ici. Non index\u00e9 ne veut pas dire manquant.`,
       quiet_examined: (place: string, d: number) =>
