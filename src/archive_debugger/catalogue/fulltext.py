@@ -48,9 +48,11 @@ def done_identifiers(manifest: Path) -> set:
     for line in manifest.read_text(encoding="utf-8").splitlines():
         if line.strip():
             try:
-                out.add(json.loads(line)["identifier"])
-            except (ValueError, KeyError):
+                row = json.loads(line)
+            except ValueError:
                 continue          # a line cut short by a stop: the item is fetched again
+            if row.get("kind") != "error":
+                out.add(row["identifier"])      # an item that failed is tried again on the next run
     return out
 
 

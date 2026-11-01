@@ -1,0 +1,25 @@
+# The compile job on the bounded slice (Phase 4 prep): the bc_govpubs sub-collection.
+[job]
+name = "compile-bc_govpubs"
+kind = "compile"
+code_version = "1"
+
+[input]
+prefix = "jobs-input/compile-bc_govpubs"
+
+[output]
+prefix = "jobs"
+
+[model]
+name = "ingest.ocr.build_passages"
+licence = "MIT"
+
+[params]
+target_tokens = 300
+overlap_tokens = 40
+catalogue_key = "catalogue/v1/catalogue.jsonl.gz"
+
+[executor.local]
+
+[executor.k8s]
+gpu = false

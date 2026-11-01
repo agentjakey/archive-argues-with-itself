@@ -34,6 +34,7 @@ def main(argv=None) -> int:
     ap.add_argument("--collection", default=COLLECTION)
     ap.add_argument("--limit", type=int, default=None, help="fulltext: at most this many items this run")
     ap.add_argument("--no-r2", action="store_true", help="fulltext: keep files locally only")
+    ap.add_argument("--ids", type=Path, default=None, help="fulltext: only these identifiers (one per line), first")
     args = ap.parse_args(argv)
     if args.command == "fetch":
         index = fetch.fetch_catalogue(f"collection:{args.collection}", CACHE)
@@ -63,7 +64,10 @@ def main(argv=None) -> int:
         from archive_debugger.catalogue import fulltext
         idents = [r["identifier"] for r in fetch.records(CACHE)
                   if (r.get("mediatype") or "texts") == "texts"]
-        counts = fulltext.run(sorted(set(idents)), REPO / "data" / "fulltext",
+        if args.ids:
+            wanted = [l.strip() for l in args.ids.read_text(encoding="utf-8").splitlines() if l.strip()]
+            idents = [i for i in wanted if i in set(idents)]
+        counts = fulltext.run(idents if args.ids else sorted(set(idents)), REPO / "data" / "fulltext",
                               store=None if args.no_r2 else R2Store(), stop_after=args.limit)
         print(json.dumps(counts))
         return 1 if counts.get("stopped") else 0

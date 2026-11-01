@@ -124,6 +124,8 @@ def pack_shard(unit_files: list, db_path: Path, *, init_db: Callable, normalize:
     for raw in unit_files:
         items, pages, passages = {}, {}, {}
         for line in gzip.decompress(raw).decode("utf-8").splitlines():
+            if not line.strip():
+                continue
             row = json.loads(line)
             if row["kind"] == "item":
                 items[row["identifier"]] = row["record"]
