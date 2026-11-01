@@ -55,7 +55,11 @@ def measure_text(raw: str) -> dict:
     buckets = {"high": 0, "medium": 0, "low": 0}
     for ch in passages:
         buckets[ocr.quality_bucket(ocr.ocr_quality(ch["text"]))] += 1
+    # archive.org's public _djvu.txt carries no page breaks (measured: none in any sampled file), so
+    # "text_pages" is 1 and the passages here are chunks of the whole item; size_collection.py
+    # estimates passages from words and from scanned pages instead.
     return {"text_pages": len(pages), "pages_with_text": len(with_text), "ocr_bytes": len(raw.encode("utf-8")),
+            "words": len(raw.split()),
             "passages": len(passages), "passage_quality": buckets,
             "passage_words": sum(ch["token_count"] for ch in passages)}
 

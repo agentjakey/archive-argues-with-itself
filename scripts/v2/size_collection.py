@@ -34,8 +34,10 @@ spec.loader.exec_module(cost_estimate)
 
 SIZING = REPO / "reports" / "v2" / "sizing"
 # Measured on the two built collections (docs/v2/COST_BASELINE.md sections 5 and 9).
-BUILT = {"pilot": {"passages": 745_893, "wake_bytes": 3_051_933_033, "anon_mib": 1_946},
-         "microlog": {"passages": 1_136_827, "wake_bytes": 4_704_823_566, "anon_mib": 2_593}}
+BUILT = {"pilot": {"passages": 745_893, "wake_bytes": 3_051_933_033, "anon_mib": 1_946,
+                   "scanned_pages": 469_869, "mean_words_per_passage": 215.3},
+         "microlog": {"passages": 1_136_827, "wake_bytes": 4_704_823_566, "anon_mib": 2_593,
+                      "scanned_pages": 775_996, "mean_words_per_passage": 202.1}}
 IMAGE_BYTES = 1_180_000_000
 DISK_HEADROOM = 500_000_000
 MEMORY_USABLE = 0.85                 # share of an instance's memory the index may use
@@ -83,9 +85,15 @@ def main(argv=None) -> int:
     population = summary["identifiers"]
     measured = [r for r in rows if not r.get("metadata_error")]
     texts = [r for r in measured if r.get("has_djvutxt") and r.get("passages") is not None]
-    passages = [r.get("passages", 0) if r.get("has_djvutxt") else 0 for r in measured]
-    usable = [(r["passage_quality"]["high"] + r["passage_quality"]["medium"]) if r.get("has_djvutxt") and r.get("passage_quality") else 0
-              for r in measured]
+    # Passages as the corpus build would cut them, two ways (the public text has no page breaks):
+    # by words, at the built corpora's words per passage; by scanned pages, at their passages per page.
+    per_page = [v["passages"] / v["scanned_pages"] for v in BUILT.values()]
+    per_words = [v["mean_words_per_passage"] for v in BUILT.values()]
+    by_words = [r.get("words", 0) / statistics.fmean(per_words) if r.get("has_djvutxt") else 0 for r in measured]
+    by_pages = [(r["imagecount"] or 0) * statistics.fmean(per_page) if r.get("has_djvutxt") else 0 for r in measured]
+    share_usable = [(r["passage_quality"]["high"] + r["passage_quality"]["medium"]) / max(1, r["passages"])
+                    for r in texts if r.get("passage_quality")]
+    usable_share = sum(share_usable) / len(share_usable) if share_usable else None
     pages = [r["imagecount"] or 0 for r in measured]
     ocr_bytes = [r.get("ocr_bytes", 0) if r.get("has_djvutxt") else 0 for r in measured]
 
@@ -93,9 +101,12 @@ def main(argv=None) -> int:
     disk_low, disk_high = disk_per_passage()
     totals = {"pages": bootstrap_total(pages, population, args.resamples, rng),
               "ocr_bytes": bootstrap_total(ocr_bytes, population, args.resamples, rng),
-              "passages": bootstrap_total(passages, population, args.resamples, rng),
-              "usable_passages": bootstrap_total(usable, population, args.resamples, rng)}
-    p_total, (p_low, p_high) = totals["passages"]["total"], totals["passages"]["total95"]
+              "passages_by_words": bootstrap_total(by_words, population, args.resamples, rng),
+              "passages_by_pages": bootstrap_total(by_pages, population, args.resamples, rng),
+              "words": bootstrap_total([r.get("words", 0) if r.get("has_djvutxt") else 0 for r in measured],
+                                       population, args.resamples, rng)}
+    p_low = min(totals["passages_by_words"]["total95"][0], totals["passages_by_pages"]["total95"][0])
+    p_high = max(totals["passages_by_words"]["total95"][1], totals["passages_by_pages"]["total95"][1])
     out = {
         "population_items": population, "sample": len(rows), "measured": len(measured), "with_text": len(texts),
         "metadata_errors": len(rows) - len(measured), "download_errors": sum(1 for r in rows if r.get("download_error")),
@@ -103,9 +114,11 @@ def main(argv=None) -> int:
         "no_ocr_text_share": round(sum(1 for r in measured if not r.get("has_djvutxt")) / len(measured), 4),
         "languages": dict(Counter(l for r in measured for l in r["languages"]).most_common(8)),
         "totals": totals,
-        "passages_per_page": round(sum(passages) / max(1, sum(r.get("pages_with_text", 0) for r in texts)), 3),
-        "ocr_bytes_per_page": round(sum(ocr_bytes) / max(1, sum(r.get("text_pages", 0) for r in texts)), 1),
-        "usable_passage_share": round(sum(usable) / max(1, sum(passages)), 4),
+        "passages_range95": [p_low, p_high],
+        "passages_per_scanned_page_built": [round(x, 3) for x in per_page],
+        "ocr_bytes_per_scanned_page": round(sum(ocr_bytes) / max(1, sum(r["imagecount"] or 0 for r in texts)), 1),
+        "usable_passage_share": round(usable_share, 4) if usable_share is not None else None,
+        "usable_note": "share of 300-word chunks of each item's whole text scoring medium or high OCR quality",
         "per_passage": {"memory_bytes": round(mem_slope), "memory_base_bytes": round(base),
                         "disk_bytes": [round(disk_low), round(disk_high)]},
         "whole_collection": {
@@ -127,10 +140,10 @@ def main(argv=None) -> int:
     for r in measured:
         for c in r.get("collections") or []:
             if c not in ("governmentpublications",):
-                sub[c] += r.get("passages", 0) if r.get("has_djvutxt") else 0
+                sub[c] += (r.get("words", 0) / statistics.fmean(per_words)) if r.get("has_djvutxt") else 0
     biggest = max(cost_estimate.INSTANCES, key=lambda i: cost_estimate.INSTANCES[i][1])
     big_cap = capacity(biggest, base, mem_slope, disk_high)
-    out["sub_collections"] = [{"collection": c, "sample_passages": n,
+    out["sub_collections"] = [{"collection": c, "sample_passages_by_words": round(n),
                                "estimated_passages": round(n / len(measured) * population),
                                "fits_one_" + biggest: round(n / len(measured) * population) <= big_cap}
                               for c, n in sub.most_common(15)]
