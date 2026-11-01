@@ -4,6 +4,7 @@
   write     the records, checked against their page checksums, into catalogue.jsonl.gz
   upload    the raw pages, the catalogue and their checksums to the private R2 bucket
   fulltext  every item's OCR text, page by page, to data/fulltext and R2 (resumes; polite)
+  browse    the registry as static files for the site's /catalogue/ page (build/catalogue-data)
 
     python scripts/v2/catalogue.py fetch
     python scripts/v2/catalogue.py write
@@ -29,7 +30,7 @@ R2_PREFIX = "catalogue/v1"
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["fetch", "write", "upload", "fulltext"])
+    ap.add_argument("command", choices=["fetch", "write", "upload", "fulltext", "browse"])
     ap.add_argument("--collection", default=COLLECTION)
     ap.add_argument("--limit", type=int, default=None, help="fulltext: at most this many items this run")
     ap.add_argument("--no-r2", action="store_true", help="fulltext: keep files locally only")
@@ -41,6 +42,19 @@ def main(argv=None) -> int:
         return 0 if index["complete"] else 1
     if args.command == "write":
         print(json.dumps(fetch.write_catalogue(CACHE, OUT)))
+        return 0
+    if args.command == "browse":
+        import sqlite3
+        from archive_debugger.catalogue import browse
+        index = json.loads((CACHE / "pages.json").read_text(encoding="utf-8"))
+        note = {"fetched_at": index["pages"][-1]["fetched_at"], "text": (
+            f"The list comes from the Internet Archive's catalogue of the {args.collection} collection "
+            f"({sum(p['items'] for p in index['pages']):,} records, fetched {index['pages'][-1]['fetched_at'][:10]} with "
+            "its public scrape API), plus the items this site indexes from other collections. Places and issuers "
+            "are read from each record's publisher and creator by the site's rules; a place we could not read is "
+            "shown as unknown. A year read from a title is shown as such, never as the catalogue's date.")}
+        print(json.dumps(browse.export(sqlite3.connect(REPO / "data" / "registry" / "registry.db"),
+                                       REPO / "build" / "catalogue-data", source_note=note)))
         return 0
     from archive_debugger.local_env import load_local_env
     from archive_debugger.jobs.store import R2Store

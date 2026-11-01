@@ -44,6 +44,8 @@ def main(argv=None) -> int:
     ap.add_argument("--catalogue", type=Path, default=None)
     ap.add_argument("--source-collection", default="governmentpublications")
     ap.add_argument("--indexed", default="", help="collections (config/collections) to add as indexed corpora")
+    ap.add_argument("--documents-only", action="store_true", help="indexed corpora: documents and coverage, not pages and passages")
+    ap.add_argument("--fulltext", type=Path, default=None, help="the full-text fetch's manifest.jsonl: text versions and coverage")
     args = ap.parse_args(argv)
     args.db.parent.mkdir(parents=True, exist_ok=True)
     conn = build.open_registry(args.db)
@@ -57,7 +59,24 @@ def main(argv=None) -> int:
             from archive_debugger.local_env import load_local_env
             load_local_env(log=None)
             coll = collections.load(name)
-            print(name, build.add_indexed(conn, corpus_connection(coll), coll.scope))
+            print(name, build.add_indexed(conn, corpus_connection(coll), coll.scope,
+                                               with_passages=not args.documents_only))
+        if args.fulltext:
+            n = 0
+            for line in args.fulltext.read_text(encoding="utf-8").splitlines():
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                text = (rec.get("files") or {}).get("searchtext") or (rec.get("files") or {}).get("djvu_txt")
+                if rec.get("kind") in ("hocr", "searchtext_only", "djvu_txt") and text:
+                    build.add_text(conn, rec["identifier"], store_key=text.get("r2_key") or "", sha256=text["sha256"],
+                                   size=text["bytes"], source_url=f"https://archive.org/download/{rec['identifier']}/{text['name']}",
+                                   page_breaks=rec["kind"] == "hocr" and "page_numbers" in rec["files"], fetched_at=rec["at"])
+                    n += 1
+            build.audit(conn, "add_text", str(args.fulltext), {"versions": n})
+            conn.commit()
+            print("fulltext", n)
         print("governance", build.add_governance(conn, REGISTER))
     print(json.dumps(stats(conn), indent=1))
     return 0

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Every item in Internet Archive Canada's government publications collection, by year, place, issuer and sub-collection, with what this project holds of each.">
+<title>Catalogue - The Archive Argues With Itself</title>
+<link rel="stylesheet" href="catalogue.css">
+<script type="module" src="catalogue.js"></script>
+</head>
+<body>
+<a class="skip" href="#results">Skip to the results</a>
+<header>
+  <p class="crumb"><a href="/">The Archive Argues With Itself</a></p>
+  <h1>Catalogue</h1>
+  <p class="lede">Every item in Internet Archive Canada's government publications collection, and the other items this site has indexed. Every one is at least <strong>known</strong>: its catalogue record is here even when its text is not searchable yet.</p>
+</header>
+<main>
+  <section aria-labelledby="states-h">
+    <h2 id="states-h">What each label means</h2>
+    <dl class="states">
+      <div><dt><span class="badge known">Known</span></dt><dd>The catalogue record is here. Its text is not searchable on this site yet.</dd></div>
+      <div><dt><span class="badge text_fetched">Text fetched</span></dt><dd>Its scanned text has been copied for indexing, but not yet indexed.</dd></div>
+      <div><dt><span class="badge indexed">Indexed</span></dt><dd>Its text is searchable here, and answers can cite its pages.</dd></div>
+    </dl>
+    <p id="totals" class="note" aria-live="polite">Loading the catalogue...</p>
+  </section>
+  <section aria-labelledby="find-h">
+    <h2 id="find-h">Find documents</h2>
+    <form id="filters" class="filters">
+      <label>Decade <select id="decade"></select></label>
+      <label>Place <select id="place"><option value="">Any place</option></select></label>
+      <label>Coverage <select id="state">
+        <option value="">Any</option>
+        <option value="indexed">Indexed</option>
+        <option value="text_fetched">Text fetched</option>
+        <option value="known">Known only</option>
+      </select></label>
+      <label>Sub-collection <select id="collection"><option value="">Any</option></select></label>
+      <label class="wide">Title or issuer contains <input id="text" type="search" autocomplete="off"></label>
+    </form>
+    <p id="count" class="note" aria-live="polite"></p>
+    <ol id="results" class="results" tabindex="-1"></ol>
+    <button id="more" type="button" hidden>Show more</button>
+  </section>
+  <section aria-labelledby="method-h">
+    <h2 id="method-h">How this list was made</h2>
+    <p id="method" class="note"></p>
+  </section>
+</main>
+<footer><p><a href="/?view=privacy">Privacy</a> . <a href="/?view=accessibility">Accessibility</a> . <a href="/">Ask the archive</a></p></footer>
+</body>
+</html>

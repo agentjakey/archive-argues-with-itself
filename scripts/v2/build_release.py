@@ -100,7 +100,8 @@ def empty_folder(folder: Path) -> None:
             child.unlink()
 
 def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, api_origin: str,
-             exhibit_app: Path | None = None, exhibit_deck: Path | None = None) -> Path:
+             exhibit_app: Path | None = None, exhibit_deck: Path | None = None,
+             catalogue_page: Path | None = None, catalogue_data: Path | None = None) -> Path:
     if not (web / "index.html").exists():
         raise SystemExit(f"{web} has no index.html: build the web app first (npm run build:static)")
     if not (data / "export.json").exists():
@@ -132,6 +133,10 @@ def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, ap
         sys.path.insert(0, str(REPO / "src"))
         from archive_debugger.exhibit.release import assemble_exhibit
         exhibit = assemble_exhibit(exhibit_app, exhibit_deck, out)
+    if catalogue_page is not None and catalogue_data is not None:
+        # The catalogue browser: a static page and the registry's compiled files (catalogue/data/).
+        shutil.copytree(catalogue_page, out / "catalogue", dirs_exist_ok=True)
+        shutil.copytree(catalogue_data, out / "catalogue" / "data", dirs_exist_ok=True)
     export = json.loads((data / "export.json").read_text(encoding="utf-8"))
     manifest = {
         "release_id": release_id,
@@ -199,6 +204,7 @@ def gate(release: Path, allow_missing_path: Path) -> list[str]:
             problems.append(f"{path.relative_to(REPO).as_posix()}: renders raw HTML")
 
     problems += site_file_problems(release)
+    problems += catalogue_problems(release)
 
     from archive_debugger.exhibit import settings as exhibit_settings
     from archive_debugger.exhibit.release import exhibit_problems
@@ -279,6 +285,32 @@ def gate(release: Path, allow_missing_path: Path) -> list[str]:
             for note in editorial.notes_for_answer(notes, scope, entry["question"], cached=True):
                 if note["id"] not in {n["id"] for n in response.get("editorial_notes") or []}:
                     problems.append(f"{scope} {label}: dated note {note['id']} is not attached")
+    return problems
+
+
+def catalogue_problems(release: Path) -> list[str]:
+    """The catalogue browser, when present: its summary names every decade file with its sha256, and
+    every row names an archive.org identifier and at least the "known" coverage state."""
+    root = release / "catalogue"
+    if not root.exists():
+        return []
+    problems = []
+    summary_path = root / "data" / "summary.json"
+    if not (root / "index.html").exists() or not summary_path.exists():
+        return ["catalogue: index.html or data/summary.json is missing"]
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    total = 0
+    for key, meta in summary["decades"].items():
+        path = root / "data" / "decades" / f"{key}.json"
+        if not path.exists() or sha256_file(path) != meta["sha256"]:
+            problems.append(f"catalogue: decades/{key}.json is missing or not the file the summary names")
+            continue
+        rows = json.loads(path.read_text(encoding="utf-8"))
+        total += len(rows)
+        if any(not r.get("id") or "known" not in [s.split(":")[0] for s in r.get("s") or []] for r in rows):
+            problems.append(f"catalogue: decades/{key}.json has a row without an identifier or the known state")
+    if total != summary["documents"]:
+        problems.append(f"catalogue: {total} rows, the summary says {summary['documents']}")
     return problems
 
 
@@ -420,6 +452,8 @@ def main(argv=None) -> int:
     a.add_argument("--api-origin", required=True, help="the engine Worker, e.g. https://api.archiveargues.org")
     a.add_argument("--exhibit-app", type=Path, default=None, help="the built exhibit app (build/exhibit-app)")
     a.add_argument("--exhibit-deck", type=Path, default=None, help="the published deck (site/exhibit/deck.json)")
+    a.add_argument("--catalogue-page", type=Path, default=None, help="the catalogue browser page (site/catalogue)")
+    a.add_argument("--catalogue-data", type=Path, default=None, help="its compiled files (build/catalogue-data)")
     g = sub.add_parser("gate")
     g.add_argument("--release", type=Path, default=REPO / "build" / "release")
     g.add_argument("--allow-missing", type=Path, default=REPO / "config" / "release_allow_missing.json")
@@ -434,7 +468,7 @@ def main(argv=None) -> int:
 
     if args.command == "assemble":
         assemble(args.release_id, args.web, args.data, args.static, args.out, args.api_origin,
-                 args.exhibit_app, args.exhibit_deck)
+                 args.exhibit_app, args.exhibit_deck, args.catalogue_page, args.catalogue_data)
         return 0
     if args.command == "gate":
         problems = gate(args.release, args.allow_missing)

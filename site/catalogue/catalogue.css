@@ -1,0 +1,23 @@
+:root { --bg: #fbfaf7; --fg: #1d1d1b; --muted: #55534d; --line: #d9d5cb; --accent: #7a3e00; --known: #e9e5da; --fetched: #d8e6f4; --indexed: #d6efd8; }
+@media (prefers-color-scheme: dark) { :root { --bg: #141412; --fg: #f1efe8; --muted: #c4c0b4; --line: #3c3a35; --accent: #ffb366; --known: #33312c; --fetched: #1f3347; --indexed: #1f3d25; } }
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 70rem; padding: 0 16px 3rem; background: var(--bg); color: var(--fg); font: 1rem/1.5 system-ui, "Segoe UI", sans-serif; }
+a { color: var(--accent); }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.skip { position: absolute; left: -999px; } .skip:focus { left: 16px; top: 8px; background: var(--bg); padding: 4px 8px; }
+.crumb { margin: 1rem 0 0; } h1 { margin: 0.2rem 0; } .lede { color: var(--muted); max-width: 48rem; }
+.note { color: var(--muted); }
+.states { display: grid; gap: 0.4rem; } .states div { display: flex; gap: 0.8rem; align-items: baseline; } .states dt { min-width: 8rem; } .states dd { margin: 0; }
+.filters { display: flex; flex-wrap: wrap; gap: 0.8rem 1.2rem; align-items: end; }
+.filters label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9rem; }
+.filters .wide { flex: 1 1 16rem; }
+select, input { font: inherit; padding: 0.35rem 0.5rem; min-height: 2.6rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); max-width: 100%; }
+.results { list-style: none; padding: 0; margin: 1rem 0; }
+.doc { border-top: 1px solid var(--line); padding: 0.6rem 0; }
+.meta { margin: 0.2rem 0; color: var(--muted); display: flex; flex-wrap: wrap; gap: 0 1rem; font-size: 0.9rem; }
+.badges { margin: 0; display: flex; gap: 0.5rem; flex-wrap: wrap; font-size: 0.85rem; }
+.badge { border: 1px solid var(--line); border-radius: 999px; padding: 0 0.6rem; }
+.badge.known { background: var(--known); } .badge.text_fetched { background: var(--fetched); } .badge.indexed { background: var(--indexed); font-weight: 600; }
+.scope { color: var(--muted); }
+button { font: inherit; min-height: 2.6rem; padding: 0.3rem 1rem; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+footer { border-top: 1px solid var(--line); margin-top: 2rem; color: var(--muted); }

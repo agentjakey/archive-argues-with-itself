@@ -126,7 +126,7 @@ def add_catalogue(conn: sqlite3.Connection, records: Iterable[dict], *, source_c
     return counts
 
 
-def add_indexed(conn: sqlite3.Connection, corpus: sqlite3.Connection, scope: str) -> dict:
+def add_indexed(conn: sqlite3.Connection, corpus: sqlite3.Connection, scope: str, *, with_passages: bool = True) -> dict:
     """An indexed corpus. Its passage ids are kept exactly; a document the catalogue fetch did not
     list (it may live in another collection) is added from the corpus's own catalogue columns."""
     seen = now()
@@ -154,6 +154,10 @@ def add_indexed(conn: sqlite3.Connection, corpus: sqlite3.Connection, scope: str
             counts["new_documents"] += 1
         conn.execute("INSERT OR IGNORE INTO coverage VALUES (?, 'indexed', ?, ?)", (did, scope, seen))
         counts["documents"] += 1
+    if not with_passages:
+        audit(conn, "add_indexed", f"scope:{scope}", {**counts, "documents_only": True})
+        conn.commit()
+        return counts
     vids = {}
     for p in corpus.execute("SELECT item_id, leaf_index, printed_page, ocr_conf_mean FROM pages"):
         pid = page_id(p["item_id"], p["leaf_index"])
