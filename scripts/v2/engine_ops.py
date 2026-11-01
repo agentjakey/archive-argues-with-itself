@@ -114,7 +114,13 @@ def wait_release(api: str, release: str, timeout: float) -> bool:
 def wake(api: str, scope: str | None, timeout: float) -> bool:
     url = f"{api.rstrip('/')}/admin/wake" + (f"?scope={scope}" if scope else "")
     t0 = time.monotonic()
-    status, _, body = request("POST", url, token=read_token())
+    try:
+        status, _, body = request("POST", url, token=read_token(), timeout=180)
+    except (TimeoutError, urllib.error.URLError, OSError) as exc:
+        # The first start of a new image can hold the reply; the wake has usually begun, so poll.
+        print(f"/admin/wake gave no reply ({exc}); polling /health")
+        status, body = 202, {"engines": [{"name": e.get("name"), "status": e.get("status")} for e in health(api).get("engines", [])
+                                         if not scope or e.get("name") == scope]}
     if status != 202:
         print(f"FAIL: /admin/wake answered {status} {body.get('error', '')}")
         return False
