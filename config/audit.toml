@@ -6,7 +6,7 @@
 [panel]
 judges = ["claude-haiku-4-5", "gpt-oss-120b"]
 escalation = "claude-sonnet-5-5"
-candidates = ["deepseek-v4-flash", "kimi-k2.6"]
+candidates = ["deepseek-v4-flash"]   # kimi-k2.6 dropped after probe-1: eight times the cost, slow, a third of replies cut off
 
 [judges.claude-haiku-4-5]
 provider = "anthropic"
