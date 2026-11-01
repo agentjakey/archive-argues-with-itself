@@ -43,7 +43,14 @@ export interface Filters {
   jurisdiction?: Jurisdiction;
   doc_type?: DocType;
   min_ocr?: number;
+  issuer?: string;       // the catalogue's normalized issuer, matched exactly
+  year_from?: string;    // catalogue year bounds, inclusive; dated items only
+  year_to?: string;
+  as_of_year?: string;   // what the record held by that year
 }
+
+/** The filters that travel in a URL and a query string, in one order everywhere. */
+export const FILTER_KEYS = ["period", "jurisdiction", "doc_type", "issuer", "year_from", "year_to", "as_of_year"] as const;
 
 export interface AskRequest {
   question: string;

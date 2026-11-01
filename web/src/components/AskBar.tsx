@@ -109,10 +109,53 @@ export function AskBar({ question, filters, busy, kiosk, scope, onQuestion, onFi
               <Select label="Jurisdiction" value={filters.jurisdiction ?? ""} options={JURISDICTIONS} onChange={(v) => set("jurisdiction", v)} disabled={busy} />
               <Select label="Document type" value={filters.doc_type ?? ""} options={DOC_TYPES} onChange={(v) => set("doc_type", v)} disabled={busy} />
             </div>
+            <div className="mt-2 flex flex-col min-[700px]:flex-row gap-2">
+              <YearInput label="From year" value={filters.year_from ?? ""} onChange={(v) => set("year_from", v)} disabled={busy} />
+              <YearInput label="To year" value={filters.year_to ?? ""} onChange={(v) => set("year_to", v)} disabled={busy} />
+              <YearInput label="As of year" value={filters.as_of_year ?? ""} onChange={(v) => set("as_of_year", v)} disabled={busy} />
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              Years use the catalogue date, so a year filter leaves out undated documents.
+            </p>
           </details>
         )}
       </form>
     </section>
+  );
+}
+
+interface YearInputProps {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}
+
+/** A four-digit year. Only a complete year (or nothing) is passed up, so a half-typed year never
+ *  reaches the engine, which would refuse it. */
+function YearInput({ label, value, onChange, disabled }: YearInputProps) {
+  const id = `year-${label.toLowerCase().replace(/\s+/g, "-")}`;
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <label htmlFor={id} className="flex items-center gap-2 text-sm text-muted">
+      {label}
+      <input
+        id={id}
+        className="w-20 border border-rule bg-sheet px-2 rounded-sm text-ink font-sans"
+        inputMode="numeric"
+        pattern="[0-9]{4}"
+        maxLength={4}
+        placeholder="any"
+        value={draft}
+        onChange={(e) => {
+          const next = e.target.value.replace(/[^0-9]/g, "").slice(0, 4);
+          setDraft(next);
+          if (next === "" || next.length === 4) onChange(next);
+        }}
+        disabled={disabled}
+      />
+    </label>
   );
 }
 

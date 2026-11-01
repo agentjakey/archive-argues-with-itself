@@ -1,4 +1,4 @@
-import type { Filters } from "../types";
+import { FILTER_KEYS, type Filters } from "../types";
 
 // The URL is the app's state: q + filters on ask, pins=a,b on pin, kiosk preserved,
 // view=how|gaps|about for the reading pages.
@@ -43,7 +43,6 @@ export interface UrlState {
   scope?: string;   // the active corpus; absent means the pilot default (byte-identical URL)
 }
 
-const FILTER_KEYS = ["period", "jurisdiction", "doc_type"] as const;
 
 export function readState(search: string): UrlState {
   const p = new URLSearchParams(search);

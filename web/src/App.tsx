@@ -48,6 +48,7 @@ import { PROVINCE_SLUGS } from "./lib/coverage";
 import { periodOfRow, pickDecadeRows } from "./lib/timeline";
 import { plural } from "./lib/format";
 import type { Comparability, EditorialNote, EvidenceRow, Example, Filters, Flagged, Period, Story } from "./types";
+import { FILTER_KEYS } from "./types";
 import { askedQuestion, attractStories, galleryStories, heroStory } from "./lib/stories";
 
 export default function App() {
@@ -340,7 +341,7 @@ export default function App() {
       const params = new URLSearchParams();
       if (name && name !== def) params.set("scope", name);
       if (text) params.set("q", text);
-      for (const k of ["period", "jurisdiction", "doc_type"] as const) {
+      for (const k of FILTER_KEYS) {
         const v = (f as Record<string, string | undefined>)[k];
         if (v) params.set(k, v);
       }

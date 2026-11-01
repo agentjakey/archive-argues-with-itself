@@ -14,4 +14,10 @@ describe("url state", () => {
     expect(readState("?period=&q=x").filters).toEqual({});
     expect(writeState({ q: "", filters: {}, pins: [], kiosk: false })).toBe("");
   });
+  it("round-trips the year and issuer filters", () => {
+    const s = { q: "x", filters: { year_from: "1974", as_of_year: "1999", issuer: "Alberta Health" }, pins: [], kiosk: false };
+    const search = writeState(s);
+    expect(search).toContain("year_from=1974");
+    expect(readState(search)).toEqual(s);
+  });
 });

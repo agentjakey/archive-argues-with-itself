@@ -10,6 +10,7 @@ import type {
   ScopesResponse,
   Story,
 } from "../types";
+import { FILTER_KEYS } from "../types";
 import { API_BASE, staticMode } from "./config";
 import * as shards from "./staticData";
 import { turnstileResult, type TokenFailure } from "./turnstile";
@@ -250,7 +251,7 @@ export async function coverage(q: string, filters: Filters): Promise<CoverageRes
     if (recorded) return recorded;
   }
   const p = new URLSearchParams({ q });
-  for (const k of ["period", "jurisdiction", "doc_type"] as const) {
+  for (const k of FILTER_KEYS) {
     const v = filters[k];
     if (v) p.set(k, v);
   }
