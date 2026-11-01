@@ -12,7 +12,7 @@
 # were written in; entries from before that are Phase 2. Phase 2's cap covers the $5.75 spent before
 # the close-out. Change `phase` when a phase starts.
 [budget]
-phase = "phase2"
+phase = "phase3"
 
 [budget.caps]
 phase2 = 60.00
