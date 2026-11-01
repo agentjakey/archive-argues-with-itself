@@ -224,3 +224,39 @@ def read_catalogue(path: Path) -> Iterable[dict]:
         for line in fh:
             if line.strip():
                 yield json.loads(line)
+
+
+def add_source_records(conn: sqlite3.Connection, records: Iterable, *, collection: str) -> dict:
+    """Second-source records (sources.adapter.SourceRecord), each a document of its own archive, with
+    the publication date the page states (kind "derived", with its evidence) and the archive's
+    capture date (kind "capture") in separate rows. Records that break the contract are not stored."""
+    seen = now()
+    counts = {"stored": 0, "refused": 0}
+    for rec in records:
+        if rec.problems():
+            counts["refused"] += 1
+            continue
+        archive = rec.archive
+        conn.execute("INSERT OR IGNORE INTO archives VALUES (?, ?, ?)", (archive, "Wayback Machine", "https://web.archive.org"))
+        coll = f"{archive}:{collection}"
+        conn.execute("INSERT OR IGNORE INTO collections VALUES (?, ?, ?, 'source')", (coll, archive, collection))
+        did = f"{archive}:{rec.identifier}"
+        conn.execute("INSERT OR REPLACE INTO documents VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,"
+                     "COALESCE((SELECT first_seen FROM documents WHERE doc_id = ?), ?))",
+                     (did, archive, rec.identifier, rec.title, None, None, None, "web", None, None, "unknown", None,
+                      "unknown", rec.text_sha256, did, seen))
+        conn.execute("INSERT OR IGNORE INTO document_collections VALUES (?, ?)", (did, coll))
+        conn.execute("INSERT OR REPLACE INTO licences VALUES (?, NULL, NULL, ?)", (did, rec.licence))
+        conn.execute("INSERT OR REPLACE INTO dates VALUES (?, 'capture', ?, ?, ?, ?)",
+                     (did, rec.capture.value, rec.capture.year, rec.capture.method, rec.capture.evidence))
+        if rec.publication.year is not None:
+            conn.execute("INSERT OR REPLACE INTO dates VALUES (?, 'derived', ?, ?, ?, ?)",
+                         (did, rec.publication.value, rec.publication.year, rec.publication.method, rec.publication.evidence))
+        conn.execute("INSERT OR IGNORE INTO locators VALUES (?, NULL, 'capture', ?)", (did, rec.locator))
+        if rec.original_url:
+            conn.execute("INSERT OR IGNORE INTO locators VALUES (?, NULL, 'original', ?)", (did, rec.original_url))
+        conn.execute("INSERT OR IGNORE INTO coverage VALUES (?, 'known', '', ?)", (did, seen))
+        counts["stored"] += 1
+    audit(conn, "add_source_records", collection, counts)
+    conn.commit()
+    return counts
