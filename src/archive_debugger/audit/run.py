@@ -50,7 +50,7 @@ def good_judgments(path: Path) -> dict:
     last record for a pair wins."""
     out = {}
     for rec in read_jsonl(path):
-        if rec.get("prompt_version") == prompts.PROMPT_VERSION and rec.get("verdicts"):
+        if rec.get("prompt_version") == prompts.version_for(rec.get("kind") or "sentence") and rec.get("verdicts"):
             out[(rec["item_id"], rec["judge"])] = rec
     return out
 
@@ -105,7 +105,7 @@ def check_items(items: list, check: str) -> list:
 def report(run_id: str, run_dir: Path, items: list, labels: dict, gate_rows: dict, cfg: judges.PanelConfig,
            ledger: Ledger, decisions: list, lenient: dict, review_ids: list) -> dict:
     judgments = read_jsonl(run_dir / "judgments.jsonl")
-    current = [j for j in judgments if j.get("prompt_version") == prompts.PROMPT_VERSION]
+    current = [j for j in judgments if j.get("prompt_version") == prompts.version_for(j.get("kind") or "sentence")]
     ids = {it["item_id"] for it in items}
     sentences = [it for it in items if prompts.kind_of(it) == "sentence"]
     by_judge: dict = {}
@@ -137,13 +137,14 @@ def report(run_id: str, run_dir: Path, items: list, labels: dict, gate_rows: dic
     panel_usd = sum(per_judge[n]["usd"] for n in list(cfg.judges) + [cfg.escalation] if n in per_judge)
     by_id = {d["item_id"]: d for d in decisions}
     finals, routes = {}, {}
-    for c in prompts.CHECKS:
+    for c in [c for c in prompts.ALL_CHECKS if check_items(items, c)]:
         ds = [by_id[it["item_id"]] for it in check_items(items, c)]
         finals[c] = dict(Counter((d["checks"][c]["final"] or "human") for d in ds))
         routes[c] = dict(Counter(d["checks"][c]["route"] for d in ds))
     panel_supports = {d["item_id"]: d["checks"]["supports"]["final"] for d in decisions if "supports" in d["checks"]}
     return {
-        "run_id": run_id, "prompt_version": prompts.PROMPT_VERSION, "gate_version": gates.GATE_VERSION,
+        "run_id": run_id, "prompt_version": prompts.PROMPT_VERSION,
+        "benchmark_prompt_version": prompts.BENCHMARK_PROMPT_VERSION, "gate_version": gates.GATE_VERSION,
         "panel_version": panel.PANEL_VERSION, "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "items": len(items), "sentence_items": len(sentences), "answer_items": len(items) - len(sentences),
         "answers": len({(it["collection"], it["qid"]) for it in items}),
@@ -193,7 +194,7 @@ def write_markdown(r: dict, path: Path) -> None:
                      f"{j['errors'] or ''} | {j['cached']} | {j['usd']:.4f} | {j['usd_per_judged_sentence'] or 0:.5f} | "
                      f"{j['input_tokens']} / {j['output_tokens']} |")
     lines += ["", "## Panel verdicts", "", "| Check | Final verdicts | Routes |", "| --- | --- | --- |"]
-    for c in prompts.CHECKS:
+    for c in r["finals"]:
         lines.append(f"| {c} | {r['finals'][c]} | {r['routes'][c]} |")
     lr = r["leniency_review"]
     lines += ["", f"Items with at least one check in the human queue: {r['human_queue_items']}.", "",
@@ -249,8 +250,11 @@ def main(argv=None) -> int:
     if items_path.exists():
         items = read_jsonl(items_path)
     elif args.items:
-        wanted = [r["item_id"] for r in read_jsonl(args.items)]
+        rows = read_jsonl(args.items)
         index = {it["item_id"]: it for it in all_items}
+        # Items that are not v1 answers (drafted benchmark items) are read whole from the file.
+        index.update({r["item_id"]: r for r in rows if r.get("kind") == "benchmark"})
+        wanted = [r["item_id"] for r in rows]
         missing = [i for i in wanted if i not in index]
         if missing:
             raise SystemExit(f"{len(missing)} items in {args.items} are not in the collections, e.g. {missing[:3]}")

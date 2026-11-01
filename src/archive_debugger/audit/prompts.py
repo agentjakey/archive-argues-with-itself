@@ -7,12 +7,16 @@ from __future__ import annotations
 import hashlib
 import json
 
-CHECKS = ("supports", "answers", "in_scope")
-KIND_CHECKS = {"sentence": ("supports", "in_scope"), "answer": ("answers",)}
+CHECKS = ("supports", "answers", "in_scope")            # the citation checks people calibrate
+ITEM_CHECKS = ("well_formed", "label_correct")          # checks on a drafted benchmark item
+ALL_CHECKS = CHECKS + ITEM_CHECKS
+KIND_CHECKS = {"sentence": ("supports", "in_scope"), "answer": ("answers",), "benchmark": ITEM_CHECKS}
 CLASSES = {
     "supports": ("pass", "partial", "fail"),
     "answers": ("pass", "partial", "fail"),
     "in_scope": ("pass", "fail", "unclear"),
+    "well_formed": ("pass", "fail"),
+    "label_correct": ("pass", "fail"),
 }
 CONSTRAINTS = ("period", "jurisdiction", "population", "program", "measure")
 CONSTRAINT_VALUES = ("fits", "differs", "unclear", "not_asked")
@@ -60,6 +64,33 @@ one asked about.
 
 """ + UNTRUSTED
 
+BENCHMARK_SYSTEM = """You check one drafted item for a benchmark of questions about Canadian government \
+publications. An item is a question a researcher might ask, the label it is given (the verdict a \
+good answer should reach and what the answer must or must not do), and the scanned pages and corpus \
+checks it was drafted from. You return two verdicts as JSON.
+
+1. well_formed: is the question clear, answerable in principle, written as a researcher would ask \
+it, and free of hints about its label?
+   pass or fail.
+
+2. label_correct: given the pages and the corpus checks, is the label right?
+   Labels: SUPPORTED (the pages answer the question), PARTIALLY_SUPPORTED (they answer part of it, \
+or only through unreliable text), CONFLICTING (comparable records disagree), INCOMPARABLE (the \
+records describe different populations, periods, programs or measures and cannot be compared), \
+INSUFFICIENT_EVIDENCE (the collection does not hold what the question needs; the corpus check says \
+what was searched).
+   pass when the label and the required behaviour follow from the pages and checks; fail otherwise.
+
+""" + UNTRUSTED
+
+BENCHMARK_TEMPLATE = """<item kind="{kind}">
+<question>{question}</question>
+<filters>{filters}</filters>
+<label verdict="{verdict}">{behaviour}</label>
+<corpus_checks>{checks}</corpus_checks>
+</item>
+{pages}"""
+
 SENTENCE_TEMPLATE = """<question>{question}</question>
 <filters>{filters}</filters>
 <answer>{answer}</answer>
@@ -81,7 +112,7 @@ def kind_of(item: dict) -> str:
 
 
 def system(kind: str) -> str:
-    return SENTENCE_SYSTEM if kind == "sentence" else ANSWER_SYSTEM
+    return {"sentence": SENTENCE_SYSTEM, "answer": ANSWER_SYSTEM, "benchmark": BENCHMARK_SYSTEM}[kind]
 
 
 def _check_schema(check: str) -> dict:
@@ -111,16 +142,27 @@ def _body(value: str) -> str:
     return (value or "").replace("</page", "(/page").replace("<page", "(page")
 
 
+def _pages(citations: list) -> str:
+    return "\n".join(
+        PAGE.format(n=n, passage_id=_attr(c["passage_id"]), title=_attr(c.get("title")), year=_attr(c.get("year")),
+                    jurisdiction=_attr(c.get("jurisdiction")), leaf=_attr(c.get("leaf_index")),
+                    text=_body((c.get("text") or "")[:MAX_PAGE_CHARS]))
+        for n, c in enumerate(citations, 1))
+
+
 def user_message(item: dict) -> str:
     filters = json.dumps(item.get("filters") or {}, sort_keys=True)
     answer = _body(item.get("answer_text") or "")
     if kind_of(item) == "answer":
         return ANSWER_TEMPLATE.format(question=_body(item["question"]), filters=filters, answer=answer)
-    pages = "\n".join(
-        PAGE.format(n=n, passage_id=_attr(c["passage_id"]), title=_attr(c.get("title")), year=_attr(c.get("year")),
-                    jurisdiction=_attr(c.get("jurisdiction")), leaf=_attr(c.get("leaf_index")),
-                    text=_body((c.get("text") or "")[:MAX_PAGE_CHARS]))
-        for n, c in enumerate(item["citations"], 1))
+    if kind_of(item) == "benchmark":
+        label = item.get("label") or {}
+        return BENCHMARK_TEMPLATE.format(kind=_attr(item.get("category")), question=_body(item["question"]),
+                                         filters=filters, verdict=_attr(label.get("verdict")),
+                                         behaviour=_body(label.get("behaviour") or ""),
+                                         checks=_body(json.dumps(item.get("corpus_checks") or [], sort_keys=True)),
+                                         pages=_pages(item.get("sources") or []))
+    pages = _pages(item["citations"])
     return SENTENCE_TEMPLATE.format(question=_body(item["question"]), filters=filters, answer=answer,
                                     sentence=_body(item["sentence"]), pages=pages)
 
@@ -134,6 +176,17 @@ PROMPT_VERSION = hashlib.sha256((SENTENCE_SYSTEM + ANSWER_SYSTEM + SENTENCE_TEMP
                                  + json.dumps(verdict_schema("sentence"), sort_keys=True)
                                  + json.dumps(verdict_schema("answer"), sort_keys=True)
                                  + str(MAX_PAGE_CHARS)).encode("utf-8")).hexdigest()[:12]
+
+
+BENCHMARK_PROMPT_VERSION = hashlib.sha256((BENCHMARK_SYSTEM + BENCHMARK_TEMPLATE + PAGE
+                                           + json.dumps(verdict_schema("benchmark"), sort_keys=True)
+                                           + str(MAX_PAGE_CHARS)).encode("utf-8")).hexdigest()[:12]
+
+
+def version_for(kind: str) -> str:
+    """The prompt version a judgment of this kind of item is made under. Benchmark items have their
+    own, so adding them left the citation-check version, and every judgment made under it, as it was."""
+    return BENCHMARK_PROMPT_VERSION if kind == "benchmark" else PROMPT_VERSION
 
 
 def parse_verdicts(text: str, kind: str = "sentence") -> dict:

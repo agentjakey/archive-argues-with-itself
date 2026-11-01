@@ -93,7 +93,7 @@ def custom_id(item_id: str) -> str:
 def _record(spec: JudgeSpec, item: dict, verdicts: Optional[dict], error: Optional[str], input_tokens: int,
             output_tokens: int, usd: float, batch: bool, cached: bool = False) -> dict:
     return {"item_id": item["item_id"], "kind": prompts.kind_of(item), "judge": spec.name, "provider": spec.provider,
-            "model": spec.model, "family": spec.family, "prompt_version": prompts.PROMPT_VERSION, "batch": batch,
+            "model": spec.model, "family": spec.family, "prompt_version": prompts.version_for(prompts.kind_of(item)), "batch": batch,
             "verdicts": verdicts, "error": error, "input_tokens": input_tokens, "output_tokens": output_tokens,
             "usd": round(usd, 6), "cached": cached, "at": round(time.time(), 3)}
 
