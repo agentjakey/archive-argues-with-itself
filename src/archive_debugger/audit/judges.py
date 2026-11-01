@@ -1,6 +1,8 @@
-"""Model judges (docs/formats/audit.md). Each judge reads one item and returns the three
-verdicts. Anthropic judges run as Message Batches (half price) or direct calls, Workers AI judges as
-direct calls; every call is checked against the budget first and its cost recorded after.
+"""Model judges (docs/formats/audit.md). Each judge reads one item and returns the verdicts for
+the item's unit: SUPPORTS and IN SCOPE for a sentence item, ANSWERS for an answer item. Anthropic
+judges run as Message Batches (half price) or direct calls, straight to Anthropic. Workers AI judges
+run as direct calls, through the AI Gateway named in config/audit.toml when one is set. Every call
+is checked against the budget first and its cost recorded after.
 
 A judgment that could not be read (an error, a refusal, a reply that is not a valid verdict) is
 recorded with its error and no verdicts, and counts as missing, never as a pass."""
@@ -43,6 +45,9 @@ class PanelConfig:
     escalation: str
     candidates: tuple
     specs: dict
+    workers_ai_gateway: Optional[str] = None
+    review_share: float = 0.10            # share of agreed passes the escalation judge re-reads
+    lenient_above: float = 0.10           # escalation disagreement on that sample that flags a check
 
 
 def load_panel(path: Path = AUDIT_CONFIG) -> PanelConfig:
@@ -59,8 +64,25 @@ def load_panel(path: Path = AUDIT_CONFIG) -> PanelConfig:
         raise ValueError(f"{path}: judges named in [panel] but not defined: {missing}")
     if len(panel["judges"]) != 2 or len({specs[n].family for n in panel["judges"]}) != 2:
         raise ValueError(f"{path}: the panel needs two judges from two different model families")
+    gateway = (raw.get("gateway") or {}).get("workers_ai") or None
     return PanelConfig(judges=tuple(panel["judges"]), escalation=panel["escalation"],
-                       candidates=tuple(panel.get("candidates") or ()), specs=specs)
+                       candidates=tuple(panel.get("candidates") or ()), specs=specs, workers_ai_gateway=gateway,
+                       review_share=float(panel.get("review_share", 0.10)),
+                       lenient_above=float(panel.get("lenient_above", 0.10)))
+
+
+def same_model(a: str, b: str) -> bool:
+    """claude-haiku-4-5 and claude-haiku-4-5-20251001 name the same model."""
+    a, b = (a or "").lower(), (b or "").lower()
+    return bool(a and b) and (a == b or a.startswith(b + "-") or b.startswith(a + "-"))
+
+
+def writer_conflicts(cfg: PanelConfig, items: list) -> list:
+    """Panel and escalation judges whose model wrote some of these answers. The panel never includes
+    the model that wrote the answers it judges; candidates may, since they decide nothing."""
+    writers = {it.get("writer_model") for it in items if it.get("writer_model")}
+    return sorted({name for name in list(cfg.judges) + [cfg.escalation]
+                   for w in writers if same_model(cfg.specs[name].model, w)})
 
 
 def custom_id(item_id: str) -> str:
@@ -68,12 +90,12 @@ def custom_id(item_id: str) -> str:
     return "i" + hashlib.sha256(item_id.encode("utf-8")).hexdigest()[:40]
 
 
-def _record(spec: JudgeSpec, item_id: str, verdicts: Optional[dict], error: Optional[str], input_tokens: int,
-            output_tokens: int, usd: float, batch: bool) -> dict:
-    return {"item_id": item_id, "judge": spec.name, "provider": spec.provider, "model": spec.model,
-            "family": spec.family, "prompt_version": prompts.PROMPT_VERSION, "batch": batch,
+def _record(spec: JudgeSpec, item: dict, verdicts: Optional[dict], error: Optional[str], input_tokens: int,
+            output_tokens: int, usd: float, batch: bool, cached: bool = False) -> dict:
+    return {"item_id": item["item_id"], "kind": prompts.kind_of(item), "judge": spec.name, "provider": spec.provider,
+            "model": spec.model, "family": spec.family, "prompt_version": prompts.PROMPT_VERSION, "batch": batch,
             "verdicts": verdicts, "error": error, "input_tokens": input_tokens, "output_tokens": output_tokens,
-            "usd": round(usd, 6), "at": round(time.time(), 3)}
+            "usd": round(usd, 6), "cached": cached, "at": round(time.time(), 3)}
 
 
 # --- Anthropic ---------------------------------------------------------------------------------
@@ -85,14 +107,16 @@ def anthropic_client():
 
 
 def anthropic_params(spec: JudgeSpec, item: dict) -> dict:
+    kind = prompts.kind_of(item)
     params = {
         "model": spec.model,
         "max_tokens": spec.max_tokens,
-        "system": prompts.SYSTEM,
+        "system": prompts.system(kind),
         "messages": [{"role": "user", "content": prompts.user_message(item)}],
-        "output_config": {"format": {"type": "json_schema", "schema": prompts.verdict_schema()}},
+        "output_config": {"format": {"type": "json_schema", "schema": prompts.verdict_schema(kind)}},
     }
     if spec.effort:
+        # Models with effort levels take no sampling parameters; the schema constrains the reply.
         params["output_config"]["effort"] = spec.effort
     else:
         params["temperature"] = 0.0
@@ -108,17 +132,17 @@ def _message_text(message) -> tuple:
     return text, None
 
 
-def _read(text: Optional[str], error: Optional[str]) -> tuple:
+def _read(text: Optional[str], error: Optional[str], kind: str) -> tuple:
     if error:
         return None, error
     try:
-        return prompts.parse_verdicts(text), None
+        return prompts.parse_verdicts(text, kind), None
     except ValueError as exc:
         return None, f"unreadable: {exc}"
 
 
 def prompt_chars(item: dict) -> int:
-    return len(prompts.SYSTEM) + len(prompts.user_message(item)) + 2000   # the schema and framing
+    return len(prompts.system(prompts.kind_of(item))) + len(prompts.user_message(item)) + 2000   # schema and framing
 
 
 class BatchState:
@@ -181,14 +205,14 @@ def run_anthropic_batch(spec: JudgeSpec, items: list, ledger: Ledger, run_id: st
             input_tokens = int(usage.input_tokens or 0) + int(getattr(usage, "cache_read_input_tokens", 0) or 0) \
                 + int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
             output_tokens = int(usage.output_tokens or 0)
-            verdicts, error = _read(*_message_text(message))
+            verdicts, error = _read(*_message_text(message), prompts.kind_of(item))
         else:
             input_tokens = output_tokens = 0
             verdicts, error = None, f"batch {result.result.type}"
         input_total += input_tokens
         output_total += output_tokens
         from archive_debugger.audit.prices import cost
-        records.append(_record(spec, item["item_id"], verdicts, error, input_tokens, output_tokens,
+        records.append(_record(spec, item, verdicts, error, input_tokens, output_tokens,
                                cost(spec.model, input_tokens, output_tokens, batch=True), True))
     ledger.spend(run_id, spec.provider, spec.model, input_total, output_total, batch=True,
                  what=f"{spec.name} batch {state['batch_id']} ({len(records)} items)")
@@ -208,8 +232,8 @@ def run_anthropic_direct(spec: JudgeSpec, item: dict, ledger: Ledger, run_id: st
         usd = ledger.spend(run_id, spec.provider, spec.model, input_tokens, output_tokens, what=f"{spec.name} {item['item_id']}")
     finally:
         ledger.release(run_id, reservation)
-    verdicts, error = _read(*_message_text(message))
-    return _record(spec, item["item_id"], verdicts, error, input_tokens, output_tokens, usd, False)
+    verdicts, error = _read(*_message_text(message), prompts.kind_of(item))
+    return _record(spec, item, verdicts, error, input_tokens, output_tokens, usd, False)
 
 
 # --- Workers AI --------------------------------------------------------------------------------
@@ -223,46 +247,69 @@ def workers_ai_credentials() -> tuple:
     return account, token
 
 
+def workers_ai_headers(token: str, gateway: Optional[str]) -> dict:
+    """Request headers. With a gateway, the request names it (cf-aig-gateway-id) and carries the
+    gateway's own token, CF_AIG_TOKEN (cf-aig-authorization). Audit traffic only: no visitor data
+    passes through the gateway."""
+    headers = {"authorization": f"Bearer {token}"}
+    if gateway:
+        aig = os.environ.get("CF_AIG_TOKEN")
+        if not aig:
+            raise RuntimeError(f"the AI Gateway {gateway} needs CF_AIG_TOKEN in the environment or .env")
+        headers["cf-aig-gateway-id"] = gateway
+        headers["cf-aig-authorization"] = f"Bearer {aig}"
+    return headers
+
+
 def workers_ai_body(spec: JudgeSpec, item: dict, structured: bool) -> dict:
+    kind = prompts.kind_of(item)
     body = {
         "model": spec.model,
         "max_tokens": spec.max_tokens,
         "temperature": 0,
-        "messages": [{"role": "system", "content": prompts.SYSTEM},
-                     {"role": "user", "content": prompts.user_message(item) + "\n\n" + prompts.json_instruction()}],
+        "messages": [{"role": "system", "content": prompts.system(kind)},
+                     {"role": "user", "content": prompts.user_message(item) + "\n\n" + prompts.json_instruction(kind)}],
     }
     if spec.reasoning_effort:
         body["reasoning_effort"] = spec.reasoning_effort
     if structured:
         body["response_format"] = {"type": "json_schema",
-                                   "json_schema": {"name": "verdicts", "schema": prompts.verdict_schema(), "strict": True}}
+                                   "json_schema": {"name": "verdicts", "schema": prompts.verdict_schema(kind), "strict": True}}
     return body
 
 
 def run_workers_ai(spec: JudgeSpec, item: dict, ledger: Ledger, run_id: str, run_cap: float, *,
-                   post: Callable = None, credentials: Callable = workers_ai_credentials) -> dict:
+                   post: Callable = None, credentials: Callable = workers_ai_credentials,
+                   gateway: Optional[str] = None) -> dict:
     post = post or net.post_json
     account, token = credentials()
     url = WORKERS_AI_URL.format(account=account)
-    headers = {"authorization": f"Bearer {token}"}
-    chars = prompt_chars(item) + len(prompts.json_instruction())
+    headers = workers_ai_headers(token, gateway)
+    reply_headers: dict = {}
+    chars = prompt_chars(item) + len(prompts.json_instruction(prompts.kind_of(item)))
     worst = worst_case(spec.model, chars, spec.max_tokens)
     reservation = f"{run_id}:{spec.name}:{item['item_id']}:{time.time_ns()}"
     ledger.reserve(run_id, run_cap, spec.provider, spec.model, reservation, worst)
     try:
         try:
-            reply = post(url, headers, workers_ai_body(spec, item, structured=True))
+            reply = post(url, headers, workers_ai_body(spec, item, structured=True), response_headers=reply_headers)
         except net.HttpError as exc:
             if exc.status != 400:
                 raise
             # A model that does not take a JSON schema gets the same prompt, which states the schema.
-            reply = post(url, headers, workers_ai_body(spec, item, structured=False))
+            reply_headers.clear()
+            reply = post(url, headers, workers_ai_body(spec, item, structured=False), response_headers=reply_headers)
         usage = reply.get("usage") or {}
         estimated = not usage
         input_tokens = int(usage.get("prompt_tokens") or 0) if usage else int(chars / 2.5)
         output_tokens = int(usage.get("completion_tokens") or 0) if usage else spec.max_tokens
-        usd = ledger.spend(run_id, spec.provider, spec.model, input_tokens, output_tokens,
-                           what=f"{spec.name} {item['item_id']}" + (" (usage not reported: worst case)" if estimated else ""))
+        # A reply the gateway served from its cache never reached the model and is not billed.
+        cached = str(reply_headers.get("cf-aig-cache-status", "")).upper() == "HIT"
+        if cached:
+            usd = 0.0
+        else:
+            usd = ledger.spend(run_id, spec.provider, spec.model, input_tokens, output_tokens,
+                               what=f"{spec.name} {item['item_id']}" + (" (usage not reported: worst case)" if estimated else ""))
     finally:
         ledger.release(run_id, reservation)
     choice = (reply.get("choices") or [{}])[0]
@@ -275,21 +322,22 @@ def run_workers_ai(spec: JudgeSpec, item: dict, ledger: Ledger, run_id: str, run
         error = "max_tokens"
     elif not text:
         error = "empty reply"
-    verdicts, error = _read(text, error)
-    return _record(spec, item["item_id"], verdicts, error, input_tokens, output_tokens, usd, False)
+    verdicts, error = _read(text, error, prompts.kind_of(item))
+    return _record(spec, item, verdicts, error, input_tokens, output_tokens, usd, False, cached)
 
 
 def run_workers_ai_many(spec: JudgeSpec, items: list, ledger: Ledger, run_id: str, run_cap: float, *,
-                        workers: int = 3, post: Callable = None, on_record: Callable[[dict], None] = None) -> list:
+                        workers: int = 3, post: Callable = None, on_record: Callable[[dict], None] = None,
+                        gateway: Optional[str] = None) -> list:
     """Judge several items, a few at a time (polite to the API); each record is handed to on_record
     as soon as it exists, so a stopped run keeps what it finished."""
     records = []
 
     def one(it):
         try:
-            rec = run_workers_ai(spec, it, ledger, run_id, run_cap, post=post)
+            rec = run_workers_ai(spec, it, ledger, run_id, run_cap, post=post, gateway=gateway)
         except net.HttpError as exc:
-            rec = _record(spec, it["item_id"], None, f"http {exc.status}", 0, 0, 0.0, False)
+            rec = _record(spec, it, None, f"http {exc.status}", 0, 0, 0.0, False)
         if on_record:
             on_record(rec)
         return rec

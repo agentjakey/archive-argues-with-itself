@@ -3,10 +3,30 @@
 # then to the human queue. Candidates are judges run alongside the panel to choose the second judge
 # by calibration (Phase 2 amendment 2); a candidate's verdicts never decide anything.
 
+# The panel never includes the model that wrote the answers it judges (each collection's [v1]
+# writer_model); the pipeline refuses a run that would. The v1 answers were written by Claude Haiku
+# 4.5, so it can only be a candidate on them. This panel is provisional until the calibration labels
+# choose one.
+
 [panel]
-judges = ["claude-haiku-4-5", "gpt-oss-120b"]
+judges = ["claude-haiku-5-5", "gpt-oss-120b"]
 escalation = "claude-sonnet-5-5"
-candidates = ["deepseek-v4-flash"]   # kimi-k2.6 dropped after probe-1: eight times the cost, slow, a third of replies cut off
+candidates = ["claude-haiku-4-5", "deepseek-v4-flash"]   # kimi-k2.6 dropped after probe-1: eight times the cost, slow, a third of replies cut off
+review_share = 0.10      # the escalation judge re-reads this share of the agreed passes in every run
+lenient_above = 0.10     # and flags a check when it does not pass more than this share of them
+
+# Audit traffic to Workers AI goes through this AI Gateway (logs and caching on, a spend limit set in
+# the dashboard). Audit items carry no visitor data. Anthropic calls go direct, so batches stay half price.
+[gateway]
+workers_ai = "archive-argues-audit"
+
+[judges.claude-haiku-5-5]
+provider = "anthropic"
+model = "claude-haiku-5-5"
+family = "anthropic"
+batch = true
+max_tokens = 3000        # thinking counts toward it
+effort = "low"
 
 [judges.claude-haiku-4-5]
 provider = "anthropic"

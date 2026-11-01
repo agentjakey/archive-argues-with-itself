@@ -21,6 +21,8 @@ class Price:
 PRICES = {
     # Anthropic list prices (Claude API skill model table, cached 2026-10-06); batches are half price.
     "claude-haiku-4-5": Price("anthropic", "claude-haiku-4-5", 1.00, 5.00, 0.5, "anthropic models table 2026-10-06"),
+    # Haiku 5.5: the rate for prompts of 100K tokens or fewer (judge prompts are far under that).
+    "claude-haiku-5-5": Price("anthropic", "claude-haiku-5-5", 0.10, 0.50, 0.5, "anthropic pricing page 2026-10-31"),
     "claude-sonnet-5-5": Price("anthropic", "claude-sonnet-5-5", 2.00, 10.00, 0.5, "anthropic models table 2026-10-06"),
     # Workers AI catalogue prices, read from the account's model search on 2026-10-31.
     "@cf/openai/gpt-oss-120b": Price("workers-ai", "@cf/openai/gpt-oss-120b", 0.35, 0.75, 1.0, "workers ai catalogue 2026-10-31"),

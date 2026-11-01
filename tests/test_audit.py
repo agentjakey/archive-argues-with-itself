@@ -68,14 +68,21 @@ def test_a_bad_label_map_is_refused(tmp_path):
         collections.load(str(cfg))
 
 
-def test_v1_items_and_labels_cover_every_kept_sentence():
+def test_v1_items_and_labels_cover_every_kept_sentence_and_every_answer():
     for name in collections.all_names():
         c = collections.load(name)
         built = items.build_v1_items(c)
         labels = items.v1_labels(c)
-        assert built and {it["item_id"] for it in built} == set(labels)
-        assert all(it["citations"] and all(ci["text"] for ci in it["citations"]) for it in built)
-        assert all(set(labels.values()) <= set(collections.LABEL_CLASSES) for _ in [0])
+        sentences = [it for it in built if it["kind"] == "sentence"]
+        answers = [it for it in built if it["kind"] == "answer"]
+        assert sentences and {it["item_id"] for it in sentences} == set(labels)
+        assert all(it["citations"] and all(ci["text"] for ci in it["citations"]) for it in sentences)
+        assert set(labels.values()) <= set(collections.LABEL_CLASSES)
+        assert sorted(a["qid"] for a in answers) == sorted({it["qid"] for it in sentences})
+        for a in answers:
+            mine = sorted((it for it in sentences if it["qid"] == a["qid"]), key=lambda it: it["sentence_no"])
+            assert a["sentences"] == [it["sentence"] for it in mine] and a["item_id"].endswith(":answer")
+        assert {it["writer_model"] for it in built} == {c.v1.writer_model}
 
 
 def test_answer_selection_is_seeded_and_spread_over_collections():
@@ -148,16 +155,39 @@ def test_archival_text_cannot_close_its_page_or_reach_the_instructions():
     message = prompts.user_message(hostile)
     assert message.count("</page>") == 1 and message.count("<page ") == 1
     assert 'year="2099' not in message
-    assert "Ignore the rules" not in prompts.SYSTEM
+    assert "Ignore the rules" not in prompts.SENTENCE_SYSTEM
 
 
 def test_prompt_version_changes_with_the_prompt(monkeypatch):
     import hashlib
     before = prompts.PROMPT_VERSION
     assert re.fullmatch(r"[0-9a-f]{12}", before)
-    changed = hashlib.sha256((prompts.SYSTEM + " " + prompts.TEMPLATE + prompts.PAGE
-                              + json.dumps(prompts.verdict_schema(), sort_keys=True) + str(prompts.MAX_PAGE_CHARS)).encode()).hexdigest()[:12]
+    changed = hashlib.sha256((prompts.SENTENCE_SYSTEM + " " + prompts.ANSWER_SYSTEM + prompts.SENTENCE_TEMPLATE
+                              + prompts.ANSWER_TEMPLATE + prompts.PAGE
+                              + json.dumps(prompts.verdict_schema("sentence"), sort_keys=True)
+                              + json.dumps(prompts.verdict_schema("answer"), sort_keys=True)
+                              + str(prompts.MAX_PAGE_CHARS)).encode()).hexdigest()[:12]
     assert changed != before
+
+
+def answer_item(item_id="c:q1:answer"):
+    return {"item_id": item_id, "kind": "answer", "collection": "c", "qid": "q1", "question": "What clinics opened?",
+            "filters": {}, "answer_text": "The ministry opened 12 clinics in 1974.",
+            "sentences": ["The ministry opened 12 clinics in 1974."]}
+
+
+def test_a_sentence_is_judged_on_supports_and_scope_and_an_answer_on_answers():
+    assert set(prompts.verdict_schema("sentence")["properties"]) == {"supports", "in_scope"}
+    assert set(prompts.verdict_schema("answer")["properties"]) == {"answers"}
+    assert set(prompts.parse_verdicts(json.dumps(verdicts()), "sentence")) == {"supports", "in_scope"}
+    assert set(prompts.parse_verdicts(json.dumps(verdicts()), "answer")) == {"answers"}
+    with pytest.raises(ValueError):
+        prompts.parse_verdicts(json.dumps({"supports": verdicts()["supports"]}), "answer")
+    message = prompts.user_message(answer_item())
+    assert "<page" not in message and "<sentence>" not in message and "12 clinics" in message
+    params = judges.anthropic_params(spec("h", "anthropic", "claude-haiku-5-5", "anthropic", effort="low"), answer_item())
+    assert params["system"] == prompts.ANSWER_SYSTEM and "temperature" not in params
+    assert params["output_config"]["effort"] == "low"
 
 
 # --- budget --------------------------------------------------------------------------------------
@@ -258,7 +288,7 @@ def test_workers_ai_judge_records_cost_from_reported_usage(tmp_path):
     ledger = budget.Ledger(tmp_path / "l.jsonl")
     sent = []
 
-    def post(url, headers, body):
+    def post(url, headers, body, **kw):
         sent.append(body)
         return {"choices": [{"message": {"content": json.dumps(verdicts(supports="partial"))}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 2000, "completion_tokens": 300}}
@@ -276,7 +306,7 @@ def test_workers_ai_without_a_schema_falls_back_and_a_bad_reply_is_an_error(tmp_
                {"choices": [{"message": {"content": "I think it passes."}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 10, "completion_tokens": 5}}]
 
-    def post(url, headers, body):
+    def post(url, headers, body, **kw):
         out = replies.pop(0)
         if isinstance(out, Exception):
             raise out
@@ -290,7 +320,7 @@ def test_workers_ai_without_a_schema_falls_back_and_a_bad_reply_is_an_error(tmp_
 def test_no_call_is_made_when_it_could_cross_the_cap(tmp_path):
     ledger = budget.Ledger(tmp_path / "l.jsonl", phase_cap=0.0001)
 
-    def post(*a):
+    def post(*a, **kw):
         raise AssertionError("called")
 
     with pytest.raises(budget.BudgetExceeded):
@@ -361,6 +391,38 @@ def test_the_configured_panel_has_two_families_and_every_judge_is_priced():
         prices.price(s.model)
 
 
+def test_the_panel_never_includes_the_model_that_wrote_the_answers():
+    cfg = judges.load_panel()
+    for name in collections.all_names():
+        built = items.build_v1_items(collections.load(name))
+        assert judges.writer_conflicts(cfg, built) == []
+    writer = {"writer_model": cfg.specs[cfg.judges[0]].model + "-20990101"}
+    assert judges.writer_conflicts(cfg, [writer]) == [cfg.judges[0]]
+    assert judges.same_model("claude-haiku-4-5", "claude-haiku-4-5-20251001")
+    assert not judges.same_model("claude-haiku-4-5", "claude-haiku-5-5")
+
+
+def test_workers_ai_goes_through_the_gateway_and_a_cache_hit_is_not_billed(tmp_path, monkeypatch):
+    monkeypatch.setenv("CF_AIG_TOKEN", "gw-token")
+    ledger = budget.Ledger(tmp_path / "l.jsonl")
+    seen = []
+
+    def post(url, headers, body, response_headers=None):
+        seen.append(headers)
+        response_headers.update({"cf-aig-cache-status": "HIT"})
+        return {"choices": [{"message": {"content": json.dumps(verdicts())}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 2000, "completion_tokens": 300}}
+
+    rec = judges.run_workers_ai(spec(), item(), ledger, "r", 1.0, post=post, credentials=lambda: ("a", "t"),
+                                gateway="audit-gw")
+    assert seen[0]["cf-aig-gateway-id"] == "audit-gw" and seen[0]["cf-aig-authorization"] == "Bearer gw-token"
+    assert rec["cached"] and rec["usd"] == 0 and ledger.totals().spent == 0 and ledger.totals().reserved == 0
+    monkeypatch.delenv("CF_AIG_TOKEN")
+    with pytest.raises(RuntimeError, match="CF_AIG_TOKEN"):
+        judges.workers_ai_headers("t", "audit-gw")
+    assert "cf-aig-gateway-id" not in judges.workers_ai_headers("t", None)
+
+
 # --- panel ---------------------------------------------------------------------------------------
 
 def rec(judge, **kw):
@@ -369,17 +431,37 @@ def rec(judge, **kw):
 
 def test_agreement_escalation_and_the_human_queue():
     gate = {"valid": "pass", "flags": []}
-    agree = panel.decide("i", gate, ("a", "b"), {"a": rec("a"), "b": rec("b")}, None)
-    assert {c: v["route"] for c, v in agree["checks"].items()} == {"supports": "agree", "answers": "agree", "in_scope": "agree"}
+    it = {"item_id": "i", "kind": "sentence"}
+    agree = panel.decide(it, gate, ("a", "b"), {"a": rec("a"), "b": rec("b")}, None)
+    assert {c: v["route"] for c, v in agree["checks"].items()} == {"supports": "agree", "in_scope": "agree"}
     split = {"a": rec("a", supports="pass"), "b": rec("b", supports="fail")}
-    assert panel.needs_escalation(split["a"], split["b"])
-    sided = panel.decide("i", gate, ("a", "b"), split, rec("e", supports="fail"))
+    assert panel.needs_escalation(split["a"], split["b"], ("supports", "in_scope"))
+    assert not panel.needs_escalation(split["a"], split["b"], ("answers",))
+    sided = panel.decide(it, gate, ("a", "b"), split, rec("e", supports="fail"))
     assert sided["checks"]["supports"] == {"final": "fail", "route": "escalated",
                                            "votes": {"a": "pass", "b": "fail", "escalation": "fail"}}
-    third = panel.decide("i", gate, ("a", "b"), split, rec("e", supports="partial"))
+    third = panel.decide(it, gate, ("a", "b"), split, rec("e", supports="partial"))
     assert third["checks"]["supports"]["final"] is None and third["human_queue"] == ["supports"]
-    missing = panel.decide("i", gate, ("a", "b"), {"a": rec("a")}, None)
-    assert missing["human_queue"] == ["supports", "answers", "in_scope"]
+    missing = panel.decide(it, gate, ("a", "b"), {"a": rec("a")}, None)
+    assert missing["human_queue"] == ["supports", "in_scope"]
+    whole = panel.decide({"item_id": "j", "kind": "answer"}, {"valid": "not_applicable", "flags": []}, ("a", "b"),
+                         {"a": rec("a", answers="partial"), "b": rec("b", answers="partial")}, None)
+    assert list(whole["checks"]) == ["answers"] and whole["checks"]["answers"]["final"] == "partial"
+
+
+def test_the_leniency_review_samples_agreed_passes_and_flags_a_lenient_check():
+    gate = {"valid": "pass", "flags": []}
+    decisions = [panel.decide({"item_id": f"i{n}", "kind": "sentence"}, gate, ("a", "b"),
+                              {"a": rec("a"), "b": rec("b")}, None) for n in range(100)]
+    sample = panel.review_sample(decisions, 0.10, "run-1")
+    assert len(sample) == 10 and sample == panel.review_sample(decisions, 0.10, "run-1")
+    assert sample != panel.review_sample(decisions, 0.10, "run-2")
+    reviews = {i: rec("e") for i in sample}
+    reviews[sample[0]] = rec("e", supports="partial")
+    reviews[sample[1]] = rec("e", supports="fail")
+    out = panel.leniency(decisions, reviews, 0.10)
+    assert out["supports"]["disagree"] == 2 and out["supports"]["too_lenient"]
+    assert out["in_scope"]["disagree"] == 0 and not out["in_scope"]["too_lenient"]
 
 
 # --- calibration ---------------------------------------------------------------------------------
@@ -407,14 +489,21 @@ def test_compare_counts_false_passes_and_applies_the_bar():
     assert calibration.compare(human, sloppy)["bar"]["meets"] is False
 
 
-def test_a_skewed_check_uses_recall_and_needs_a_threshold():
-    human = {f"i{n}": ("pass" if n < 97 else "fail") for n in range(100)}
-    m = calibration.compare(human, dict(human))
-    assert m["skewed"] and not m["bar"]["meets"] and "recall threshold" in m["bar"]["reasons"][0]
-    assert calibration.compare(human, dict(human), recall_min=0.6)["bar"]["meets"] is True
-    blind = {k: "pass" for k in human}                  # passes everything: high agreement, no recall on fail
-    m = calibration.compare(human, blind, recall_min=0.6)
-    assert m["exact_agreement"] == 0.97 and m["recall"]["fail"]["recall"] == 0.0 and not m["bar"]["meets"]
+def test_recall_on_the_not_pass_class_needs_20_labels_and_0_80():
+    few = {f"i{n}": ("pass" if n < 97 else "fail") for n in range(100)}
+    m = calibration.compare(few, dict(few))
+    assert m["skewed"] and not m["bar"]["meets"] and "no recall claim" in m["bar"]["reasons"][0]
+    many = {f"i{n}": ("pass" if n < 380 else "partial") for n in range(400)}       # 20 not pass, 5% of labels
+    m = calibration.compare(many, dict(many))
+    assert m["skewed"] and m["not_pass_recall"]["recall"] == 1.0 and m["bar"]["meets"] is True
+    weak = dict(many)
+    for n in range(380, 385):                                                      # 5 of the 20 passed: recall 0.75
+        weak[f"i{n}"] = "pass"
+    m = calibration.compare(many, weak)
+    assert m["not_pass_recall"]["recall"] == 0.75 and any("recall" in r for r in m["bar"]["reasons"])
+    blind = {k: "pass" for k in many}
+    m = calibration.compare(many, blind)
+    assert m["exact_agreement"] == 0.95 and m["not_pass_recall"]["recall"] == 0.0 and not m["bar"]["meets"]
 
 
 def test_stratified_sample_includes_the_must_haves_and_every_prefix_mixes_strata():

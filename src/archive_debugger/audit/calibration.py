@@ -2,10 +2,12 @@
 people's labels (docs/formats/audit.md), and the bar a check must clear before it can
 be called AI-AUDITED.
 
-The bar (Phase 2 amendment 1), on the panel's final verdict, per check:
-  - Cohen's kappa against the person's labels at least KAPPA_MIN, or, where one class is too rare
-    for kappa to mean much (under SKEW_SHARE of the labels), every class's recall at least
-    recall_min, which the account owner sets;
+The bar (Phase 2 amendment 1, recall rule set at Gate 2a), on the panel's final verdict, per check:
+  - Cohen's kappa (pass against not pass) at least KAPPA_MIN, except where one class is under
+    SKEW_SHARE of the labels, when kappa means little and the recall rule below decides alone;
+  - recall on the not-pass class (partial, fail, unclear: the items the person would not pass) at
+    least RECALL_MIN, with its Wilson interval reported; with fewer than RECALL_MIN_LABELS not-pass
+    labels no recall claim is made and the check stays human-reviewed;
   - the upper 95% Wilson bound on the false-pass rate at most FALSE_PASS_MAX: of the items the
     panel passed, the share the person would not pass;
   - the upper 95% Wilson bound on overall error at most ERROR_MAX.
@@ -22,6 +24,8 @@ KAPPA_MIN = 0.6
 FALSE_PASS_MAX = 0.10
 ERROR_MAX = 0.15
 SKEW_SHARE = 0.10
+RECALL_MIN = 0.80
+RECALL_MIN_LABELS = 20
 Z95 = 1.959963984540054
 
 
@@ -57,7 +61,7 @@ def binary(label: Optional[str]) -> Optional[str]:
     return "pass" if label == "pass" else "not_pass"
 
 
-def compare(human: dict, machine: dict, *, recall_min: Optional[float] = None) -> dict:
+def compare(human: dict, machine: dict, *, recall_min: float = RECALL_MIN) -> dict:
     """Agreement between a person's labels and a judge's (or the panel's) verdicts on one check.
     human and machine map item_id to a class; machine None means no verdict (the human queue)."""
     shared = sorted(i for i in human if i in machine)
@@ -94,25 +98,25 @@ def compare(human: dict, machine: dict, *, recall_min: Optional[float] = None) -
                             "rate": missed / len(human_not_pass) if human_not_pass else None,
                             "wilson": wilson(missed, len(human_not_pass))},
         "recall": recall, "minority_share": minority_share, "skewed": skewed,
+        "not_pass_recall": {"hits": len(human_not_pass) - missed, "n": len(human_not_pass),
+                            "recall": (len(human_not_pass) - missed) / len(human_not_pass) if human_not_pass else None,
+                            "wilson": wilson(len(human_not_pass) - missed, len(human_not_pass))},
     }
     out["bar"] = bar(out, recall_min=recall_min)
     return out
 
 
-def bar(m: dict, *, recall_min: Optional[float] = None) -> dict:
+def bar(m: dict, *, recall_min: float = RECALL_MIN) -> dict:
     reasons = []
     if not m["items_decided"]:
         return {"meets": False, "reasons": ["no labeled items with a verdict"]}
-    if m["skewed"]:
-        if recall_min is None:
-            reasons.append("one class is under 10% of the labels, so the bar uses per-class recall, and no "
-                           "recall threshold has been set")
-        else:
-            low = [c for c, r in m["recall"].items() if r["recall"] is None or r["recall"] < recall_min]
-            if low:
-                reasons.append(f"recall under {recall_min} for {low}")
-    elif m["kappa_binary"] is None or m["kappa_binary"] < KAPPA_MIN:
+    if not m["skewed"] and (m["kappa_binary"] is None or m["kappa_binary"] < KAPPA_MIN):
         reasons.append(f"kappa {m['kappa_binary']} under {KAPPA_MIN}")
+    r = m["not_pass_recall"]
+    if r["n"] < RECALL_MIN_LABELS:
+        reasons.append(f"only {r['n']} not-pass labels, under {RECALL_MIN_LABELS}: no recall claim")
+    elif r["recall"] < recall_min:
+        reasons.append(f"not-pass recall {r['recall']:.3f} under {recall_min}")
     if m["false_pass"]["wilson"][1] > FALSE_PASS_MAX:
         reasons.append(f"false-pass upper bound {m['false_pass']['wilson'][1]:.3f} over {FALSE_PASS_MAX}")
     if m["error_wilson"][1] > ERROR_MAX:

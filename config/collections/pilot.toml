@@ -17,6 +17,9 @@ jurisdictions = ["federal", "ontario", "alberta", "quebec", "british_columbia", 
 worksheet = "reports/phase16/judgment_worksheet.jsonl"
 # Recorded v1 answers in the API response format; they carry each answer's retrieved evidence.
 answers_index = "site/data/pilot/answers/index.json"
+# The model that wrote the v1 answers (the "model" field of every recorded answer). The audit
+# panel never includes it for these answers.
+writer_model = "claude-haiku-4-5-20251001"
 # The author's sentence-support decisions: {qid: {sentence_no: label}}.
 labels = "eval/judgments_phase16.json"
 labels_kind = "by_question"

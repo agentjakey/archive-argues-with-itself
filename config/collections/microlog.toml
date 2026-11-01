@@ -14,6 +14,9 @@ jurisdictions = ["federal", "ontario", "alberta", "quebec", "british_columbia", 
 [v1]
 worksheet = "reports/microlog/judgment_worksheet.jsonl"
 answers_index = "site/data/microlog/answers/index.json"
+# The model that wrote the v1 answers (the "model" field of every recorded answer). The audit
+# panel never includes it for these answers.
+writer_model = "claude-haiku-4-5-20251001"
 # Labels sit in the worksheet's own "judgment" field.
 labels = "reports/microlog/judgment_worksheet.jsonl"
 labels_kind = "worksheet_field"

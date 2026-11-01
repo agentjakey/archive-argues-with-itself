@@ -1,14 +1,16 @@
 """Run the audit pipeline (docs/formats/audit.md).
 
     python -m archive_debugger.audit.run --run-id probe-1 --answers 20 --seed 2026 --cap 2.00
-    python -m archive_debugger.audit.run --run-id calib-1 --items reports/v2/audit/calibration/kit.jsonl --cap 6.00
+    python -m archive_debugger.audit.run --run-id calib-1 --items reports/v2/audit/calibration/kit.jsonl --cap 5.00
 
 Steps, each resumable (a stopped run is started again with the same command and only does what is
-missing): build the judge items from every collection's v1 answers (or read them from --items),
-run the deterministic gates, have each panel judge and each candidate judge read every item, send
-the disagreements to the escalation judge, decide the panel's verdicts, and write the run report
-with the spend per provider and the cost per judged item. Every paid call is checked against the
-run's cap and the phase cap first (audit/budget.py).
+missing): build the judge items from every collection's v1 answers (sentence items and one answer
+item per answer, or read them from --items), run the deterministic gates, have each panel judge and
+each candidate judge read every item, send the disagreements to the escalation judge, decide the
+panel's verdicts, have the escalation judge re-read a random share of the agreed passes (the
+leniency review), and write the run report with the spend per provider and the cost per judged
+sentence. Every paid call is checked against the run's cap and the phase cap first
+(audit/budget.py). A panel that includes the model that wrote the answers is refused.
 
 Outputs go under reports/v2/audit/runs/<run id>/; the spend ledger is reports/v2/audit/ledger.jsonl."""
 from __future__ import annotations
@@ -54,7 +56,7 @@ def good_judgments(path: Path) -> dict:
 
 
 def run_judge(spec: judges.JudgeSpec, pending: list, run_dir: Path, ledger: Ledger, run_id: str, cap: float,
-              log=print) -> None:
+              log=print, gateway=None) -> None:
     out = run_dir / "judgments.jsonl"
     if not pending:
         return
@@ -67,16 +69,22 @@ def run_judge(spec: judges.JudgeSpec, pending: list, run_dir: Path, ledger: Ledg
         for it in pending:
             append_jsonl(out, judges.run_anthropic_direct(spec, it, ledger, run_id, cap))
     elif spec.provider == "workers-ai":
-        judges.run_workers_ai_many(spec, pending, ledger, run_id, cap, on_record=lambda r: append_jsonl(out, r))
+        judges.run_workers_ai_many(spec, pending, ledger, run_id, cap, on_record=lambda r: append_jsonl(out, r),
+                                   gateway=gateway)
     else:
         raise ValueError(f"unknown provider {spec.provider}")
 
 
+def check_items(items: list, check: str) -> list:
+    return [it for it in items if check in prompts.KIND_CHECKS[prompts.kind_of(it)]]
+
+
 def report(run_id: str, run_dir: Path, items: list, labels: dict, gate_rows: dict, cfg: judges.PanelConfig,
-           ledger: Ledger, decisions: list) -> dict:
+           ledger: Ledger, decisions: list, lenient: dict, review_ids: list) -> dict:
     judgments = read_jsonl(run_dir / "judgments.jsonl")
     current = [j for j in judgments if j.get("prompt_version") == prompts.PROMPT_VERSION]
     ids = {it["item_id"] for it in items}
+    sentences = [it for it in items if prompts.kind_of(it) == "sentence"]
     by_judge: dict = {}
     for j in current:
         if j["item_id"] in ids:
@@ -89,67 +97,93 @@ def report(run_id: str, run_dir: Path, items: list, labels: dict, gate_rows: dic
             latest[r["item_id"]] = r
         good = [r for r in latest.values() if r.get("verdicts")]
         spent = sum(r["usd"] for r in recs)
-        machine = {r["item_id"]: r["verdicts"]["supports"]["verdict"] for r in good}
+        machine = {r["item_id"]: r["verdicts"]["supports"]["verdict"] for r in good if "supports" in r["verdicts"]}
+        spec = cfg.specs[name]
         per_judge[name] = {
-            "provider": cfg.specs[name].provider, "model": cfg.specs[name].model, "family": cfg.specs[name].family,
+            "provider": spec.provider, "model": spec.model, "family": spec.family,
             "role": "panel" if name in cfg.judges else ("escalation" if name == cfg.escalation else "candidate"),
             "items_with_verdicts": len(good), "items_without": len(latest) - len(good),
+            "by_kind": dict(Counter(r.get("kind", "sentence") for r in latest.values())),
             "errors": dict(Counter(r["error"] for r in latest.values() if r.get("error"))),
-            "usd": round(spent, 6), "usd_per_item": round(spent / len(latest), 6) if latest else None,
+            "cached": sum(1 for r in recs if r.get("cached")),
+            "usd": round(spent, 6),
+            "usd_per_judged_sentence": round(spent / len(sentences), 6) if sentences and latest else None,
             "input_tokens": sum(r["input_tokens"] for r in recs), "output_tokens": sum(r["output_tokens"] for r in recs),
             "v1_supports": calibration.compare({i: labels[i] for i in machine if i in labels}, machine),
         }
     panel_usd = sum(per_judge[n]["usd"] for n in list(cfg.judges) + [cfg.escalation] if n in per_judge)
-    finals = {c: Counter((d["checks"][c]["final"] or "human") for d in decisions) for c in prompts.CHECKS}
-    routes = {c: Counter(d["checks"][c]["route"] for d in decisions) for c in prompts.CHECKS}
-    panel_supports = {d["item_id"]: d["checks"]["supports"]["final"] for d in decisions}
-    out = {
+    by_id = {d["item_id"]: d for d in decisions}
+    finals, routes = {}, {}
+    for c in prompts.CHECKS:
+        ds = [by_id[it["item_id"]] for it in check_items(items, c)]
+        finals[c] = dict(Counter((d["checks"][c]["final"] or "human") for d in ds))
+        routes[c] = dict(Counter(d["checks"][c]["route"] for d in ds))
+    panel_supports = {d["item_id"]: d["checks"]["supports"]["final"] for d in decisions if "supports" in d["checks"]}
+    return {
         "run_id": run_id, "prompt_version": prompts.PROMPT_VERSION, "gate_version": gates.GATE_VERSION,
         "panel_version": panel.PANEL_VERSION, "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "items": len(items), "answers": len({(it["collection"], it["qid"]) for it in items}),
+        "items": len(items), "sentence_items": len(sentences), "answer_items": len(items) - len(sentences),
+        "answers": len({(it["collection"], it["qid"]) for it in items}),
         "by_collection": dict(Counter(it["collection"] for it in items)),
-        "valid": dict(Counter(g["valid"] for g in gate_rows.values())),
+        "valid": dict(Counter(gate_rows[it["item_id"]]["valid"] for it in sentences)),
         "gate_flags": dict(Counter(f for g in gate_rows.values() for f in g["flags"])),
-        "panel": {"judges": list(cfg.judges), "escalation": cfg.escalation, "candidates": list(cfg.candidates)},
-        "finals": {c: dict(v) for c, v in finals.items()}, "routes": {c: dict(v) for c, v in routes.items()},
+        "panel": {"judges": list(cfg.judges), "escalation": cfg.escalation, "candidates": list(cfg.candidates),
+                  "workers_ai_gateway": cfg.workers_ai_gateway},
+        "finals": finals, "routes": routes,
         "human_queue_items": sum(1 for d in decisions if d["human_queue"]),
+        "leniency_review": {"share": cfg.review_share, "flag_above": cfg.lenient_above, "items": len(review_ids),
+                            "checks": lenient,
+                            "too_lenient": sorted(c for c, v in lenient.items() if v["too_lenient"])},
         "spend": {"run_usd": round(totals.spent, 6), "reserved_usd": round(totals.reserved, 6),
                   "by_provider": {k: round(v, 6) for k, v in totals.by_provider.items()},
                   "phase_usd": round(ledger.totals().spent, 6), "phase_cap_usd": ledger.phase_cap},
-        "cost_per_judged_item": {
-            "panel_with_escalation_usd": round(panel_usd / len(items), 6) if items else None,
-            "everything_in_this_run_usd": round(totals.spent / len(items), 6) if items else None,
+        "cost_per_judged_sentence": {
+            "panel_with_escalation_usd": round(panel_usd / len(sentences), 6) if sentences else None,
+            "everything_in_this_run_usd": round(totals.spent / len(sentences), 6) if sentences else None,
+            "note": "per sentence item; the cost of the answer items (ANSWERS) is spread over the sentences",
         },
         "judges": per_judge,
         "panel_v1_supports": calibration.compare({i: labels[i] for i in panel_supports if i in labels}, panel_supports),
     }
-    return out
 
 
 def write_markdown(r: dict, path: Path) -> None:
+    cost = r["cost_per_judged_sentence"]
     lines = [f"# Audit run {r['run_id']}", "",
              f"Prompt {r['prompt_version']}, gates v{r['gate_version']}, panel v{r['panel_version']}, {r['generated_at']}.", "",
-             f"{r['items']} items (answer sentences) from {r['answers']} answers: "
+             f"{r['sentence_items']} sentence items and {r['answer_items']} answer items from {r['answers']} answers: "
              + ", ".join(f"{k} {v}" for k, v in sorted(r["by_collection"].items())) + ".", "",
-             f"VALID (gates): {r['valid']}. Gate flags: {r['gate_flags'] or 'none'}.", "",
+             f"VALID (gates, sentences): {r['valid']}. Gate flags: {r['gate_flags'] or 'none'}.", "",
+             f"Panel: {', '.join(r['panel']['judges'])}; escalation {r['panel']['escalation']}; candidates "
+             f"{', '.join(r['panel']['candidates']) or 'none'}. Workers AI gateway: {r['panel']['workers_ai_gateway'] or 'none (direct)'}.", "",
              "## Spend", "",
              f"This run: ${r['spend']['run_usd']:.4f} ("
              + ", ".join(f"{k} ${v:.4f}" for k, v in sorted(r["spend"]["by_provider"].items())) + "). "
-             f"Phase total: ${r['spend']['phase_usd']:.4f} of ${r['spend']['phase_cap_usd']:.2f}.", "",
-             f"Cost per judged item, panel and escalation only: ${r['cost_per_judged_item']['panel_with_escalation_usd']:.5f}; "
-             f"everything in this run, candidates included: ${r['cost_per_judged_item']['everything_in_this_run_usd']:.5f}.", "",
-             "| Judge | Role | Family | Items with verdicts | Without | Errors | USD | USD per item | Tokens in / out |",
-             "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+             f"Phase total: ${r['spend']['phase_usd']:.4f} of ${r['spend']['phase_cap_usd']:.2f}.", ""]
+    if cost["panel_with_escalation_usd"] is not None:
+        lines += [f"Cost per judged sentence, panel and escalation only: ${cost['panel_with_escalation_usd']:.5f}; "
+                  f"everything in this run: ${cost['everything_in_this_run_usd']:.5f} ({cost['note']}).", ""]
+    lines += ["| Judge | Role | Family | Items with verdicts | Without | Errors | Gateway cache hits | USD | USD per sentence | Tokens in / out |",
+              "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for name, j in r["judges"].items():
         lines.append(f"| {name} | {j['role']} | {j['family']} | {j['items_with_verdicts']} | {j['items_without']} | "
-                     f"{j['errors'] or ''} | {j['usd']:.4f} | {j['usd_per_item'] or 0:.5f} | {j['input_tokens']} / {j['output_tokens']} |")
+                     f"{j['errors'] or ''} | {j['cached']} | {j['usd']:.4f} | {j['usd_per_judged_sentence'] or 0:.5f} | "
+                     f"{j['input_tokens']} / {j['output_tokens']} |")
     lines += ["", "## Panel verdicts", "", "| Check | Final verdicts | Routes |", "| --- | --- | --- |"]
     for c in prompts.CHECKS:
         lines.append(f"| {c} | {r['finals'][c]} | {r['routes'][c]} |")
+    lr = r["leniency_review"]
     lines += ["", f"Items with at least one check in the human queue: {r['human_queue_items']}.", "",
-              "## Agreement with the v1 SUPPORTS labels", "",
-              "The v1 labels were proposed by a model of the same family as the Claude judge, then reviewed and "
-              "decided by the author, so they may lean toward that judge. They cover SUPPORTS only. This is a first "
+              "## Leniency review", "",
+              f"The escalation judge re-read {lr['items']} items with agreed passes ({lr['share']:.0%} of them). A check "
+              f"is flagged when it did not pass more than {lr['flag_above']:.0%} of the reviewed agreed passes.", "",
+              "| Check | Reviewed | Escalation did not pass | Rate (95% interval) | Flag |", "| --- | --- | --- | --- | --- |"]
+    for c, v in sorted(lr["checks"].items()):
+        rate = f"{v['rate']:.3f} ({v['wilson'][0]:.3f} to {v['wilson'][1]:.3f})" if v["rate"] is not None else "-"
+        lines.append(f"| {c} | {v['reviewed']} | {v['disagree']} | {rate} | {'TOO LENIENT' if v['too_lenient'] else ''} |")
+    lines += ["", "## Agreement with the v1 SUPPORTS labels", "",
+              "The v1 labels were proposed by a model of the same family as the Claude judges, then reviewed and "
+              "decided by the author, so they may lean toward those judges. They cover SUPPORTS only. This is a first "
               "look, not calibration: calibration uses the new blind labels.", "",
               "| Judge | Decided | Exact agreement | Kappa (pass / not pass) | False passes | Missed failures |",
               "| --- | --- | --- | --- | --- | --- |"]
@@ -173,11 +207,13 @@ def main(argv=None) -> int:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--cap", type=float, required=True, help="this run's spending cap in US dollars")
     parser.add_argument("--collections", nargs="*", default=None, help="default: every config/collections/*.toml")
-    parser.add_argument("--answers", type=int, default=None, help="judge every sentence of this many answers")
+    parser.add_argument("--answers", type=int, default=None, help="judge every sentence and the answer item of this many answers")
     parser.add_argument("--seed", type=int, default=2026)
-    parser.add_argument("--items", type=Path, default=None, help="judge these items (a judge_items JSONL file)")
-    parser.add_argument("--judges", nargs="*", default=None, help="default: the panel and the candidates")
+    parser.add_argument("--items", type=Path, default=None, help="judge these items (a judge_items or kit JSONL file)")
+    parser.add_argument("--judges", nargs="*", default=None,
+                        help="judges that read every item; default: the panel and the candidates")
     parser.add_argument("--no-escalation", action="store_true")
+    parser.add_argument("--no-review", action="store_true", help="skip the leniency review")
     args = parser.parse_args(argv)
 
     run_dir = AUDIT_DIR / "runs" / args.run_id
@@ -192,13 +228,21 @@ def main(argv=None) -> int:
     elif args.items:
         wanted = [r["item_id"] for r in read_jsonl(args.items)]
         index = {it["item_id"]: it for it in all_items}
-        items = [index[i] for i in wanted if i in index]
+        missing = [i for i in wanted if i not in index]
+        if missing:
+            raise SystemExit(f"{len(missing)} items in {args.items} are not in the collections, e.g. {missing[:3]}")
+        items = [index[i] for i in wanted]
     elif args.answers:
         items = items_mod.select_answers(all_items, args.answers, args.seed)
     else:
         items = all_items
+    conflicts = judges.writer_conflicts(cfg, items)
+    if conflicts:
+        raise SystemExit(f"refused: panel or escalation judges {conflicts} use the model that wrote these answers; "
+                         "change [panel] in config/audit.toml")
     write_jsonl(items_path, items)
-    print(f"{len(items)} items from {len({(i['collection'], i['qid']) for i in items})} answers")
+    n_answers = sum(1 for it in items if prompts.kind_of(it) == "answer")
+    print(f"{len(items) - n_answers} sentence items and {n_answers} answer items")
 
     gate_path = run_dir / "gates.jsonl"
     gate_rows = {g["item_id"]: g for g in read_jsonl(gate_path)}
@@ -211,32 +255,51 @@ def main(argv=None) -> int:
             gate_rows[it["item_id"]] = gates.run_gates(conn, it)
         write_jsonl(gate_path, gate_rows.values())
 
+    judgments_path = run_dir / "judgments.jsonl"
     judge_names = args.judges or (list(cfg.judges) + list(cfg.candidates))
+
+    def judge(name: str, pending: list) -> None:
+        run_judge(cfg.specs[name], pending, run_dir, ledger, args.run_id, args.cap, gateway=cfg.workers_ai_gateway)
+
+    def decide_all() -> list:
+        done = good_judgments(judgments_path)
+        return [panel.decide(it, gate_rows[it["item_id"]], cfg.judges,
+                             {n: done.get((it["item_id"], n)) for n in cfg.judges},
+                             done.get((it["item_id"], cfg.escalation))) for it in items]
+
+    review_ids: list = []
     try:
         for name in judge_names:
-            done = good_judgments(run_dir / "judgments.jsonl")
-            pending = [it for it in items if (it["item_id"], name) not in done]
-            run_judge(cfg.specs[name], pending, run_dir, ledger, args.run_id, args.cap)
+            done = good_judgments(judgments_path)
+            judge(name, [it for it in items if (it["item_id"], name) not in done])
         if not args.no_escalation:
-            done = good_judgments(run_dir / "judgments.jsonl")
+            done = good_judgments(judgments_path)
             a, b = cfg.judges
-            pending = [it for it in items
-                       if panel.needs_escalation(done.get((it["item_id"], a)), done.get((it["item_id"], b)))
-                       and (it["item_id"], cfg.escalation) not in done]
-            run_judge(cfg.specs[cfg.escalation], pending, run_dir, ledger, args.run_id, args.cap)
+            judge(cfg.escalation, [it for it in items
+                                   if panel.needs_escalation(done.get((it["item_id"], a)), done.get((it["item_id"], b)),
+                                                             prompts.KIND_CHECKS[prompts.kind_of(it)])
+                                   and (it["item_id"], cfg.escalation) not in done])
+        if not args.no_review:
+            # The sample is drawn from the panel's agreed passes before the review, seeded by the run id.
+            review_ids = panel.review_sample(decide_all(), cfg.review_share, args.run_id)
+            done = good_judgments(judgments_path)
+            wanted = set(review_ids)
+            judge(cfg.escalation, [it for it in items if it["item_id"] in wanted and (it["item_id"], cfg.escalation) not in done])
     except BudgetExceeded as exc:
         print(f"STOPPED before a call that could cross a cap: {exc}", file=sys.stderr)
 
-    done = good_judgments(run_dir / "judgments.jsonl")
-    decisions = [panel.decide(it["item_id"], gate_rows[it["item_id"]], cfg.judges,
-                              {n: done.get((it["item_id"], n)) for n in cfg.judges},
-                              done.get((it["item_id"], cfg.escalation))) for it in items]
+    decisions = decide_all()
+    done = good_judgments(judgments_path)
+    reviews = {i: done.get((i, cfg.escalation)) for i in review_ids}
+    lenient = panel.leniency([d for d in decisions if d["item_id"] in reviews], reviews, cfg.lenient_above)
     write_jsonl(run_dir / "panel.jsonl", decisions)
     write_jsonl(run_dir / "human_queue.jsonl", [d for d in decisions if d["human_queue"]])
-    r = report(args.run_id, run_dir, items, labels, gate_rows, cfg, ledger, decisions)
+    r = report(args.run_id, run_dir, items, labels, gate_rows, cfg, ledger, decisions, lenient, review_ids)
     (run_dir / "report.json").write_text(json.dumps(r, indent=1, sort_keys=True), encoding="utf-8")
     write_markdown(r, run_dir / "report.md")
     print(f"spend this run ${r['spend']['run_usd']:.4f} {r['spend']['by_provider']}; phase ${r['spend']['phase_usd']:.4f}")
+    if r["leniency_review"]["too_lenient"]:
+        print(f"FLAG: the panel looks too lenient on {r['leniency_review']['too_lenient']}")
     print(f"report: {run_dir / 'report.md'}")
     return 0
 

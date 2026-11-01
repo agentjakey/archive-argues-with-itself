@@ -1,7 +1,9 @@
-"""Judge items (docs/formats/audit.md): one kept answer sentence with the question it answers
-and the full text of every passage it cites. Built from a collection's v1 audit worksheet; the
-answer's retrieved evidence comes from the recorded answer when one exists for the same question
-and sentence. People's labels are kept in a separate file, so a judge never sees them."""
+"""Judge items (docs/formats/audit.md). A sentence item is one kept answer sentence with the
+question it answers and the full text of every passage it cites; it is judged on SUPPORTS and IN
+SCOPE. An answer item is one whole answer with its question; it is judged on ANSWERS. Built from a
+collection's v1 audit worksheet; the answer's retrieved evidence comes from the recorded answer when
+one exists for the same question and sentences. People's labels are kept in a separate file, so a
+judge never sees them."""
 from __future__ import annotations
 
 import json
@@ -12,13 +14,17 @@ from typing import Optional
 from archive_debugger.audit.collections import Collection
 from archive_debugger.audit.records import iter_jsonl
 
-ITEM_FORMAT = 1
+ITEM_FORMAT = 2
 CITATION_FIELDS = ("passage_id", "item_id", "title", "year", "jurisdiction", "leaf_index", "printed_page",
                    "deep_link", "text")
 
 
 def item_id(collection: str, qid: str, sentence_no: int) -> str:
     return f"{collection}:{qid}:s{int(sentence_no)}"
+
+
+def answer_item_id(collection: str, qid: str) -> str:
+    return f"{collection}:{qid}:answer"
 
 
 def _year(value) -> Optional[int]:
@@ -46,7 +52,8 @@ def _recorded_answers(index_path: Optional[Path]) -> dict:
 
 
 def build_v1_items(collection: Collection) -> list[dict]:
-    """Every kept sentence of the collection's v1 answers, in worksheet order."""
+    """Every kept sentence of the collection's v1 answers, in worksheet order, then one answer item
+    per answer."""
     if collection.v1 is None:
         raise ValueError(f"collection {collection.name} has no [v1] sources")
     recorded = _recorded_answers(collection.v1.answers_index)
@@ -54,7 +61,7 @@ def build_v1_items(collection: Collection) -> list[dict]:
     for row in iter_jsonl(collection.v1.worksheet):
         if row.get("kind") == "sentence":
             sentences.setdefault(row["qid"], []).append(row)
-    items = []
+    items, answers = [], []
     for qid, rows in sentences.items():
         rows.sort(key=lambda r: int(r["sentence_no"]))
         answer_text = " ".join(r["text"] for r in rows)
@@ -71,6 +78,7 @@ def build_v1_items(collection: Collection) -> list[dict]:
                 citations.append(cite)
             items.append({
                 "format": ITEM_FORMAT,
+                "kind": "sentence",
                 "item_id": item_id(collection.name, qid, r["sentence_no"]),
                 "collection": collection.name,
                 "qid": qid,
@@ -82,9 +90,24 @@ def build_v1_items(collection: Collection) -> list[dict]:
                 "citations": citations,
                 "retrieved_ids": retrieved,
                 "source": "v1",
+                "writer_model": collection.v1.writer_model,
                 "generated_at": r.get("generated_at"),
             })
-    return items
+        answers.append({
+            "format": ITEM_FORMAT,
+            "kind": "answer",
+            "item_id": answer_item_id(collection.name, qid),
+            "collection": collection.name,
+            "qid": qid,
+            "question": rows[0]["question"],
+            "filters": filters if same_answer else {},
+            "answer_text": answer_text,
+            "sentences": [r["text"] for r in rows],
+            "source": "v1",
+            "writer_model": collection.v1.writer_model,
+            "generated_at": rows[0].get("generated_at"),
+        })
+    return items + answers
 
 
 def v1_labels(collection: Collection) -> dict:

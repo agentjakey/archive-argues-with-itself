@@ -22,6 +22,7 @@ class V1Sources:
     answers_index: Optional[Path]
     labels: Optional[Path]
     labels_kind: str                      # "by_question" or "worksheet_field"
+    writer_model: str                     # the model that wrote these answers: never on their panel
     label_map: dict = field(default_factory=dict)
 
 
@@ -67,11 +68,13 @@ def load(name_or_path: str, config_dir: Path = CONFIG_DIR) -> Collection:
         bad = sorted(set(label_map.values()) - set(LABEL_CLASSES))
         if bad:
             raise CollectionError(f"{path}: label_map values must be {LABEL_CLASSES}, got {bad}")
+        if not v.get("writer_model"):
+            raise CollectionError(f"{path}: [v1] needs writer_model, the model that wrote the answers")
         if v.get("labels_kind", "by_question") not in ("by_question", "worksheet_field"):
             raise CollectionError(f"{path}: labels_kind must be by_question or worksheet_field")
         v1 = V1Sources(worksheet=_repo_path(v["worksheet"]), answers_index=_repo_path(v.get("answers_index")),
                        labels=_repo_path(v.get("labels")), labels_kind=v.get("labels_kind", "by_question"),
-                       label_map=label_map)
+                       writer_model=v["writer_model"], label_map=label_map)
     return Collection(name=c["name"], scope=c["scope"], label=c.get("label", c["name"]),
                       languages=tuple(c.get("languages") or ()), period=period,
                       jurisdictions=tuple(c["jurisdictions"]), v1=v1, path=path)

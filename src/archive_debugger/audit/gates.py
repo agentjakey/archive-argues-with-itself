@@ -96,6 +96,10 @@ def year_checks(sentence: str, citations: list) -> list:
 
 
 def run_gates(conn: sqlite3.Connection, item: dict) -> dict:
+    if item.get("kind") == "answer":
+        # VALID and the page checks belong to sentences; an answer item is judged on ANSWERS only.
+        return {"item_id": item["item_id"], "gate_version": GATE_VERSION, "valid": "not_applicable",
+                "citations": [], "quotes": [], "years": [], "flags": []}
     checks = [check_citation(conn, c, item.get("retrieved_ids")) for c in item["citations"]]
     quotes = quote_checks(item["sentence"], [c.get("text") for c in item["citations"]])
     years = year_checks(item["sentence"], item["citations"])
