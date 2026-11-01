@@ -151,7 +151,7 @@ def report(run_id: str, run_dir: Path, items: list, labels: dict, gate_rows: dic
         "panel_version": panel.PANEL_VERSION, "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "items": len(items), "sentence_items": len(sentences),
         "answer_items": sum(1 for it in items if prompts.kind_of(it) == "answer"),
-        "benchmark_items": sum(1 for it in items if prompts.kind_of(it) == "benchmark"),
+        "benchmark_items": sum(1 for it in items if prompts.kind_of(it) in ("benchmark", "benchmark2")),
         "answers": len({(it["collection"], it.get("qid") or it["item_id"]) for it in items}),
         "by_collection": dict(Counter(it["collection"] for it in items)),
         "valid": dict(Counter(gate_rows[it["item_id"]]["valid"] for it in sentences)),
@@ -259,7 +259,7 @@ def main(argv=None) -> int:
         rows = read_jsonl(args.items)
         index = {it["item_id"]: it for it in all_items}
         # Items that are not v1 answers (drafted benchmark items) are read whole from the file.
-        index.update({r["item_id"]: r for r in rows if r.get("kind") == "benchmark"})
+        index.update({r["item_id"]: r for r in rows if r.get("kind") in ("benchmark", "benchmark2")})
         wanted = [r["item_id"] for r in rows]
         missing = [i for i in wanted if i not in index]
         if missing:

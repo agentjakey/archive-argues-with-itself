@@ -10,7 +10,8 @@ import json
 CHECKS = ("supports", "answers", "in_scope")            # the citation checks people calibrate
 ITEM_CHECKS = ("well_formed", "label_correct")          # checks on a drafted benchmark item
 ALL_CHECKS = CHECKS + ITEM_CHECKS
-KIND_CHECKS = {"sentence": ("supports", "in_scope"), "answer": ("answers",), "benchmark": ITEM_CHECKS}
+KIND_CHECKS = {"sentence": ("supports", "in_scope"), "answer": ("answers",), "benchmark": ITEM_CHECKS,
+               "benchmark2": ITEM_CHECKS}
 CLASSES = {
     "supports": ("pass", "partial", "fail"),
     "answers": ("pass", "partial", "fail"),
@@ -174,6 +175,33 @@ return answers only. You see the question, its filters and the whole answer, not
 
 REFERENCE_BENCHMARK_SYSTEM = REFERENCE_PREAMBLE + BENCHMARK_SYSTEM
 
+# The second kind of drafted benchmark item (Phase 2 close-out): conflicting evidence from two real
+# pages, restricted records under a synthetic governance fixture, and false premises drafted by a
+# stronger model. Its own prompt and version, so the first kind's judgments stay valid.
+BENCHMARK2_SYSTEM = """You check one drafted item for a benchmark of questions about Canadian government publications. An item is a question a researcher might ask, the label it is given (the verdict a good answer should reach and what the answer must or must not do), the scanned pages it was drafted from with the exact quotes it relies on, any governance record that applies, and the corpus checks. You return two verdicts as JSON.
+
+1. well_formed: is the question clear, answerable in principle, written as a researcher would ask it, and free of hints about its label?
+   pass or fail.
+
+2. label_correct: given the pages, the quotes, the governance record and the checks, is the label right?
+   Labels: SUPPORTED (the pages answer the question); PARTIALLY_SUPPORTED (they answer part of it, or only through unreliable text); CONFLICTING (two records that measure the same thing, for the same place, population and period, report different values: comparable and disagreeing); INCOMPARABLE (the records describe different populations, periods, programs or measures and cannot be compared); INSUFFICIENT_EVIDENCE (the collection does not hold what the question needs, or the question rests on a claim the pages contradict); RESTRICTED (a governance record restricts the use of the records the question needs; the answer must say so and must not use them).
+   For CONFLICTING, fail the label when the two values could both be right because they count different things, places, years or units: that is INCOMPARABLE, not a conflict. For INSUFFICIENT_EVIDENCE on a false premise, fail the label when the page does not clearly contradict the claim. For RESTRICTED, judge whether the governance record covers the records the question needs.
+   pass when the label and the required behaviour follow from the material; fail otherwise.
+
+""" + UNTRUSTED
+
+BENCHMARK2_TEMPLATE = """<item kind="{kind}">
+<question>{question}</question>
+<filters>{filters}</filters>
+<label verdict="{verdict}">{behaviour}</label>
+<quotes>{quotes}</quotes>
+<governance>{governance}</governance>
+<corpus_checks>{checks}</corpus_checks>
+</item>
+{pages}"""
+
+REFERENCE_BENCHMARK2_SYSTEM = REFERENCE_PREAMBLE + BENCHMARK2_SYSTEM
+
 STYLES = ("panel", "reference")
 
 
@@ -185,8 +213,9 @@ def kind_of(item: dict) -> str:
 def system(kind: str, style: str = "panel") -> str:
     if style == "reference":
         return {"sentence": REFERENCE_SENTENCE_SYSTEM, "answer": REFERENCE_ANSWER_SYSTEM,
-                "benchmark": REFERENCE_BENCHMARK_SYSTEM}[kind]
-    return {"sentence": SENTENCE_SYSTEM, "answer": ANSWER_SYSTEM, "benchmark": BENCHMARK_SYSTEM}[kind]
+                "benchmark": REFERENCE_BENCHMARK_SYSTEM, "benchmark2": REFERENCE_BENCHMARK2_SYSTEM}[kind]
+    return {"sentence": SENTENCE_SYSTEM, "answer": ANSWER_SYSTEM, "benchmark": BENCHMARK_SYSTEM,
+            "benchmark2": BENCHMARK2_SYSTEM}[kind]
 
 
 def _check_schema(check: str) -> dict:
@@ -237,6 +266,15 @@ def user_message(item: dict, style: str = "panel") -> str:
                                          behaviour=_body(label.get("behaviour") or ""),
                                          checks=_body(json.dumps(item.get("corpus_checks") or [], sort_keys=True)),
                                          pages=_pages(item.get("sources") or [], limit))
+    if kind_of(item) == "benchmark2":
+        label = item.get("label") or {}
+        return BENCHMARK2_TEMPLATE.format(kind=_attr(item.get("category")), question=_body(item["question"]),
+                                          filters=filters, verdict=_attr(label.get("verdict")),
+                                          behaviour=_body(label.get("behaviour") or ""),
+                                          quotes=_body(json.dumps(item.get("quotes") or [], sort_keys=True)),
+                                          governance=_body(json.dumps(item.get("governance") or [], sort_keys=True)),
+                                          checks=_body(json.dumps(item.get("corpus_checks") or [], sort_keys=True)),
+                                          pages=_pages(item.get("sources") or [], limit))
     pages = _pages(item["citations"], limit)
     return SENTENCE_TEMPLATE.format(question=_body(item["question"]), filters=filters, answer=answer,
                                     sentence=_body(item["sentence"]), pages=pages)
@@ -260,14 +298,26 @@ BENCHMARK_PROMPT_VERSION = hashlib.sha256((BENCHMARK_SYSTEM + BENCHMARK_TEMPLATE
 
 REFERENCE_PROMPT_VERSION = hashlib.sha256((REFERENCE_SENTENCE_SYSTEM + REFERENCE_ANSWER_SYSTEM + REFERENCE_BENCHMARK_SYSTEM
                                            + SENTENCE_TEMPLATE + ANSWER_TEMPLATE + BENCHMARK_TEMPLATE + PAGE
-                                           + json.dumps([verdict_schema(k) for k in KIND_CHECKS], sort_keys=True)
+                                           + json.dumps([verdict_schema(k) for k in ("sentence", "answer", "benchmark")],
+                                                        sort_keys=True)
                                            + "full-pages").encode("utf-8")).hexdigest()[:12]
+
+
+BENCHMARK2_PROMPT_VERSION = hashlib.sha256((BENCHMARK2_SYSTEM + BENCHMARK2_TEMPLATE + PAGE
+                                            + json.dumps(verdict_schema("benchmark2"), sort_keys=True)
+                                            + str(MAX_PAGE_CHARS)).encode("utf-8")).hexdigest()[:12]
+
+REFERENCE_BENCHMARK2_PROMPT_VERSION = hashlib.sha256((REFERENCE_BENCHMARK2_SYSTEM + BENCHMARK2_TEMPLATE + PAGE
+                                                      + json.dumps(verdict_schema("benchmark2"), sort_keys=True)
+                                                      + "full-pages").encode("utf-8")).hexdigest()[:12]
 
 
 def version_for(kind: str, style: str = "panel") -> str:
     """The prompt version a judgment of this kind of item is made under. Benchmark items have their
     own, so adding them left the citation-check version, and every judgment made under it, as it was.
     Reference judges have one version for all three kinds."""
+    if kind == "benchmark2":
+        return REFERENCE_BENCHMARK2_PROMPT_VERSION if style == "reference" else BENCHMARK2_PROMPT_VERSION
     if style == "reference":
         return REFERENCE_PROMPT_VERSION
     return BENCHMARK_PROMPT_VERSION if kind == "benchmark" else PROMPT_VERSION

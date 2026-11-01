@@ -37,7 +37,7 @@ CLASSES = {"supports": ("pass", "partial", "fail"), "answers": ("pass", "partial
            "in_scope": ("pass", "fail", "unclear"), "well_formed": ("pass", "fail"),
            "label_correct": ("pass", "fail")}
 KIND_CHECKS = {"sentence": ("supports", "in_scope"), "answer": ("answers",),
-               "benchmark": ("well_formed", "label_correct")}
+               "benchmark": ("well_formed", "label_correct"), "benchmark2": ("well_formed", "label_correct")}
 LABELER = "author"
 
 
@@ -235,7 +235,7 @@ const CLASSES = { supports: ["pass","partial","fail"], answers: ["pass","partial
                   well_formed: ["pass","fail"], label_correct: ["pass","fail"] };
 const KIND_CHECKS = { sentence: ["supports","in_scope"], answer: ["answers"], benchmark: ["well_formed","label_correct"] };
 let items = [], labels = {}, index = 0, current = {};
-function kindOf(it) { return it.kind || "sentence"; }
+function kindOf(it) { return it.kind === "benchmark2" ? "benchmark" : (it.kind || "sentence"); }
 function el(tag, text, cls) { const e = document.createElement(tag); if (text !== undefined) e.textContent = text; if (cls) e.className = cls; return e; }
 function status(text, cls) { const s = document.getElementById("status"); s.textContent = text; s.className = cls || ""; }
 function buildGroups(kind) {
@@ -279,7 +279,9 @@ function showBench(it) {
   document.getElementById("bench-label").textContent = label.verdict || "";
   document.getElementById("bench-behaviour").textContent = label.behaviour || "";
   document.getElementById("bench-category").textContent = "Category: " + (it.category || "");
-  document.getElementById("bench-checks").textContent = JSON.stringify(it.corpus_checks || [], null, 1);
+  const extra = { quotes: it.quotes, governance: it.governance };
+  document.getElementById("bench-checks").textContent = JSON.stringify(it.corpus_checks || [], null, 1)
+    + (it.kind === "benchmark2" ? " " + JSON.stringify(extra, null, 1) : "");
   pageCards(document.getElementById("bench-pages"), it.sources);
 }
 function showSentence(it) {
