@@ -37,6 +37,7 @@ class JudgeSpec:
     batch: bool = False
     effort: Optional[str] = None
     reasoning_effort: Optional[str] = None
+    prompt: str = "panel"                 # "reference": the author's guide, full pages, reasoning allowed
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,7 @@ class PanelConfig:
     workers_ai_gateway: Optional[str] = None
     review_share: float = 0.10            # share of agreed passes the escalation judge re-reads
     lenient_above: float = 0.10           # escalation disagreement on that sample that flags a check
+    references: tuple = ()                # reference judges (silver labels); never panel, escalation or candidate
 
 
 def load_panel(path: Path = AUDIT_CONFIG) -> PanelConfig:
@@ -55,7 +57,8 @@ def load_panel(path: Path = AUDIT_CONFIG) -> PanelConfig:
         raw = tomllib.load(fh)
     specs = {name: JudgeSpec(name=name, provider=j["provider"], model=j["model"], family=j["family"],
                              max_tokens=int(j["max_tokens"]), batch=bool(j.get("batch", False)),
-                             effort=j.get("effort"), reasoning_effort=j.get("reasoning_effort"))
+                             effort=j.get("effort"), reasoning_effort=j.get("reasoning_effort"),
+                             prompt=j.get("prompt", "panel"))
              for name, j in (raw.get("judges") or {}).items()}
     panel = raw["panel"]
     names = list(panel["judges"]) + [panel["escalation"]] + list(panel.get("candidates") or [])
@@ -65,7 +68,16 @@ def load_panel(path: Path = AUDIT_CONFIG) -> PanelConfig:
     if len(panel["judges"]) != 2 or len({specs[n].family for n in panel["judges"]}) != 2:
         raise ValueError(f"{path}: the panel needs two judges from two different model families")
     gateway = (raw.get("gateway") or {}).get("workers_ai") or None
-    return PanelConfig(judges=tuple(panel["judges"]), escalation=panel["escalation"],
+    references = tuple((raw.get("reference") or {}).get("judges") or ())
+    unknown = [n for n in references if n not in specs]
+    if unknown:
+        raise ValueError(f"{path}: reference judges not defined: {unknown}")
+    on_panel = [n for n in references if n in names]
+    if on_panel:
+        raise ValueError(f"{path}: a reference judge cannot also be a panel, escalation or candidate judge: {on_panel}")
+    if len({specs[n].family for n in references}) != len(references):
+        raise ValueError(f"{path}: the reference judges must come from different model families")
+    return PanelConfig(references=references,judges=tuple(panel["judges"]), escalation=panel["escalation"],
                        candidates=tuple(panel.get("candidates") or ()), specs=specs, workers_ai_gateway=gateway,
                        review_share=float(panel.get("review_share", 0.10)),
                        lenient_above=float(panel.get("lenient_above", 0.10)))
@@ -93,7 +105,8 @@ def custom_id(item_id: str) -> str:
 def _record(spec: JudgeSpec, item: dict, verdicts: Optional[dict], error: Optional[str], input_tokens: int,
             output_tokens: int, usd: float, batch: bool, cached: bool = False) -> dict:
     return {"item_id": item["item_id"], "kind": prompts.kind_of(item), "judge": spec.name, "provider": spec.provider,
-            "model": spec.model, "family": spec.family, "prompt_version": prompts.version_for(prompts.kind_of(item)), "batch": batch,
+            "model": spec.model, "family": spec.family, "prompt_style": spec.prompt,
+            "prompt_version": prompts.version_for(prompts.kind_of(item), spec.prompt), "batch": batch,
             "verdicts": verdicts, "error": error, "input_tokens": input_tokens, "output_tokens": output_tokens,
             "usd": round(usd, 6), "cached": cached, "at": round(time.time(), 3)}
 
@@ -111,8 +124,8 @@ def anthropic_params(spec: JudgeSpec, item: dict) -> dict:
     params = {
         "model": spec.model,
         "max_tokens": spec.max_tokens,
-        "system": prompts.system(kind),
-        "messages": [{"role": "user", "content": prompts.user_message(item)}],
+        "system": prompts.system(kind, spec.prompt),
+        "messages": [{"role": "user", "content": prompts.user_message(item, spec.prompt)}],
         "output_config": {"format": {"type": "json_schema", "schema": prompts.verdict_schema(kind)}},
     }
     if spec.effort:
@@ -141,8 +154,9 @@ def _read(text: Optional[str], error: Optional[str], kind: str) -> tuple:
         return None, f"unreadable: {exc}"
 
 
-def prompt_chars(item: dict) -> int:
-    return len(prompts.system(prompts.kind_of(item))) + len(prompts.user_message(item)) + 2000   # schema and framing
+def prompt_chars(item: dict, style: str = "panel") -> int:
+    kind = prompts.kind_of(item)
+    return len(prompts.system(kind, style)) + len(prompts.user_message(item, style)) + 2000   # schema and framing
 
 
 class BatchState:
@@ -171,7 +185,7 @@ def run_anthropic_batch(spec: JudgeSpec, items: list, ledger: Ledger, run_id: st
     state = state_store.load()
     by_cid = {custom_id(it["item_id"]): it for it in items}
     if not state.get("batch_id"):
-        worst = sum(worst_case(spec.model, prompt_chars(it), spec.max_tokens, batch=True) for it in items)
+        worst = sum(worst_case(spec.model, prompt_chars(it, spec.prompt), spec.max_tokens, batch=True) for it in items)
         reservation = f"{run_id}:{spec.name}:batch:{len(items)}:{int(time.time())}"
         ledger.reserve(run_id, run_cap, spec.provider, spec.model, reservation, worst)
         # Plain dicts in the SDK's request shape, so importing this module never loads the SDK.
@@ -225,7 +239,7 @@ def run_anthropic_direct(spec: JudgeSpec, item: dict, ledger: Ledger, run_id: st
                          client_factory: Callable = anthropic_client) -> dict:
     reservation = f"{run_id}:{spec.name}:{item['item_id']}:{time.time_ns()}"
     ledger.reserve(run_id, run_cap, spec.provider, spec.model, reservation,
-                   worst_case(spec.model, prompt_chars(item), spec.max_tokens))
+                   worst_case(spec.model, prompt_chars(item, spec.prompt), spec.max_tokens))
     try:
         message = client_factory().messages.create(**anthropic_params(spec, item))
         input_tokens, output_tokens = int(message.usage.input_tokens or 0), int(message.usage.output_tokens or 0)
@@ -267,8 +281,8 @@ def workers_ai_body(spec: JudgeSpec, item: dict, structured: bool) -> dict:
         "model": spec.model,
         "max_tokens": spec.max_tokens,
         "temperature": 0,
-        "messages": [{"role": "system", "content": prompts.system(kind)},
-                     {"role": "user", "content": prompts.user_message(item) + "\n\n" + prompts.json_instruction(kind)}],
+        "messages": [{"role": "system", "content": prompts.system(kind, spec.prompt)},
+                     {"role": "user", "content": prompts.user_message(item, spec.prompt) +"\n\n" + prompts.json_instruction(kind)}],
     }
     if spec.reasoning_effort:
         body["reasoning_effort"] = spec.reasoning_effort
@@ -286,7 +300,7 @@ def run_workers_ai(spec: JudgeSpec, item: dict, ledger: Ledger, run_id: str, run
     url = WORKERS_AI_URL.format(account=account)
     headers = workers_ai_headers(token, gateway)
     reply_headers: dict = {}
-    chars = prompt_chars(item) + len(prompts.json_instruction(prompts.kind_of(item)))
+    chars = prompt_chars(item, spec.prompt) +len(prompts.json_instruction(prompts.kind_of(item)))
     worst = worst_case(spec.model, chars, spec.max_tokens)
     reservation = f"{run_id}:{spec.name}:{item['item_id']}:{time.time_ns()}"
     ledger.reserve(run_id, run_cap, spec.provider, spec.model, reservation, worst)

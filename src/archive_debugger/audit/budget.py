@@ -17,7 +17,22 @@ from typing import Optional
 from archive_debugger.audit import prices
 from archive_debugger.audit.records import append_jsonl, iter_jsonl
 
-PHASE_CAP_USD = 25.00
+PHASE_CAP_USD = 25.00          # used only when config/audit.toml names no cap for the current phase
+LEGACY_PHASE = "phase2"        # ledger entries written before entries carried a phase
+AUDIT_CONFIG = Path(__file__).resolve().parents[3] / "config" / "audit.toml"
+
+
+def phase_settings(path: Path = AUDIT_CONFIG) -> tuple:
+    """(current phase, its cap in US dollars) from [budget] in config/audit.toml."""
+    import tomllib
+    try:
+        with Path(path).open("rb") as fh:
+            raw = tomllib.load(fh).get("budget") or {}
+    except FileNotFoundError:
+        raw = {}
+    phase = raw.get("phase") or LEGACY_PHASE
+    cap = float((raw.get("caps") or {}).get(phase, PHASE_CAP_USD))
+    return phase, cap
 
 
 class BudgetExceeded(Exception):
@@ -36,9 +51,11 @@ class Totals:
 
 
 class Ledger:
-    def __init__(self, path: Path, *, phase_cap: float = PHASE_CAP_USD, clock=time.time):
+    def __init__(self, path: Path, *, phase: Optional[str] = None, phase_cap: Optional[float] = None, clock=time.time):
+        configured_phase, configured_cap = phase_settings()
         self.path = Path(path)
-        self.phase_cap = phase_cap
+        self.phase = phase or configured_phase
+        self.phase_cap = configured_cap if phase_cap is None else phase_cap
         self.clock = clock
         # A check and the reservation it allows are one step, and no entry is read while another
         # thread is writing one.
@@ -48,12 +65,17 @@ class Ledger:
         with self._lock:
             return list(iter_jsonl(self.path))
 
-    def totals(self, run_id: Optional[str] = None) -> Totals:
+    def totals(self, run_id: Optional[str] = None, *, phase: Optional[str] = None) -> Totals:
+        """Spend and open reservations for one run, or for the whole of this ledger's phase (or the
+        phase named)."""
         spent = 0.0
         reserved: dict = {}
         by_provider: dict = {}
+        wanted_phase = phase or self.phase
         for e in self._entries():
             if run_id is not None and e["run_id"] != run_id:
+                continue
+            if run_id is None and (e.get("phase") or LEGACY_PHASE) != wanted_phase:
                 continue
             if e["kind"] == "spend":
                 spent += e["usd"]
@@ -79,6 +101,7 @@ class Ledger:
     def _write(self, entry: dict) -> None:
         entry.setdefault("at", round(self.clock(), 3))
         entry.setdefault("price_version", prices.PRICE_VERSION)
+        entry.setdefault("phase", self.phase)
         with self._lock:
             append_jsonl(self.path, entry)
 

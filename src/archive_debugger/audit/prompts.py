@@ -106,12 +106,86 @@ PAGE = """<page id="{n}" passage="{passage_id}" title="{title}" year="{year}" ju
 </page>"""
 
 
+# The reference judges (silver labels) read what the author reads: the calibration guide's rubric
+# and its worked examples, the full page text with no cap, and they may reason before answering.
+# They have their own prompt version, so a reference judgment is never mistaken for a panel one.
+REFERENCE_PREAMBLE = """You are a careful reference reviewer. Your labels are compared with a \
+person's labels and with an automated panel, so label what you see, exactly as the guide below says. \
+Think through each check before you answer; take the time you need. Then return the verdicts as JSON.
+
+"""
+
+REFERENCE_GUIDE = """An answer item is the question and the whole answer. A sentence item is one \
+sentence of that answer and the full text of the passage or passages it cites.
+
+Supports. Is every factual claim in the sentence in the cited text?
+- pass: verbatim, a faithful paraphrase, or a matching number or table entry.
+- partial: the core claim is there but something is added or shifted: a date, a number, who said it, \
+the kind of source, a generalization, or two sources fused into one claim.
+- fail: the sentence misstates the text or its claim is not there.
+Judge against the cited text only. Your own knowledge of the subject does not count as support.
+
+Answers (once per answer). Does the whole answer answer the question that was asked?
+- pass: it addresses what the question asks, including the period, place, population, program or \
+measure the question names.
+- partial: related and useful, but it answers only part of the question, is mostly background, or \
+answers about a different place, period, population, program or measure than the one asked.
+- fail: it does not address the question.
+Judge what the answer says, not whether its sources support it: that is Supports, per sentence. An \
+answer that says plainly what its evidence does not cover is judged on what it does answer.
+
+In scope. Does the cited page fit the question: its period, jurisdiction, population, program and \
+measure? Use the page's title, year and jurisdiction as well as its text.
+- pass: nothing the question asks for differs.
+- fail: at least one differs: another country or province, another program, another population, \
+another period, or a different measure, even when the words match.
+- unclear: nothing clearly differs, but the page does not let you tell for one of them (an undated \
+page for a question about the 1980s, for example).
+A constraint the question does not set does not count against the page (say "not_asked" for it).
+
+Worked examples:
+1. Supports pass. Question: "What did Ontario public health authorities recommend about controlling \
+tobacco smoking?" Sentence: the Government of Ontario should make all indoor public places 100% \
+smoke-free, with youth facilities first and target dates for the rest. The 1999 Expert Panel report \
+says this in nearly the same words. In scope: pass (Ontario, 1999, tobacco control).
+2. Supports partial. The sentence places a list of approaches "in the early 1990s"; the passage lists \
+them as past approaches as of 1992. The added period is a shifted date.
+3. Supports partial. "Ontario recognized ..." where the passage is an Ontario commission quoting the \
+federal Auditor General: the speaker shifted.
+4. Supports fail. The passage says the booklet is part of a series from the Centre; the sentence says \
+the Centre is part of a series. The claim is reversed.
+5. In scope fail. Question: "What did United States Medicaid reports describe about eligibility \
+rules?" The sentences are word-for-word supported by a 2002 Canadian Senate report on health care \
+systems in other countries. Supports: pass. In scope: fail, because the question asks for United \
+States reports and the page is a Canadian committee report. Answers, for the whole answer: partial \
+at best (a Canadian report describing Medicaid, not Medicaid reports).
+
+"""
+
+REFERENCE_SENTENCE_SYSTEM = REFERENCE_PREAMBLE + REFERENCE_GUIDE + """This item is a sentence item: \
+return supports and in_scope. The whole answer is context only; judge the one sentence.
+
+""" + UNTRUSTED
+
+REFERENCE_ANSWER_SYSTEM = REFERENCE_PREAMBLE + REFERENCE_GUIDE + """This item is an answer item: \
+return answers only. You see the question, its filters and the whole answer, not the sources.
+
+""" + UNTRUSTED
+
+REFERENCE_BENCHMARK_SYSTEM = REFERENCE_PREAMBLE + BENCHMARK_SYSTEM
+
+STYLES = ("panel", "reference")
+
+
 def kind_of(item: dict) -> str:
     """Items written before the answer unit existed are sentence items."""
     return item.get("kind") or "sentence"
 
 
-def system(kind: str) -> str:
+def system(kind: str, style: str = "panel") -> str:
+    if style == "reference":
+        return {"sentence": REFERENCE_SENTENCE_SYSTEM, "answer": REFERENCE_ANSWER_SYSTEM,
+                "benchmark": REFERENCE_BENCHMARK_SYSTEM}[kind]
     return {"sentence": SENTENCE_SYSTEM, "answer": ANSWER_SYSTEM, "benchmark": BENCHMARK_SYSTEM}[kind]
 
 
@@ -142,15 +216,16 @@ def _body(value: str) -> str:
     return (value or "").replace("</page", "(/page").replace("<page", "(page")
 
 
-def _pages(citations: list) -> str:
+def _pages(citations: list, limit: int | None = MAX_PAGE_CHARS) -> str:
     return "\n".join(
         PAGE.format(n=n, passage_id=_attr(c["passage_id"]), title=_attr(c.get("title")), year=_attr(c.get("year")),
                     jurisdiction=_attr(c.get("jurisdiction")), leaf=_attr(c.get("leaf_index")),
-                    text=_body((c.get("text") or "")[:MAX_PAGE_CHARS]))
+                    text=_body((c.get("text") or "")[:limit] if limit else (c.get("text") or "")))
         for n, c in enumerate(citations, 1))
 
 
-def user_message(item: dict) -> str:
+def user_message(item: dict, style: str = "panel") -> str:
+    limit = None if style == "reference" else MAX_PAGE_CHARS
     filters = json.dumps(item.get("filters") or {}, sort_keys=True)
     answer = _body(item.get("answer_text") or "")
     if kind_of(item) == "answer":
@@ -161,8 +236,8 @@ def user_message(item: dict) -> str:
                                          filters=filters, verdict=_attr(label.get("verdict")),
                                          behaviour=_body(label.get("behaviour") or ""),
                                          checks=_body(json.dumps(item.get("corpus_checks") or [], sort_keys=True)),
-                                         pages=_pages(item.get("sources") or []))
-    pages = _pages(item["citations"])
+                                         pages=_pages(item.get("sources") or [], limit))
+    pages = _pages(item["citations"], limit)
     return SENTENCE_TEMPLATE.format(question=_body(item["question"]), filters=filters, answer=answer,
                                     sentence=_body(item["sentence"]), pages=pages)
 
@@ -183,9 +258,18 @@ BENCHMARK_PROMPT_VERSION = hashlib.sha256((BENCHMARK_SYSTEM + BENCHMARK_TEMPLATE
                                            + str(MAX_PAGE_CHARS)).encode("utf-8")).hexdigest()[:12]
 
 
-def version_for(kind: str) -> str:
+REFERENCE_PROMPT_VERSION = hashlib.sha256((REFERENCE_SENTENCE_SYSTEM + REFERENCE_ANSWER_SYSTEM + REFERENCE_BENCHMARK_SYSTEM
+                                           + SENTENCE_TEMPLATE + ANSWER_TEMPLATE + BENCHMARK_TEMPLATE + PAGE
+                                           + json.dumps([verdict_schema(k) for k in KIND_CHECKS], sort_keys=True)
+                                           + "full-pages").encode("utf-8")).hexdigest()[:12]
+
+
+def version_for(kind: str, style: str = "panel") -> str:
     """The prompt version a judgment of this kind of item is made under. Benchmark items have their
-    own, so adding them left the citation-check version, and every judgment made under it, as it was."""
+    own, so adding them left the citation-check version, and every judgment made under it, as it was.
+    Reference judges have one version for all three kinds."""
+    if style == "reference":
+        return REFERENCE_PROMPT_VERSION
     return BENCHMARK_PROMPT_VERSION if kind == "benchmark" else PROMPT_VERSION
 
 

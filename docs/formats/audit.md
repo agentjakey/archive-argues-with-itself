@@ -40,7 +40,15 @@ that sample that flags a check). A run is refused when a panel or escalation jud
 that wrote the answers. `[gateway] workers_ai` names the AI Gateway that Workers AI calls go
 through (empty: direct). Each `[judges.<name>]` gives `provider` (`anthropic` or `workers-ai`),
 `model`, `family`, `max_tokens`, and optionally `batch`, `effort` (Anthropic) or
-`reasoning_effort` (Workers AI). Every model must have a price in `audit/prices.py`.
+`reasoning_effort` (Workers AI), and `prompt` (`panel`, the default, or `reference`). Every model
+must have a price in `audit/prices.py`.
+
+`[reference] judges` names the reference judges: two models from two families, none of them a panel,
+escalation or candidate judge. They read the author's labelling guide and worked examples, the full
+page text (no cap) and may reason before answering, under their own prompt version
+(`REFERENCE_PROMPT_VERSION`). Where both agree, that is the silver label (see Silver labels below).
+
+`[budget] phase` names the current phase and `[budget.caps]` its hard cap in US dollars.
 
 ## Judge item (`items.jsonl`, `kit.jsonl`)
 
@@ -75,7 +83,7 @@ page), `years` (each year in the sentence, on the page or the page's own year), 
 ## Judgment (`judgments.jsonl`)
 
 One record per item per judge call: `item_id`, `kind`, `judge`, `provider`, `model`, `family`,
-`prompt_version`, `batch`, `verdicts` (null when the call failed or the reply could not be read),
+`prompt_style` (`panel` or `reference`; absent means `panel`), `prompt_version`, `batch`, `verdicts` (null when the call failed or the reply could not be read),
 `error`, `input_tokens`, `output_tokens`, `usd`, `cached` (true when the AI Gateway answered from
 its cache: not billed, `usd` 0), `at`.
 
@@ -95,8 +103,9 @@ record for an item and judge wins.
 
 `kind` `spend` (`run_id`, `provider`, `model`, `batch`, `input_tokens`, `output_tokens`, `usd`,
 `what`), `reserve` (`reservation`, `usd`: the worst case of a call or batch in flight) or `release`.
-Every entry has `at` and `price_version`. Committed spend is spend plus open reservations; no call
-is made that could take either the run's cap or the phase cap ($25) past its limit.
+Every entry has `at`, `price_version` and `phase` (entries written before the field existed are
+`phase2`). Committed spend is spend plus open reservations; no call is made that could take either
+the run's cap or the current phase's cap (`[budget.caps]`) past its limit.
 
 ## Calibration labels (`labels.jsonl`, `labels_relabel_<seed>.jsonl`)
 

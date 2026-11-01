@@ -8,6 +8,16 @@
 # 4.5, so it can only be a candidate on them. This panel is provisional until the calibration labels
 # choose one.
 
+# Hard spending caps per phase, through the ledger (audit/budget.py). Entries carry the phase they
+# were written in; entries from before that are Phase 2. Phase 2's cap covers the $5.75 spent before
+# the close-out. Change `phase` when a phase starts.
+[budget]
+phase = "phase2"
+
+[budget.caps]
+phase2 = 60.00
+phase3 = 120.00
+
 [panel]
 judges = ["claude-haiku-5-5", "gpt-oss-120b"]
 escalation = "claude-sonnet-5-5"
@@ -61,3 +71,27 @@ provider = "workers-ai"
 model = "@cf/moonshotai/kimi-k2.6"
 family = "moonshot"
 max_tokens = 3000
+
+# Reference judges (Phase 2 close-out): two strong models from different families, neither on the
+# panel, that label the calibration kit and the benchmark approval sample with the author's guide,
+# the full page text and reasoning allowed. Where they agree, that is the silver label
+# (docs/formats/audit.md). They never decide a production verdict.
+[reference]
+judges = ["claude-fable-5-1", "deepseek-v4-pro"]
+
+[judges.claude-fable-5-1]
+provider = "anthropic"
+model = "claude-fable-5-1"
+family = "anthropic"
+batch = true
+max_tokens = 16000       # thinking is always on for this model and counts toward it
+effort = "medium"
+prompt = "reference"
+
+[judges.deepseek-v4-pro]
+provider = "workers-ai"
+model = "@cf/deepseek-ai/deepseek-v4-pro-0813"
+family = "deepseek"
+max_tokens = 16000
+reasoning_effort = "high"
+prompt = "reference"

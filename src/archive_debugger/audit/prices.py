@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-PRICE_VERSION = "2026-10-31"
+PRICE_VERSION = "2026-11-01"
 
 
 @dataclass(frozen=True)
@@ -24,10 +24,15 @@ PRICES = {
     # Haiku 5.5: the rate for prompts of 100K tokens or fewer (judge prompts are far under that).
     "claude-haiku-5-5": Price("anthropic", "claude-haiku-5-5", 0.10, 0.50, 0.5, "anthropic pricing page 2026-10-31"),
     "claude-sonnet-5-5": Price("anthropic", "claude-sonnet-5-5", 2.00, 10.00, 0.5, "anthropic models table 2026-10-06"),
+    # Reference judges and writer candidates (Phase 2 close-out, Phase 3).
+    "claude-fable-5-1": Price("anthropic", "claude-fable-5-1", 10.00, 50.00, 0.5, "anthropic models table 2026-10-06"),
+    "claude-opus-5-5": Price("anthropic", "claude-opus-5-5", 4.00, 20.00, 0.5, "anthropic models table 2026-10-06"),
     # Workers AI catalogue prices, read from the account's model search on 2026-10-31.
     "@cf/openai/gpt-oss-120b": Price("workers-ai", "@cf/openai/gpt-oss-120b", 0.35, 0.75, 1.0, "workers ai catalogue 2026-10-31"),
     "@cf/deepseek-ai/deepseek-v4-flash-0731": Price("workers-ai", "@cf/deepseek-ai/deepseek-v4-flash-0731", 0.44, 1.32, 1.0,
                                                     "workers ai catalogue 2026-10-31"),
+    "@cf/deepseek-ai/deepseek-v4-pro-0813": Price("workers-ai", "@cf/deepseek-ai/deepseek-v4-pro-0813", 1.32, 3.96, 1.0,
+                                                  "workers ai catalogue 2026-11-01"),
     "@cf/moonshotai/kimi-k2.6": Price("workers-ai", "@cf/moonshotai/kimi-k2.6", 0.95, 4.00, 1.0, "workers ai catalogue 2026-10-31"),
     # Workers AI embedding models: input tokens only, so the output price is 0. Read from each
     # model's page under developers.cloudflare.com/workers-ai/models/ on 2026-10-31.

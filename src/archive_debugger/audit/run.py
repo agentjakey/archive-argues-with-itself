@@ -50,7 +50,8 @@ def good_judgments(path: Path) -> dict:
     last record for a pair wins."""
     out = {}
     for rec in read_jsonl(path):
-        if rec.get("prompt_version") == prompts.version_for(rec.get("kind") or "sentence") and rec.get("verdicts"):
+        style = rec.get("prompt_style") or "panel"
+        if rec.get("prompt_version") == prompts.version_for(rec.get("kind") or "sentence", style) and rec.get("verdicts"):
             out[(rec["item_id"], rec["judge"])] = rec
     return out
 
@@ -105,7 +106,8 @@ def check_items(items: list, check: str) -> list:
 def report(run_id: str, run_dir: Path, items: list, labels: dict, gate_rows: dict, cfg: judges.PanelConfig,
            ledger: Ledger, decisions: list, lenient: dict, review_ids: list) -> dict:
     judgments = read_jsonl(run_dir / "judgments.jsonl")
-    current = [j for j in judgments if j.get("prompt_version") == prompts.version_for(j.get("kind") or "sentence")]
+    current = [j for j in judgments
+               if j.get("prompt_version") == prompts.version_for(j.get("kind") or "sentence", j.get("prompt_style") or "panel")]
     ids = {it["item_id"] for it in items}
     sentences = [it for it in items if prompts.kind_of(it) == "sentence"]
     by_judge: dict = {}
@@ -124,7 +126,8 @@ def report(run_id: str, run_dir: Path, items: list, labels: dict, gate_rows: dic
         spec = cfg.specs[name]
         per_judge[name] = {
             "provider": spec.provider, "model": spec.model, "family": spec.family,
-            "role": "panel" if name in cfg.judges else ("escalation" if name == cfg.escalation else "candidate"),
+            "role": "panel" if name in cfg.judges else ("escalation" if name == cfg.escalation
+                                                         else ("reference" if name in cfg.references else "candidate")),
             "items_with_verdicts": len(good), "items_without": len(latest) - len(good),
             "by_kind": dict(Counter(r.get("kind", "sentence") for r in latest.values())),
             "errors": dict(Counter(r["error"] for r in latest.values() if r.get("error"))),

@@ -570,3 +570,36 @@ def test_batches_are_chunked_and_a_submitted_batch_is_collected_before_anything_
     assert sent == [["c:q1:s3", "c:q1:s4"], ["c:q1:s5", "c:q1:s6"], ["c:q1:s7"]]
     written = [json.loads(line)["item_id"] for line in (tmp_path / "judgments.jsonl").read_text().splitlines()]
     assert sorted(written) == sorted(it["item_id"] for it in pending)
+
+
+# --- reference judges (silver labels) --------------------------------------------------------------
+
+def test_reference_judges_read_the_guide_and_the_full_page_under_their_own_version():
+    long_item = item()
+    long_item["citations"][0]["text"] = "word " * (prompts.MAX_PAGE_CHARS // 2)
+    assert len(prompts.user_message(long_item)) < len(prompts.user_message(long_item, "reference"))
+    assert prompts.user_message(long_item, "reference").count("word ") == prompts.MAX_PAGE_CHARS // 2
+    assert "Worked examples" in prompts.system("sentence", "reference")
+    assert "Worked examples" not in prompts.system("sentence")
+    assert prompts.version_for("sentence", "reference") == prompts.version_for("answer", "reference")
+    assert prompts.version_for("sentence", "reference") not in {prompts.PROMPT_VERSION, prompts.BENCHMARK_PROMPT_VERSION}
+    ref = spec("f", "anthropic", "claude-fable-5-1", "anthropic", effort="medium")
+    ref = judges.JudgeSpec(**{**ref.__dict__, "prompt": "reference"})
+    params = judges.anthropic_params(ref, answer_item())
+    assert params["system"] == prompts.REFERENCE_ANSWER_SYSTEM and "temperature" not in params
+    record = judges._record(ref, answer_item(), None, "x", 0, 0, 0.0, True)
+    assert record["prompt_style"] == "reference" and record["prompt_version"] == prompts.REFERENCE_PROMPT_VERSION
+
+
+def test_reference_judges_come_from_two_families_and_are_never_on_the_panel(tmp_path):
+    cfg = judges.load_panel()
+    assert len(cfg.references) == 2 and len({cfg.specs[n].family for n in cfg.references}) == 2
+    panel_names = set(cfg.judges) | {cfg.escalation} | set(cfg.candidates)
+    assert not panel_names & set(cfg.references)
+    assert all(cfg.specs[n].prompt == "reference" for n in cfg.references)
+    text = (REPO / "config" / "audit.toml").read_text(encoding="utf-8")
+    bad = text.replace('judges = ["claude-fable-5-1", "deepseek-v4-pro"]', 'judges = ["claude-fable-5-1", "gpt-oss-120b"]')
+    path = tmp_path / "audit.toml"
+    path.write_text(bad, encoding="utf-8")
+    with pytest.raises(ValueError, match="cannot also be"):
+        judges.load_panel(path)
