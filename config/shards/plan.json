@@ -1,0 +1,646 @@
+{
+ "format": 1,
+ "target_passages": 1000000,
+ "passages_per_page": 1.59,
+ "shards": [
+  {
+   "shard_id": "alberta-1866-1985",
+   "jurisdiction": "alberta",
+   "first_year": 1866,
+   "last_year": 1985,
+   "undated": false,
+   "documents": 6018,
+   "est_passages": 999929,
+   "split_year": true,
+   "jurisdictions": [
+    "alberta"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "6987c7b11b5094e8"
+  },
+  {
+   "shard_id": "alberta-1985-2000",
+   "jurisdiction": "alberta",
+   "first_year": 1985,
+   "last_year": 2000,
+   "undated": false,
+   "documents": 7608,
+   "est_passages": 999965,
+   "split_year": true,
+   "jurisdictions": [
+    "alberta"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "4f3dbf10ee28b6f3"
+  },
+  {
+   "shard_id": "alberta-2000-2016",
+   "jurisdiction": "alberta",
+   "first_year": 2000,
+   "last_year": 2016,
+   "undated": false,
+   "documents": 4061,
+   "est_passages": 471513,
+   "split_year": true,
+   "jurisdictions": [
+    "alberta"
+   ],
+   "est_wake_gb": 1.86,
+   "documents_sha256": "28d91ed83806ffe6"
+  },
+  {
+   "shard_id": "alberta-undated",
+   "jurisdiction": "alberta",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 135,
+   "est_passages": 22379,
+   "split_year": false,
+   "jurisdictions": [
+    "alberta"
+   ],
+   "est_wake_gb": 0.09,
+   "documents_sha256": "81d2ec7c5a56287a"
+  },
+  {
+   "shard_id": "federal-1851-1899",
+   "jurisdiction": "federal",
+   "first_year": 1851,
+   "last_year": 1899,
+   "undated": false,
+   "documents": 844,
+   "est_passages": 999409,
+   "split_year": true,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "1003f60b4caa4257"
+  },
+  {
+   "shard_id": "federal-1899-1911",
+   "jurisdiction": "federal",
+   "first_year": 1899,
+   "last_year": 1911,
+   "undated": false,
+   "documents": 1000,
+   "est_passages": 997981,
+   "split_year": true,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.94,
+   "documents_sha256": "c2ca934e3e257eb7"
+  },
+  {
+   "shard_id": "federal-1911-1921",
+   "jurisdiction": "federal",
+   "first_year": 1911,
+   "last_year": 1921,
+   "undated": false,
+   "documents": 1205,
+   "est_passages": 999671,
+   "split_year": true,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "19a5d3bfe05d9631"
+  },
+  {
+   "shard_id": "federal-1921-1944",
+   "jurisdiction": "federal",
+   "first_year": 1921,
+   "last_year": 1944,
+   "undated": false,
+   "documents": 2005,
+   "est_passages": 998251,
+   "split_year": true,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.94,
+   "documents_sha256": "e04d311868414ec0"
+  },
+  {
+   "shard_id": "federal-1944-1947",
+   "jurisdiction": "federal",
+   "first_year": 1944,
+   "last_year": 1947,
+   "undated": false,
+   "documents": 997,
+   "est_passages": 998762,
+   "split_year": true,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.94,
+   "documents_sha256": "a57b40ed9a5dd78b"
+  },
+  {
+   "shard_id": "federal-1947-1969",
+   "jurisdiction": "federal",
+   "first_year": 1947,
+   "last_year": 1969,
+   "undated": false,
+   "documents": 2518,
+   "est_passages": 999798,
+   "split_year": true,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "594d6d4ba4274169"
+  },
+  {
+   "shard_id": "federal-1969-1983",
+   "jurisdiction": "federal",
+   "first_year": 1969,
+   "last_year": 1983,
+   "undated": false,
+   "documents": 3638,
+   "est_passages": 999563,
+   "split_year": true,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "0bf2256d9a78555b"
+  },
+  {
+   "shard_id": "federal-1983-1990",
+   "jurisdiction": "federal",
+   "first_year": 1983,
+   "last_year": 1990,
+   "undated": false,
+   "documents": 3576,
+   "est_passages": 999099,
+   "split_year": true,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.94,
+   "documents_sha256": "26599f3d53488ce8"
+  },
+  {
+   "shard_id": "federal-1990-1996",
+   "jurisdiction": "federal",
+   "first_year": 1990,
+   "last_year": 1996,
+   "undated": false,
+   "documents": 3408,
+   "est_passages": 998377,
+   "split_year": true,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.94,
+   "documents_sha256": "12acfa46efc0bf36"
+  },
+  {
+   "shard_id": "federal-1996-2025",
+   "jurisdiction": "federal",
+   "first_year": 1996,
+   "last_year": 2025,
+   "undated": false,
+   "documents": 5174,
+   "est_passages": 981199,
+   "split_year": true,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.87,
+   "documents_sha256": "6f031d666149b719"
+  },
+  {
+   "shard_id": "federal-undated",
+   "jurisdiction": "federal",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 2896,
+   "est_passages": 999274,
+   "split_year": false,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "ceebaa154caed33b"
+  },
+  {
+   "shard_id": "federal-undated-2",
+   "jurisdiction": "federal",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 1986,
+   "est_passages": 997854,
+   "split_year": false,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.94,
+   "documents_sha256": "8318ac000b80b07e"
+  },
+  {
+   "shard_id": "federal-undated-3",
+   "jurisdiction": "federal",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 991,
+   "est_passages": 999396,
+   "split_year": false,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "e010122271d3d0e5"
+  },
+  {
+   "shard_id": "federal-undated-4",
+   "jurisdiction": "federal",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 1596,
+   "est_passages": 999954,
+   "split_year": false,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "5cd8a3c3d4367077"
+  },
+  {
+   "shard_id": "federal-undated-5",
+   "jurisdiction": "federal",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 2306,
+   "est_passages": 999687,
+   "split_year": false,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "fb1205817cdebb34"
+  },
+  {
+   "shard_id": "federal-undated-6",
+   "jurisdiction": "federal",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 1461,
+   "est_passages": 999460,
+   "split_year": false,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "fae370c2f7dad26b"
+  },
+  {
+   "shard_id": "federal-undated-7",
+   "jurisdiction": "federal",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 1463,
+   "est_passages": 631871,
+   "split_year": false,
+   "jurisdictions": [
+    "federal"
+   ],
+   "est_wake_gb": 2.49,
+   "documents_sha256": "28d142400df2aad4"
+  },
+  {
+   "shard_id": "ontario-1856-1912",
+   "jurisdiction": "ontario",
+   "first_year": 1856,
+   "last_year": 1912,
+   "undated": false,
+   "documents": 1274,
+   "est_passages": 999049,
+   "split_year": true,
+   "jurisdictions": [
+    "ontario"
+   ],
+   "est_wake_gb": 3.94,
+   "documents_sha256": "6afced8e2e95839c"
+  },
+  {
+   "shard_id": "ontario-1912-1949",
+   "jurisdiction": "ontario",
+   "first_year": 1912,
+   "last_year": 1949,
+   "undated": false,
+   "documents": 1704,
+   "est_passages": 998504,
+   "split_year": true,
+   "jurisdictions": [
+    "ontario"
+   ],
+   "est_wake_gb": 3.94,
+   "documents_sha256": "3098089a202738b7"
+  },
+  {
+   "shard_id": "ontario-1949-1971",
+   "jurisdiction": "ontario",
+   "first_year": 1949,
+   "last_year": 1971,
+   "undated": false,
+   "documents": 2760,
+   "est_passages": 999148,
+   "split_year": true,
+   "jurisdictions": [
+    "ontario"
+   ],
+   "est_wake_gb": 3.94,
+   "documents_sha256": "15f0ac4d906e1b4a"
+  },
+  {
+   "shard_id": "ontario-1971-1980",
+   "jurisdiction": "ontario",
+   "first_year": 1971,
+   "last_year": 1980,
+   "undated": false,
+   "documents": 3859,
+   "est_passages": 999258,
+   "split_year": true,
+   "jurisdictions": [
+    "ontario"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "2f4226dc656e974f"
+  },
+  {
+   "shard_id": "ontario-1980-1988",
+   "jurisdiction": "ontario",
+   "first_year": 1980,
+   "last_year": 1988,
+   "undated": false,
+   "documents": 4235,
+   "est_passages": 999929,
+   "split_year": true,
+   "jurisdictions": [
+    "ontario"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "f2978359c626c35a"
+  },
+  {
+   "shard_id": "ontario-1988-1995",
+   "jurisdiction": "ontario",
+   "first_year": 1988,
+   "last_year": 1995,
+   "undated": false,
+   "documents": 5119,
+   "est_passages": 999851,
+   "split_year": true,
+   "jurisdictions": [
+    "ontario"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "a2b4eb799d2f44a7"
+  },
+  {
+   "shard_id": "ontario-1995-2025",
+   "jurisdiction": "ontario",
+   "first_year": 1995,
+   "last_year": 2025,
+   "undated": false,
+   "documents": 3672,
+   "est_passages": 662278,
+   "split_year": true,
+   "jurisdictions": [
+    "ontario"
+   ],
+   "est_wake_gb": 2.61,
+   "documents_sha256": "0caca4e9764be5a8"
+  },
+  {
+   "shard_id": "ontario-undated",
+   "jurisdiction": "ontario",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 2600,
+   "est_passages": 999860,
+   "split_year": false,
+   "jurisdictions": [
+    "ontario"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "0b57d05c222d8c5e"
+  },
+  {
+   "shard_id": "ontario-undated-2",
+   "jurisdiction": "ontario",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 4763,
+   "est_passages": 826428,
+   "split_year": false,
+   "jurisdictions": [
+    "ontario"
+   ],
+   "est_wake_gb": 3.26,
+   "documents_sha256": "705d357d7f26cf17"
+  },
+  {
+   "shard_id": "other-1858-2009",
+   "jurisdiction": "other",
+   "first_year": 1858,
+   "last_year": 2009,
+   "undated": false,
+   "documents": 1592,
+   "est_passages": 321765,
+   "split_year": false,
+   "jurisdictions": [
+    "british_columbia",
+    "manitoba",
+    "new_brunswick",
+    "newfoundland",
+    "northwest_territories",
+    "nova_scotia",
+    "nunavut",
+    "prince_edward_island",
+    "quebec",
+    "saskatchewan",
+    "yukon"
+   ],
+   "est_wake_gb": 1.27,
+   "documents_sha256": "3e81294f605c5f46"
+  },
+  {
+   "shard_id": "other-undated",
+   "jurisdiction": "other",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 89,
+   "est_passages": 19344,
+   "split_year": false,
+   "jurisdictions": [
+    "british_columbia",
+    "manitoba",
+    "new_brunswick",
+    "newfoundland",
+    "northwest_territories",
+    "nova_scotia",
+    "quebec",
+    "saskatchewan",
+    "yukon"
+   ],
+   "est_wake_gb": 0.08,
+   "documents_sha256": "326718cd464ae31c"
+  },
+  {
+   "shard_id": "unknown-1861-1993",
+   "jurisdiction": "unknown",
+   "first_year": 1861,
+   "last_year": 1993,
+   "undated": false,
+   "documents": 2986,
+   "est_passages": 999145,
+   "split_year": true,
+   "jurisdictions": [
+    "unknown"
+   ],
+   "est_wake_gb": 3.94,
+   "documents_sha256": "23f0abbb824286a8"
+  },
+  {
+   "shard_id": "unknown-1993-2021",
+   "jurisdiction": "unknown",
+   "first_year": 1993,
+   "last_year": 2021,
+   "undated": false,
+   "documents": 1661,
+   "est_passages": 333725,
+   "split_year": true,
+   "jurisdictions": [
+    "unknown"
+   ],
+   "est_wake_gb": 1.32,
+   "documents_sha256": "efe16680d9ebdfbc"
+  },
+  {
+   "shard_id": "unknown-undated",
+   "jurisdiction": "unknown",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 1160,
+   "est_passages": 999717,
+   "split_year": false,
+   "jurisdictions": [
+    "unknown"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "6940b2a0d5b5bb91"
+  },
+  {
+   "shard_id": "unknown-undated-2",
+   "jurisdiction": "unknown",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 1311,
+   "est_passages": 999997,
+   "split_year": false,
+   "jurisdictions": [
+    "unknown"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "e4a75f53393f9f50"
+  },
+  {
+   "shard_id": "unknown-undated-3",
+   "jurisdiction": "unknown",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 3045,
+   "est_passages": 999647,
+   "split_year": false,
+   "jurisdictions": [
+    "unknown"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "197527565cfb6e65"
+  },
+  {
+   "shard_id": "unknown-undated-4",
+   "jurisdiction": "unknown",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 1153,
+   "est_passages": 999229,
+   "split_year": false,
+   "jurisdictions": [
+    "unknown"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "0fc29428e78510df"
+  },
+  {
+   "shard_id": "unknown-undated-5",
+   "jurisdiction": "unknown",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 1732,
+   "est_passages": 999638,
+   "split_year": false,
+   "jurisdictions": [
+    "unknown"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "7db34400f386af2c"
+  },
+  {
+   "shard_id": "unknown-undated-6",
+   "jurisdiction": "unknown",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 2572,
+   "est_passages": 999356,
+   "split_year": false,
+   "jurisdictions": [
+    "unknown"
+   ],
+   "est_wake_gb": 3.95,
+   "documents_sha256": "93b5e6557b9b10c4"
+  },
+  {
+   "shard_id": "unknown-undated-7",
+   "jurisdiction": "unknown",
+   "first_year": null,
+   "last_year": null,
+   "undated": true,
+   "documents": 2356,
+   "est_passages": 775443,
+   "split_year": false,
+   "jurisdictions": [
+    "unknown"
+   ],
+   "est_wake_gb": 3.06,
+   "documents_sha256": "0e438caaa4e94a29"
+  }
+ ],
+ "totals": {
+  "shards": 41,
+  "documents": 104529,
+  "est_passages": 36024703,
+  "est_wake_gb": 142.2
+ }
+}
