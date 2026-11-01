@@ -16,6 +16,14 @@ class Filters:
     jurisdiction: Optional[str] = None
     doc_type: Optional[str] = None
     min_ocr: float = 0.0
+    # Catalogue year bounds (inclusive). Each one keeps only dated items: an undated item has no
+    # catalogue year to compare, and a derived date never stands in for one here.
+    year_from: Optional[int] = None
+    year_to: Optional[int] = None
+    # "As of" a year: what the record held by then, so items catalogued in that year or before. The
+    # same predicate as year_to; the engine also prefers the most recent of them when it ranks.
+    as_of_year: Optional[int] = None
+    issuer: Optional[str] = None          # exact issuer_norm (the catalogue's normalized issuer)
     # Documents a governance policy restricts from retrieval (governance.py). Set by the engine from
     # the register, never from a request, and applied to both arms before the search.
     exclude_items: tuple = ()
@@ -60,6 +68,16 @@ def build_where(f: Filters, *, doc_type_families: Optional[dict] = None) -> tupl
         else:
             clauses.append("i.doc_type_norm = ?")
             params.append(f.doc_type)
+    if f.issuer:
+        clauses.append("i.issuer_norm = ?")
+        params.append(f.issuer)
+    if f.year_from is not None:
+        clauses.append("i.dated = 1 AND i.year >= ?")
+        params.append(int(f.year_from))
+    upper = [int(y) for y in (f.year_to, f.as_of_year) if y is not None]
+    if upper:
+        clauses.append("i.dated = 1 AND i.year <= ?")
+        params.append(min(upper))
     if f.min_ocr and f.min_ocr > 0:
         clauses.append("CAST(p.ocr_quality AS REAL) >= ?")
         params.append(f.min_ocr)

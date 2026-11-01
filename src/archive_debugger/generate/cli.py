@@ -52,8 +52,13 @@ def question_from_seed(seed_path: Path, qid: str) -> dict:
 def build_filters(d: Optional[dict]) -> Filters:
     """Filters from a plain dict (seed record, CLI, or API body)."""
     d = d or {}
+    def year(name: str) -> Optional[int]:
+        value = d.get(name)
+        return None if value is None or value == "" else int(value)
     return Filters(period=d.get("period"), jurisdiction=d.get("jurisdiction"),
-                   doc_type=d.get("doc_type"), min_ocr=float(d.get("min_ocr", 0.0) or 0.0))
+                   doc_type=d.get("doc_type"), min_ocr=float(d.get("min_ocr", 0.0) or 0.0),
+                   year_from=year("year_from"), year_to=year("year_to"), as_of_year=year("as_of_year"),
+                   issuer=d.get("issuer") or None)
 
 
 def sent_temperature(kind: str, gcfg: dict) -> Optional[float]:

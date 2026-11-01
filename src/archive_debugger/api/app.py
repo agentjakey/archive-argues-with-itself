@@ -368,8 +368,10 @@ def _key_available() -> bool:
     return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"))
 
 
-def _clean_filters(period: Optional[str], jurisdiction: Optional[str], doc_type: Optional[str]) -> dict:
-    return {k: v for k, v in (("period", period), ("jurisdiction", jurisdiction), ("doc_type", doc_type)) if v}
+def _clean_filters(period: Optional[str], jurisdiction: Optional[str], doc_type: Optional[str],
+                   **more: Optional[str]) -> dict:
+    pairs = [("period", period), ("jurisdiction", jurisdiction), ("doc_type", doc_type)] + list(more.items())
+    return {k: v for k, v in pairs if v}
 
 
 def parse_serve_scopes(raw: Optional[str]) -> Optional[list[str]]:
@@ -1283,8 +1285,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         # Answer with exactly the filter values the key sees, so one key never holds two answers.
         try:
             filters = answer_cache.applied_filters(filters)
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=422, detail="min_ocr must be a number")
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=f"bad filter: {exc}")
         if not answer_cache.known_period(filters.get("period")):
             raise HTTPException(status_code=422, detail="unknown period")
         kind = req_provider or b.provider or gcfg["provider"]
@@ -1631,12 +1633,15 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
     @app.get("/coverage")
     def coverage_view(q: str = Query(..., min_length=1), period: Optional[str] = None,
                       jurisdiction: Optional[str] = None, doc_type: Optional[str] = None,
-                      scope: Optional[str] = None) -> dict:
+                      scope: Optional[str] = None, year_from: Optional[str] = None, year_to: Optional[str] = None,
+                      as_of_year: Optional[str] = None, issuer: Optional[str] = None) -> dict:
         b = _bundle(scope)
         try:
-            filters = answer_cache.applied_filters(_clean_filters(period, jurisdiction, doc_type))
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=422, detail="min_ocr must be a number")
+            filters = answer_cache.applied_filters(_clean_filters(period, jurisdiction, doc_type, year_from=year_from,
+                                                                  year_to=year_to, as_of_year=as_of_year,
+                                                                  issuer=issuer))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=f"bad filter: {exc}")
         if not answer_cache.known_period(filters.get("period")):
             raise HTTPException(status_code=422, detail="unknown period")
         ck = (q, tuple(sorted(filters.items())))
@@ -1677,7 +1682,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
     def ask_get(background: BackgroundTasks, q: str = Query(..., min_length=1), period: Optional[str] = None,
                 jurisdiction: Optional[str] = None, doc_type: Optional[str] = None, nocache: int = 0,
                 provider: Optional[str] = None, scope: Optional[str] = None, evidence_only: int = 0,
-                x_civic_model_budget: Optional[str] = Header(default=None)):
+                year_from: Optional[str] = None, year_to: Optional[str] = None, as_of_year: Optional[str] = None,
+                issuer: Optional[str] = None, x_civic_model_budget: Optional[str] = Header(default=None)):
         """Permalink form: same handler as POST, filters from query params. `provider=stub`
         exercises retrieval and the response shape without a model call (smoke tests; the engine
         Worker refuses it from the public where it is not allowed); `evidence_only=1` returns the
@@ -1686,7 +1692,9 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             raise HTTPException(status_code=422, detail="provider must be 'stub' or 'anthropic'")
         if not app.state.ready.is_set():
             return starting_answer(q)
-        out = answer(_bundle(scope), q, _clean_filters(period, jurisdiction, doc_type), provider, None, bool(nocache),
+        filters = _clean_filters(period, jurisdiction, doc_type, year_from=year_from, year_to=year_to,
+                                 as_of_year=as_of_year, issuer=issuer)
+        out = answer(_bundle(scope), q, filters, provider, None, bool(nocache),
                      x_civic_model_budget, bool(evidence_only))
         background.add_task(app.state.first_answer.set)
         return out

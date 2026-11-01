@@ -6,7 +6,20 @@
 
 export const KEY_VERSION = 2;
 const MAX_QUESTION_CHARS = 500;
-const TEXT_FILTERS = ["period", "jurisdiction", "doc_type"] as const;
+const TEXT_FILTERS = ["period", "jurisdiction", "doc_type", "issuer"] as const;
+const YEAR_FILTERS = ["year_from", "year_to", "as_of_year"] as const;
+const YEAR_TEXT = /^ *([0-9]{4}) *$/;
+const YEAR_MIN = 1000;
+const YEAR_MAX = 2100;
+
+/** A year filter as the engine's canonical_year sees it, or null when the engine would reject it. */
+export function canonicalYear(value: unknown): number | null {
+  let year: number;
+  if (typeof value === "number" && Number.isInteger(value)) year = value;
+  else if (typeof value === "string" && YEAR_TEXT.test(value)) year = Number(YEAR_TEXT.exec(value)![1]);
+  else return null;
+  return year >= YEAR_MIN && year <= YEAR_MAX ? year : null;
+}
 
 // Code points Python's str.split() treats as whitespace (str.isspace), as a character class.
 const PYTHON_SPACE_CODES = [
@@ -27,9 +40,10 @@ export function normalizeQuestion(text: string | null | undefined): string {
   return out.replace(/^ +| +$/g, "");
 }
 
-/** The filters the key uses: the three text filters as normalized strings when non-empty, and
- *  min_ocr as a four-decimal string when set and not zero. null when min_ocr is not a number (the
- *  engine would reject it; the Worker then skips its cache and forwards). */
+/** The filters the key uses: the text filters as normalized strings when non-empty, min_ocr as a
+ *  four-decimal string when set and not zero, and the year filters as four-digit strings. null when
+ *  min_ocr or a year is not valid (the engine would reject it; the Worker then skips its cache and
+ *  forwards). */
 export function canonicalFilters(filters: Filters): Record<string, string> | null {
   const source = filters ?? {};
   const out: Record<string, string> = {};
@@ -44,6 +58,13 @@ export function canonicalFilters(filters: Filters): Record<string, string> | nul
     const number = Number(minOcr);
     if (!Number.isFinite(number)) return null;
     if (number !== 0) out["min_ocr"] = number.toFixed(4);
+  }
+  for (const name of YEAR_FILTERS) {
+    const value = source[name];
+    if (value === null || value === undefined || value === "") continue;
+    const year = canonicalYear(value);
+    if (year === null) return null;
+    out[name] = String(year);
   }
   return out;
 }

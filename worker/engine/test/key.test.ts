@@ -62,4 +62,12 @@ describe("filters the Worker cannot key", () => {
     expect(canonicalFilters({ min_ocr: "high" })).toBeNull();
     expect(await contentKey("c", "q", { min_ocr: "high" })).toBeNull();
   });
+
+  it("returns null for a year the engine would reject", async () => {
+    for (const bad of [true, 1974.5, "1974.0", "74", "later", 999, 2101, [1974]]) {
+      expect(canonicalFilters({ year_from: bad })).toBeNull();
+    }
+    expect(await contentKey("c", "q", { as_of_year: "soon" })).toBeNull();
+    expect(canonicalFilters({ year_to: " 1990 ", as_of_year: 1985 })).toEqual({ year_to: "1990", as_of_year: "1985" });
+  });
 });

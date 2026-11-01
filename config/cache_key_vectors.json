@@ -131,6 +131,79 @@
    "salient_terms": []
   },
   {
+   "name": "year filters as numbers",
+   "question": "q",
+   "filters": {
+    "year_from": 1974,
+    "year_to": 1999
+   },
+   "normalized_question": "q",
+   "canonical_filters": {
+    "year_from": "1974",
+    "year_to": "1999"
+   },
+   "key": "73cb303a08f1ab0ce3af83bd63800a085489901eb86e4a167eeb3ae4eec61ab3",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "year filter as text with spaces",
+   "question": "q",
+   "filters": {
+    "as_of_year": " 1985 "
+   },
+   "normalized_question": "q",
+   "canonical_filters": {
+    "as_of_year": "1985"
+   },
+   "key": "6de06f29885ce9dcbb8aa852f62fdfc4c0128e9788081c2cbd6494e6f2daec6c",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "year filter whole float",
+   "question": "q",
+   "filters": {
+    "year_to": 1990.0
+   },
+   "normalized_question": "q",
+   "canonical_filters": {
+    "year_to": "1990"
+   },
+   "key": "a2360150cbf3840ed4c27bed5b86e6673d88f54441fc6b65cfbd9b73588c07e2",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "year filter empty dropped",
+   "question": "q",
+   "filters": {
+    "year_from": "",
+    "issuer": "Alberta Health"
+   },
+   "normalized_question": "q",
+   "canonical_filters": {
+    "issuer": "Alberta Health"
+   },
+   "key": "947539385301309fd0398c225883f83959f78b21e697cd2ef48b05f806e96e50",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
+   "name": "issuer trimmed",
+   "question": "q",
+   "filters": {
+    "issuer": "  Health Canada (federal health portfolio) "
+   },
+   "normalized_question": "q",
+   "canonical_filters": {
+    "issuer": "Health Canada (federal health portfolio)"
+   },
+   "key": "e2fb8bef02b9b035e6f7debe27d54e97ee95f5a1bbe0fea026e34d3677104860",
+   "clean_question": "q",
+   "salient_terms": []
+  },
+  {
    "name": "spaces collapse",
    "question": "  vaccination   hospital  ",
    "filters": {},

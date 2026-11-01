@@ -44,7 +44,10 @@ RETENTION_DAYS = 90
 _PATH_FIELDS = ("db_path", "index_path")
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 _SPACES = re.compile(r" {2,}")
-_FILTER_TEXT = ("period", "jurisdiction", "doc_type")
+_FILTER_TEXT = ("period", "jurisdiction", "doc_type", "issuer")
+_FILTER_YEARS = ("year_from", "year_to", "as_of_year")
+_YEAR_TEXT = re.compile(r"^ *([0-9]{4}) *$")
+YEAR_MIN, YEAR_MAX = 1000, 2100
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 # North American numbers (613-555-0199, (613) 555 0199, +1 613.555.0199, 1-800-555-0199) and
 # international numbers written with a leading +. Years and counts in a question ("1974 and 1999",
@@ -97,9 +100,11 @@ def normalize_question(text: Optional[str]) -> str:
 
 
 def canonical_filters(filters: Optional[dict]) -> dict:
-    """The filters as the key sees them: the three text filters as trimmed strings when non-empty,
-    and min_ocr as a fixed four-decimal string when it is set and not zero. Unknown keys are
-    ignored, as build_filters ignores them."""
+    """The filters as the key sees them: the text filters (period, jurisdiction, doc_type, issuer)
+    as trimmed strings when non-empty, min_ocr as a fixed four-decimal string when it is set and not
+    zero, and the year filters (year_from, year_to, as_of_year) as four-digit strings. Unknown keys
+    are ignored, as build_filters ignores them. A filter absent before the year filters existed keys
+    exactly as it did, so no stored answer moved."""
     filters = filters or {}
     out = {}
     for name in _FILTER_TEXT:
@@ -114,7 +119,30 @@ def canonical_filters(filters: Optional[dict]) -> dict:
         number = float(min_ocr)
         if number != 0.0:
             out["min_ocr"] = f"{number:.4f}"
+    for name in _FILTER_YEARS:
+        value = filters.get(name)
+        if value is None or value == "":
+            continue
+        out[name] = str(canonical_year(value))
     return out
+
+
+def canonical_year(value) -> int:
+    """A year filter as the key sees it: a whole number, or four ASCII digits with optional spaces,
+    between YEAR_MIN and YEAR_MAX. Anything else raises ValueError (the Worker forwards it uncached)."""
+    if isinstance(value, bool):
+        raise ValueError("a year must be a number")
+    if isinstance(value, int):
+        year = value
+    elif isinstance(value, float) and value.is_integer():
+        year = int(value)
+    elif isinstance(value, str) and _YEAR_TEXT.match(value):
+        year = int(_YEAR_TEXT.match(value).group(1))
+    else:
+        raise ValueError("a year must be a whole number")
+    if not YEAR_MIN <= year <= YEAR_MAX:
+        raise ValueError(f"a year must be between {YEAR_MIN} and {YEAR_MAX}")
+    return year
 
 
 def applied_filters(filters: Optional[dict]) -> dict:
@@ -126,6 +154,9 @@ def applied_filters(filters: Optional[dict]) -> dict:
     out: dict = {k: v for k, v in canonical.items() if k in _FILTER_TEXT}
     if "min_ocr" in canonical:
         out["min_ocr"] = float(canonical["min_ocr"])
+    for name in _FILTER_YEARS:
+        if name in canonical:
+            out[name] = int(canonical[name])
     return out
 
 

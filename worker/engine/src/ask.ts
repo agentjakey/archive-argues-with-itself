@@ -38,7 +38,7 @@ export async function readAsk(request: Request, env: Pick<Env, "PUBLIC_MODELS" |
   if (request.method === "GET") {
     question = url.searchParams.get("q") ?? "";
     filters = {};
-    for (const name of ["period", "jurisdiction", "doc_type"]) {
+    for (const name of ["period", "jurisdiction", "doc_type", "issuer", "year_from", "year_to", "as_of_year"]) {
       const value = url.searchParams.get(name);
       if (value) filters[name] = value;
     }

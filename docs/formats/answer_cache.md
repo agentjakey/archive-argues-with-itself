@@ -19,8 +19,12 @@ key = sha256 of canonical JSON (sorted keys, no spaces, non-ASCII kept) of
 - `normalize`: lone UTF-16 surrogates become U+FFFD; Unicode NFC; U+0000-U+001F and U+007F become
   spaces; runs of spaces collapse; leading and trailing spaces are removed. Case and every other
   character are kept.
-- `canonical(filters)`: `period`, `jurisdiction` and `doc_type` as normalized strings when not
-  empty; `min_ocr` as a string with four decimals when set and not zero; other keys ignored.
+- `canonical(filters)`: `period`, `jurisdiction`, `doc_type` and `issuer` as normalized strings
+  when not empty; `min_ocr` as a string with four decimals when set and not zero; `year_from`,
+  `year_to` and `as_of_year` as four-digit strings (a whole number, or four ASCII digits with
+  optional spaces, from 1000 to 2100; anything else is refused by the engine with 422 and never
+  keyed by the Worker); other keys ignored. A request without the year and issuer filters keys
+  exactly as it did before they existed.
 - The Worker keys only the configured provider and model of each scope (from the generated
   config). A request with `evidence_only` goes to the engine, and so does one with `nocache` where
   the engine Worker's `PUBLIC_NOCACHE` is on (staging); production ignores a public `nocache` and
