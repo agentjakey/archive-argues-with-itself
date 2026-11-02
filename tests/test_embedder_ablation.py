@@ -352,3 +352,22 @@ def test_lock_is_removed_on_error(env):
     with pytest.raises(RuntimeError):
         ea.run_build(env["args"](), lock_path=env["lock"], candidates_factory=stub_candidates, open_corpus=broken)
     assert not env["lock"].exists()
+
+
+def test_whole_collection_cost_scales_measured_spend_and_cpu_time(tmp_path):
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_text(json.dumps({"kind": "spend", "run_id": "e1", "model": "@cf/x", "usd": 0.5}) + chr(10)
+                      + json.dumps({"kind": "spend", "run_id": "other", "model": "@cf/x", "usd": 9.0}) + chr(10),
+                      encoding="utf-8")
+    builds = {"a": {"corpus_rows": 600_000, "corpus_pages": 200_000}, "b": {"corpus_rows": 400_000, "corpus_pages": 50_000}}
+    cands = {"paid": {"model": "@cf/x", "paid": True, "embedding": {"a": {"rows": 30_000}, "b": {"rows": 20_000}}},
+             "local": {"model": "m", "paid": False, "embedding": {"a": {"rows": 1000, "embed_seconds": 10.0}}},
+             "blocked": {"model": "z", "paid": False}}
+    out = ea.whole_collection_cost(cands, builds, run_id="e1", ledger_path=ledger, iac_pages=1_000_000)
+    assert out["rows_current_index"] == 1_000_000 and out["passages_per_page"] == 4.0
+    assert out["rows_iac_estimate"] == 4_000_000
+    paid = out["candidates"]["paid"]
+    assert paid["usd_spent"] == 0.5 and paid["usd_current_index"] == 10.0 and paid["usd_iac_estimate"] == 40.0
+    local = out["candidates"]["local"]
+    assert local["cpu_ms_per_row"] == 10.0 and local["cpu_hours_current_index"] == round(10_000 / 3600, 1)
+    assert "blocked" not in out["candidates"]

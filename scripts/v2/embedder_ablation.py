@@ -109,6 +109,8 @@ DEFAULT_QUESTIONS = (REPO / "reports" / "v2" / "benchmark" / "v2" / "dev.jsonl",
                      REPO / "reports" / "v2" / "benchmark" / "v2" / "validation.jsonl")
 RUNS_DIR = REPO / "reports" / "v2" / "audit" / "runs"
 LOCK_PATH = REPO / ".cc-heavy.lock"
+LEDGER_PATH = REPO / "reports" / "v2" / "audit" / "ledger.jsonl"
+IAC_PAGES = 22_100_000      # about 22.1 million scanned pages in the whole collection (archive.org)
 LOCK_OWNER = "run-A embedder_ablation"
 LOCK_BUSY_STATUS = 3
 
@@ -700,7 +702,11 @@ def build_collection(conn, collection: str, questions: list, candidates: list, *
     summary = {"format": 1, "collection": collection, "built": now_iso(), "subcorpus_sha256": sub["sha256"],
                "subcorpus_counts": sub["counts"], "corpus_rows": sub["corpus_rows"], "questions": len(questions),
                "rrf_k": rrf_k, "fusion_depth": FUSION_DEPTH, "dense_top": DENSE_TOP, "hybrid_top": HYBRID_TOP,
-               "pool_items": len(items), "candidates": cand_info}
+               "pool_items": len(items), "candidates": cand_info,
+               "corpus_pages": corpus_pages(conn),
+               "subcorpus_mean_chars": round(sum(len(t or "") for t in texts_by_id.values()) / max(len(ids), 1), 1),
+               "subcorpus_mean_chars_cut": round(sum(min(len(t or ""), WORKERS_AI_CHARS) for t in texts_by_id.values())
+                                                 / max(len(ids), 1), 1)}
     _write_json(build_path, summary)
     log(f"[{collection}] pool: {len(items)} items over {len(questions)} questions")
     return summary
@@ -844,12 +850,64 @@ def _ci(d: Optional[dict]) -> str:
     return f"{d['diff']:+.4f} [{d['low']:+.4f}, {d['high']:+.4f}]"
 
 
-def score(out_dir: Path, runs: list, *, runs_dir: Path = RUNS_DIR, seed: int = 0, spot: int = 0) -> dict:
+def corpus_pages(conn) -> int:
+    """Pages with at least one passage: the unit the whole-collection estimate scales by."""
+    return int(conn.execute("SELECT COUNT(*) FROM (SELECT DISTINCT item_id, leaf_index FROM passages)").fetchone()[0])
+
+
+def ledger_usd(ledger_path: Path, run_id: str, model: str) -> float:
+    """Everything spent on one model under one run id (resumed runs included)."""
+    return sum(float(e.get("usd") or 0.0) for e in read_jsonl(ledger_path)
+               if e.get("kind") == "spend" and e.get("run_id") == run_id and e.get("model") == model)
+
+
+def whole_collection_cost(candidates: dict, builds: dict, *, run_id: Optional[str], ledger_path: Path,
+                          iac_pages: int = IAC_PAGES) -> dict:
+    """What embedding everything would cost each candidate, from what the sub-corpus build cost:
+    for a Workers AI candidate, the ledger's spend on the run divided by the rows it embedded, times
+    the rows; for a local one, its measured embedding seconds per row on this laptop's CPU, times the
+    rows. Rows are the current index (both collections) and an estimate for the whole Internet
+    Archive Canada collection at the current index's passages per page. Estimates, not quotes."""
+    rows_now = sum(b["corpus_rows"] for b in builds.values())
+    pages_now = sum(b.get("corpus_pages") or 0 for b in builds.values())
+    per_page = rows_now / pages_now if pages_now else None
+    rows_iac = int(round(per_page * iac_pages)) if per_page else None
+    out = {"rows_current_index": rows_now, "pages_current_index": pages_now,
+           "passages_per_page": round(per_page, 3) if per_page else None,
+           "iac_pages": iac_pages, "rows_iac_estimate": rows_iac, "run_id": run_id, "candidates": {}}
+    for name, row in candidates.items():
+        emb = row.get("embedding") or {}
+        embedded = sum(int(e.get("rows") or 0) for e in emb.values())
+        if not embedded:
+            continue
+        entry = {"rows_embedded": embedded}
+        if row.get("paid"):
+            usd = ledger_usd(ledger_path, run_id, row["model"]) if run_id else 0.0
+            entry["usd_spent"] = round(usd, 4)
+            if usd > 0:
+                per_row = usd / embedded
+                entry["usd_per_million_rows"] = round(per_row * 1e6, 2)
+                entry["usd_current_index"] = round(per_row * rows_now, 2)
+                entry["usd_iac_estimate"] = round(per_row * rows_iac, 2) if rows_iac else None
+        else:
+            seconds = sum(float(e.get("embed_seconds") or 0.0) for e in emb.values())
+            if seconds > 0:
+                per_row = seconds / embedded
+                entry["cpu_ms_per_row"] = round(per_row * 1000, 3)
+                entry["cpu_hours_current_index"] = round(per_row * rows_now / 3600, 1)
+                entry["cpu_hours_iac_estimate"] = round(per_row * rows_iac / 3600, 1) if rows_iac else None
+        out["candidates"][name] = entry
+    return out
+
+
+def score(out_dir: Path, runs: list, *, runs_dir: Path = RUNS_DIR, seed: int = 0, spot: int = 0,
+          build_run_id: Optional[str] = None, ledger_path: Path = LEDGER_PATH) -> dict:
     out_dir = Path(out_dir)
     decisions = load_decisions(runs, runs_dir)
     result = {"format": 1, "generated": now_iso(), "runs": runs, "reference_system": REFERENCE_SYSTEM,
               "bootstrap": {"resamples": BOOTSTRAP, "seed": seed}, "collections": {}, "candidates": {}}
     scored = {}
+    builds = {}
     all_items = []
     for rank_path in sorted(out_dir.glob("*/rankings.json")):
         coll_dir = rank_path.parent
@@ -862,6 +920,7 @@ def score(out_dir: Path, runs: list, *, runs_dir: Path = RUNS_DIR, seed: int = 0
         build_path = coll_dir / "build.json"
         if build_path.exists():
             build = json.loads(build_path.read_text(encoding="utf-8"))
+            builds[collection] = build
             for name, info in build.get("candidates", {}).items():
                 row = result["candidates"].setdefault(name, {k: info.get(k) for k in (
                     "model", "licence", "runs_on", "paid", "query_prefix_note", "input_note")})
@@ -876,6 +935,9 @@ def score(out_dir: Path, runs: list, *, runs_dir: Path = RUNS_DIR, seed: int = 0
                 if emb:
                     row.setdefault("embedding", {})[collection] = emb
     result["pooled"] = pooled_scores(scored, seed) if scored else {}
+    if builds:
+        result["whole_collection_cost"] = whole_collection_cost(result["candidates"], builds, run_id=build_run_id,
+                                                                ledger_path=ledger_path)
     result["judged_items"] = sum(1 for it in all_items if it["item_id"] in decisions)
     result["pool_items"] = len(all_items)
     if spot:
@@ -917,6 +979,19 @@ def scores_markdown(result: dict) -> str:
                           for coll, s in (c.get("index_size_whole_collection") or {}).items() if s)
         status = ", ".join(f"{k}: {v}" for k, v in (c.get("status") or {}).items())
         lines.append(f"| {name} | {c.get('model')} | {c.get('licence')} | {c.get('runs_on')} | {status} | {sizes} |")
+    cost = result.get("whole_collection_cost")
+    if cost:
+        lines += ["", "## Embedding everything: estimated cost per candidate", "",
+                  f"Current index {cost['rows_current_index']} passages on {cost['pages_current_index']} pages "
+                  f"({cost['passages_per_page']} per page); whole collection about {cost['iac_pages']} pages, so about "
+                  f"{cost['rows_iac_estimate']} passages at the same density. Workers AI: the build's ledger spend per "
+                  "row; local: embedding seconds per row measured on this laptop's CPU (no GPU). Estimates, not quotes.",
+                  "", "| Candidate | Rows embedded | Workers AI USD, current index | Workers AI USD, whole collection | "
+                  "CPU hours, current index | CPU hours, whole collection |", "| --- | --- | --- | --- | --- | --- |"]
+        for name, c in cost["candidates"].items():
+            lines.append(f"| {name} | {c['rows_embedded']} | {c.get('usd_current_index', '-')} | "
+                         f"{c.get('usd_iac_estimate', '-')} | {c.get('cpu_hours_current_index', '-')} | "
+                         f"{c.get('cpu_hours_iac_estimate', '-')} |")
     return NEWLINE.join(lines) + NEWLINE
 
 
@@ -995,6 +1070,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--seed", type=int, default=20261101)
     s.add_argument("--runs-dir", default=str(RUNS_DIR))
     s.add_argument("--out", default=str(DEFAULT_OUT))
+    s.add_argument("--build-run-id", default=None, help="the build's --run-id, for the Workers AI spend per row")
     return p
 
 
@@ -1006,7 +1082,8 @@ def main(argv=None) -> int:
         from archive_debugger.local_env import load_local_env
         load_local_env(log=lambda m: None)
         return run_build(args)
-    result = score(Path(args.out), args.runs, runs_dir=Path(args.runs_dir), seed=args.seed, spot=args.spot)
+    result = score(Path(args.out), args.runs, runs_dir=Path(args.runs_dir), seed=args.seed, spot=args.spot,
+                   build_run_id=args.build_run_id)
     log(f"scored {result['judged_items']} judged of {result['pool_items']} pool items; {Path(args.out) / 'scores.md'}")
     return 0
 
