@@ -77,10 +77,17 @@ def main(argv=None) -> int:
         from archive_debugger.catalogue import fulltext
         idents = [r["identifier"] for r in fetch.records(CACHE)
                   if (r.get("mediatype") or "texts") == "texts"]
+        order = REPO / "data" / "fulltext" / "order.txt"     # shard by shard (shard_builder.py order)
         if args.ids:
             wanted = [l.strip() for l in args.ids.read_text(encoding="utf-8").splitlines() if l.strip()]
             idents = [i for i in wanted if i in set(idents)]
-        counts = fulltext.run(idents if args.ids else sorted(set(idents)), REPO / "data" / "fulltext",
+        elif order.exists():
+            known = set(idents)
+            first = [l.strip() for l in order.read_text(encoding="utf-8").splitlines() if l.strip() in known]
+            idents = list(dict.fromkeys(first + sorted(known)))
+        else:
+            idents = sorted(set(idents))
+        counts = fulltext.run(idents, REPO / "data" / "fulltext",
                               store=None if args.no_r2 else R2Store(), stop_after=args.limit)
         print(json.dumps(counts))
         return 1 if counts.get("stopped") else 0

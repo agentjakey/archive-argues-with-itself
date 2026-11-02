@@ -35,6 +35,18 @@ class Store:
     def describe(self) -> str:
         raise NotImplementedError
 
+    def put_file(self, key: str, path: Path) -> dict:
+        """Write a file; a store that can stream it from disk does, so large files never sit in memory."""
+        return self.put(key, Path(path).read_bytes())
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
 
 class LocalStore(Store):
     def __init__(self, root: Path):
@@ -98,6 +110,12 @@ class R2Store(Store):
         digest = sha256_bytes(data)
         self.client.put_object(Bucket=self.bucket, Key=key, Body=io.BytesIO(data), Metadata={"sha256": digest})
         return {"bytes": len(data), "sha256": digest}
+
+    def put_file(self, key: str, path: Path) -> dict:
+        """A multipart upload streamed from disk, for files too large to hold in memory."""
+        digest = sha256_file(path)
+        self.client.upload_file(str(path), self.bucket, key, ExtraArgs={"Metadata": {"sha256": digest}})
+        return {"bytes": Path(path).stat().st_size, "sha256": digest}
 
     def get(self, key: str) -> bytes:
         return self.client.get_object(Bucket=self.bucket, Key=key)["Body"].read()
