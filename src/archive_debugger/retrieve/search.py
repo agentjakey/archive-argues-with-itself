@@ -181,9 +181,18 @@ class Retriever:
     def search(self, query: str, filters: Optional[Filters] = None, top_k: int = 20) -> list[dict]:
         where, params = build_where(filters or Filters(), doc_type_families=self.cfg.active_families())
         bm = self._bm25(query, where, params, self.cfg.candidates)
-        qvec = self.embedder.embed_query(query)
-        dn = self._dense(qvec, where, params, self.cfg.candidates)
-        fused = rrf([bm, dn], k=self.cfg.rrf_k)
+        weight = self.cfg.dense_weight
+        if weight == 0:
+            dn = []                                            # BM25 alone: the dense leg is not run
+        else:
+            qvec = self.embedder.embed_query(query)
+            dn = self._dense(qvec, where, params, self.cfg.candidates)
+        if weight == 1.0:
+            fused = rrf([bm, dn], k=self.cfg.rrf_k)            # the baseline fusion, unchanged
+        else:
+            fused = rrf([bm], k=self.cfg.rrf_k)
+            for pid, score in rrf([dn], k=self.cfg.rrf_k).items():
+                fused[pid] = fused.get(pid, 0.0) + weight * score
         if not fused:
             return []
         bm_rank = {pid: i + 1 for i, pid in enumerate(bm)}

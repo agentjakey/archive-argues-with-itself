@@ -174,6 +174,8 @@ def retrieve_settings(cfg: RetrieveConfig) -> dict:
     for name, value in asdict(cfg).items():
         if name in _PATH_FIELDS:
             continue
+        if name == "dense_weight" and value == 1.0:
+            continue        # the baseline fusion keys exactly as it did before the setting existed
         out[name] = str(value) if isinstance(value, Path) else value
     return out
 

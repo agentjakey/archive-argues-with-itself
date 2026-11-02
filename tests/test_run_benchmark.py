@@ -461,3 +461,12 @@ def test_writer_extra_is_written_as_toml_and_named_in_the_label(tmp_path):
     assert rb.load_generate_config(dest)["extra_body"] == extra
     label = rb.pipeline_label("v2", "@cf/x/y", None, False, extra_body=extra)
     assert label.startswith("v2-cf_x_y-x") and len(label.split("-x")[-1]) == 8
+
+
+def test_dense_weight_reaches_the_retrieve_section_and_the_label(tmp_path):
+    import tomllib
+    dest = rb.write_engine_config(REPO / "config" / "pilot.toml", tmp_path / "p.toml", answer_version="v2",
+                                  model="m", effort=None, dense_weight=0.5)
+    raw = tomllib.loads(dest.read_text(encoding="utf-8"))
+    assert raw["retrieve"]["dense_weight"] == 0.5 and raw["retrieve"]["rrf_k"] == 60
+    assert rb.pipeline_label("v2", "claude-haiku-4-5", None, True, dense_weight=0.0) == "v2-claude-haiku-4-5-dw0-stub"

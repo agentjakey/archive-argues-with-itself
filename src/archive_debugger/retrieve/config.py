@@ -43,6 +43,9 @@ class RetrieveConfig:
     pool_size: int = 30
     per_item_cap: int = 0
     later_years_flag: bool = False
+    # Phase 3 (re-freeze, docs/FREEZE.md): the dense leg's weight in the fusion. 1.0 is the RRF the
+    # baseline uses, byte for byte; 0 is BM25 alone and skips the dense leg.
+    dense_weight: float = 1.0
 
     def switches(self) -> dict:
         """The Phase 13 switch state, for eval_runs rows and the cache fingerprint."""
@@ -98,4 +101,5 @@ def load_retrieve_config(config_path: Path, *, embedder_override: Optional[str] 
         pool_size=int(ret.get("pool_size", 30)),
         per_item_cap=int(ret.get("per_item_cap", 0)),
         later_years_flag=bool(ret.get("later_years_flag", False)),
+        dense_weight=float(ret.get("dense_weight", 1.0)),
     )
