@@ -59,6 +59,7 @@ jobs:
           npx playwright install --with-deps chromium
           npm run build
           cd ../..
+          (cd web && npm ci && npm run build:static)
           PYTHONPATH=src python scripts/v2/build_release.py assemble --release-id soak-${{ github.run_id }} \
             --api-origin https://api.archiveargues.org --exhibit-app build/exhibit-app --exhibit-deck site/exhibit/deck.json
           python exhibit/kiosk/serve.py --root build/kiosk-soak install build/release
