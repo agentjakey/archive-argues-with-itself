@@ -42,6 +42,8 @@ PRICES = {
     # model's page under developers.cloudflare.com/workers-ai/models/ on 2026-10-31.
     "@cf/baai/bge-m3": Price("workers-ai", "@cf/baai/bge-m3", 0.0118, 0.0, 1.0,
                              "developers.cloudflare.com/workers-ai/models/bge-m3 2026-10-31"),
+    "@cf/baai/bge-reranker-base": Price("workers-ai", "@cf/baai/bge-reranker-base", 0.00311, 0.0, 1.0,
+                                        "workers ai catalogue 2026-11-02"),
     "@cf/qwen/qwen3-embedding-0.6b": Price("workers-ai", "@cf/qwen/qwen3-embedding-0.6b", 0.0118, 0.0, 1.0,
                                            "developers.cloudflare.com/workers-ai/models/qwen3-embedding-0.6b 2026-10-31"),
 }

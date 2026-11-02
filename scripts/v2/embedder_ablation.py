@@ -97,6 +97,7 @@ _spec = importlib.util.spec_from_file_location("retrieval_ablation", Path(__file
 ra = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ra)
 
+from archive_debugger.audit import prices  # noqa: E402
 from archive_debugger.audit.budget import BudgetExceeded, Ledger  # noqa: E402
 from archive_debugger.audit.records import iter_jsonl, read_jsonl, write_jsonl  # noqa: E402
 from archive_debugger.eval import metrics  # noqa: E402
@@ -124,6 +125,9 @@ WORKERS_AI_CHARS = 2000
 CHUNK_TOKENS = 128
 CHUNK_OVERLAP = 32
 BOOTSTRAP = 2000
+RERANKER = "@cf/baai/bge-reranker-base"
+RERANK_DEPTH = 30          # fused passages the reranker reorders
+RERANK_URL = "https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}"
 BINARY_SHORTLIST = 400      # rows the sign bits pass to the int8 rerank (compact storage)
 REFERENCE_SYSTEM = "hybrid minilm-128"
 GAIN = {"pass": 2, "partial": 1, "fail": 0}
@@ -847,6 +851,108 @@ def run_quantize(args, *, open_corpus: Optional[Callable] = None) -> int:
     return 0
 
 
+# --- reranker ----------------------------------------------------------------------------------------
+
+def rerank_call(question: str, texts: list, *, ledger: Ledger, run_id: str, run_cap: float, post: Callable,
+                account: str, headers: dict, model: str = RERANKER) -> tuple:
+    """(order of texts best first, seconds, usd) from the Workers AI reranker, metered: the worst case
+    is reserved before the call and the reported tokens recorded after it."""
+    cut = [(t or "")[:WORKERS_AI_CHARS] or " " for t in texts]
+    estimate = prices.estimate_input_tokens(question) * len(cut) + sum(prices.estimate_input_tokens(t) for t in cut)
+    reservation = f"{run_id}:{model}:{time.time_ns()}"
+    ledger.reserve(run_id, run_cap, "workers-ai", model, reservation, prices.cost(model, estimate, 0))
+    try:
+        t0 = time.perf_counter()
+        reply = post(RERANK_URL.format(account=account, model=model), headers,
+                     {"query": question, "contexts": [{"text": t} for t in cut], "top_k": len(cut)})
+        seconds = time.perf_counter() - t0
+        result = reply.get("result") or {}
+        usage = result.get("usage") or {}
+        tokens = int(usage.get("prompt_tokens") or usage.get("total_tokens") or 0)
+        what = f"ablation rerank {len(cut)} passages" + ("" if tokens else " (usage not reported: worst case)")
+        usd = ledger.spend(run_id, "workers-ai", model, tokens or estimate, 0, what=what)
+    finally:
+        ledger.release(run_id, reservation)
+    ranked = sorted(result.get("response") or [], key=lambda r: -float(r.get("score") or 0.0))
+    order = [int(r["id"]) for r in ranked if 0 <= int(r.get("id", -1)) < len(cut)]
+    if sorted(order) != list(range(len(cut))):
+        raise ValueError(f"{model}: the reply does not rank every passage once")
+    return order, seconds, usd
+
+
+def rerank_collection(conn, collection: str, items_by_id: dict, out_dir: Path, *, systems_to_rerank: list,
+                      rrf_k: int, ledger: Ledger, run_id: str, run_cap: float, post: Callable, account: str,
+                      headers: dict, depth: int = RERANK_DEPTH) -> dict:
+    """For each named hybrid system, the fusion's top `depth` (from the stored BM25 and dense top 50),
+    reordered by the reranker, top 10 kept as "<system> rerank". The pool is rebuilt so new passages get
+    judged; rerank.json records the per-question latency and spend."""
+    coll_dir = Path(out_dir) / collection
+    rankings = json.loads((coll_dir / "rankings.json").read_text(encoding="utf-8"))
+    systems = rankings["systems"]
+    sub = json.loads((coll_dir / "subcorpus.json").read_text(encoding="utf-8"))
+    rows = passage_rows(conn, sub["passage_ids"])
+    questions = [items_by_id[q] for q in rankings["questions"]]
+    report = {"format": 1, "collection": collection, "model": RERANKER, "depth": depth, "systems": {}}
+    for name in systems_to_rerank:
+        dense_name = name.replace("hybrid ", "dense ", 1)
+        if name not in systems or dense_name not in systems:
+            continue
+        out, seconds, usd = {}, [], 0.0
+        for q in questions:
+            qid = q["item_id"]
+            fused = fuse([systems["bm25"].get(qid, []), systems[dense_name].get(qid, [])], rrf_k, depth)
+            if not fused:
+                out[qid] = []
+                continue
+            order, secs, cost = rerank_call(q["question"], [rows[pid]["text"] for pid in fused], ledger=ledger,
+                                            run_id=run_id, run_cap=run_cap, post=post, account=account, headers=headers)
+            out[qid] = [fused[i] for i in order][:HYBRID_TOP]
+            seconds.append(secs)
+            usd += cost
+        systems[f"{name} rerank"] = out
+        report["systems"][name] = {"questions": len(seconds), "latency": ra.latency_summary(seconds),
+                                   "usd": round(usd, 6)}
+        log(f"[{collection}] {name} rerank: {report['systems'][name]}")
+    items = pool_items(collection, questions, systems, rows)
+    write_jsonl(coll_dir / "pool_items.jsonl", items)
+    rankings["systems"] = systems
+    _write_json(coll_dir / "rankings.json", rankings)
+    report["pool_items"] = len(items)
+    _write_json(coll_dir / "rerank.json", report)
+    return report
+
+
+def run_rerank(args, *, open_corpus: Optional[Callable] = None, post: Optional[Callable] = None,
+               account: Optional[str] = None, headers: Optional[dict] = None) -> int:
+    items_by_id = {}
+    for path in args.questions:
+        refuse_test_split(path)
+        for item in read_jsonl(path):
+            items_by_id[item["item_id"]] = item
+    if post is None:
+        from archive_debugger.audit import net
+        post = net.post_json
+    if account is None or headers is None:
+        account, token = ra.judges.workers_ai_credentials()
+        headers = ra.judges.workers_ai_headers(token, ra._gateway_name())
+    ledger = Ledger(Path(args.ledger))
+    open_corpus = open_corpus or _scope_corpus
+    for rank_path in sorted(Path(args.out).glob("*/rankings.json")):
+        collection = rank_path.parent.name
+        conn, rrf_k, _drop = open_corpus(collection)
+        try:
+            rerank_collection(conn, collection, items_by_id, Path(args.out), systems_to_rerank=args.systems,
+                              rrf_k=rrf_k, ledger=ledger, run_id=args.run_id, run_cap=args.cap, post=post,
+                              account=account, headers=headers)
+        except BudgetExceeded as exc:
+            log(f"[{collection}] rerank stopped by the budget: {exc}")
+            return 2
+        finally:
+            conn.close()
+    log(f"assembled: {assemble(Path(args.out))}")
+    return 0
+
+
 def assemble(out_dir: Path) -> dict:
     """The top-level pool_items.jsonl and rankings.json from every collection directory."""
     out_dir = Path(out_dir)
@@ -1209,6 +1315,13 @@ def parser() -> argparse.ArgumentParser:
     qz = sub.add_parser("quantize", help="add int8 and binary systems from the cached embeddings; rebuild the pool")
     qz.add_argument("--questions", nargs="+", type=Path, default=list(DEFAULT_QUESTIONS))
     qz.add_argument("--out", default=str(DEFAULT_OUT))
+    rr = sub.add_parser("rerank", help="rerank hybrid systems' fused top 30 with the Workers AI reranker; rebuild the pool")
+    rr.add_argument("--systems", nargs="+", required=True, help='e.g. "hybrid minilm-128" "hybrid bge-m3"')
+    rr.add_argument("--questions", nargs="+", type=Path, default=list(DEFAULT_QUESTIONS))
+    rr.add_argument("--out", default=str(DEFAULT_OUT))
+    rr.add_argument("--run-id", required=True)
+    rr.add_argument("--cap", type=float, required=True)
+    rr.add_argument("--ledger", default=str(LEDGER_PATH))
     return p
 
 
@@ -1224,6 +1337,10 @@ def main(argv=None) -> int:
         from archive_debugger.local_env import load_local_env
         load_local_env(log=lambda m: None)
         return run_quantize(args)
+    if args.command == "rerank":
+        from archive_debugger.local_env import load_local_env
+        load_local_env(log=lambda m: None)
+        return run_rerank(args)
     result = score(Path(args.out), args.runs, runs_dir=Path(args.runs_dir), seed=args.seed, spot=args.spot,
                    build_run_id=args.build_run_id)
     log(f"scored {result['judged_items']} judged of {result['pool_items']} pool items; {Path(args.out) / 'scores.md'}")

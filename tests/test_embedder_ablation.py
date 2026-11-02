@@ -403,3 +403,29 @@ def test_int8_keeps_the_ranking_of_unit_vectors_close():
     assert set(np.argsort(-exact)[:10]) & set(np.argsort(-approx)[:10])
     bits = ea.sign_bits(unit)
     assert bits.shape == (500, 6) and ea.hamming_scores(bits, unit[0])[0] == 0
+
+
+def test_rerank_reorders_the_fused_top_and_is_metered(env, tmp_path):
+    assert run(env) == 0
+    calls = []
+
+    def fake_post(url, headers, body, **kw):
+        calls.append(body)
+        n = len(body["contexts"])
+        # the reranker likes the last passage best
+        return {"result": {"response": [{"id": i, "score": float(i)} for i in range(n)],
+                           "usage": {"prompt_tokens": 10 * n}}}
+    ledger = tmp_path / "rr-ledger.jsonl"
+    args = ea.parser().parse_args(["rerank", "--systems", "hybrid stub-a", "--questions", str(env["qfile"]),
+                                   "--out", str(env["out"]), "--run-id", "rr", "--cap", "1.0", "--ledger", str(ledger)])
+    assert ea.run_rerank(args, open_corpus=env["open_corpus"], post=fake_post, account="a", headers={}) == 0
+    systems = json.loads((env["out"] / "toy" / "rankings.json").read_text(encoding="utf-8"))["systems"]
+    reranked = systems["hybrid stub-a rerank"]
+    assert calls and all(len(c["contexts"]) <= ea.RERANK_DEPTH for c in calls)
+    for qid, top in reranked.items():
+        fused = ea.fuse([systems["bm25"][qid], systems["dense stub-a"][qid]], 60, ea.RERANK_DEPTH)
+        assert top == list(reversed(fused))[:ea.HYBRID_TOP]
+    report = json.loads((env["out"] / "toy" / "rerank.json").read_text(encoding="utf-8"))
+    assert report["systems"]["hybrid stub-a"]["usd"] > 0
+    kinds = [e["kind"] for e in read_jsonl(ledger)]
+    assert kinds.count("reserve") == kinds.count("release") == kinds.count("spend") == len(calls)
