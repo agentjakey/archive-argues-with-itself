@@ -243,3 +243,44 @@ def test_workers_ai_embedding_uses_only_the_index_specs_own_model(monkeypatch, t
     assert name == "workers_ai:@cf/baai/bge-m3"
     fn(["a passage"])
     assert sent["headers"]["cf-aig-gateway-id"] == "archive-argues-audit"
+
+def test_serve_renders_no_public_entry_and_secrets_by_name_only():
+    import importlib.util
+    import tomllib
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("cluster", root / "scripts" / "v2" / "cluster.py")
+    cluster = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cluster)
+    values = tomllib.loads((root / "k8s" / "values.example.toml").read_text(encoding="utf-8"))
+    values["serve"]["enabled"] = True
+    for preset in values["serve"]["presets"]:
+        values["serve"]["preset"] = preset
+        docs = cluster.serve(values)
+        kinds = [d["kind"] for d in docs]
+        assert "Ingress" not in kinds and kinds.count("NetworkPolicy") == 1
+        for d in docs:
+            if d["kind"] == "Service":
+                assert d["spec"]["type"] == "ClusterIP"
+            if d["kind"] == "Deployment":
+                pod = d["spec"]["template"]["spec"]
+                assert pod["automountServiceAccountToken"] is False
+                for c in pod["containers"]:
+                    assert c["securityContext"]["privileged"] is False and c["securityContext"]["allowPrivilegeEscalation"] is False
+                    assert "hostPort" not in str(c.get("ports"))
+                    for e in c.get("env") or []:
+                        assert "value" in e or e["valueFrom"]["secretKeyRef"]["name"] == values["secrets"]["tunnel"]
+        server = docs[0]["spec"]["template"]["spec"]["containers"][0]
+        assert {"startupProbe", "readinessProbe", "livenessProbe"} <= set(server)
+
+def test_ocr_scorer_fails_an_engine_that_adds_text_whatever_its_cer():
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("ocr_eval", Path(__file__).resolve().parents[1] / "scripts" / "v2" / "ocr_eval.py")
+    o = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(o)
+    ref = {"a#1": "The Board accepted 4,210 claims for compensation this year."}
+    noisy = o.score({"a#1": "Thc Board acceptcd 4,21O claims for compensatlon this ycar."}, ref)
+    assert noisy["verdict"] == "pass" and noisy["cer"] > 0
+    adds = o.score({"a#1": "The Board accepted 4,210 claims for compensation this year. Several regional offices reported new staff."}, ref)
+    assert adds["verdict"].startswith("FAIL") and adds["pages_with_added_text"] == 1

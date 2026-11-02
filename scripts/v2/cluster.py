@@ -172,6 +172,91 @@ def judge_server(v: dict) -> list:
              "spec": {"selector": labels, "ports": [{"port": 8000, "targetPort": 8000}]}}]
 
 
+SERVE_PORT = 8000
+
+
+def serve_args(preset: dict) -> list:
+    """The server's command line: the preset's model card flags, then our limits."""
+    args = list(preset["args"])
+    for flag, value in (preset.get("set") or {}).items():
+        if flag in args:
+            args[args.index(flag) + 1] = str(value)
+        else:
+            args += [flag, str(value)]
+    return args
+
+
+def serve(v: dict) -> list:
+    """An OpenAI-compatible model server for a writer or judge (values [serve]), reachable only from
+    inside the namespace and through an outbound-only Cloudflare Tunnel: no Ingress, no LoadBalancer,
+    no NodePort, and a NetworkPolicy that admits only the tunnel's pod."""
+    s = v["serve"]
+    preset = s["presets"][s["preset"]]
+    name = "model-server"
+    labels = {PART_OF: v["cluster"]["owner_label"], NAME: name}
+    port = int(preset.get("port", SERVE_PORT))
+    probe = {"httpGet": {"path": preset.get("health", "/health"), "port": port}}
+    gpus = int(preset.get("gpus", 0))
+    resources = {"requests": dict(preset["resources"]["requests"]), "limits": dict(preset["resources"]["limits"])}
+    if gpus:
+        resources["limits"][v["gpu"]["resource"]] = gpus
+    container = {"name": "server", "image": preset["image"], "imagePullPolicy": v["images"].get("pull_policy", "IfNotPresent"),
+                 "args": serve_args(preset), "ports": [{"containerPort": port}],
+                 "env": [{"name": "HF_HOME", "value": "/scratch/hf"}, {"name": "HOME", "value": "/scratch/home"},
+                         *[{"name": k, "value": str(val)} for k, val in (preset.get("env") or {}).items()]],
+                 "resources": resources, "securityContext": security(read_only=False),
+                 "volumeMounts": [{"name": "scratch", "mountPath": "/scratch"}, {"name": "shm", "mountPath": "/dev/shm"}],
+                 # Loading weights can take many minutes: the startup probe allows it, then readiness and
+                 # liveness take over.
+                 "startupProbe": {**probe, "periodSeconds": 15, "failureThreshold": int(preset.get("startup_minutes", 40)) * 4},
+                 "readinessProbe": {**probe, "periodSeconds": 10, "failureThreshold": 3},
+                 "livenessProbe": {**probe, "periodSeconds": 30, "failureThreshold": 5}}
+    if preset.get("command"):
+        container["command"] = list(preset["command"])
+    if v["secrets"].get("hf"):
+        container["envFrom"] = [{"secretRef": {"name": v["secrets"]["hf"]}}]
+    pod = {"automountServiceAccountToken": False,
+           "securityContext": {"runAsNonRoot": True, "runAsUser": 10001, "fsGroup": 10001, "seccompProfile": {"type": "RuntimeDefault"}},
+           "containers": [container],
+           "volumes": [scratch_volume(v), {"name": "shm", "emptyDir": {"medium": "Memory", "sizeLimit": preset.get("shm", "16Gi")}}]}
+    if gpus:
+        selector = dict(v["gpu"].get("node_selector") or {})
+        if preset.get("gpu_type") or v["gpu"].get("type"):
+            selector[v["gpu"]["type_label"]] = preset.get("gpu_type") or v["gpu"]["type"]
+        if selector:
+            pod["nodeSelector"] = selector
+        if v["gpu"].get("tolerations"):
+            pod["tolerations"] = v["gpu"]["tolerations"]
+    docs = [{"apiVersion": "apps/v1", "kind": "Deployment", "metadata": meta(v, name, "model-server"),
+             "spec": {"replicas": int(s.get("replicas", 1)), "selector": {"matchLabels": labels},
+                      "template": {"metadata": {"labels": labels}, "spec": pod}}},
+            {"apiVersion": "v1", "kind": "Service", "metadata": meta(v, name, "model-server"),
+             "spec": {"type": "ClusterIP", "selector": labels, "ports": [{"port": port, "targetPort": port}]}}]
+    tunnel_labels = {PART_OF: v["cluster"]["owner_label"], NAME: "tunnel"}
+    docs.append({"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy", "metadata": meta(v, f"{name}-ingress", "model-server"),
+                 "spec": {"podSelector": {"matchLabels": labels}, "policyTypes": ["Ingress"],
+                          "ingress": [{"from": [{"podSelector": {"matchLabels": tunnel_labels}}],
+                                       "ports": [{"port": port, "protocol": "TCP"}]}]}})
+    t = s.get("tunnel") or {}
+    if t.get("enabled"):
+        # cloudflared makes outbound connections only; its token comes from a Secret by name. The
+        # tunnel's public hostname is protected by a Cloudflare Access policy that admits only the
+        # engine Worker's service token (docs/CLUSTER.md, Jake's steps).
+        tc = {"name": "cloudflared", "image": t["image"], "args": ["tunnel", "--no-autoupdate", "--metrics", "0.0.0.0:2000", "run"],
+              "env": [{"name": "TUNNEL_TOKEN", "valueFrom": {"secretKeyRef": {"name": v["secrets"]["tunnel"], "key": "token"}}}],
+              "resources": {"requests": {"cpu": "100m", "memory": "128Mi"}, "limits": {"cpu": "500m", "memory": "256Mi"}},
+              "securityContext": security(read_only=True),
+              "livenessProbe": {"httpGet": {"path": "/ready", "port": 2000}, "periodSeconds": 30, "failureThreshold": 3}}
+        docs.append({"apiVersion": "apps/v1", "kind": "Deployment", "metadata": meta(v, "tunnel", "tunnel"),
+                     "spec": {"replicas": int(t.get("replicas", 2)), "selector": {"matchLabels": tunnel_labels},
+                              "template": {"metadata": {"labels": tunnel_labels},
+                                           "spec": {"automountServiceAccountToken": False,
+                                                    "securityContext": {"runAsNonRoot": True, "runAsUser": 65532,
+                                                                        "seccompProfile": {"type": "RuntimeDefault"}},
+                                                    "containers": [tc]}}}})
+    return docs
+
+
 def write(docs: list, folder: Path) -> Path:
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / "manifests.yaml"
@@ -195,6 +280,12 @@ def main(argv=None) -> int:
     ns = values["cluster"]["namespace"]
     ctx = ["--context", args.context] if args.context else []
     label = f"{PART_OF}={values['cluster']['owner_label']}"
+    if args.command in ("render", "up") and args.job == "serve":
+        if not (values.get("serve") or {}).get("enabled"):
+            ap.error("[serve] enabled = false in the values file")
+        path = write(serve(values), REPO / "k8s" / "out" / "serve")
+        print(f"wrote {path} (preset {values['serve']['preset']})")
+        return kubectl(*ctx, "apply", "-f", str(path)) if args.command == "up" else 0
     if args.command in ("render", "up"):
         if not args.job:
             ap.error("--job is required")
@@ -206,7 +297,7 @@ def main(argv=None) -> int:
         return kubectl(*ctx, "apply", "-f", str(path))
     if args.command == "status":
         return kubectl(*ctx, "get", "jobs,pods,pvc,deployments,services", "-n", ns, "-l", label, "-o", "wide")
-    code = kubectl(*ctx, "delete", "jobs,deployments,services,pods,pvc,resourcequota,configmaps", "-n", ns, "-l", label,
+    code = kubectl(*ctx, "delete", "jobs,deployments,services,pods,pvc,resourcequota,configmaps,networkpolicies", "-n", ns, "-l", label,
                    "--ignore-not-found", "--wait=true")
     if values["cluster"].get("create_namespace"):
         code = kubectl(*ctx, "delete", "namespace", ns, "--ignore-not-found", "--wait=true") or code

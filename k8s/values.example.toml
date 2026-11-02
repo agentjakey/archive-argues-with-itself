@@ -21,6 +21,8 @@ pull_secret = ""                       # the name of an image pull Secret, if th
 # environment variables in the pods. Values never appear in this repository.
 r2 = "archive-argues-r2"               # R2_ENDPOINT, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
 workers_ai = ""                        # CF_ACCOUNT_ID, CF_AI_TOKEN (only for the workers_ai executor)
+hf = ""                                # HF_TOKEN, only if a served model is gated
+tunnel = "archive-argues-tunnel"        # key token: the Cloudflare Tunnel token (serve)
 
 [quota]
 # A ResourceQuota on the namespace, so the project can never take more than this.
@@ -63,3 +65,78 @@ model = "Qwen/Qwen2.5-7B-Instruct"
 image = "vllm/vllm-openai:v0.10.1"
 gpus = 1
 max_model_len = 16384
+
+[serve]
+# An OpenAI-compatible model server for an open-weight writer or judge (docs/CLUSTER.md, docs/MODELS.md).
+# Reachable only through the outbound tunnel below: no Ingress, LoadBalancer or NodePort, and a
+# NetworkPolicy that admits only the tunnel's pods. Render with:
+#   python scripts/v2/cluster.py render --values k8s/values.toml --job serve
+enabled = false
+preset = "ministral-3-14b"
+replicas = 1
+
+[serve.tunnel]
+# cloudflared, outbound only. Its token is a Secret named in [secrets] tunnel (key "token"); the
+# public hostname and its Access policy (service token for the engine Worker) are Jake's to create.
+enabled = true
+image = "cloudflare/cloudflared:2026.9.3"
+replicas = 2
+
+# Each preset: the model card's own vLLM flags (args), then our limits (set), checked on 2026-11-01.
+# Hardware is the card's; "set" changes only parallelism and request limits.
+[serve.presets.mistral-small-4-nvfp4-96gb]
+image = "vllm/vllm-openai:v0.19.1"
+gpus = 1
+gpu_type = ""                          # a 96 GB GPU, for example "NVIDIA-RTX-PRO-6000-Blackwell"
+args = ["--model", "mistralai/Mistral-Small-4-119B-2603-NVFP4", "--max-model-len", "262144", "--tensor-parallel-size", "2",
+        "--attention-backend", "TRITON_MLA", "--tool-call-parser", "mistral", "--enable-auto-tool-choice",
+        "--reasoning-parser", "mistral", "--max_num_batched_tokens", "16384", "--max_num_seqs", "128",
+        "--gpu_memory_utilization", "0.8", "--port", "8000"]
+set = { "--tensor-parallel-size" = 1, "--max-model-len" = 32768, "--max_num_seqs" = 16 }
+resources = { requests = { cpu = "8", memory = "64Gi" }, limits = { cpu = "16", memory = "96Gi" } }
+startup_minutes = 60
+
+[serve.presets.mistral-small-4-tp2-80gb]
+image = "vllm/vllm-openai:v0.19.1"
+gpus = 2
+gpu_type = ""                          # two 80 GB GPUs, for example "NVIDIA-H100-80GB-HBM3"
+args = ["--model", "mistralai/Mistral-Small-4-119B-2603", "--max-model-len", "262144", "--tensor-parallel-size", "2",
+        "--attention-backend", "FLASH_ATTN_MLA", "--tool-call-parser", "mistral", "--enable-auto-tool-choice",
+        "--reasoning-parser", "mistral", "--max_num_batched_tokens", "16384", "--max_num_seqs", "128",
+        "--gpu_memory_utilization", "0.8", "--port", "8000"]
+set = { "--max-model-len" = 32768, "--max_num_seqs" = 16 }
+resources = { requests = { cpu = "16", memory = "128Gi" }, limits = { cpu = "32", memory = "192Gi" } }
+startup_minutes = 60
+
+[serve.presets.gpt-oss-120b]
+image = "vllm/vllm-openai:v0.19.1"
+gpus = 1
+gpu_type = ""                          # one 80 GB GPU (the card: H100 or MI300X)
+args = ["--model", "openai/gpt-oss-120b", "--port", "8000"]
+set = { "--max-model-len" = 32768, "--max-num-seqs" = 16 }
+resources = { requests = { cpu = "8", memory = "64Gi" }, limits = { cpu = "16", memory = "96Gi" } }
+startup_minutes = 45
+
+[serve.presets.ministral-3-14b]
+image = "vllm/vllm-openai:v0.19.1"
+gpus = 1
+gpu_type = ""                          # one 24 GB GPU (the card: fits in 24 GB in FP8)
+args = ["--model", "mistralai/Ministral-3-14B-Instruct-2512", "--tokenizer_mode", "mistral", "--config_format", "mistral",
+        "--load_format", "mistral", "--enable-auto-tool-choice", "--tool-call-parser", "mistral", "--port", "8000"]
+set = { "--max-model-len" = 16384, "--max-num-seqs" = 8 }
+resources = { requests = { cpu = "4", memory = "32Gi" }, limits = { cpu = "8", memory = "48Gi" } }
+startup_minutes = 30
+
+[serve.presets.ollama-cpu]
+# The CPU executor: proves the serve path on a tiny slice without a GPU. Ollama answers the same
+# OpenAI-compatible API at /v1; the model is pulled on first start into the scratch volume.
+image = "ollama/ollama:0.40.11"
+gpus = 0
+port = 11434
+health = "/"
+command = ["/bin/sh", "-c"]
+args = ["ollama serve & sleep 5 && ollama pull qwen2.5:0.5b-instruct && wait"]
+env = { OLLAMA_HOST = "0.0.0.0:11434", OLLAMA_MODELS = "/scratch/ollama", OLLAMA_NUM_PARALLEL = "2" }
+resources = { requests = { cpu = "2", memory = "4Gi" }, limits = { cpu = "4", memory = "8Gi" } }
+startup_minutes = 15
+shm = "1Gi"
