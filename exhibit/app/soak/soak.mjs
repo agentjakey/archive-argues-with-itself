@@ -69,15 +69,20 @@ const page = await context.newPage();
 const cdp = await context.newCDPSession(page);
 await cdp.send("Performance.enable");
 
-const events = { crashes: 0, page_errors: [], visits: 0, idle_resets: 0, console_errors: 0 };
+const events = { crashes: 0, page_errors: [], visits: 0, idle_resets: 0, console_errors: 0, browser_closed_at_s: null };
 page.on("crash", () => (events.crashes += 1));
+// The browser process ending (closed, killed or crashed outside the page) stops the soak and fails it,
+// with the time recorded, instead of ending the script without a summary.
+browser.on("disconnected", () => {
+  if (events.browser_closed_at_s === null) events.browser_closed_at_s = Math.round((Date.now() - started) / 1000);
+});
 page.on("pageerror", (e) => events.page_errors.length < 50 && events.page_errors.push(String(e).slice(0, 300)));
 page.on("console", (m) => {
   if (m.type() === "error" && !/net::ERR_INTERNET_DISCONNECTED|Failed to load resource/.test(m.text())) events.console_errors += 1;
 });
 
-await page.goto(URL);
 const started = Date.now();
+await page.goto(URL);
 const samples = [];
 
 async function sample() {
@@ -157,9 +162,9 @@ async function visit() {
 }
 
 let nextSample = Date.now();
-while (Date.now() - started < HOURS * 3600_000 && events.crashes === 0) {
+while (Date.now() - started < HOURS * 3600_000 && events.crashes === 0 && events.browser_closed_at_s === null) {
   if (Date.now() >= nextSample) {
-    await sample();
+    await sample().catch(() => undefined);
     nextSample += SAMPLE_MS;
   }
   try {
@@ -169,7 +174,7 @@ while (Date.now() - started < HOURS * 3600_000 && events.crashes === 0) {
     await page.goto(URL).catch(() => undefined);
   }
 }
-await sample();
+if (events.browser_closed_at_s === null) await sample();
 
 const after = samples.filter((s) => s.t_s * 1000 >= WARMUP_MS);
 const heap = fit(after.map((s) => [s.t_s / 3600, s.heap_used_mb]));
@@ -177,11 +182,12 @@ const ws = fit(after.filter((s) => s.working_set_mb !== null).map((s) => [s.t_s 
 const visitErrors = events.page_errors.filter((e) => e.startsWith("visit script:")).length;
 const pass =
   events.crashes === 0 &&
+  events.browser_closed_at_s === null &&
   events.page_errors.length - visitErrors === 0 &&
   heap !== null && heap.slope <= LIMITS.heap_mb_per_hour &&
   (ws === null || ws.slope <= LIMITS.working_set_mb_per_hour);
 const summary = {
-  url: URL, channel: CHANNEL, hours_planned: HOURS, hours_run: +(samples.at(-1).t_s / 3600).toFixed(2),
+  url: URL, channel: CHANNEL, hours_planned: HOURS, hours_run: +((events.browser_closed_at_s ?? samples.at(-1)?.t_s ?? 0) / 3600).toFixed(2),
   network: "every host but 127.0.0.1 blocked", samples: samples.length, warmup_minutes: WARMUP_MS / 60000,
   events, limits: LIMITS,
   heap_used_mb: { first: samples[0]?.heap_used_mb, last: samples.at(-1)?.heap_used_mb, max: Math.max(...samples.map((s) => s.heap_used_mb)), slope_per_hour: heap },
@@ -192,6 +198,6 @@ const summary = {
 };
 writeFileSync(summaryPath, JSON.stringify(summary, null, 1) + "\n");
 console.log(JSON.stringify({ pass, hours_run: summary.hours_run, visits: events.visits, crashes: events.crashes, heap: heap, ws }, null, 1));
-await browser.close();
-await server.close();
+await browser.close().catch(() => undefined);
+await server.close().catch(() => undefined);
 process.exit(pass ? 0 : 1);
