@@ -11,7 +11,12 @@ Each item's files are kept as fetched under the local folder, uploaded to the pr
 under fulltext/v1/<identifier>/, and recorded in manifest.jsonl with their sha256 and size. A
 stopped fetch resumes after the last recorded item; an item is never fetched twice. Requests are
 polite (net.py: identified, at most two at a time, a pause after each, backoff) and the whole fetch
-stops with a report when 429 or 503 responses pile up."""
+stops with a report when 429 or 503 responses pile up.
+
+On the cloud runners (GitHub Actions, scripts/v2/catalogue.py fulltext --stream) nothing is kept on
+disk but the manifest: each item's files go straight to R2, the fetch order comes from R2
+(_state/order.txt), the manifest is restored from its R2 chunks at the start, and status.json is
+copied to _state/status.json at every sync, which `catalogue.py status --r2` reads."""
 from __future__ import annotations
 
 import hashlib
@@ -119,15 +124,16 @@ def _complete_lines(manifest: Path) -> list:
     return raw[:end].decode("utf-8").splitlines(keepends=True)
 
 
-def sync_manifest(store, out: Path, *, final: bool = False) -> int:
+def sync_manifest(store, out: Path, *, final: bool = False, every: Optional[int] = None) -> int:
     """Copy manifest lines not yet on R2 there, as numbered chunks (_state/manifest/<first line>.jsonl).
     A chunk is written only when it holds SYNC_EVERY lines, or at the end of a run, so the chunks
     never overlap. Returns how many lines R2 now holds."""
+    every = every or SYNC_EVERY
     synced_path = out / "manifest.synced"
     synced = int(synced_path.read_text(encoding="ascii")) if synced_path.exists() else 0
     lines = _complete_lines(out / "manifest.jsonl")
-    while len(lines) - synced >= SYNC_EVERY or (final and len(lines) > synced):
-        chunk = lines[synced: synced + SYNC_EVERY]
+    while len(lines) - synced >= every or (final and len(lines) > synced):
+        chunk = lines[synced: synced + every]
         store.put(f"{STATE_PREFIX}/{synced:08d}.jsonl", "".join(chunk).encode("utf-8"))
         synced += len(chunk)
         synced_path.write_text(str(synced), encoding="ascii")
@@ -181,13 +187,23 @@ def write_status(out: Path, total: int, counts: dict, limit_state: dict) -> dict
     return status
 
 
+STATUS_KEY = f"{R2_PREFIX}/_state/status.json"
+ORDER_KEY = f"{R2_PREFIX}/_state/order.txt"
+
+
 RETRY_WINDOW = 500      # items between retries of the ones that failed
 MAX_ATTEMPTS = 3        # tries per item in one run; after that it waits for the next pass
 
 
-def run(identifiers: list, out: Path, *, store=None, get: Callable = None, workers: int = net.MAX_CONCURRENCY,
-        log: Callable[[str], None] = print, stop_after: Optional[int] = None) -> dict:
+def run(identifiers: list, out: Path, *, store=None, get: Callable = None, workers: Optional[int] = None,
+        log: Callable[[str], None] = print, stop_after: Optional[int] = None, keep_local: bool = True,
+        deadline: Optional[float] = None, sync_every: Optional[int] = None, runner: Optional[str] = None) -> dict:
+    """Fetch every identifier not yet recorded. keep_local=False streams each item's files to R2 only
+    (the cloud runners: nothing but the manifest is written to disk). deadline (time.monotonic) ends
+    the run cleanly: no new item starts after it, uploads finish and the manifest is synced."""
+    import time as _time
     get = get or net.get
+    workers = workers or net.LIMIT.ceiling
     refusals = net.RefusalCounter()
     out.mkdir(parents=True, exist_ok=True)
     manifest = out / "manifest.jsonl"
@@ -205,8 +221,13 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
     stop = threading.Event()
     failed = []
 
+    out_of_time = threading.Event()
+
     def one(ident: str) -> None:
-        if stop.is_set():
+        if stop.is_set() or out_of_time.is_set():
+            return
+        if deadline is not None and _time.monotonic() >= deadline:
+            out_of_time.set()
             return
         try:
             item = fetch_item(ident, get, refusals)
@@ -224,8 +245,9 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
         record = {"identifier": ident, "kind": item["kind"], "files": {}, "at": now()}
         folder = out / ident[:2] / ident
         for role, (name, data) in item["files"].items():
-            folder.mkdir(parents=True, exist_ok=True)
-            (folder / name).write_bytes(data)
+            if keep_local or store is None:
+                folder.mkdir(parents=True, exist_ok=True)
+                (folder / name).write_bytes(data)
             entry = {"name": name, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
             if store is not None:
                 entry["r2_key"] = f"{R2_PREFIX}/{ident}/{name}"
@@ -246,10 +268,11 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
             if n % 200 == 0:
                 log(f"{n} of {len(todo)} this run ({counts}; {net.LIMIT.state()})")
             if n % 50 == 0:
-                write_status(out, len(identifiers), counts, net.LIMIT.state())
+                status = write_status(out, len(identifiers), counts, net.LIMIT.state())
                 if store is not None:
                     try:
-                        sync_manifest(store, out)
+                        sync_manifest(store, out, every=sync_every)
+                        store.put(STATUS_KEY, json.dumps({**status, "runner": runner}, sort_keys=True).encode("utf-8"))
                     except Exception as exc:       # retried at the next sync; never stops the fetch
                         log(f"manifest sync to R2 failed: {str(exc)[:200]}")
 
@@ -272,8 +295,8 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
     # short until the next pass.
     attempts = {}
     queue = list(todo)
-    with ThreadPoolExecutor(max_workers=min(workers, net.MAX_CONCURRENCY)) as pool:
-        while queue and not stop.is_set():
+    with ThreadPoolExecutor(max_workers=min(workers, net.LIMIT.ceiling)) as pool:
+        while queue and not stop.is_set() and not out_of_time.is_set():
             window, queue = queue[:RETRY_WINDOW], queue[RETRY_WINDOW:]
             for ident in window:
                 attempts[ident] = attempts.get(ident, 0) + 1
@@ -285,12 +308,15 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
             with lock:
                 again = [i for i in dict.fromkeys(failed) if attempts.get(i, 0) < MAX_ATTEMPTS]
                 failed.clear()
-            if again:
+            if again and not out_of_time.is_set():
                 counts["retried"] = counts.get("retried", 0) + len(again)
                 queue = again + queue
     if uploads is not None:
         uploads.shutdown(wait=True)
-        sync_manifest(store, out, final=True)
+        sync_manifest(store, out, final=True, every=sync_every)
     counts["stopped"] = stop.is_set()
-    write_status(out, len(identifiers), counts, net.LIMIT.state())
+    counts["out_of_time"] = out_of_time.is_set()
+    status = write_status(out, len(identifiers), counts, net.LIMIT.state())
+    if store is not None:
+        store.put(STATUS_KEY, json.dumps({**status, "runner": runner}, sort_keys=True).encode("utf-8"))
     return counts
