@@ -338,6 +338,7 @@ class ComposeRequest(BaseModel):
     filters: Optional[dict] = None
     hits: list = []          # router rows from the shards (router_rows), the merged pool
     prompt_ids: list = []    # the merged top passages, in order: what the writer sees
+    evidence_only: bool = False   # the merged record alone, no model call
 
 
 
@@ -1809,6 +1810,13 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
 
         if not clean:
             return limited("empty")
+        if req.evidence_only:            # the merged record alone: no model call
+            ans = Answer(text=_EVIDENCE_ONLY_MSG, sentences=[], verified_citations=[], unsupported=[], abstained=True,
+                         coverage=coverage_of(clean, hits), abstention_text=_EVIDENCE_ONLY_MSG, generation=gen)
+            out = shown(ans)
+            out["flagged"] = flags.detect(out["evidence"], question=clean if rows else None)
+            out["evidence_only"] = True
+            return out
         if not b.answers_allowed:
             return limited("index_unavailable")
         if kind == "anthropic" and b.llm is None and not _key_available():

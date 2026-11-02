@@ -60,3 +60,15 @@ def test_supplied_evidence_checks():
     assert ok.ok and ok.deep_link.endswith("/page/n1")
     assert not missing.exists and not missing.ok
     assert unseen.exists and not unseen.in_evidence and not unseen.ok
+
+
+def test_compose_evidence_only_makes_no_model_call(tmp_path):
+    r, _ = _retriever(tmp_path, [("a", 1985, "alberta")])
+    llm = StubLLM(Draft(sentences=[]))
+    rows = [{"passage_id": "far#3:0", "item_id": "far", "leaf_index": 3, "text": "vaccination hospital",
+             "page_deep_link": "https://archive.org/details/far/page/n3"}]
+    with TestClient(_app(tmp_path, r, llm=llm)) as c:
+        out = c.post("/compose", json={"question": "vaccination hospital", "hits": rows, "prompt_ids": ["far#3:0"],
+                                       "evidence_only": True}, headers=ROUTER).json()
+    assert out["evidence_only"] is True and out["answer"]["abstained"] is True
+    assert [e["passage_id"] for e in out["evidence"]] == ["far#3:0"] and llm.calls == 0
