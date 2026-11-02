@@ -68,3 +68,18 @@ Every condition must hold. The result is published in docs/ACCURACY.md whatever 
 ## Budget
 
 At most $20 of paid calls for all of it (drafting, both runs, judging), metered in the audit ledger.
+
+## Amendment (2026-11-02, 16:35 UTC, before any confirm-1 result was read)
+
+Committed while the production pipeline was still answering the set and before the candidate had started.
+
+- The full judging of both runs is cut. The only condition the frozen test missed, false refusals, needs no judges.
+  Recall, false refusals and should-refuse refusals are computed from the answers on all 839 questions.
+- SUPPORTS and ANSWERS become a guardrail on a seeded sample: the first 100 questions, in a fixed random order of
+  all item ids (seed "confirm1-guardrail:20261113"), that both pipelines answered. Same panel, same retries, the
+  undecided checks adjudicated by AI blind to the pipeline. The guardrail fails only if the candidate is shown worse
+  by more than 2 points: the 95% upper bound of the strict SUPPORTS difference below -2, or the 95% lower bound of
+  the ANSWERS-failure difference above +2.
+- Fallback, used only if confirm-1 misses on false refusals alone: the same bound (95% upper bound at most +2 points)
+  on the false-refusal difference pooled across the frozen test and confirm-1, by a stratified paired bootstrap
+  (questions resampled within each set; 2,000 resamples, seed 20261105).
