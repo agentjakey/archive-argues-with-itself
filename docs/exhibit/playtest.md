@@ -16,7 +16,7 @@ place yet. Nothing in this repository reports one.
 
 ## Protocol for one session (5 to 10 minutes)
 
-1. Reset the kiosk to the attract screen by waiting a minute, or by touching Home.
+1. Reset the kiosk to the attract screen by waiting a minute, or by touching Start over.
 2. Start the timer when the visitor first touches the screen or the dial.
 3. Watch without speaking. Fill in the observation sheet as you go.
 4. When they leave, or after 5 minutes, ask the three questions at the end of the sheet. Write the

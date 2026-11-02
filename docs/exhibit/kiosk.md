@@ -53,11 +53,22 @@ stored."
 
 ## Behaviour
 
-- The kiosk opens on the attract screen, the Gap Hunt map walking through the decades. Any touch
-  or turn of the dial starts the visit.
+- The kiosk opens on the attract screen: the title, one line, a real line from a page in the deck
+  (changing every few seconds), and "Touch to start". One touch, or one press of the dial, starts a
+  visit of about four minutes: two When Was This? cards and two Same or Not? rounds, alternating,
+  then one Time Dial question, then "Your visit", the chronicle of what the visitor said beside
+  what the record says, with the evidence card to print.
+- "Play as a group" runs the same visit for 2 to 6 players. In Same or Not? each player picks in
+  secret and passes the screen on, then a split bar shows how the room voted. "All games" opens
+  each game on its own, Gap Hunt included.
 - After 60 seconds with no touch, key or turn, the exhibit warns for 10 seconds, then returns to
-  the attract screen in English.
-- English and French are one touch apart. A "Less motion" switch turns off the attract animation
-  and transitions, and the visitor's reduced-motion setting is honoured.
+  the attract screen in English, with sound off and the visit forgotten.
+- English and French are one touch apart; in French the footer says the French was drafted by AI
+  and waits for review. "Sound" turns the dial's click on (it starts off). "Less motion" turns off
+  the paced reveals' movement and the changing attract line, and the device's reduced-motion
+  setting is honoured.
 - The dial and the arrow keys move the year. Pressing the dial (Enter) presses the screen's main
   button.
+- The visit's answers live only in the page's memory. Nothing about a visit is written anywhere;
+  the daily totals count only events such as "visit:start", "visit:group", "visit:finish" and
+  "card:print".
