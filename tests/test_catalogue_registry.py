@@ -95,6 +95,27 @@ def test_fulltext_takes_page_indexed_text_and_resumes(tmp_path):
     assert len(calls) == before            # nothing fetched twice
 
 
+def test_fulltext_retries_a_failed_item_in_the_same_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(fulltext, "RETRY_WINDOW", 2)
+    failures = {"flaky": 1, "broken": 99}
+
+    def get(url, refusals=None):
+        name = url.rsplit("/", 1)[-1]
+        ident = name.split("_hocr")[0]
+        if failures.get(ident, 0) > 0 and name.endswith("searchtext.txt.gz"):
+            failures[ident] -= 1
+            raise net.HttpError(500, "server error")
+        if name.endswith("searchtext.txt.gz"):
+            return gzip.compress(b"text")
+        if name.endswith("pageindex.json.gz"):
+            return gzip.compress(b"[[0, 4, 0, 0]]")
+        raise net.HttpError(404, "missing")
+    counts = fulltext.run(["flaky", "a", "b", "broken"], tmp_path, get=get, log=lambda m: None)
+    done = fulltext.done_identifiers(tmp_path / "manifest.jsonl")
+    assert done == {"flaky", "a", "b"}                 # fetched on its second try, in this run
+    assert failures["broken"] == 99 - fulltext.MAX_ATTEMPTS   # tried MAX_ATTEMPTS times, then left for the next pass
+
+
 def make_corpus():
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row

@@ -181,6 +181,10 @@ def write_status(out: Path, total: int, counts: dict, limit_state: dict) -> dict
     return status
 
 
+RETRY_WINDOW = 500      # items between retries of the ones that failed
+MAX_ATTEMPTS = 3        # tries per item in one run; after that it waits for the next pass
+
+
 def run(identifiers: list, out: Path, *, store=None, get: Callable = None, workers: int = net.MAX_CONCURRENCY,
         log: Callable[[str], None] = print, stop_after: Optional[int] = None) -> dict:
     get = get or net.get
@@ -199,6 +203,7 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
     uploads = ThreadPoolExecutor(max_workers=4) if store is not None else None
     counts = {"fetched": 0, "no_text": 0, "errors": 0, "already": len(done), "todo": len(todo)}
     stop = threading.Event()
+    failed = []
 
     def one(ident: str) -> None:
         if stop.is_set():
@@ -212,6 +217,7 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
         except Exception as exc:     # an item that keeps failing is recorded and the fetch goes on
             with lock:
                 counts["errors"] += 1
+                failed.append(ident)
                 with manifest.open("a", encoding="utf-8") as fh:
                     fh.write(json.dumps({"identifier": ident, "kind": "error", "error": str(exc)[:200], "at": now()}) + "\n")
             return
@@ -254,14 +260,34 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
         except Exception as exc:
             with lock:
                 counts["errors"] += 1
+                failed.append(record["identifier"])
             log(f"upload of {record['identifier']} failed: {str(exc)[:200]}")
             return
         write_record(record)
 
     # The pool has a thread for the highest concurrency allowed; net.LIMIT decides how many
-    # requests actually run at once.
+    # requests actually run at once. The list is worked in windows of RETRY_WINDOW items: an item that
+    # failed in one window (a 500, a 503 after the retries, a DNS failure, an upload) is tried again
+    # at the start of the next, up to MAX_ATTEMPTS times in a run, so a shard is not left an item
+    # short until the next pass.
+    attempts = {}
+    queue = list(todo)
     with ThreadPoolExecutor(max_workers=min(workers, net.MAX_CONCURRENCY)) as pool:
-        list(pool.map(one, todo))
+        while queue and not stop.is_set():
+            window, queue = queue[:RETRY_WINDOW], queue[RETRY_WINDOW:]
+            for ident in window:
+                attempts[ident] = attempts.get(ident, 0) + 1
+            list(pool.map(one, window))
+            if uploads is not None:
+                # This window's uploads finish first, so their failures are known before the next.
+                uploads.shutdown(wait=True)
+                uploads = ThreadPoolExecutor(max_workers=4)
+            with lock:
+                again = [i for i in dict.fromkeys(failed) if attempts.get(i, 0) < MAX_ATTEMPTS]
+                failed.clear()
+            if again:
+                counts["retried"] = counts.get("retried", 0) + len(again)
+                queue = again + queue
     if uploads is not None:
         uploads.shutdown(wait=True)
         sync_manifest(store, out, final=True)
