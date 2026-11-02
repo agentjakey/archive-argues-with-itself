@@ -6,11 +6,12 @@ name: exhibit soak
 # working-set slopes with their standard errors (the interval). It passes with no crash, no page or
 # console error, every walk-away reset, and both slopes under their limits (soak.mjs LIMITS).
 #
-# Publishing: only when the soak passes AND the repository has the CLOUDFLARE_API_TOKEN and
-# CLOUDFLARE_ACCOUNT_ID secrets, the publish job assembles production as it stands (the production web
-# at commit 0858543, the catalogue browsing, and this exhibit with the deck that was soaked), runs the
-# release gates and publishes with build_release.py, then checks the live pages. Without the secrets
-# the soak result is recorded and nothing is published.
+# The soak is a pre-install check for a physical kiosk, run once before a library installs it; it
+# gates nothing online (the online exhibit is published with build_release.py like any release).
+# Publishing from here is off by default: only when asked (publish: true), the soak passes AND the
+# repository has the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets does the publish job
+# assemble production with the production web at commit 0858543, which would replace any later web
+# release, so leave it off once the site has moved on.
 on:
   workflow_dispatch:
     inputs:
@@ -20,7 +21,7 @@ on:
       publish:
         description: "publish to production if the soak passes (needs the Cloudflare secrets)"
         type: boolean
-        default: true
+        default: false
   push:
     branches: [v2]
     paths: [".github/workflows/exhibit-soak.yml"]
