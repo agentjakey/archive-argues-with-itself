@@ -397,3 +397,24 @@ def test_score_writes_json_and_markdown(tmp_path, corpus):
 
 def test_the_script_is_ascii():
     assert (REPO / "scripts" / "v2" / "run_benchmark.py").read_bytes().isascii()
+
+
+def test_an_open_writer_provider_is_v2_only_and_metered_under_its_own_provider(tmp_path, corpus):
+    class PaidOpen(rb.EchoStubWriter):
+        def draft(self, system, user):
+            out = super().draft(system, user)
+            self.last_usage = {"input_tokens": 1000, "output_tokens": 100}
+            return out
+    with pytest.raises(rb.Refused, match="v2 pipeline only"):
+        run(tmp_path, corpus, pipeline="v1", stub=False, provider="workers_ai", writer="@cf/zai-org/glm-5.3")
+    with pytest.raises(rb.Refused, match="--endpoint"):
+        run(tmp_path, corpus, stub=False, endpoint="mistral")
+    ledger = Ledger(tmp_path / "ledger.jsonl", phase="test", phase_cap=100.0)
+    lock, splits = make_bench(tmp_path, items=[bench_item(1)])
+    assert run(tmp_path, corpus, bench=(lock, splits), stub=False, ledger=ledger, provider="workers_ai",
+               writer="@cf/zai-org/glm-5.3", writer_factory=lambda *a: PaidOpen()) == 0
+    spend = [e for e in read_jsonl(tmp_path / "ledger.jsonl") if e["kind"] == "spend"]
+    assert len(spend) == 1 and spend[0]["provider"] == "workers-ai"
+    assert spend[0]["usd"] == round(rb.prices.cost("@cf/zai-org/glm-5.3", 1000, 100), 6)
+    info = json.loads((tmp_path / "out" / "runs" / "t1" / "run.json").read_text(encoding="utf-8"))
+    assert info["config"]["provider"] == "workers_ai" and info["pipeline_label"] == "v2-cf_zai-org_glm-5.3"

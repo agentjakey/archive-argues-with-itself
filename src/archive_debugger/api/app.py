@@ -40,6 +40,7 @@ from archive_debugger.eval.questions import load_seed
 from archive_debugger.generate.answer import Answer, compose, coverage_of, generation_meta, salient_terms
 from archive_debugger.generate import answer_v2
 from archive_debugger.generate.cli import build_filters, load_generate_config, retrieve_pool, sent_temperature
+from archive_debugger.generate import writers
 from archive_debugger.generate.llm import LLM, AnthropicLLM, make_llm
 from archive_debugger.ingest.db import ENV_CACHE_PATH, env_path
 from archive_debugger.retrieve import citation, dense, meta_rank
@@ -1489,20 +1490,20 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                     model = b.llm
                 elif kind == "stub":
                     model = make_llm("stub", model_id, gcfg["max_tokens"])
-                else:                            # real provider: budget-aware hard timeout, no retries (N5: llm.py untouched)
+                elif not v2:                     # real provider: budget-aware hard timeout, no retries (N5: llm.py untouched)
                     import anthropic
                     client = anthropic.Anthropic(timeout=model_budget, max_retries=0)
                     model = AnthropicLLM(model_id, gcfg["max_tokens"], client=client, temperature=temp)
                 verify = functools.partial(citation.verify_citations, pr.conn)
                 if v2:
-                    if b.llm is not None and isinstance(b.llm, (answer_v2.StubWriter, answer_v2.AnthropicWriter)):
+                    if b.llm is not None and isinstance(b.llm, writers.V2_WRITERS):
                         writer = b.llm
                     elif kind == "stub":
                         writer = answer_v2.StubWriter(answer_v2.Draft2(sentences=[], evidence_state="insufficient",
                                                                        state_reason="stub writer"))
-                    else:
-                        writer = answer_v2.AnthropicWriter(model_id, gcfg["max_tokens"], effort=gcfg.get("effort"),
-                                                           timeout=model_budget)
+                    else:                        # anthropic, workers_ai or openai_compat (generate/writers.py)
+                        writer = writers.make_writer(kind, model_id, gcfg["max_tokens"], effort=gcfg.get("effort"),
+                                                     endpoint=gcfg.get("endpoint"), timeout=model_budget)
                     window, jurisdictions = collection_bounds(b.name)
                     ans = answer_v2.compose_v2(clean, hits, writer, verify, min_passages=gcfg["min_passages"],
                                                generation=gen, filters=filters, window=window,

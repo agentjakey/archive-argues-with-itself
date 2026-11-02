@@ -1,0 +1,72 @@
+# Writer endpoints and candidates for the v2 answer (src/archive_debugger/generate/writers.py).
+# Keys live only in the environment or .env under the names given here; never in this file.
+#
+# [endpoints.<name>]: an OpenAI-compatible chat completions endpoint.
+#   provider     workers_ai or openai_compat
+#   base_url     the URL before /chat/completions; {NAME} is filled from the environment variable NAME
+#   key_env      the environment variable holding the bearer key
+#   header_envs  extra headers, header name -> environment variable (an Access service token, say)
+#   temperature  0 by default; "omit" for an endpoint that refuses the parameter
+#   json_schema  false for an endpoint that takes only json_object
+
+[endpoints.workers_ai]
+provider = "workers_ai"
+base_url = "https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/v1"
+key_env = "CF_AI_TOKEN"
+
+# Any OpenAI-compatible host: a hosted API, or a vLLM / llama.cpp server behind a Cloudflare Tunnel
+# with an Access service token (set OPENAI_COMPAT_HEADER_ID and OPENAI_COMPAT_HEADER_SECRET).
+[endpoints.openai_compat]
+provider = "openai_compat"
+base_url = "{OPENAI_COMPAT_BASE_URL}"
+key_env = "OPENAI_COMPAT_API_KEY"
+
+[endpoints.openai_compat_access]
+provider = "openai_compat"
+base_url = "{OPENAI_COMPAT_BASE_URL}"
+key_env = "OPENAI_COMPAT_API_KEY"
+header_envs = { "CF-Access-Client-Id" = "OPENAI_COMPAT_HEADER_ID", "CF-Access-Client-Secret" = "OPENAI_COMPAT_HEADER_SECRET" }
+
+[endpoints.mistral]
+provider = "openai_compat"
+base_url = "https://api.mistral.ai/v1"
+key_env = "MISTRAL_API_KEY"
+
+[endpoints.publicai]
+provider = "openai_compat"
+base_url = "https://api.publicai.co/v1"
+key_env = "PUBLICAI_API_KEY"
+
+# [candidates.<name>]: writers in the validation comparison. family is the model family, for the
+# writer exclusion (no judge from the writer's family). licence and runs_on are reported as given
+# by each model's own card; check them there before relying on them.
+[candidates.haiku45]
+provider = "anthropic"
+model = "claude-haiku-4-5-20251001"
+family = "claude"
+licence = "proprietary (API only)"
+runs_on = "API only"
+
+[candidates.haiku55]
+provider = "anthropic"
+model = "claude-haiku-5-5"
+effort = "low"
+family = "claude"
+licence = "proprietary (API only)"
+runs_on = "API only"
+
+# Open-weight candidates. Mistral Small 4 (endpoint mistral or openai_compat) and Apertus 70B (endpoint
+# publicai) join when their keys are in the environment; neither key is set as of 2026-11-02.
+[candidates.glm53]
+provider = "workers_ai"
+model = "@cf/zai-org/glm-5.3"
+family = "glm"
+licence = "GLM-5.3 licence (MIT terms plus a Model-as-a-Service clause: operators over USD 10B revenue need Z.AI's security review)"
+runs_on = "multi-GPU node (753B parameters; FP8 weights about 750 GB): not one 96 GB GPU, not two 80 GB GPUs"
+
+[candidates.gemma4_26b]
+provider = "workers_ai"
+model = "@cf/google/gemma-4-26b-a4b-it"
+family = "gemma"
+licence = "Apache 2.0"
+runs_on = "one 96 GB GPU (BF16 about 52 GB); laptop with a 4-bit quantization (about 16 GB)"

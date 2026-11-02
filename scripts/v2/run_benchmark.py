@@ -35,6 +35,7 @@ judge_items.jsonl}, test_runs/<pipeline label>.json and scores/<name>/{scores.js
 from __future__ import annotations
 
 import argparse
+import functools
 import hashlib
 import json
 import os
@@ -57,7 +58,7 @@ from archive_debugger.audit import calibration, prices  # noqa: E402
 from archive_debugger.audit import items as audit_items  # noqa: E402
 from archive_debugger.audit.budget import BudgetExceeded, Ledger  # noqa: E402
 from archive_debugger.audit.records import append_jsonl, read_jsonl, write_jsonl  # noqa: E402
-from archive_debugger.generate import answer_v2  # noqa: E402
+from archive_debugger.generate import answer_v2, writers  # noqa: E402
 from archive_debugger.generate.cli import load_generate_config, sent_temperature  # noqa: E402
 from archive_debugger.retrieve import meta_rank  # noqa: E402
 
@@ -78,7 +79,9 @@ LIMIT_SEED = 20261104
 BOOTSTRAP_RESAMPLES = 2000
 BOOTSTRAP_SEED = 20261105
 RUN_ID = re.compile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
-RESUME_KEYS = ("split", "pipeline", "writer", "effort", "stub", "collections", "limit", "seed", "rank")
+RESUME_KEYS = ("split", "pipeline", "writer", "effort", "stub", "collections", "limit", "seed", "rank", "provider",
+               "endpoint")
+CONFIG_DEFAULTS = {"provider": "anthropic", "endpoint": None}    # keys older runs did not record
 
 
 class Refused(Exception):
@@ -177,7 +180,9 @@ def parse_rank(spec: Optional[str]) -> Optional[dict]:
 
 
 def pipeline_label(pipeline: str, writer: str, effort: Optional[str], stub: bool, rank: Optional[dict] = None) -> str:
-    label = f"{pipeline}-{price_model(writer)}"
+    # A provider's model path ("@cf/org/model") becomes one safe name ("cf_org_model"): the label
+    # names a file under test_runs/.
+    label = f"{pipeline}-{re.sub(r'[^A-Za-z0-9._-]+', '_', price_model(writer)).strip('_')}"
     if effort:
         label += f"-{effort}"
     if rank:
@@ -249,11 +254,34 @@ class MeteredWriter(answer_v2.AnthropicWriter):
         return super().draft(system, user)
 
 
-def real_writer(pipeline: str, writer: str, effort: Optional[str], stub: bool, gcfg: dict):
+class MeteredOpenWriter(writers.OpenAICompatWriter):
+    """An OpenAI-compatible v2 writer (writers.py), counting calls like MeteredWriter."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.calls = 0
+
+    def draft(self, system: str, user: str):
+        self.calls += 1
+        return super().draft(system, user)
+
+
+def real_writer(pipeline: str, writer: str, effort: Optional[str], stub: bool, gcfg: dict, *,
+                provider: str = "anthropic", endpoint: Optional[str] = None):
     """The writer handed to the engine: a stub for --stub, else the real Anthropic writer (v2) or
-    the frozen v1 model through a client with a 60 s timeout and no SDK retries."""
+    the frozen v1 model through a client with a 60 s timeout and no SDK retries, or, for another
+    provider, the OpenAI-compatible writer on the endpoint config/writers.toml names (v2 only)."""
     if stub:
         return EchoStubWriter() if pipeline == "v2" else EchoStubLLM()
+    if provider != "anthropic":
+        endpoints = writers.load_endpoints()
+        name = endpoint or provider
+        if name not in endpoints:
+            raise Refused(f"no [endpoints.{name}] in config/writers.toml")
+        try:
+            return MeteredOpenWriter(endpoints[name], writer, gcfg["max_tokens"], timeout=60.0)
+        except RuntimeError as exc:
+            raise Refused(str(exc))
     if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
         raise Refused("no Anthropic key in the environment or .env; use --stub for a run without paid calls")
     if pipeline == "v2":
@@ -473,7 +501,8 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
                   collections: Optional[list] = None, stub: bool = False, final: bool = False,
                   out_root: Path = DEFAULT_OUT, lock_path: Path = DEFAULT_LOCK, splits_dir: Path = DEFAULT_SPLITS,
                   ledger: Optional[Ledger] = None, engine_factory: Optional[Callable] = None,
-                  writer_factory: Callable = real_writer, log: Callable = print, rank: Optional[dict] = None) -> int:
+                  writer_factory: Callable = real_writer, log: Callable = print, rank: Optional[dict] = None,
+                  provider: str = "anthropic", endpoint: Optional[str] = None) -> int:
     """Answer the split's items; 0 when every item was answered, 1 when some came back with an
     error (a rerun asks them again), 2 when the run stopped before a call that could cross a cap."""
     if not RUN_ID.match(run_id or ""):
@@ -482,6 +511,14 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
         raise Refused(f"unknown pipeline {pipeline!r}")
     if effort and pipeline != "v2":
         raise Refused("--effort is for the v2 pipeline only")
+    if provider not in writers.PROVIDERS:
+        raise Refused(f"unknown provider {provider!r} (known: {', '.join(writers.PROVIDERS)})")
+    if provider != "anthropic" and pipeline != "v2":
+        raise Refused("another writer provider is for the v2 pipeline only (v1 is the frozen baseline)")
+    if endpoint and provider == "anthropic":
+        raise Refused("--endpoint is for the workers_ai and openai_compat providers")
+    if writer_factory is real_writer and provider != "anthropic":
+        writer_factory = functools.partial(real_writer, provider=provider, endpoint=endpoint)
     items, facts = load_split(split, lock_path, splits_dir)
     if collections:
         unknown = set(collections) - {it["collection"] for it in items}
@@ -519,10 +556,11 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
     run_json = run_dir / "run.json"
     answers_path = run_dir / "answers.jsonl"
     config = {"split": split, "pipeline": pipeline, "writer": writer, "effort": effort, "stub": stub,
-              "collections": names, "limit": limit, "seed": seed, "rank": rank or None}
+              "collections": names, "limit": limit, "seed": seed, "rank": rank or None,
+              "provider": provider, "endpoint": endpoint}
     if run_json.exists():
         before = json.loads(run_json.read_text(encoding="utf-8"))
-        changed = [k for k in RESUME_KEYS if before.get("config", {}).get(k) != config[k]]
+        changed = [k for k in RESUME_KEYS if before.get("config", {}).get(k, CONFIG_DEFAULTS.get(k)) != config[k]]
         if changed:
             raise Refused(f"run {run_id} exists with different {changed}; use a new run id")
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -569,7 +607,7 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
                     if stopped or not group:
                         continue
                     llm = writer_factory(pipeline, writer, effort, stub, gcfg)
-                    with engine_factory(collection, cfg_path, register, llm, "stub" if stub else "anthropic") as client:
+                    with engine_factory(collection, cfg_path, register, llm, "stub" if stub else provider) as client:
                         for it in group:
                             try:
                                 row = ask(client, it, collection, llm, pipeline=pipeline, writer=writer, effort=effort,
@@ -625,7 +663,7 @@ def ask(client, item: dict, collection: str, llm, *, pipeline: str, writer: str,
         if not stub else (0, 0, 0.0)
     if not stub:
         reservation = f"{run_id}:{item['item_id']}:{time.time():.3f}"
-        ledger.reserve(run_id, cap, "anthropic", model, reservation, worst_usd)    # raises BudgetExceeded
+        ledger.reserve(run_id, cap, prices.price(model).provider, model, reservation, worst_usd)    # raises BudgetExceeded
     calls_before = getattr(llm, "calls", 0)
     body, error = None, None
     t0 = time.monotonic()
@@ -647,11 +685,11 @@ def ask(client, item: dict, collection: str, llm, *, pipeline: str, writer: str,
             if tokens.get("input_tokens") or tokens.get("output_tokens"):
                 usage = {"input_tokens": int(tokens.get("input_tokens") or 0),
                          "output_tokens": int(tokens.get("output_tokens") or 0), "estimated": False}
-                usd = ledger.spend(run_id, "anthropic", model, usage["input_tokens"], usage["output_tokens"],
+                usd = ledger.spend(run_id, prices.price(model).provider, model, usage["input_tokens"], usage["output_tokens"],
                                    what=f"benchmark {pipeline} answer {item['item_id']}")
             else:
                 usage = {"input_tokens": worst_in, "output_tokens": worst_out, "estimated": True}
-                usd = ledger.spend(run_id, "anthropic", model, worst_in, worst_out,
+                usd = ledger.spend(run_id, prices.price(model).provider, model, worst_in, worst_out,
                                    what=f"benchmark {pipeline} answer {item['item_id']} (estimated: worst case, "
                                         "no usage reported)")
     finally:
@@ -1004,6 +1042,9 @@ def main(argv=None) -> int:
     p_run.add_argument("--collections", nargs="*", default=None)
     p_run.add_argument("--stub", action="store_true", help="stub writer: no paid calls, no ledger entries")
     p_run.add_argument("--final", action="store_true", help="required for the test split (once per pipeline label)")
+    p_run.add_argument("--provider", choices=writers.PROVIDERS, default="anthropic",
+                       help="writer provider (v2 only for workers_ai and openai_compat)")
+    p_run.add_argument("--endpoint", default=None, help="an [endpoints.<name>] entry in config/writers.toml")
     p_run.add_argument("--rank", default=None, help='[rank] weights for this run, e.g. "year=0.3,place=0.2" (meta_rank)')
     p_run.add_argument("--lock", type=Path, default=DEFAULT_LOCK)
     p_run.add_argument("--splits-dir", type=Path, default=DEFAULT_SPLITS)
@@ -1027,7 +1068,7 @@ def main(argv=None) -> int:
                                  writer=args.writer, effort=args.effort, limit=args.limit, seed=args.seed,
                                  collections=args.collections, stub=args.stub, final=args.final, out_root=out_root,
                                  lock_path=args.lock, splits_dir=args.splits_dir, ledger=ledger,
-                                 rank=parse_rank(args.rank))
+                                 rank=parse_rank(args.rank), provider=args.provider, endpoint=args.endpoint)
         if args.command == "judge-items":
             from archive_debugger.local_env import load_local_env
             load_local_env()

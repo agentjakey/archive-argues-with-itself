@@ -33,6 +33,10 @@ PRICES = {
                                                     "workers ai catalogue 2026-10-31"),
     "@cf/deepseek-ai/deepseek-v4-pro-0813": Price("workers-ai", "@cf/deepseek-ai/deepseek-v4-pro-0813", 1.32, 3.96, 1.0,
                                                   "workers ai catalogue 2026-11-01"),
+    # Open-weight writer candidates (Phase 3), read from the account's model search on 2026-11-02.
+    "@cf/zai-org/glm-5.3": Price("workers-ai", "@cf/zai-org/glm-5.3", 1.40, 4.40, 1.0, "workers ai catalogue 2026-11-02"),
+    "@cf/google/gemma-4-26b-a4b-it": Price("workers-ai", "@cf/google/gemma-4-26b-a4b-it", 0.10, 0.30, 1.0,
+                                           "workers ai catalogue 2026-11-02"),
     "@cf/moonshotai/kimi-k2.6": Price("workers-ai", "@cf/moonshotai/kimi-k2.6", 0.95, 4.00, 1.0, "workers ai catalogue 2026-10-31"),
     # Workers AI embedding models: input tokens only, so the output price is 0. Read from each
     # model's page under developers.cloudflare.com/workers-ai/models/ on 2026-10-31.

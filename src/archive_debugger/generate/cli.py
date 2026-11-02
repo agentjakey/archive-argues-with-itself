@@ -39,6 +39,9 @@ def load_generate_config(config_path: Path) -> dict:
         # (generate/answer_v2.py: evidence states). effort is sent only by v2, to models that take it.
         "answer_version": str(g.get("answer_version", "v1")),
         "effort": g.get("effort") or None,
+        # v2 only: the [endpoints.<name>] entry in config/writers.toml for a workers_ai or
+        # openai_compat provider (default: the provider's own name).
+        "endpoint": g.get("endpoint") or None,
         # Year, place and issuer ranking weights ([rank], retrieve/meta_rank.py); all zero by default.
         "rank": meta_rank.load_weights(config_path),
     }
