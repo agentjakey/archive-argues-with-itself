@@ -222,3 +222,24 @@ def test_catalogue_browsing_lists_internet_archive_items_only():
         conn.execute("INSERT INTO documents (doc_id, archive_id, identifier, title, record_sha256, first_seen) "
                      "VALUES (?, ?, ?, 't', 'x', '2026-11-01')", (doc, arch, ident))
     assert [r["id"] for r in browse.rows(conn)] == ["report1990"]
+
+def test_rights_rule_crown_cutoff_and_derived_dates_never_make_public_domain(tmp_path):
+    from datetime import date
+    from archive_debugger.registry import rights
+    today = date(2026, 11, 1)
+    assert rights.issuer_type("federal", "Health Canada", None, None) == ("federal", "jurisdiction")
+    assert rights.issuer_type("ontario", "City of Toronto Dept. of Public Health", None, None)[0] == "municipal"
+    assert rights.issuer_type("yukon", None, None, None)[0] == "territorial"
+    assert rights.issuer_type("unknown", None, None, None)[0] == "unknown"
+    assert rights.status("provincial", 1975, "exact", today) == "PD_CA_CROWN"
+    assert rights.status("provincial", 1976, "exact", today) == "CROWN_IN_COPYRIGHT"
+    assert rights.status("federal", 1960, "title_extracted", today) == "UNKNOWN"
+    assert rights.status("municipal", 1950, "exact", today) == "UNKNOWN"
+    topics, indigenous = rights.care_block("Report on services to First Nations communities", "", "")
+    assert indigenous is True
+    with pytest.raises(PermissionError):
+        rights.export_pd_shelf(sqlite3.connect(":memory:"), tmp_path / "missing.toml", tmp_path / "out.txt")
+    (tmp_path / "off.toml").write_text("export_enabled = false\n")
+    with pytest.raises(PermissionError):
+        rights.export_pd_shelf(sqlite3.connect(":memory:"), tmp_path / "off.toml", tmp_path / "out.txt")
+    assert not (tmp_path / "out.txt").exists()

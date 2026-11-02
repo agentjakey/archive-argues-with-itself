@@ -39,7 +39,7 @@ def stats(conn) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["build", "stats"])
+    ap.add_argument("command", choices=["build", "stats", "rights", "pd-shelf"])
     ap.add_argument("--db", type=Path, default=DB)
     ap.add_argument("--catalogue", type=Path, default=None)
     ap.add_argument("--source-collection", default="governmentpublications")
@@ -78,8 +78,52 @@ def main(argv=None) -> int:
             conn.commit()
             print("fulltext", n)
         print("governance", build.add_governance(conn, REGISTER))
+    if args.command == "rights":
+        from archive_debugger.registry import rights
+        print(json.dumps(rights.apply(conn), indent=1))
+        return 0
+    if args.command == "pd-shelf":
+        from archive_debugger.registry import rights
+        per_page, source = measured_tokens_per_page()
+        manifest = rights.pd_shelf_manifest(conn, per_page, source)
+        out = REPO / "reports" / "v2" / "scale" / "pd_shelf_manifest.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(manifest, indent=1), encoding="utf-8")
+        print(json.dumps({k: manifest[k] for k in ("documents", "pages", "estimated_tokens", "tokens_per_page",
+                                                   "tokens_per_page_source", "excluded")}), f"-> {out}")
+        return 0
     print(json.dumps(stats(conn), indent=1))
     return 0
+
+
+def measured_tokens_per_page(limit: int = 2000) -> tuple:
+    """Tokens per page measured on fetched text (characters / 4 per page, over up to `limit` items
+    with page indexes), or the rule's assumption when nothing is fetched yet."""
+    import gzip
+    from archive_debugger.registry import rights
+    manifest = REPO / "data" / "fulltext" / "manifest.jsonl"
+    chars = pages = items = 0
+    if manifest.exists():
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            if items >= limit:
+                break
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            files = rec.get("files") or {}
+            if rec.get("kind") != "hocr" or "pageindex" not in files:
+                continue
+            folder = REPO / "data" / "fulltext" / rec["identifier"][:2] / rec["identifier"]
+            try:
+                n = len(json.loads(gzip.decompress((folder / files["pageindex"]["name"]).read_bytes())))
+                c = len(gzip.decompress((folder / files["searchtext"]["name"]).read_bytes()).decode("utf-8", "replace"))
+            except OSError:
+                continue
+            chars, pages, items = chars + c, pages + n, items + 1
+    if not pages:
+        return rights.TOKENS_PER_PAGE, "assumed"
+    return round(chars / pages / 4, 1), f"measured: characters / 4 over {pages:,} pages of {items:,} fetched items"
 
 
 if __name__ == "__main__":

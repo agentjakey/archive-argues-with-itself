@@ -1,0 +1,4 @@
+# The public-domain text shelf (src/archive_debugger/registry/rights.py).
+# The export stays off until Internet Archive Canada signs off in writing. Turning it on is Jake's
+# decision, recorded in docs/v2/DECISIONS.md with the sign-off's date; nothing is uploaded either way.
+export_enabled = false

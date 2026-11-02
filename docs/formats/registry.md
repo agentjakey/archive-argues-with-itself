@@ -37,3 +37,10 @@ OCR's page index counts every scan, including the colour cards the viewer skips.
 | `coverage` | the states a document has reached: `known`, `text_fetched`, `indexed` (with the scope), `verified`, `absent`. "Not indexed" is never reported as "not in the archive" |
 | `governance` | the governance register's production policies, for each document they target (docs/formats/governance.md). A fixture policy is refused |
 | `audit_trail` | one row per build step: when, which script and version, what was added. The database refuses updates and deletes on this table |
+| `rights` | per document: `issuer_type` (`federal`, `provincial`, `territorial`, `municipal`, `other`, `unknown`) and how it was read, `publication_year` (the catalogue year, only when the catalogue date was read exactly), its `date_method`, `status` and `rule_version`, and `decided_on`. Rule `pd-ca-crown-1`: `PD_CA_CROWN` when the issuer is federal, provincial or territorial and the year is at most the current year minus 51; `CROWN_IN_COPYRIGHT` for such an issuer and a later year; `UNKNOWN` otherwise. A derived date never makes a document public domain. A rule on catalogue metadata, not a clearance (`scripts/v2/registry.py rights`) |
+| `care` | per document: the care `topics` its catalogue title, creator and publisher match under the site's care rules, `indigenous` (Indigenous-identifying metadata), and `export_excluded`: 1 while IAC has not answered the CARE/OCAP question for Indigenous content, or when a care topic applies |
+
+`scripts/v2/registry.py pd-shelf` writes a dry-run manifest of the public-domain shelf (counts by
+decade, jurisdiction, language and OCR band, estimated tokens) to `reports/v2/scale/`. The export
+itself refuses to run while `config/pd_shelf.toml` has `export_enabled = false`, which it does until
+IAC signs off in writing; nothing is uploaded.
