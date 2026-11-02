@@ -63,7 +63,10 @@
         "PUBLIC_MODELS": "stub",
         "PUBLIC_NOCACHE": "true",
         "PUBLIC_URL": "https://archive-argues-site-staging.jakemyguy.workers.dev",
-        "WRITER_CANDIDATE": ""
+        "WRITER_CANDIDATE": "",
+        // Shards of the whole collection this deployment serves (config/shards/served.toml), comma-separated.
+        // Staging: the bounded run's two British Columbia shards, to prove shard serving end to end.
+        "SHARDS": "british_columbia-1968-2001,british_columbia-2001-2003"
       },
       // Workers AI for the open writer flag (WRITER_CANDIDATE names a candidate in config/writers.toml);
       // the container reaches it through AIProxy. Not bound in production.
@@ -113,7 +116,9 @@
         "PUBLIC_MODELS": "",
         "PUBLIC_NOCACHE": "",
         "PUBLIC_URL": "https://archiveargues.org",
-        "WRITER_CANDIDATE": ""
+        "WRITER_CANDIDATE": "",
+        // A shard is added here, one at a time, after its audit and smoke tests pass on staging.
+        "SHARDS": ""
       }
     }
   }

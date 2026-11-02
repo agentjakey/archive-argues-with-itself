@@ -6,7 +6,7 @@
 // platform timeout), and records how long every wake took.
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import { readRow, writeRow, isKey, type CacheRow } from "./cache";
-import { ENGINE_CONFIG, type Env, instanceFor, verifyPolicy, whole, asChatCompletion, candidateModel } from "./config";
+import { ENGINE_CONFIG, type Env, instanceFor, verifyPolicy, whole, asChatCompletion, candidateModel, servedScopes } from "./config";
 import { parseRange } from "./ranges";
 import { idleCheck } from "./schedule";
 
@@ -142,7 +142,7 @@ export class EngineContainer extends DurableObject<Env> {
       PUBLIC_URL: this.env.PUBLIC_URL,
     };
     if (this.engineName === "engine") {
-      env.CIVIC_ENABLED_SCOPES = Object.keys(ENGINE_CONFIG.scopes).join(",");
+      env.CIVIC_ENABLED_SCOPES = servedScopes(this.env.SHARDS).join(",");
     } else {
       env.CIVIC_SCOPE = this.engineName;
       env.CIVIC_ENABLED_SCOPES = this.engineName;

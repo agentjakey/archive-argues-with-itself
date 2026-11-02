@@ -18,7 +18,7 @@ import { checkAdmin } from "./admin";
 import { bareRequest, readAsk, engineFor, engineNames, engineRequest } from "./ask";
 import { servedHit, purgeExpired, storedAnswerResponse } from "./cache";
 import { benchCacheStores, type BenchBindings } from "./bench";
-import { ENGINE_CONFIG, ROBOTS, type Env } from "./config";
+import { ENGINE_CONFIG, ROBOTS, scopeServed, type Env } from "./config";
 import { checkRate, checkTurnstile, clientKey, corsHeaders, takeModelBudget, type GuardResult } from "./guard";
 import { keepWarmNow } from "./schedule";
 
@@ -98,6 +98,7 @@ async function handleWake(request: Request, env: Env, cors: Record<string, strin
   if (!checked.ok) return json({ error: checked.reason }, checked.status ?? 403, cors);
   const url = new URL(request.url);
   const scope = url.searchParams.get("scope");
+  if (scope && !scopeServed(scope, env.SHARDS)) return json({ error: "unknown scope" }, 422, cors);
   const names = scope && env.ENGINE_LAYOUT === "split" ? [engineFor(env, scope)] : engineNames(env);
   const engines = await Promise.all(names.map((name) => stub(env, name).wakeUp()));
   log({ route: "/wake", engines: engines.map((e) => `${e.name}:${e.status}`) });
@@ -144,6 +145,7 @@ export default {
       }
       if ((url.pathname === "/coverage" || url.pathname === "/flag") && request.method === "GET") {
         const scope = url.searchParams.get("scope") || ENGINE_CONFIG.default_scope;
+        if (!scopeServed(scope, env.SHARDS)) return json({ error: "unknown scope" }, 422, cors);
         const resp = await stub(env, engineFor(env, scope)).forward(bareRequest(request.url, "GET", null), false);
         return withHeaders(resp, cors);
       }

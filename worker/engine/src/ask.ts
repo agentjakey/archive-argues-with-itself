@@ -1,15 +1,15 @@
 // Reading an /ask request, and which engine serves a scope. Kept free of runtime-only imports so
 // the tests can run it under Node.
 import type { AskInput } from "./cache";
-import { ENGINE_CONFIG, flag, modelAllowed, scopeConfig, type Env } from "./config";
+import { ENGINE_CONFIG, flag, modelAllowed, scopeConfig, scopeServed, servedScopes, type Env } from "./config";
 
 /** Which engine serves a scope: the single "engine" container, or the scope's own (split layout). */
 export function engineFor(env: Env, scope: string): string {
   return env.ENGINE_LAYOUT === "split" ? scope : "engine";
 }
 
-export function engineNames(env: Env): string[] {
-  return env.ENGINE_LAYOUT === "split" ? Object.keys(ENGINE_CONFIG.scopes) : ["engine"];
+export function engineNames(env: Pick<Env, "ENGINE_LAYOUT" | "SHARDS">): string[] {
+  return env.ENGINE_LAYOUT === "split" ? servedScopes(env.SHARDS) : ["engine"];
 }
 
 export interface ParsedAsk {
@@ -24,9 +24,10 @@ export interface ParsedAsk {
  *  cache (not with evidence_only, nor with a provider or model other than the configured one, nor
  *  with nocache where PUBLIC_NOCACHE allows it); and whether the provider and model it asks for are
  *  allowed here. Production leaves PUBLIC_NOCACHE off, so a public nocache is ignored. */
-export async function readAsk(request: Request, env: Pick<Env, "PUBLIC_MODELS" | "PUBLIC_NOCACHE" | "WRITER_CANDIDATE">): Promise<ParsedAsk | null> {
+export async function readAsk(request: Request, env: Pick<Env, "PUBLIC_MODELS" | "PUBLIC_NOCACHE" | "WRITER_CANDIDATE" | "SHARDS">): Promise<ParsedAsk | null> {
   const url = new URL(request.url);
   const scope = url.searchParams.get("scope") || ENGINE_CONFIG.default_scope;
+  if (!scopeServed(scope, env.SHARDS)) return null;
   const configured = scopeConfig(scope, env.WRITER_CANDIDATE);
   if (!configured) return null;
   let question: string;

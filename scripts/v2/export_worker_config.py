@@ -71,6 +71,12 @@ def build() -> dict:
                             "curated_context": curated_cache_context(name, registry=registry),
                             "provider": gcfg["provider"], "model": gcfg["model"],
                             "candidates": candidate_rows(name, registry, Path(resolved.config_path))}
+        entry = registry["scopes"][name]
+        if entry.get("shard"):
+            # A shard of the whole collection (config/shards/served.toml): served only where the
+            # deployment's SHARDS names it, with its audit tier.
+            scope_rows[name]["shard"] = True
+            scope_rows[name]["tier"] = entry.get("tier") or "INDEXED"
     keys = [f.key for f in release_files.all_files(registry)]
     notes = editorial.load_notes(editorial.DEFAULT_NOTES)
     answer_notes = []

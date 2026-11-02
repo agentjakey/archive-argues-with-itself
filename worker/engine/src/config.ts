@@ -27,6 +27,7 @@ export interface Env {
   PUBLIC_NOCACHE?: string;       // "true" lets a public /ask skip the answer cache (staging); off in production
   PUBLIC_URL: string;
   WRITER_CANDIDATE?: string;     // staging flag: an open writer candidate (config/writers.toml) answers in place of the configured one
+  SHARDS?: string;               // the whole collection's shard scopes this deployment serves: comma-separated ids, or "" for none
   AI?: Ai;                       // Workers AI binding, staging only: the container reaches it through AIProxy
   // Secrets (wrangler secret put)
   ANTHROPIC_API_KEY?: string;
@@ -46,6 +47,8 @@ export interface ScopeConfig {
   provider: string;
   model: string;
   candidates?: Record<string, CandidateConfig>;   // open writer candidates for the staging flag
+  shard?: boolean;            // a shard of the whole collection (config/shards/served.toml)
+  tier?: string | null;       // its audit tier: INDEXED, AI-AUDITED or HUMAN-AUDITED
 }
 
 export interface AnswerNote {
@@ -70,6 +73,21 @@ export interface EngineConfig {
 export const ENGINE_CONFIG = generated as EngineConfig;
 export const STOPWORDS: ReadonlySet<string> = new Set(ENGINE_CONFIG.stopwords);
 export const SCOPES = Object.keys(ENGINE_CONFIG.scopes);
+
+/** Whether this deployment serves a scope. Every scope that is not a shard is served everywhere; a
+ *  shard of the whole collection only where SHARDS names it, so a shard reaches production by
+ *  adding its id to production's SHARDS, one at a time, after its audit and smoke tests. */
+export function scopeServed(scope: string, shards: string | undefined): boolean {
+  const configured = ENGINE_CONFIG.scopes[scope];
+  if (!configured) return false;
+  if (!configured.shard) return true;
+  return (shards || "").split(",").map((s) => s.trim()).filter(Boolean).includes(scope);
+}
+
+/** The scopes this deployment serves, in the generated config's order. */
+export function servedScopes(shards: string | undefined): string[] {
+  return SCOPES.filter((scope) => scopeServed(scope, shards));
+}
 
 /** A scope's writer and cache context: the configured writer, or, while the staging flag
  *  WRITER_CANDIDATE names one of the scope's generated candidates, that candidate (the engine reads

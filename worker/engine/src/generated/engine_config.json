@@ -28,10 +28,54 @@
   "pilot/dense/vectors.dense.json",
   "pilot/dense/vectors.ids.npy",
   "pilot/dense/vectors.matrix.npy",
-  "pilot/vectors.db"
+  "pilot/vectors.db",
+  "shards/bounded/british_columbia-1968-2001/civic.db",
+  "shards/bounded/british_columbia-1968-2001/vectors.db",
+  "shards/bounded/british_columbia-2001-2003/civic.db",
+  "shards/bounded/british_columbia-2001-2003/vectors.db"
  ],
  "retention_days": 90,
  "scopes": {
+  "british_columbia-1968-2001": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "3d89331d4549533e1cd1457571e96e6c1f30ef5ffa417038b635dd6f559572b0",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "060b3fc0a93c0fb1bcd690ea6bf1f53fc2f5d9b5cd18806611bcdbef59f9f64f",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "f0f071d6682649bcbbfa71752fe38af116d9fc7e24d9e12c7bde597c15530f85",
+   "curated_context": "f0f071d6682649bcbbfa71752fe38af116d9fc7e24d9e12c7bde597c15530f85",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "british_columbia-2001-2003": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "4011ba6e7a9c6cfc62b9d584c2f2e0003692d246a972a43ba2658cfb8cd48cd7",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "d0d005149ccfe540595d664fec035feb9a5bdcd4383e54678b691b772ff3caa3",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "57e371afcd9226ec8e2b1244dd6ec8b77d21d3a6841125db51ed9d8db9b723a0",
+   "curated_context": "57e371afcd9226ec8e2b1244dd6ec8b77d21d3a6841125db51ed9d8db9b723a0",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
   "microlog": {
    "candidates": {
     "gemma4_26b": {
