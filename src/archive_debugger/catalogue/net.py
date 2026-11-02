@@ -36,6 +36,7 @@ LATENCY_WINDOW_S = 900.0
 LATENCY_RISE = 1.25
 MIN_SAMPLES = 50
 HARD_CEILING = 8
+LOAD_SIGNALS = (408, 429, 502, 503, 504)   # these, timeouts and connection failures reset the limit
 
 
 class HttpError(Exception):
@@ -183,7 +184,10 @@ def get(url: str, params: dict | None = None, *, timeout_s: float = 120.0, sleep
                 refusals.refused(exc.code)
             if not (exc.code in (408, 429) or exc.code >= 500):
                 raise HttpError(exc.code, text) from exc
-            limit.problem(f"HTTP {exc.code}")
+            if exc.code in LOAD_SIGNALS:
+                # A sign the servers are under load: back to the start and restart the quiet hour. A
+                # plain 500 is about one item (the same item fails again) and is only retried.
+                limit.problem(f"HTTP {exc.code}")
             last = HttpError(exc.code, text)
             asked = retry_after_s(exc.headers.get("retry-after") if exc.headers else None)
             if asked is not None and asked > MAX_RETRY_AFTER_S:

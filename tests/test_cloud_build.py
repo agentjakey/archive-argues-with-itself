@@ -95,6 +95,25 @@ def test_retry_after_is_honoured_in_full_and_pauses_every_request(monkeypatch):
         net.get("https://archive.org/x", sleep=slept.append, limit=lim)
 
 
+def test_an_items_own_500_does_not_hold_the_limit_down(monkeypatch):
+    lim = net.AdaptiveLimit(start=4, ceiling=8)
+    monkeypatch.setattr(lim, "acquire", lambda: None)
+
+    def broken(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 500, "broken item", None, None)
+    monkeypatch.setattr(net.urllib.request, "urlopen", broken)
+    with pytest.raises(net.HttpError):
+        net.get("https://archive.org/x", sleep=lambda s: None, limit=lim)
+    assert lim.last_problem is None              # retried, but the quiet hour is not reset
+
+    def busy(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 503, "busy", None, None)
+    monkeypatch.setattr(net.urllib.request, "urlopen", busy)
+    with pytest.raises(net.HttpError):
+        net.get("https://archive.org/x", sleep=lambda s: None, limit=lim)
+    assert lim.last_problem is not None
+
+
 def served_get(served):
     def get(url, refusals=None):
         name = url.rsplit("/", 1)[-1]
