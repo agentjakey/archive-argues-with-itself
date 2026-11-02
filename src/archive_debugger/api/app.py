@@ -722,6 +722,9 @@ def scope_facts(name: str, config_path, corpus: dict) -> dict:
         "jurisdiction_phrase": entry.get("jurisdiction_phrase") or None,
         "national": bool(entry.get("national", False)),
         "audit": entry.get("audit") or None,
+        # The audit tier a served shard of the whole collection carries (config/shards/served.toml):
+        # INDEXED until its audit; None for a scope that does not state one.
+        "tier": entry.get("tier") or None,
     }
 
 

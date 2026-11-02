@@ -49,3 +49,26 @@ The router (`src/archive_debugger/shards/router.py`) has two steps.
    recomputed from each candidate's query-term counts and length, using the collection's N,
    document frequencies and average length summed over all coverage files. The two rankings are
    fused by reciprocal rank with k = 60, and one model call is made on the merged top passages.
+
+## Served shards (`config/shards/served.toml`)
+
+Each served shard is one engine scope, and so one container in the engine Worker's split layout.
+`scripts/v2/serve_shards.py register --shard <id>` writes its entry from the shard builder's
+manifest on R2. The scope registry (`archive_debugger.scopes.load_registry`) reads the file
+together with `config/scopes.toml`. A shard may not reuse a registered scope's name. No shard is
+named in code.
+
+| Field | Meaning |
+|---|---|
+| `config` | `config/shards/engine.toml`, shared by every shard: BM25 alone (`dense_weight = 0`) |
+| `db_path`, `index_path` | where the engine places the shard's corpus database and its empty vectors database |
+| `release_dir` | the shard's folder under the engine's data root |
+| `label`, `blurb`, `jurisdiction_phrase` | display text, from the plan: the places and the years |
+| `tier` | `INDEXED` until the shard's audit; `AI-AUDITED` (with `audit`) or `HUMAN-AUDITED` after it (`serve_shards.py tier`) |
+| `[shard]` | `jurisdictions`, `first_year`, `last_year`, `undated` and `documents`, as in the plan |
+| `[r2]` | `db_key` and `db_sha256` (from the builder's manifest), `index_key` and `index_sha256` (the empty vectors database) |
+
+A shard is served by an engine Worker deployment only when the deployment's `SHARDS` variable names
+it. Production starts with none. A shard is added there one at a time, after its audit and its smoke
+tests pass on staging. Run `scripts/v2/export_worker_config.py` after any change. The Worker's
+generated config marks each shard scope `shard: true` and carries its `tier`.
