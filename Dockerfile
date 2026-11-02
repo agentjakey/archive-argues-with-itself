@@ -11,6 +11,8 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
+# The shared design tokens and fonts (design/tokens.css), which web/src/styles.css imports from ../design.
+COPY design/ /design/
 RUN npm run build
 
 # --- stage 2: api -----------------------------------------------------------
