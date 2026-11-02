@@ -1,4 +1,5 @@
 import { jurisdictionLabel, shortTitle, yearLabel } from "../lib/format";
+import { SplitBar, splitLabel } from "./SplitBar";
 import type { Story } from "../types";
 
 interface Props {
@@ -20,21 +21,22 @@ export function ThresholdHero({ featured, onOpen }: Props) {
   if (!featured) return null;
   const [a, b] = featured.pins;
   return (
-    <section className="settle mt-6 border-b border-rule pb-10" aria-labelledby="threshold-kicker">
+    <section className="settle hero-meander mt-6 border-b border-rule pb-10" aria-labelledby="threshold-kicker">
       <div onClick={() => onOpen(featured)} className="group block w-full cursor-pointer text-left">
         <span id="threshold-kicker" className="tag block">
           {KICKER}
         </span>
         <span className="screen-title mt-1 block max-w-[24ch]">{featured.question}</span>
 
-        <span className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <SplitBar />
+        <span className="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2">
           {[a, b].map((p, i) => (
             <span key={p.passage_id} className="block min-w-0">
               <span className="flex items-baseline gap-2">
                 {a.year != null && b.year != null && a.year !== b.year && (
                   <span className="tag">{i === 0 ? "Then" : "Later"}</span>
                 )}
-                <span className="era-year">{yearLabel(p.year)}</span>
+                <span className={`era-year ${splitLabel(i)}`}>{yearLabel(p.year)}</span>
                 {jurisdictionLabel(p.jurisdiction) && (
                   <span className="text-sm text-muted">{jurisdictionLabel(p.jurisdiction)}</span>
                 )}

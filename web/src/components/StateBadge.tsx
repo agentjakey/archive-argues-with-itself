@@ -50,7 +50,7 @@ export function StateBadge({ answer }: Props) {
   return (
     <div className="mt-2" data-testid="state-badge">
       <p className="text-sm">
-        <span className="tag mr-2">{info.label}</span>
+        <span className="tag mr-2" data-state={state}>{info.label}</span>
         {info.line}
       </p>
       {answer.state_reason && <p className="mt-1 text-sm text-muted">{answer.state_reason}</p>}

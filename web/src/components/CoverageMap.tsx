@@ -113,10 +113,10 @@ export function CoverageMapView({
           >
             <defs>
               <pattern id="cov-none" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                <rect width="6" height="6" fill="#fcfaf4" />
-                <line x1="0" y1="0" x2="0" y2="6" stroke="#d9d2c3" strokeWidth="2" />
+                <rect width="6" height="6" fill="var(--surface)" />
+                <line x1="0" y1="0" x2="0" y2="6" stroke="var(--hair)" strokeWidth="2" />
               </pattern>
-              <style>{".cov-p:focus{outline:none}.cov-p:hover,.cov-p:focus{stroke:#8b2e1f;stroke-width:2}.cov-click{cursor:pointer}"}</style>
+              <style>{".cov-p:focus{outline:none}.cov-p:hover,.cov-p:focus{stroke:var(--gold);stroke-width:2}.cov-click{cursor:pointer}"}</style>
             </defs>
             {geo.features.map((f, i) => {
               const d = featurePath(f, project);
@@ -126,7 +126,7 @@ export function CoverageMapView({
               const isONAB = !!prov && (prov.slug === "ontario" || prov.slug === "alberta");
               let fill = "url(#cov-none)";
               if (national) fill = bandOf(count)?.fill ?? "url(#cov-none)";
-              else fill = isONAB && count > 0 ? "#8a6a3f" : "#f2ecdd";   // pilot: highlight ON/AB, rest de-emphasized
+              else fill = isONAB && count > 0 ? "var(--accent)" : "var(--surface-2)";   // pilot: highlight ON/AB, rest de-emphasized
               const explorable = !!prov && count > 0 && (national || isONAB);
               const label = prov
                 ? `${prov.name}: ${bandLabel(count)}, ${shareText(count)}`
@@ -136,7 +136,7 @@ export function CoverageMapView({
                   key={(f.properties?.code as string) ?? i}
                   d={d}
                   fill={fill}
-                  stroke="#b8ad97"
+                  stroke="var(--line)"
                   strokeWidth={0.8}
                   className={`cov-p ${explorable ? "cov-click" : ""}`}
                   tabIndex={prov ? 0 : -1}
@@ -195,18 +195,18 @@ export function CoverageMapView({
                 </span>
               ))}
               <span className="inline-flex items-center gap-2">
-                <span style={{ backgroundImage: "repeating-linear-gradient(45deg,#fcfaf4,#fcfaf4 2px,#d9d2c3 2px,#d9d2c3 4px)" }} className="inline-block h-4 w-4 border border-rule" />
+                <span style={{ backgroundImage: "repeating-linear-gradient(45deg,var(--surface),var(--surface) 2px,var(--hair) 2px,var(--hair) 4px)" }} className="inline-block h-4 w-4 border border-rule" />
                 not placed
               </span>
             </>
           ) : (
             <>
               <span className="inline-flex items-center gap-2">
-                <span style={{ background: "#8a6a3f" }} className="inline-block h-4 w-4 border border-rule" />
+                <span style={{ background: "var(--accent)" }} className="inline-block h-4 w-4 border border-rule" />
                 in this pilot (Ontario, Alberta)
               </span>
               <span className="inline-flex items-center gap-2">
-                <span style={{ background: "#f2ecdd" }} className="inline-block h-4 w-4 border border-rule" />
+                <span style={{ background: "var(--surface-2)" }} className="inline-block h-4 w-4 border border-rule" />
                 not in this pilot
               </span>
             </>

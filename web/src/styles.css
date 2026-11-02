@@ -1,9 +1,13 @@
+@import "../../design/tokens.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Reading room, not chat. Paper and ink; one accent, used only for Cited.
-   Two body sizes (1rem and .875rem); headings in serif; rules, not boxes. */
+/* Reading room, not chat, in Agora's look (design/tokens.css, shared with the catalogue and the
+   exhibit). The UI recedes: the question, the answer and the scanned page are the heroes. Cinzel,
+   uppercase and letter-spaced, for headings, labels and buttons; Crimson Text for reading; lining
+   tabular figures wherever numbers line up. Rules, not boxes; square corners; no shadows. */
+
 
 :root {
   --scale: 1;
@@ -17,10 +21,44 @@ body.kiosk {
 body {
   @apply bg-paper text-ink font-sans antialiased;
   margin: 0;
+  background-image: var(--noise);
+  line-height: 1.5;
 }
 
 h1, h2, h3, h4 {
-  @apply font-serif;
+  font-family: var(--display);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Labels and buttons speak in Cinzel; reading text never does. */
+button,
+.chip,
+label,
+summary,
+.tag,
+.cited,
+.lane-heading,
+.grid-table thead th,
+legend {
+  font-family: var(--display);
+  letter-spacing: var(--label-tracking);
+}
+
+a {
+  color: var(--gold);
+  text-underline-offset: 0.18em;
+}
+
+/* Numbers that line up: tables, grids, years and counts. */
+.grid-table,
+.era-year,
+.timeline-label,
+.timeline-counts,
+.figures,
+time {
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 button,
@@ -31,7 +69,7 @@ input {
 }
 
 :focus-visible {
-  outline: 3px solid theme("colors.ink");
+    outline: 3px solid var(--gold);
   outline-offset: 2px;
 }
 
@@ -45,12 +83,14 @@ input {
   z-index: 60;
   transform: translateY(-200%);
   transition: transform 0.15s ease;
-  background: theme("colors.ink");
-  color: theme("colors.paper");
+    background: var(--gold);
+  color: var(--ink);
   padding: 0.5rem 0.9rem;
-  border-radius: 2px;
+  border-radius: var(--radius);
   text-decoration: none;
-  font-family: theme("fontFamily.sans");
+  font-family: var(--display);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
   font-size: 0.875rem;
 }
 
@@ -73,22 +113,37 @@ input {
 }
 
 .tag {
-  @apply font-sans text-xs text-muted;
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.08em;
+  @apply text-xs text-muted;
+  text-transform: uppercase;
 }
+
+/* Evidence states are told apart by label and by shape, never by colour alone. */
+.tag[data-state]::before {
+  content: "";
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  margin-right: 0.45em;
+  vertical-align: 0.02em;
+  border: 1.5px solid currentColor;
+}
+.tag[data-state="SUPPORTED"]::before { background: currentColor; }
+.tag[data-state="PARTIALLY_SUPPORTED"]::before { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+.tag[data-state="CONFLICTING"]::before { transform: rotate(45deg); background: currentColor; }
+.tag[data-state="INCOMPARABLE"]::before { background: linear-gradient(135deg, transparent 45%, currentColor 45%, currentColor 55%, transparent 55%); }
+.tag[data-state="INSUFFICIENT_EVIDENCE"]::before { background: transparent; }
+.tag[data-state="RESTRICTED"]::before { background: linear-gradient(transparent 40%, currentColor 40%, currentColor 60%, transparent 60%); }
 
 /* The one metadata tag that carries real honesty meaning (a pooled row the model never saw) stays
    legible rather than muted: readable words, a little more contrast, a quiet dotted underline. */
 .tag-note {
-  @apply font-sans text-xs text-ink;
+  @apply text-xs text-ink;
   border-bottom: 1px dotted theme("colors.muted");
 }
 
 .cited {
-  @apply font-sans text-xs text-accent;
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.08em;
+  @apply text-xs text-accent;
+  text-transform: uppercase;
   border-bottom: 2px solid theme("colors.accent");
   padding-bottom: 1px;
 }
@@ -108,9 +163,11 @@ input {
   min-height: 0;
 }
 
+/* Scans sit on the dark ground with a thin border and are never inverted or filtered. */
 .evidence .thumb img {
   @apply block w-full h-auto;
-  box-shadow: 0 1px 3px rgba(28, 26, 23, 0.18), 0 6px 14px rgba(28, 26, 23, 0.08);
+  border: 1px solid var(--line);
+  filter: none;
 }
 
 .lane {
@@ -118,7 +175,8 @@ input {
 }
 
 .lane-heading {
-  @apply font-serif text-lg border-b border-ink pb-1;
+  @apply text-base border-b border-line pb-1;
+  text-transform: uppercase;
 }
 
 .lane[data-empty="true"] .lane-heading {
@@ -126,12 +184,22 @@ input {
 }
 
 /* --- controls --- */
+/* Buttons are transparent with a 1 px border that turns gold on hover. */
 .chip {
-  @apply inline-flex items-center font-sans text-sm border border-ink bg-sheet px-3 py-1.5 rounded-sm cursor-pointer;
+  @apply inline-flex items-center text-xs border border-line bg-transparent text-ink px-3 py-1.5 cursor-pointer no-underline;
+  text-transform: uppercase;
+  border-radius: var(--radius);
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
-
+.chip:hover,
+.chip:focus-visible {
+  border-color: var(--gold);
+  color: var(--gold);
+}
 .chip[aria-pressed="true"] {
-  @apply bg-ink text-paper;
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--surface-2);
 }
 
 body.kiosk .chip {
@@ -139,28 +207,24 @@ body.kiosk .chip {
   padding: 0.75em 1.1em;
 }
 
-/* Primary action button: dark ink fill, paper text. A compound selector (.chip.chip-primary)
-   so the dark fill wins over the .chip base by specificity, without fighting utilities. Paper on
-   ink is about 15:1 (AA). Disabled greys to a rule fill with muted text (about 3.8:1, still
-   legible) and is visually distinct from the enabled dark fill. */
+/* The primary action stays transparent too: a parchment border instead of the quieter line, gold on
+   hover. A disabled chip keeps a hairline border and muted text (9.7:1, still legible). */
 .chip.chip-primary {
-  @apply bg-ink text-paper border-ink;
+  border-color: var(--text);
 }
-
+.chip.chip-primary:hover,
+.chip.chip-primary:focus-visible {
+  border-color: var(--gold);
+}
+.chip:disabled,
 .chip.chip-primary:disabled {
-  @apply bg-rule border-rule text-muted;
-  cursor: not-allowed;
-}
-
-/* Any chip when disabled: greyed and clearly inactive, still legible (muted on sheet is about
-   5.5:1). The primary rule above wins over this for a disabled primary button. */
-.chip:disabled {
-  @apply border-rule text-muted;
+  border-color: var(--hair);
+  color: var(--muted);
   cursor: not-allowed;
 }
 
 .linkish {
-  @apply font-sans text-ink underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer;
+  @apply text-ink underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer;
   min-height: 0;
 }
 
@@ -169,7 +233,7 @@ body.kiosk .chip {
 }
 
 .mark {
-  @apply font-sans text-xs align-super mx-0.5 px-1 bg-transparent border-0 cursor-pointer text-ink;
+  @apply text-xs align-super mx-0.5 px-1 bg-transparent border-0 cursor-pointer text-accent;
   min-height: 0;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -184,7 +248,7 @@ body.kiosk .chip {
    inks in on hover and focus. The bubble is portaled and fixed, clamped to the viewport width, so it
    is never clipped by an overflow ancestor and never widens the page. --- */
 .term {
-  @apply font-sans text-ink bg-transparent border-0 p-0;
+  @apply text-ink bg-transparent border-0 p-0;
   min-height: 0;
   display: inline;
   cursor: help;
@@ -200,9 +264,8 @@ body.kiosk .chip {
   position: fixed;
   z-index: 50;
   max-width: min(22rem, calc(100vw - 16px));
-  @apply bg-sheet border border-ink p-3 text-sm text-ink font-sans;
+    @apply bg-sheet border border-line p-3 text-sm text-ink font-sans;
   line-height: 1.45;
-  box-shadow: 0 2px 4px rgba(28, 26, 23, 0.14), 0 10px 26px rgba(28, 26, 23, 0.1);
 }
 
 /* --- coverage grid --- */
@@ -221,9 +284,8 @@ body.kiosk .chip {
 }
 
 .grid-table thead th {
-  @apply font-sans text-xs text-muted;
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.08em;
+  @apply text-xs text-muted;
+  text-transform: uppercase;
 }
 
 .grid-table .baseline td,
@@ -252,6 +314,7 @@ body.kiosk .chip {
 
 .timeline-btn {
   @apply flex flex-col items-center w-full bg-transparent border-0 cursor-pointer text-ink font-sans;
+  letter-spacing: normal;
 }
 
 .timeline-label {
@@ -285,7 +348,7 @@ body.kiosk .chip {
 .thumb-sm {
   @apply block h-auto bg-paper;
   width: 72px;
-  box-shadow: 0 1px 3px rgba(28, 26, 23, 0.18), 0 6px 14px rgba(28, 26, 23, 0.08);
+  border: 1px solid var(--line);
 }
 
 /* --- reading pages (How this works, Gaps, About) --- */
@@ -294,7 +357,7 @@ body.kiosk .chip {
 }
 
 .reading-body h3 {
-  @apply font-serif text-lg mt-6 mb-2 border-b border-rule pb-1;
+  @apply text-base mt-6 mb-2 border-b border-rule pb-1;
 }
 
 .reading-body ol {
@@ -328,7 +391,7 @@ body.kiosk .chip {
 }
 
 .backdrop {
-  @apply fixed inset-0 z-20 bg-ink/30;
+  @apply fixed inset-0 z-20 bg-paper/80;
 }
 
 /* Honor a reduced-motion preference: quiet the kiosk attract-loop fade, the skeleton shimmer, and
@@ -349,21 +412,21 @@ body.kiosk .chip {
 .sk-line,
 .sk-page {
   display: block;
-  background: linear-gradient(90deg, #efe9db 25%, #f6f1e7 37%, #efe9db 63%);
+    background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 37%, var(--surface) 63%);
   background-size: 400% 100%;
   animation: sk-shimmer 1.4s ease-in-out infinite;
 }
 
 .sk-line {
   height: 1rem;
-  border-radius: 3px;
+  border-radius: var(--radius);
 }
 
 .sk-page {
   height: 180px;
   max-width: 320px;
-  border: 1px solid theme("colors.rule");
-  border-radius: 2px;
+    border: 1px solid theme("colors.rule");
+  border-radius: var(--radius);
 }
 
 /* Reserve the answer region's vertical space so content landing does not shift the page (the
@@ -384,7 +447,8 @@ body.kiosk .chip {
 }
 
 .evidence-disclosure > summary {
-  @apply font-sans text-sm text-ink cursor-pointer list-none;
+  @apply text-xs text-ink cursor-pointer list-none;
+  text-transform: uppercase;
 }
 
 .evidence-disclosure > summary::-webkit-details-marker {
@@ -422,18 +486,19 @@ body.kiosk .chip {
    compare years), a clear second (lead / screen title), then body and meta.
    rem-based and clamped, so they ride the root font clamp and the kiosk scale. */
 .display {
-  font-family: theme("fontFamily.serif");
-  font-weight: 400;
-  line-height: 1.04;
-  letter-spacing: -0.01em;
-  font-size: clamp(2rem, 1.1rem + 3.4vw, 3.25rem);
+  font-family: var(--display);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: clamp(1.75rem, 1rem + 2.8vw, 2.9rem);
 }
-
+/* The question is a hero: it reads as a sentence, in the reading face, large. */
 .screen-title {
-  font-family: theme("fontFamily.serif");
+  font-family: var(--reading);
   font-weight: 400;
-  line-height: 1.1;
-  font-size: clamp(1.5rem, 1.15rem + 1.3vw, 2.1rem);
+  line-height: 1.15;
+  font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.3rem);
 }
 
 .lead {
@@ -444,28 +509,25 @@ body.kiosk .chip {
 
 /* The big year that carries the disagreement in the compare view. */
 .era-year {
-  font-family: theme("fontFamily.serif");
-  font-weight: 400;
+  font-family: var(--display);
+  font-weight: 600;
   line-height: 1;
   font-size: clamp(2.1rem, 1.2rem + 2.8vw, 3.3rem);
 }
 
-/* A scanned page shown as an artifact: thin rule, paper ground, a soft shadow so
-   it reads as a real document lifted off the page. Used only where the scan is
-   the hero (the threshold feature and the compare). Working surfaces, like the
-   evidence-trail thumbnails and the reading drawer, keep their lighter styling. */
+/* A scanned page shown as an artifact: on the dark ground with a thin border, never inverted or
+   filtered, no shadow. Used where the scan is the hero (the threshold feature and the compare). */
 .page-artifact {
   display: block;
   width: 100%;
   height: auto;
-  background: theme("colors.paper");
-  border: 1px solid theme("colors.rule");
-  box-shadow: 0 1px 2px rgba(28, 26, 23, 0.14), 0 10px 26px rgba(28, 26, 23, 0.10);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  filter: none;
 }
-
 a:hover .page-artifact,
 button:hover .page-artifact {
-  border-color: theme("colors.ink");
+  border-color: var(--gold);
 }
 
 /* One gentle settle on first paint of a resolved screen. Short, subtle, once per
@@ -474,17 +536,25 @@ button:hover .page-artifact {
 @keyframes settle {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 .settle {
   animation: settle 420ms ease-out both;
 }
+/* Paced reveals for an answer or a refusal: each part fades in a beat after the one before it, so
+   the verdict comes first and the evidence follows. Opacity only; with reduced motion the rule above
+   lands every part at once. */
+.settle > * {
+  animation: settle 520ms ease-out both;
+}
+.settle > *:nth-child(2) { animation-delay: 140ms; }
+.settle > *:nth-child(3) { animation-delay: 280ms; }
+.settle > *:nth-child(4) { animation-delay: 420ms; }
+.settle > *:nth-child(n + 5) { animation-delay: 560ms; }
 
 .settle-delay {
   animation: settle 440ms ease-out 90ms both;
@@ -516,19 +586,19 @@ button:hover .page-artifact {
   appearance: none;
   -webkit-appearance: none;
   height: 0.5rem;
-  border: 1px solid #1c1a17;
-  border-radius: 2px;
-  background: #fcfaf4;
-  color: #1c1a17;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--gold);
 }
 .waking-progress::-webkit-progress-bar {
-  background: #fcfaf4;
+  background: var(--surface);
 }
 .waking-progress::-webkit-progress-value {
-  background: #1c1a17;
+  background: var(--gold);
 }
 .waking-progress::-moz-progress-bar {
-  background: #1c1a17;
+  background: var(--gold);
 }
 
 /* The person check beside Ask. Empty for most visitors (Turnstile's interaction-only appearance draws
@@ -599,4 +669,58 @@ button:hover .page-artifact {
 .reading-body ul {
   list-style: disc;
   padding-left: 1.25rem;
+}
+
+/* --- the split bar (Agora): wherever two records are compared, a bar in the two split colours, each
+   half named by its record, so the pairing is read by label as well as by colour. --- */
+.split-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin-top: 0.75rem;
+}
+.split-bar > span {
+  display: block;
+  height: 4px;
+}
+.split-bar .split-a { background: var(--split-a); }
+.split-bar .split-b { background: var(--split-b); }
+.split-label-a { color: var(--split-a); }
+.split-label-b { color: var(--split-b); }
+
+/* The faint meander, only behind the landing hero. */
+.hero-meander {
+  background-image: var(--meander);
+  background-repeat: repeat-x;
+  background-position: left bottom;
+  padding-bottom: 1.5rem;
+}
+
+/* Print stays light: answers and evidence cards print on white, in black, with no texture. */
+@media print {
+  :root {
+    --bg: #ffffff; --bg-rgb: 255 255 255;
+    --surface: #ffffff; --surface-rgb: 255 255 255;
+    --surface-2: #ffffff; --surface-2-rgb: 255 255 255;
+    --text: #000000; --text-rgb: 0 0 0;
+    --muted: #333333; --muted-rgb: 51 51 51;
+    --gold: #000000; --gold-rgb: 0 0 0;
+    --accent: #000000; --accent-rgb: 0 0 0;
+    --line: #555555; --line-rgb: 85 85 85;
+    --hair: #bbbbbb; --hair-rgb: 187 187 187;
+    --split-a: #000000; --split-b: #555555;
+    color-scheme: light;
+  }
+  body {
+    background: #ffffff;
+    background-image: none;
+    color: #000000;
+  }
+  .hero-meander {
+    background-image: none;
+  }
+  .settle,
+  .settle > * {
+    animation: none;
+  }
 }

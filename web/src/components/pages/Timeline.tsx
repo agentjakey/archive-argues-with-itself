@@ -100,13 +100,13 @@ function TimelineBody({
         >
           <defs>
             <pattern id="tl-undated" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <rect width="7" height="7" fill="#fcfaf4" />
-              <line x1="0" y1="0" x2="0" y2="7" stroke="#8b2e1f" strokeWidth="2.5" />
+              <rect width="7" height="7" fill="var(--surface)" />
+              <line x1="0" y1="0" x2="0" y2="7" stroke="var(--gold)" strokeWidth="2.5" />
             </pattern>
-            <style>{".tl-bar{cursor:pointer}.tl-bar:hover rect,.tl-bar:focus rect{stroke:#8b2e1f;stroke-width:3}"}</style>
+            <style>{".tl-bar{cursor:pointer}.tl-bar:hover rect,.tl-bar:focus rect{stroke:var(--gold);stroke-width:3}"}</style>
           </defs>
 
-          <line x1="0" y1={baseline} x2={width} y2={baseline} stroke="#1c1a17" strokeWidth="1.5" />
+          <line x1="0" y1={baseline} x2={width} y2={baseline} stroke="var(--text)" strokeWidth="1.5" />
 
           {dated.map((bar, i) => (
             <Bar
@@ -115,7 +115,7 @@ function TimelineBody({
               x={i * SLOT}
               baseline={baseline}
               h={barHeight(bar.count)}
-              fill="#1c1a17"
+              fill="var(--text)"
               onDrill={() => drill(bar)}
             />
           ))}
@@ -126,7 +126,7 @@ function TimelineBody({
             y1={TOP}
             x2={dated.length * SLOT + GAP / 2}
             y2={baseline}
-            stroke="#d9d2c3"
+            stroke="var(--hair)"
             strokeWidth="1"
             strokeDasharray="3 3"
           />
@@ -256,12 +256,12 @@ function Bar({
       <title>{label}</title>
       {/* full-slot hit target so even a zero bar is clickable */}
       <rect x={x} y={TOP} width={SLOT} height={baseline - TOP + BOT} fill="transparent" />
-      {h > 0 && <rect x={barX} y={baseline - h} width={BAR_W} height={h} fill={fill} stroke="#1c1a17" strokeWidth="1" rx="2" />}
+      {h > 0 && <rect x={barX} y={baseline - h} width={BAR_W} height={h} fill={fill} stroke="var(--text)" strokeWidth="1" />}
       {/* the period first, then its count: the order the accessible name reads in */}
-      <text x={cx} y={baseline + 20} textAnchor="middle" fontSize="14" fill="#1c1a17" fontFamily="ui-sans-serif, system-ui">
+      <text x={cx} y={baseline + 20} textAnchor="middle" fontSize="14" fill="var(--text)" fontFamily="Cinzel, Georgia, serif">
         {bar.label}
       </text>
-      <text x={cx} y={baseline - h - 8} textAnchor="middle" fontSize="15" fill="#1c1a17" fontFamily="ui-monospace, monospace">
+      <text x={cx} y={baseline - h - 8} textAnchor="middle" fontSize="15" fill="var(--text)" fontFamily="Crimson Text, Georgia, serif" style={{ fontVariantNumeric: "lining-nums tabular-nums" }}>
         {formatInt(bar.count)}
       </text>
     </g>

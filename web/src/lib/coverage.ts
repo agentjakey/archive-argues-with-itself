@@ -51,14 +51,14 @@ export interface Band {
   text: string;
 }
 
-// Warm brown ramp, widened for clear at-a-glance separation on a projector (dark -> mid -> light),
-// staying in the paper/ink-plus-single-accent system. Text pairing keeps contrast (paper on the dark
-// well, ink on the mid and light bands). The pilot ON/AB highlight (#8a6a3f, in CoverageMap) sits
-// between well and some, so it still reads as "represented" and coherent with this ramp.
+// Gold ramp on the dark ground (design/tokens.css): brighter means more, so the well-represented band
+// is the full gold and the sparse band sits just above the surface. Text pairing keeps contrast (dark
+// ink on the gold and mid bands, parchment on the sparse band; scripts/v2/contrast.py style ratios:
+// 8.2, 4.9 and 9.1). The pilot ON/AB highlight (the accent, in CoverageMap) sits between well and some.
 export const BANDS: Band[] = [
-  { key: "well", label: "well represented", fill: "#6f4e26", text: "#f6f1e7" },
-  { key: "some", label: "some", fill: "#c9a86a", text: "#1c1a17" },
-  { key: "sparse", label: "sparse", fill: "#ece2cc", text: "#1c1a17" },
+  { key: "well", label: "well represented", fill: "#d4a017", text: "#0e0c09" },
+  { key: "some", label: "some", fill: "#a07a1c", text: "#0e0c09" },
+  { key: "sparse", label: "sparse", fill: "#3d3524", text: "#e8dfc0" },
 ];
 
 /** The coarse band for a province's item count, or null for none (absent / zero). Thresholds are

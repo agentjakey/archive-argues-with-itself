@@ -20,6 +20,10 @@ export default defineConfig({
   projects: [
     { name: "laptop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
     { name: "phone", use: { ...devices["Pixel 7"] } },
+    // Screenshots only (SCREENSHOTS=1): the same pages on a 4K screen.
+    ...(process.env.SCREENSHOTS
+      ? [{ name: "4k", use: { ...devices["Desktop Chrome"], viewport: { width: 3840, height: 2160 } } }]
+      : []),
   ],
   webServer: {
     command: "npx vite preview --outDir ../build/release --host 127.0.0.1 --port 4173 --strictPort",

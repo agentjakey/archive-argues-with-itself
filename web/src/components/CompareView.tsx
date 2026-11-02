@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SplitBar, splitLabel } from "./SplitBar";
 import { useEscape } from "../hooks/useKeyboard";
 import { CrosswalkText } from "./CrosswalkText";
 import { jurisdictionLabel, shortTitle, yearLabel } from "../lib/format";
@@ -102,14 +103,15 @@ export function CompareView({ a, b, salientTerms, caption, comparability, notes,
       )}
       <EditorialNotes notes={notes} className="mt-3" />
 
-      <div className="mt-5 grid grid-cols-1 gap-8 sm:grid-cols-2">
+      <SplitBar />
+      <div className="mt-3 grid grid-cols-1 gap-8 sm:grid-cols-2">
         {columns.map((row, i) => {
           const tag = eraTag(row, columns[1 - i]);
           return (
             <div key={row.passage_id} className="min-w-0">
               <div className="flex items-baseline gap-3 border-b border-rule pb-2">
                 {tag && <span className="tag">{tag}</span>}
-                <span className="era-year">{yearLabel(row.year)}</span>
+                <span className={`era-year ${splitLabel(i)}`}>{yearLabel(row.year)}</span>
                 {jurisdictionLabel(row.jurisdiction) && (
                   <span className="text-sm text-muted">{jurisdictionLabel(row.jurisdiction)}</span>
                 )}

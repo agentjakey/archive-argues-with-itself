@@ -7,7 +7,7 @@
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="theme-color" content="#f6f1e7" />
+    <meta name="theme-color" content="#0e0c09" />
     <link rel="canonical" href="https://archiveargues.org/" />
 
     <title>Archive Argues With Itself</title>
@@ -39,39 +39,39 @@
     />
     <meta name="twitter:image" content="https://archiveargues.org/og-image.png" />
 
-    <!-- Critical inline styles: paint the paper background and a themed skeleton immediately, so
+    <!-- Critical inline styles (values copied from design/tokens.css): paint the dark ground and a themed skeleton immediately, so
          there is no white flash before the JS bundle loads and React mounts. No animation, so it
          is reduced-motion safe by construction. Tailwind (in the bundle) takes over on hydrate. -->
     <style>
-      html { background: #f6f1e7; }
+      html { background: #0e0c09; }
       body {
         margin: 0;
-        background: #f6f1e7;
-        color: #1c1a17;
-        font-family: system-ui, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        background: #0e0c09;
+        color: #e8dfc0;
+        font-family: "Crimson Text", Georgia, "Times New Roman", serif;
         -webkit-font-smoothing: antialiased;
       }
       #app-skeleton { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
       #app-skeleton .sk-title {
-        font-family: "Iowan Old Style", Charter, Georgia, "Times New Roman", serif;
+        font-family: Cinzel, Georgia, serif; text-transform: uppercase; letter-spacing: 0.06em;
         font-size: clamp(28px, 5vw, 40px);
         line-height: 1.1;
-        color: #1c1a17;
+        color: #e8dfc0;
       }
-      #app-skeleton .sk-sub { margin-top: 8px; color: #6b655c; font-size: 15px; }
-      #app-skeleton .sk-rule { margin-top: 16px; border-top: 2px solid #d9d2c3; }
+      #app-skeleton .sk-sub { margin-top: 8px; color: #c2b791; font-size: 15px; }
+      #app-skeleton .sk-rule { margin-top: 16px; border-top: 2px solid #3a3320; }
       #app-skeleton .sk-line {
         height: 16px;
         margin-top: 14px;
-        background: #fcfaf4;
-        border: 1px solid #d9d2c3;
+        background: #1a1710;
+        border: 1px solid #3a3320;
         border-radius: 4px;
       }
       #app-skeleton .sk-block {
         height: 200px;
         margin-top: 20px;
-        background: #fcfaf4;
-        border: 1px solid #d9d2c3;
+        background: #1a1710;
+        border: 1px solid #3a3320;
         border-radius: 6px;
       }
     </style>
