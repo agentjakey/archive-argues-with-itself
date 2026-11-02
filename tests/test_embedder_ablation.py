@@ -371,3 +371,35 @@ def test_whole_collection_cost_scales_measured_spend_and_cpu_time(tmp_path):
     local = out["candidates"]["local"]
     assert local["cpu_ms_per_row"] == 10.0 and local["cpu_hours_current_index"] == round(10_000 / 3600, 1)
     assert "blocked" not in out["candidates"]
+
+
+def test_quantize_adds_compact_systems_from_cached_embeddings_and_grows_the_pool(env):
+    made = []
+    assert run(env, made) == 0
+    calls_after_build = sum(e.calls for e in made)
+    args = ea.parser().parse_args(["quantize", "--questions", str(env["qfile"]), "--out", str(env["out"])])
+    assert ea.run_quantize(args, open_corpus=env["open_corpus"]) == 0
+    assert sum(e.calls for e in made) == calls_after_build          # nothing embedded again
+    systems = json.loads((env["out"] / "toy" / "rankings.json").read_text(encoding="utf-8"))["systems"]
+    for name in ("stub-a", "stub-b", "stub-chunks"):
+        for v in ("int8", "binary-rescore"):
+            assert f"hybrid {name} {v}" in systems and f"dense {name} {v}" in systems
+    report = json.loads((env["out"] / "toy" / "quantize.json").read_text(encoding="utf-8"))
+    a = report["candidates"]["stub-a"]
+    assert a["bytes_per_row"] == {"float32": 256, "int8": 64, "binary": 8}
+    assert 0.0 <= a["hybrid_overlap_at_10_with_float32"]["int8"] <= 1.0
+    pool = read_jsonl(env["out"] / "toy" / "pool_items.jsonl")
+    assert report["pool_items"] == len(pool)
+
+
+def test_int8_keeps_the_ranking_of_unit_vectors_close():
+    rng = np.random.default_rng(3)
+    unit = ea.unit_rows(rng.normal(size=(500, 48)).astype(np.float32))
+    q = ea.unit_rows(rng.normal(size=(1, 48)).astype(np.float32))[0]
+    codes, scale = ea.int8_rows(unit)
+    exact = unit @ q
+    approx = ea.int8_scores(codes, scale, q)
+    assert np.corrcoef(exact, approx)[0, 1] > 0.99
+    assert set(np.argsort(-exact)[:10]) & set(np.argsort(-approx)[:10])
+    bits = ea.sign_bits(unit)
+    assert bits.shape == (500, 6) and ea.hamming_scores(bits, unit[0])[0] == 0

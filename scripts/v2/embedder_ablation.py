@@ -124,6 +124,7 @@ WORKERS_AI_CHARS = 2000
 CHUNK_TOKENS = 128
 CHUNK_OVERLAP = 32
 BOOTSTRAP = 2000
+BINARY_SHORTLIST = 400      # rows the sign bits pass to the int8 rerank (compact storage)
 REFERENCE_SYSTEM = "hybrid minilm-128"
 GAIN = {"pass": 2, "partial": 1, "fail": 0}
 
@@ -712,6 +713,140 @@ def build_collection(conn, collection: str, questions: list, candidates: list, *
     return summary
 
 
+# --- compact storage ---------------------------------------------------------------------------------
+
+def int8_rows(unit: np.ndarray) -> tuple:
+    """Symmetric per-dimension int8 quantization of unit rows: (codes, scale); a row is restored as
+    codes * scale / 127. One byte per dimension instead of four."""
+    scale = np.abs(unit).max(axis=0).astype(np.float32)
+    scale[scale == 0] = 1.0
+    codes = np.clip(np.round(unit / scale * 127.0), -127, 127).astype(np.int8)
+    return codes, scale
+
+
+def int8_scores(codes: np.ndarray, scale: np.ndarray, qvec: np.ndarray) -> np.ndarray:
+    return codes.astype(np.float32) @ (np.asarray(qvec, dtype=np.float32) * scale / 127.0)
+
+
+def sign_bits(unit: np.ndarray) -> np.ndarray:
+    """One bit per dimension (the sign), packed: dim / 8 bytes per row."""
+    return np.packbits(unit > 0, axis=1)
+
+
+_POPCOUNT = np.array([bin(i).count("1") for i in range(256)], dtype=np.uint8)
+
+
+def hamming_scores(bits: np.ndarray, qvec: np.ndarray) -> np.ndarray:
+    """Negative Hamming distance between each row's sign bits and the query's (higher is closer)."""
+    qbits = np.packbits(np.asarray(qvec) > 0)
+    return -_POPCOUNT[np.bitwise_xor(bits, qbits)].sum(axis=1).astype(np.float32)
+
+
+def ranked_from_scores(row_scores: np.ndarray, owners: np.ndarray, ids: list, allowed_mask: np.ndarray, k: int) -> list:
+    scores = np.full(len(ids), -np.inf, dtype=np.float32)
+    np.maximum.at(scores, owners, row_scores)
+    scores[~allowed_mask] = -np.inf
+    order = ra.top_k_desc(scores, min(k, int(allowed_mask.sum())))
+    return [ids[i] for i in order]
+
+
+def binary_rescore(bits: np.ndarray, codes: np.ndarray, scale: np.ndarray, owners: np.ndarray, qvec: np.ndarray,
+                   ids: list, allowed_mask: np.ndarray, k: int, shortlist: int = BINARY_SHORTLIST) -> list:
+    """Sign bits pick a shortlist of rows by Hamming distance; int8 cosine reranks it."""
+    row_allowed = allowed_mask[owners]
+    ham = hamming_scores(bits, qvec)
+    ham[~row_allowed] = -np.inf
+    rows = ra.top_k_desc(ham, min(shortlist, int(row_allowed.sum())))
+    exact = np.full(len(owners), -np.inf, dtype=np.float32)
+    if len(rows):
+        exact[rows] = int8_scores(codes[rows], scale, qvec)
+    return ranked_from_scores(exact, owners, ids, allowed_mask, k)
+
+
+def overlap_at(a: list, b: list, k: int = HYBRID_TOP) -> float:
+    return len(set(a[:k]) & set(b[:k])) / k if a and b else 0.0
+
+
+def quantize_collection(conn, collection: str, items_by_id: dict, out_dir: Path, *, rrf_k: int,
+                        drop_stopwords: bool) -> dict:
+    """Adds int8 and binary-then-int8 systems for every built candidate to rankings.json, from the
+    cached embeddings (nothing is embedded again), rebuilds the pool so their new passages get
+    judged, and writes quantize.json with how far each compact ranking moved from float32."""
+    coll_dir = Path(out_dir) / collection
+    emb_dir = coll_dir / "embeddings"
+    rankings = json.loads((coll_dir / "rankings.json").read_text(encoding="utf-8"))
+    build = json.loads((coll_dir / "build.json").read_text(encoding="utf-8"))
+    sub = json.loads((coll_dir / "subcorpus.json").read_text(encoding="utf-8"))
+    ids, sha = sub["passage_ids"], sub["sha256"]
+    position = {pid: i for i, pid in enumerate(ids)}
+    questions = [items_by_id[q] for q in rankings["questions"]]
+    masks, bm25 = {}, {}
+    for q in questions:
+        allowed = allowed_ids(conn, question_filters(q), ids)
+        mask = np.zeros(len(ids), dtype=bool)
+        mask[[position[pid] for pid in allowed]] = True
+        masks[q["item_id"]] = mask
+        bm25[q["item_id"]] = bm25_ranking(conn, q["question"], question_filters(q), FUSION_DEPTH, within=ids,
+                                          drop_stopwords=drop_stopwords)
+    systems = rankings["systems"]
+    report = {"format": 1, "collection": collection, "binary_shortlist": BINARY_SHORTLIST, "candidates": {}}
+    for name, info in sorted(build["candidates"].items()):
+        if info.get("status") != "BUILT":
+            continue
+        base = emb_dir / f"{name}-{sha[:16]}"
+        unit = unit_rows(np.load(base.with_name(base.name + ".npy"), allow_pickle=False))
+        row_ids = json.loads(base.with_name(base.name + ".ids.json").read_text(encoding="utf-8"))["row_passage_ids"]
+        owners = np.asarray([position[pid] for pid in row_ids], dtype=np.int64)
+        qmat = unit_rows(np.load(base.with_name(base.name + ".queries.npy"), allow_pickle=False))
+        codes, scale = int8_rows(unit)
+        bits = sign_bits(unit)
+        variants = {"int8": {}, "binary-rescore": {}}
+        for n, q in enumerate(questions):
+            qid = q["item_id"]
+            variants["int8"][qid] = ranked_from_scores(int8_scores(codes, scale, qmat[n]), owners, ids, masks[qid],
+                                                       FUSION_DEPTH)
+            variants["binary-rescore"][qid] = binary_rescore(bits, codes, scale, owners, qmat[n], ids, masks[qid],
+                                                             FUSION_DEPTH)
+        moved = {}
+        for v, dense in variants.items():
+            systems[f"dense {name} {v}"] = {qid: lst[:DENSE_TOP] for qid, lst in dense.items()}
+            hybrid = {qid: fuse([bm25[qid], lst], rrf_k, HYBRID_TOP) for qid, lst in dense.items()}
+            systems[f"hybrid {name} {v}"] = hybrid
+            ref = systems.get(f"hybrid {name}") or {}
+            overlaps = [overlap_at(hybrid[qid], ref.get(qid, [])) for qid in hybrid]
+            moved[v] = round(float(np.mean(overlaps)), 4) if overlaps else None
+        report["candidates"][name] = {"hybrid_overlap_at_10_with_float32": moved, "dim": int(unit.shape[1]),
+                                      "bytes_per_row": {"float32": int(unit.shape[1]) * 4, "int8": int(unit.shape[1]),
+                                                        "binary": int(bits.shape[1])}}
+        log(f"[{collection}] {name}: compact rankings, overlap@10 with float32 {moved}")
+    rows = passage_rows(conn, ids)
+    items = pool_items(collection, questions, systems, rows)
+    write_jsonl(coll_dir / "pool_items.jsonl", items)
+    rankings["systems"] = systems
+    _write_json(coll_dir / "rankings.json", rankings)
+    report["pool_items"] = len(items)
+    _write_json(coll_dir / "quantize.json", report)
+    return report
+
+
+def run_quantize(args, *, open_corpus: Optional[Callable] = None) -> int:
+    items_by_id = {}
+    for path in args.questions:
+        refuse_test_split(path)
+        for item in read_jsonl(path):
+            items_by_id[item["item_id"]] = item
+    open_corpus = open_corpus or _scope_corpus
+    for rank_path in sorted(Path(args.out).glob("*/rankings.json")):
+        collection = rank_path.parent.name
+        conn, rrf_k, drop_stopwords = open_corpus(collection)
+        try:
+            quantize_collection(conn, collection, items_by_id, Path(args.out), rrf_k=rrf_k, drop_stopwords=drop_stopwords)
+        finally:
+            conn.close()
+    log(f"assembled: {assemble(Path(args.out))}")
+    return 0
+
+
 def assemble(out_dir: Path) -> dict:
     """The top-level pool_items.jsonl and rankings.json from every collection directory."""
     out_dir = Path(out_dir)
@@ -1071,6 +1206,9 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--runs-dir", default=str(RUNS_DIR))
     s.add_argument("--out", default=str(DEFAULT_OUT))
     s.add_argument("--build-run-id", default=None, help="the build's --run-id, for the Workers AI spend per row")
+    qz = sub.add_parser("quantize", help="add int8 and binary systems from the cached embeddings; rebuild the pool")
+    qz.add_argument("--questions", nargs="+", type=Path, default=list(DEFAULT_QUESTIONS))
+    qz.add_argument("--out", default=str(DEFAULT_OUT))
     return p
 
 
@@ -1082,6 +1220,10 @@ def main(argv=None) -> int:
         from archive_debugger.local_env import load_local_env
         load_local_env(log=lambda m: None)
         return run_build(args)
+    if args.command == "quantize":
+        from archive_debugger.local_env import load_local_env
+        load_local_env(log=lambda m: None)
+        return run_quantize(args)
     result = score(Path(args.out), args.runs, runs_dir=Path(args.runs_dir), seed=args.seed, spot=args.spot,
                    build_run_id=args.build_run_id)
     log(f"scored {result['judged_items']} judged of {result['pool_items']} pool items; {Path(args.out) / 'scores.md'}")
