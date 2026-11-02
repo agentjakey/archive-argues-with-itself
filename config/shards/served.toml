@@ -1,0 +1,55 @@
+# Served shards of the whole collection, one engine scope each. Written by
+# scripts/v2/serve_shards.py; do not edit by hand. Read with config/scopes.toml by
+# archive_debugger.scopes.load_registry.
+
+[scopes."british_columbia-1968-2001"]
+blurb = "145 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/british_columbia-1968-2001/civic.db"
+index_path = "data/shards/british_columbia-1968-2001/index/vectors.db"
+jurisdiction_phrase = "British Columbia"
+label = "British Columbia, 1968 to 2001"
+national = false
+release_dir = "shards/british_columbia-1968-2001"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."british_columbia-1968-2001".r2]
+db_key = "shards/bounded/british_columbia-1968-2001/civic.db"
+db_sha256 = "a06dbef5e55189f4ef19d67679913dbabbd7a40179ff2194cc5e38cb3f380a9e"
+index_key = "shards/bounded/british_columbia-1968-2001/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."british_columbia-1968-2001".shard]
+documents = 145
+first_year = 1968
+jurisdictions = ["british_columbia"]
+last_year = 2001
+undated = false
+
+[scopes."british_columbia-2001-2003"]
+blurb = "37 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/british_columbia-2001-2003/civic.db"
+index_path = "data/shards/british_columbia-2001-2003/index/vectors.db"
+jurisdiction_phrase = "British Columbia"
+label = "British Columbia, 2001 to 2003"
+national = false
+release_dir = "shards/british_columbia-2001-2003"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."british_columbia-2001-2003".r2]
+db_key = "shards/bounded/british_columbia-2001-2003/civic.db"
+db_sha256 = "f64ec8cb9613039b00f13822aab7fb6ca355e068de75b07d3a7381275ca78b6e"
+index_key = "shards/bounded/british_columbia-2001-2003/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."british_columbia-2001-2003".shard]
+documents = 37
+first_year = 2001
+jurisdictions = ["british_columbia"]
+last_year = 2003
+undated = false
