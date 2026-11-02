@@ -907,7 +907,7 @@ def rerank_collection(conn, collection: str, items_by_id: dict, out_dir: Path, *
                       rrf_k: int, ledger: Ledger, run_id: str, run_cap: float, post: Callable, account: str,
                       headers: dict, depth: int = RERANK_DEPTH) -> dict:
     """For each named hybrid system, the fusion's top `depth` (from the stored BM25 and dense top 50),
-    reordered by the reranker, top 10 kept as "<system> rerank". The pool is rebuilt so new passages get
+    or for "bm25" its own top `depth`, reordered by the reranker, top 10 kept as "<system> rerank". The pool is rebuilt so new passages get
     judged; rerank.json records the per-question latency and spend."""
     coll_dir = Path(out_dir) / collection
     rankings = json.loads((coll_dir / "rankings.json").read_text(encoding="utf-8"))
@@ -918,12 +918,15 @@ def rerank_collection(conn, collection: str, items_by_id: dict, out_dir: Path, *
     report = {"format": 1, "collection": collection, "model": RERANKER, "depth": depth, "systems": {}}
     for name in systems_to_rerank:
         dense_name = name.replace("hybrid ", "dense ", 1)
-        if name not in systems or dense_name not in systems:
+        if name not in systems or (name != "bm25" and dense_name not in systems):
             continue
         out, seconds, usd = {}, [], 0.0
         for q in questions:
             qid = q["item_id"]
-            fused = fuse([systems["bm25"].get(qid, []), systems[dense_name].get(qid, [])], rrf_k, depth)
+            if name == "bm25":
+                fused = list(systems["bm25"].get(qid, []))[:depth]      # BM25's own top, reranked
+            else:
+                fused = fuse([systems["bm25"].get(qid, []), systems[dense_name].get(qid, [])], rrf_k, depth)
             if not fused:
                 out[qid] = []
                 continue
