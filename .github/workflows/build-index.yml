@@ -1,0 +1,94 @@
+name: build index
+
+# Builds this project's search index of the whole Internet Archive Canada government collection,
+# step one: the OCR text each shard is compiled from. One runner at a time fetches each item's small
+# text files (_hocr_searchtext.txt.gz, _hocr_pageindex.json.gz, _page_numbers.json; _djvu.txt as a
+# fallback) from archive.org and streams them to the project's R2 bucket; nothing is kept on the
+# runner. The fetch resumes from its manifest on R2, so no item is fetched twice, and follows the
+# order on R2 (public-domain items first). Every hour, and when it stops, it starts the shard build
+# (build-shards.yml), which compiles each shard whose text is complete.
+#
+# Politeness (archive.org/developers/bots.html): an identified user agent with a contact address;
+# 4 requests at once, rising by 2 after each hour with no 429, 503 or other server error and flat
+# latency, never above 8 (catalogue/net.py refuses more); Retry-After honoured in full; a pause of one
+# second after each request; the fetch stops itself when refusals pile up. Only one fetch job ever
+# runs (max-parallel 1 and the concurrency group), so these are the project's totals.
+#
+# Runs only when asked (workflow_dispatch). The push trigger exists only so GitHub registers the
+# workflow from this branch; on a push every job is skipped. Each slot is one job of at most 5.5 h;
+# 20 slots bound the run at about 110 runner hours.
+on:
+  workflow_dispatch:
+    inputs:
+      slots:
+        description: "how many 5.5-hour fetch slots this run may use (at most 20)"
+        default: "20"
+  push:
+    branches: [v2]
+    paths: [".github/workflows/build-index.yml"]
+
+concurrency:
+  group: build-index
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  fetch:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    env:
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      PYTHONPATH: src
+    steps:
+      - name: slot within this run's budget
+        id: budget
+        run: |
+          if [ "${{ matrix.slot }}" -gt "${{ github.event.inputs.slots || '20' }}" ]; then echo "go=no" >> "$GITHUB_OUTPUT"; else echo "go=yes" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.budget.outputs.go == 'yes'
+      - uses: actions/setup-python@v5
+        if: steps.budget.outputs.go == 'yes'
+        with:
+          python-version: "3.11"
+          cache: pip
+      - if: steps.budget.outputs.go == 'yes'
+        run: python -m pip install -e .
+      - name: fetch until done or 5.5 hours
+        if: steps.budget.outputs.go == 'yes'
+        run: |
+          python scripts/v2/catalogue.py fulltext --stream --order-r2 --max-minutes 330 \
+            --concurrency 4 --max-concurrency 8 --step 2 --pause 1.0 --sync-every 100 \
+            --out "$RUNNER_TEMP/fulltext" > "$RUNNER_TEMP/fetch.log" 2>&1 &
+          fetch=$!
+          # While the fetch runs, start the shard build once an hour (it builds only shards whose
+          # text is complete and not built yet; one build run at a time).
+          while kill -0 "$fetch" 2>/dev/null; do
+            for i in $(seq 1 360); do kill -0 "$fetch" 2>/dev/null || break; sleep 10; done
+            kill -0 "$fetch" 2>/dev/null && gh workflow run build-shards.yml --ref "$GITHUB_REF_NAME" || true
+            tail -n 3 "$RUNNER_TEMP/fetch.log"
+          done
+          wait "$fetch"; code=$?
+          tail -n 40 "$RUNNER_TEMP/fetch.log"
+          python scripts/v2/catalogue.py status --r2
+          if [ "$code" -ne 0 ]; then
+            # archive.org kept refusing: wait half an hour before the next slot starts.
+            echo "the fetch stopped on refusals; the next slot waits 30 minutes"
+            sleep 1800
+          fi
+          exit $code
+      - name: start the shard build
+        if: always() && steps.budget.outputs.go == 'yes'
+        run: gh workflow run build-shards.yml --ref "$GITHUB_REF_NAME" || true

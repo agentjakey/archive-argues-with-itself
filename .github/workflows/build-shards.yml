@@ -1,0 +1,83 @@
+name: build shards
+
+# Builds this project's search index, step two: one job per shard whose text is complete on R2 and
+# that is not built yet (scripts/v2/shard_builder.py ready). Each job reads the shard's text and the
+# build inputs from R2, compiles pages and passages, packs the shard's corpus database with its
+# keyword index (SQLite FTS5, BM25; no embeddings), runs the release gates on the built database and
+# only then uploads it to R2 under shards/v1/<shard>/ with a manifest of sha256 checksums. A shard
+# that fails a gate is not uploaded and is tried again by the next run. Nothing here talks to
+# archive.org. Started by build-index.yml, or by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      max_shards:
+        description: "at most this many shards in this run"
+        default: "40"
+  push:
+    branches: [v2]
+    paths: [".github/workflows/build-shards.yml"]
+
+concurrency:
+  group: build-shards
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+  R2_BUCKET: ${{ secrets.R2_BUCKET }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  PYTHONPATH: src
+
+jobs:
+  plan:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      shards: ${{ steps.ready.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e .
+      - id: ready
+        run: |
+          shards=$(python scripts/v2/shard_builder.py ready --from-r2 --no-lock --max "${{ github.event.inputs.max_shards || '40' }}")
+          echo "ready: $shards"
+          echo "shards=$shards" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.shards != '[]' && needs.plan.outputs.shards != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: ${{ fromJson(needs.plan.outputs.shards) }}
+    steps:
+      - name: room on the runner's disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e .
+      - name: build ${{ matrix.shard }}
+        run: |
+          python scripts/v2/shard_builder.py build --shard "${{ matrix.shard }}" --from-r2 --no-lock \
+            --keep-free-disk-gb 2 --min-free-memory-gb 2
+      - name: what was built
+        if: always()
+        run: |
+          tail -n 20 data/build/builder.log || true
+          python scripts/v2/catalogue.py status --r2
