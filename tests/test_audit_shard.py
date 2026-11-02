@@ -211,3 +211,30 @@ def test_the_audit_workflow_names_the_production_writer():
     served = re.search(r'"WRITER_CANDIDATE":\s*"([^"]*)"', production).group(1)
     workflow = (repo / ".github" / "workflows" / "audit-shards.yml").read_text(encoding="utf-8")
     assert re.search(r"CIVIC_WRITER_CANDIDATE:\s*(\S+)", workflow).group(1).strip("'\"") == served
+
+
+def test_undecided_sentences_are_adjudicated_into_the_result_without_changing_the_tier(tmp_path, monkeypatch):
+    from argparse import Namespace
+    from archive_debugger.jobs.store import LocalStore
+    mod = load_module()
+    store = LocalStore(tmp_path / "r2")
+    monkeypatch.setattr(mod, "r2_store", lambda: store)
+    monkeypatch.setattr(mod, "ADJ_DIR", tmp_path / "adj")
+    sid = "ontario-1960-1970"
+    item = {"item_id": f"{sid}:q1:s1", "kind": "sentence", "qid": "audit/q1", "question": "What did it report?",
+            "filters": "{}", "answer_text": "Beds rose.", "sentence": "Beds rose to 4,200.", "sentence_no": "1",
+            "citations": json.dumps([{"passage_id": "x#1:0", "title": "Report", "year": 1965, "text": "beds rose to 4,200"}])}
+    store.put(f"{mod.AUDIT_PREFIX}/{sid}/undecided.jsonl", (json.dumps({"item": item, "decision": {}}) + "\n").encode())
+    store.put(f"{mod.AUDIT_PREFIX}/{sid}/result.json", json.dumps({"pass": 8, "decided": 9, "undecided": 1, "tier": "INDEXED"}).encode())
+    assert mod.cmd_render_undecided(Namespace(shard=sid, batch_size=45)) == 0
+    out = tmp_path / "adj" / f"shard-{sid}"
+    key = next(iter(json.loads((out / "keys.json").read_text())["keys"]))
+    assert "beds rose to 4,200" in (out / "batch1.txt").read_text()
+    (out / "batch1.labels.jsonl").write_text(json.dumps({"key": key, "supports": "pass", "note": "On the page."}) + "\n")
+    assert mod.cmd_apply_adjudicated(Namespace(shard=sid)) == 0
+    result = json.loads(store.get(f"{mod.AUDIT_PREFIX}/{sid}/result.json"))
+    all_ = result["adjudicated"]["supports_strict_all"]
+    assert all_["value"] == 0.9 and all_["sentences"] == 10 and result["adjudicated"]["sentences"] == 1
+    assert result["tier"] == "INDEXED" and result["pass"] == 8          # the panel-only figures are kept as they were
+    rows = store.get(f"{mod.AUDIT_PREFIX}/{sid}/adjudicated.jsonl").decode().splitlines()
+    assert json.loads(rows[0])["source"] == "adjudicated-ai"

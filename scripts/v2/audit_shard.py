@@ -5,6 +5,16 @@
     python scripts/v2/audit_shard.py run --shard federal-1899-1911
     python scripts/v2/audit_shard.py tiers [--apply]          # each audited shard's tier from its result
     python scripts/v2/audit_shard.py publish-calibration      # put the current calibration status on R2
+    python scripts/v2/audit_shard.py render-undecided --shard federal-1899-1911
+    python scripts/v2/audit_shard.py apply-adjudicated --shard federal-1899-1911
+
+render-undecided / apply-adjudicated: the sentences the panel left undecided (audits/v1/<shard>/undecided.jsonl)
+rendered for AI adjudication, blind to the shard's writer, with the reference guide (reports/v2/audit/adjudicated/
+shard-<shard>/batchN.txt; the adjudicator writes batchN.labels.jsonl: {"key", "supports", "note"}); then the labels
+go to audits/v1/<shard>/adjudicated.jsonl (source "adjudicated-ai") and result.json gains an "adjudicated" block: the
+strict SUPPORTS rate over every judged sentence, the panel's decisions plus the adjudicated ones, with its Wilson
+interval. The panel-only rate is kept as it was. Adjudication never changes the tier: no AI label stands in for the
+human review an AI-AUDITED claim waits for.
 
 run (resumable: a stopped run is started again with the same command and does only what is missing;
 its state lives on R2 under audits/v1/<shard>/state/, so a fresh runner resumes it):
@@ -45,6 +55,7 @@ the result says why. `tiers --apply` sets served shards' tiers through serve_sha
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -735,6 +746,73 @@ def cmd_tiers(args) -> int:
     return 0
 
 
+ADJ_DIR = REPO / "reports" / "v2" / "audit" / "adjudicated"
+
+
+def cmd_render_undecided(args) -> int:
+    sys.path.insert(0, str(REPO / "scripts" / "v2"))
+    import adjudicate_checks as adj
+    store = r2_store()
+    key = f"{AUDIT_PREFIX}/{args.shard}/undecided.jsonl"
+    if store.head(key) is None:
+        print(f"{args.shard}: no undecided.jsonl on R2")
+        return 0
+    rows = [json.loads(line) for line in store.get(key).decode("utf-8").splitlines() if line.strip()]
+    out = ADJ_DIR / f"shard-{args.shard}"
+    out.mkdir(parents=True, exist_ok=True)
+    keys, texts = {}, []
+    for row in rows:
+        item = row["item"]
+        k = hashlib.sha256(f"{args.shard}|{item['item_id']}".encode("utf-8")).hexdigest()[:10]
+        keys[k] = {"item_id": item["item_id"], "check": CHECK}
+        texts.append(adj.render(item, CHECK, k))
+    for n in range(0, len(texts), args.batch_size):
+        (out / f"batch{n // args.batch_size + 1}.txt").write_text("\n".join(texts[n:n + args.batch_size]),
+                                                                  encoding="utf-8", newline="\n")
+    (out / "guide.txt").write_text("# REFERENCE GUIDE (reference prompt version " + prompts.REFERENCE_PROMPT_VERSION + ")\n\n"
+                                   + prompts.REFERENCE_GUIDE, encoding="utf-8", newline="\n")
+    (out / "keys.json").write_text(json.dumps({"shard": args.shard, "keys": keys}, indent=1), encoding="utf-8")
+    print(f"{args.shard}: {len(keys)} undecided sentences in {out}")
+    return 0
+
+
+def cmd_apply_adjudicated(args) -> int:
+    store = r2_store()
+    out = ADJ_DIR / f"shard-{args.shard}"
+    keys = json.loads((out / "keys.json").read_text(encoding="utf-8"))["keys"]
+    labels = {}
+    for path in sorted(out.glob("batch*.labels.jsonl")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                row = json.loads(line)
+                labels[row["key"]] = row
+    missing = [k for k in keys if k not in labels or labels[k].get(CHECK) not in ("pass", "partial", "fail")
+               or not str(labels[k].get("note") or "").strip()]
+    if missing:
+        raise SystemExit(f"{len(missing)} undecided sentences have no usable label: {missing[:5]}")
+    rows = [{"item_id": keys[k]["item_id"], "check": CHECK, "final": labels[k][CHECK], "note": labels[k]["note"],
+             "source": "adjudicated-ai", "guide_version": prompts.REFERENCE_PROMPT_VERSION} for k in sorted(keys)]
+    store.put(f"{AUDIT_PREFIX}/{args.shard}/adjudicated.jsonl",
+              "".join(json.dumps(r, sort_keys=True) + "\n" for r in rows).encode("utf-8"))
+    result_key = f"{AUDIT_PREFIX}/{args.shard}/result.json"
+    result = json.loads(store.get(result_key).decode("utf-8"))
+    passes = int(result["pass"]) + sum(1 for r in rows if r["final"] == "pass")
+    total = int(result["decided"]) + len(rows)
+    low, high = calibration.wilson(passes, total) if total else (None, None)
+    result["adjudicated"] = {
+        "source": "adjudicated-ai", "sentences": len(rows),
+        "pass": sum(1 for r in rows if r["final"] == "pass"), "partial": sum(1 for r in rows if r["final"] == "partial"),
+        "fail": sum(1 for r in rows if r["final"] == "fail"), "at": now_iso(),
+        "supports_strict_all": {"value": round(passes / total, 4) if total else None,
+                                "wilson95": [round(low, 4), round(high, 4)] if total else None, "sentences": total,
+                                "note": "pass among every judged sentence: the panel's decisions plus AI adjudication of "
+                                        "the rest (no human has checked the adjudication)"}}
+    store.put(result_key, (json.dumps(result, indent=1, sort_keys=True) + "\n").encode("utf-8"))
+    print(f"{args.shard}: {len(rows)} adjudicated; strict SUPPORTS over all {total} sentences "
+          f"{result['adjudicated']['supports_strict_all']['value']} {result['adjudicated']['supports_strict_all']['wilson95']}")
+    return 0
+
+
 def cmd_publish_calibration(args) -> int:
     store = r2_store()
     path = Path(args.status or CALIBRATION_FILE)
@@ -760,6 +838,13 @@ def main(argv=None) -> int:
     p = sub.add_parser("tiers")
     p.add_argument("--apply", action="store_true", help="set served shards' tiers with serve_shards.py")
     p.set_defaults(fn=cmd_tiers)
+    p = sub.add_parser("render-undecided")
+    p.add_argument("--shard", required=True)
+    p.add_argument("--batch-size", type=int, default=45)
+    p.set_defaults(fn=cmd_render_undecided)
+    p = sub.add_parser("apply-adjudicated")
+    p.add_argument("--shard", required=True)
+    p.set_defaults(fn=cmd_apply_adjudicated)
     p = sub.add_parser("publish-calibration")
     p.add_argument("--status", default=None)
     p.set_defaults(fn=cmd_publish_calibration)
