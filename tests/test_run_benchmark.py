@@ -440,3 +440,13 @@ def test_public_ai_gap_breaks_down_by_expected_state(tmp_path):
     assert r["by_state"]["INSUFFICIENT_EVIDENCE"]["refusal_rate_should_refuse"]["value"] == 1.0
     assert r["latency_s"]["p50"] == 4.0 and r["over_production_cap"]["den"] == 3
     assert "Expected state: SUPPORTED" in gap_mod.gap_markdown(result)
+
+
+def test_max_tokens_reaches_the_engine_config_and_the_label(tmp_path, corpus):
+    seen = []
+    assert run(tmp_path, corpus, seen, max_tokens=8192) == 0
+    info = json.loads((tmp_path / "out" / "runs" / "t1" / "run.json").read_text(encoding="utf-8"))
+    assert info["config"]["max_tokens"] == 8192 and info["pipeline_label"].endswith("-mt8192-stub")
+    assert info["engine"]["pilot"]["max_tokens"] == 8192
+    with pytest.raises(rb.Refused, match="different"):
+        run(tmp_path, corpus, seen)
