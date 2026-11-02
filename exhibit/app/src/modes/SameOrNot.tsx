@@ -1,137 +1,220 @@
-// Same or Not?: two real pages, two claims, four choices. The reveal names the answer in words,
-// marks the decisive lines on the pages, and shows what was compared (period, place, population,
-// program, measure). Right and wrong are said in words and shapes, never by colour alone.
-import { useState } from "react";
+// Same or Not?: two real pages, two claims, four choices. It plays like a document inspection: the
+// claims sit side by side, and the reveal fills in the checklist of what has to match (period,
+// place, population, program, measure). Choices are told apart by shape, letter and words.
+// In group mode each player picks in secret on the one screen, passing it along, and the reveal
+// opens with how the room split. Picks live in memory only and leave with the round.
+import { useEffect, useRef, useState } from "react";
 import type { Choice, Lang, SameOrNotRound } from "../lib/deck";
-import { CHOICES, pageByRef, quoteById } from "../lib/deck";
+import { CHOICES, quoteById } from "../lib/deck";
+import { GROUP_PACE, SOLO_PACE, useStaged } from "../lib/pace";
+import { useSettings } from "../lib/settings";
 import type { Strings } from "../lib/strings";
 import { PageView } from "../components/PageView";
+import { Shape } from "../components/Shape";
+import { SplitBar } from "../components/SplitBar";
 import { StatusNote } from "../components/StatusNote";
-import { EvidenceCard } from "../components/EvidenceCard";
 
-type Props = { rounds: SameOrNotRound[]; lang: Lang; t: Strings; canPrint: boolean; onEvent: (e: string) => void; onDone: () => void };
+type Props = {
+  round: SameOrNotRound;
+  lang: Lang;
+  t: Strings;
+  players: number | null;
+  progress: string;
+  nextLabel: string;
+  onEvent: (e: string) => void;
+  onNext: (picks: Choice[]) => void;
+};
 
-export function SameOrNot({ rounds, lang, t, canPrint, onEvent, onDone }: Props) {
-  const [index, setIndex] = useState(0);
-  const [picked, setPicked] = useState<Choice | null>(null);
-  const round = rounds[index];
-  if (!round) return null;
+const CONSTRAINTS = ["period", "jurisdiction", "population", "program", "measure"];
+const MARK: Record<string, string> = { same: "=", differs: "\u2260", unclear: "?" };
+
+export function SameOrNot({ round, lang, t, players, progress, nextLabel, onEvent, onNext }: Props) {
+  const { reducedMotion } = useSettings();
+  const [picks, setPicks] = useState<Choice[]>([]);
+  const [passing, setPassing] = useState(false);
+  const [reading, setReading] = useState<0 | 1 | null>(null);
+  const choiceRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const voters = players ?? 1;
+  const revealed = picks.length >= voters;
+  const shown = useStaged(players ? GROUP_PACE : SOLO_PACE, reducedMotion, round.id, revealed);
+  const revealRef = useRef<HTMLDivElement>(null);
+  // The reveal is the screen's one dominant element once everyone has picked: bring it into view.
+  const started = revealed && shown > 0;
+  useEffect(() => {
+    if (!started) return;
+    const frame = window.requestAnimationFrame(() => {
+      const box = revealRef.current?.getBoundingClientRect();
+      if (box) window.scrollTo(0, Math.max(0, window.scrollY + box.top - 16));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [started]);
   const [pa, pb] = round.pages;
-  const revealed = picked !== null;
-  const right = picked === round.play.answer;
-  const decisive = round.play.decisive.map((id) => quoteById(round, id)).filter(Boolean);
+  const answer = round.play.answer;
+  const decisive = round.play.decisive.map((id) => quoteById(round, id)).filter((q): q is NonNullable<typeof q> => Boolean(q));
   const marksFor = (ref: string) =>
     revealed ? round.quotes.filter((q) => q.page_ref === ref && (q.role === "decisive" || q.role === "claim")).map((q) => ({ id: q.id, quote: q.text })) : [];
+
   const choose = (c: Choice) => {
-    if (revealed) return;
-    setPicked(c);
+    if (revealed || passing) return;
+    const next = [...picks, c];
+    setPicks(next);
     onEvent(`same_or_not:${c}`);
-    if (index === rounds.length - 1) onEvent("same_or_not:finish");
+    if (next.length < voters) setPassing(true);
   };
+
+  if (reading !== null) {
+    const page = reading === 0 ? pa : pb;
+    const label = reading === 0 ? t.same.pageA : t.same.pageB;
+    return (
+      <section className="round round-reading" data-step="same_or_not" aria-labelledby="reading-heading">
+        <h2 id="reading-heading" className="sr-only">
+          {label}
+        </h2>
+        <button type="button" className="btn btn-quiet" onClick={() => setReading(null)} autoFocus>
+          {t.same.backToClaims}
+        </button>
+        <PageView page={page} label={label} t={t} marks={marksFor(page.ref)} />
+      </section>
+    );
+  }
+
+  if (passing) {
+    const nextPlayer = picks.length + 1;
+    return (
+      <section className="round round-pass" data-step="same_or_not" aria-labelledby="pass-heading">
+        <p className="kicker">{progress}</p>
+        <h2 id="pass-heading">{t.same.passTo(nextPlayer)}</h2>
+        <p className="lede">{t.same.passLede}</p>
+        <button type="button" className="btn btn-primary" data-primary onClick={() => setPassing(false)} autoFocus>
+          {t.same.ready(nextPlayer)}
+        </button>
+      </section>
+    );
+  }
+
+  const soloPick = !players && picks.length > 0 ? picks[0] : null;
+  const answerBeat = players ? 3 : 2;
   return (
-    <section className="mode" aria-labelledby="son-heading">
+    <section className="round round-same" data-step="same_or_not" aria-labelledby="son-heading">
       <p className="kicker">
-        {t.same.level(round.level)} . {t.same.round(index + 1, rounds.length)}
+        {progress}
+        {players && !revealed ? ` . ${t.same.playerTurn(picks.length + 1, players)}` : ""}
       </p>
       <h2 id="son-heading">{t.same.prompt}</h2>
-      {round.level === 1 && <p className="note level-one">{t.same.levelOneNote}</p>}
+      {round.level === 1 && !revealed && <p className="note level-one">{t.same.levelOneNote}</p>}
       <div className="claims">
-        <div className="claim">
-          <p className="claim-label">{t.same.claimA}</p>
-          <p className="claim-text">{round.play.claims[0].text[lang]}</p>
-        </div>
-        <div className="claim">
-          <p className="claim-label">{t.same.claimB}</p>
-          <p className="claim-text">{round.play.claims[1].text[lang]}</p>
-        </div>
+        {[pa, pb].map((page, i) => (
+          <div className="claim" key={page.ref}>
+            <p className="claim-label">{i === 0 ? t.same.claimA : t.same.claimB}</p>
+            <p className="claim-text">{round.play.claims[i].text[lang]}</p>
+            <button type="button" className="btn btn-quiet" onClick={() => setReading(i === 0 ? 0 : 1)}>
+              {i === 0 ? t.same.readA : t.same.readB}
+            </button>
+          </div>
+        ))}
       </div>
-      <div className="choices" role="radiogroup" aria-label={t.same.prompt}>
-        {CHOICES.map((c, i) => {
-          const isAnswer = revealed && c === round.play.answer;
-          const isPicked = picked === c;
-          return (
+      {!revealed && (
+        <div className="choices" role="radiogroup" aria-labelledby="son-heading">
+          {CHOICES.map((c, i) => (
             <button
               key={c}
+              ref={(el) => {
+                choiceRefs.current[i] = el;
+              }}
               type="button"
               role="radio"
-              aria-checked={isPicked}
-              className={`choice${isAnswer ? " choice-answer" : ""}${isPicked && !isAnswer ? " choice-wrong" : ""}`}
+              aria-checked={false}
+              className="choice"
               onClick={() => choose(c)}
               onKeyDown={(e) => {
-                if (revealed) return;
-                const next = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-                if (next !== 0) {
+                const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+                if (step !== 0) {
                   e.preventDefault();
-                  const target = (e.currentTarget.parentElement?.children[(i + next + CHOICES.length) % CHOICES.length] as HTMLElement | undefined);
-                  target?.focus();
+                  choiceRefs.current[(i + step + CHOICES.length) % CHOICES.length]?.focus();
                 }
               }}
-              disabled={revealed && !isAnswer && !isPicked}
             >
+              <Shape index={i} className="choice-shape" />
               <span className="choice-key" aria-hidden="true">
                 {String.fromCharCode(65 + i)}
               </span>
               <span className="choice-name">{t.same.choices[c]}</span>
               <span className="choice-help">{t.same.choiceHelp[c]}</span>
-              {isAnswer && <span className="choice-mark">{"\u2713"} {t.same.right.replace(".", "")}</span>}
-              {isPicked && !isAnswer && <span className="choice-mark">{"\u2717"}</span>}
             </button>
-          );
-        })}
-      </div>
-      {revealed && (
-        <div className="reveal" role="status" aria-live="polite">
-          <p className="reveal-head">
-            {right ? t.same.right : t.same.notQuite} {t.same.answerWas(t.same.choices[round.play.answer])}
-          </p>
-          <p>{round.explanation[lang]}</p>
-          <h3>{t.same.decisive}</h3>
-          <ul className="quote-list">
-            {decisive.map((q) => (
-              <li key={q!.id}>
-                <blockquote>"{q!.text}"</blockquote>
-                <span className="note">{q!.page_ref === pa.ref ? t.same.pageA : t.same.pageB}</span>
-              </li>
-            ))}
-          </ul>
-          <h3>{t.same.compared}</h3>
-          <dl className="constraints">
-            {Object.entries(round.play.constraints).map(([k, v]) => (
-              <div key={k} className={`constraint constraint-${v}`}>
-                <dt>{t.same.constraint[k] ?? k}</dt>
-                <dd>
-                  <span aria-hidden="true">{v === "same" ? "=" : v === "differs" ? "\u2260" : "?"}</span> {t.same.constraintValue[v] ?? v}
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <StatusNote round={round} t={t} />
-          <EvidenceCard
-            page={pageByRef(round, decisive[0]?.page_ref ?? pa.ref) ?? pa}
-            quote={decisive[0]}
-            verdict={t.same.choices[round.play.answer]}
-            t={t}
-            canPrint={canPrint}
-            onPrint={() => onEvent("card:print")}
-          />
-          <button
-            type="button"
-            className="btn btn-big"
-            data-primary
-            onClick={() => {
-              setPicked(null);
-              if (index + 1 < rounds.length) setIndex(index + 1);
-              else onDone();
-            }}
-          >
-            {index + 1 < rounds.length ? t.next : t.home}
-          </button>
+          ))}
         </div>
       )}
-      <div className="pair">
-        <PageView page={pa} label={t.same.pageA} t={t} marks={marksFor(pa.ref)} />
-        <PageView page={pb} label={t.same.pageB} t={t} marks={marksFor(pb.ref)} />
-      </div>
+      {revealed && (
+        <div className="reveal" aria-live="polite" ref={revealRef}>
+          {players && shown >= 1 && (
+            <div className="beat">
+              <SplitBar picks={picks} answer={answer} t={t} reducedMotion={reducedMotion} showCounts={shown >= 2} />
+            </div>
+          )}
+          {soloPick && shown >= 1 && (
+            <div className="beat pick-line">
+              <Shape index={CHOICES.indexOf(soloPick)} className="inline-shape" />
+              <p className="verdict-sub">{t.same.youSaid(t.same.choices[soloPick])}</p>
+            </div>
+          )}
+          {shown >= answerBeat && (
+            <div className="beat pick-line">
+              <Shape index={CHOICES.indexOf(answer)} className="inline-shape" />
+              <p className="verdict">
+                {soloPick ? (soloPick === answer ? t.same.right : t.same.notQuite) + " " : ""}
+                {t.same.answerWas(t.same.choices[answer])}
+              </p>
+            </div>
+          )}
+          {shown >= answerBeat + 1 && (
+            <div className="beat">
+              <p>{round.explanation[lang]}</p>
+              <h3>{t.same.decisive}</h3>
+              <ul className="quote-list">
+                {decisive.map((q) => (
+                  <li key={q.id}>
+                    <blockquote>"{q.text}"</blockquote>
+                    <span className="note">{q.page_ref === pa.ref ? t.same.pageA : t.same.pageB}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {shown >= answerBeat + 2 && (
+            <div className="beat">
+              <h3>{t.same.compared}</h3>
+              <dl className="checklist">
+                {CONSTRAINTS.filter((k) => round.play.constraints[k]).map((k) => {
+                  const v = round.play.constraints[k];
+                  return (
+                    <div key={k} className={`check check-${v}`}>
+                      <dt>{t.same.constraint[k] ?? k}</dt>
+                      <dd>
+                        <span className="check-mark" aria-hidden="true">
+                          {MARK[v] ?? "?"}
+                        </span>{" "}
+                        {t.same.constraintValue[v] ?? v}
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </div>
+          )}
+          {shown >= answerBeat + 2 && (
+            <div className="beat">
+              <StatusNote round={round} t={t} />
+            </div>
+          )}
+          {shown >= answerBeat + 2 && (
+            <div className="next-bar">
+              <button type="button" className="btn btn-primary" data-primary onClick={() => onNext(picks)}>
+                {nextLabel}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
