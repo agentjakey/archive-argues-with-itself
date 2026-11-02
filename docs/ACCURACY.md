@@ -64,25 +64,26 @@ prompt, and are shown as recorded answers with their date.
 The v2 audit uses AI judges from two model families. To know how far to trust them, their verdicts are
 compared with reference labels on a set of items. Those reference labels come from AI adjudication:
 each item was read against the full text of its page and decided check by check, with a written reason
-(Claude Opus 5.5, 106 items, 2026-11-02). No human has checked those labels yet, and outside review is
+(Claude Opus 5.5, 146 items, 2026-11-02). No human has checked those labels yet, and outside review is
 planned. Nothing in this section is a human check, and nothing here should be read as one.
 
 A check may be called AI-AUDITED only when the judge panel meets the published bar against those
 labels, and when the cheaper reference labels used for the bulk of the comparison (two reference judges
-agreeing) are themselves shown accurate enough: on a random 40 items, the upper 95% bound of their error
-against the adjudicated labels must be at most 10%. As of 2026-11-02 no check is AI-AUDITED:
+agreeing) are themselves shown accurate enough: on a random sample of items (80 since 2026-11-02, drawn in
+two seeded halves), the upper 95% bound of their error against the adjudicated labels must be at most
+10%. As of 2026-11-02 no check is AI-AUDITED:
 
 | Check | Panel against the best labels | Why not AI-AUDITED |
 | --- | --- | --- |
-| SUPPORTS | 255 items, kappa 0.867, false pass 1.7% (to 4.3%), 18 of 22 failures caught | the reference labels disagreed with adjudication on 1 of the random 40, so their error bound is 12.9%, over 10% |
-| ANSWERS | 81 items, kappa 0.707, error 11.1% (to 19.8%) | the panel misses the bar (error and false-pass bounds) |
-| IN SCOPE | 296 items, kappa 0.249, 5 of 29 failures caught | the panel misses the bar: it rarely catches an out-of-scope page |
+| SUPPORTS | 255 items, kappa 0.844, false pass 2.1% (to 4.9%), 18 of 23 failures caught | the reference labels disagree with adjudication on 4 of the random 80 (error bound 12.2%, over 10%), and 18 of 23 failures caught is under the 80% bar |
+| ANSWERS | 81 items, kappa 0.679, error 12.3% (to 21.3%) | the panel misses the bar (error and false-pass bounds) |
+| IN SCOPE | 296 items, kappa 0.241, 5 of 30 failures caught | the panel misses the bar: it rarely catches an out-of-scope page |
 
-The one disagreement on the random 40 is a sentence about United States Medicaid that a Canadian
-Senate report describes word for word. The adjudication followed the review guide's own worked example
-(the page supports the words; the page is out of scope); the two reference judges called it partly
-supported because the kind of source shifted. The guide contradicts itself on this case. The label was
-not changed to clear the bar; the guide will be fixed for the next round.
+The review guide contradicted itself on one case (a sentence that credits "United States Medicaid
+reports" with words found in a Canadian Senate report): its rule said a shifted source is partly supported,
+its worked example said supported. The guide now follows its rule; that case was adjudicated again under the
+fixed guide, and 40 more random items were adjudicated as a fresh check. The fix removed that one
+disagreement (0 of the first 40); the new 40 brought four, so the reference labels still miss the bar.
 
 What this does not say: the adjudicated labels are one AI's reading; an AI adjudicator may share blind
 spots with AI judges. Until outside reviewers check them, these are AI measurements of AI judges.
@@ -157,11 +158,22 @@ with a paired bootstrap (2,000 resamples):
 The rule was fixed before the test. One condition is not met, so production did not change. The
 candidate runs on the staging engine behind a switch, where it can be tried without a proprietary model.
 
+The judges left 45 to 49% of the supported and answers checks undecided (one judge failed to reply, or
+the two split), so the rows above rest on the checks both judges agreed on. On 2026-11-02 every undecided
+check was adjudicated by AI (Claude Opus 5.5, with a written reason, blind to which pipeline wrote the
+answer; 549 checks). Scored with every check decided, the conclusion is the same and the margins are wider:
+
+| Measure (every check decided) | Production | Candidate | Difference [95%] |
+| --- | --- | --- | --- |
+| Answers that do not answer the question | 25.0% (33/132) | 7.1% (9/126) | -17.9 [-26.1, -9.9] |
+| Sentences fully supported | 87.5% (364/416) | 95.6% (523/547) | +8.1 [+4.6, +11.9] |
+
+The refusal and source-page rows do not use the judges and are unchanged.
+
 What these numbers do not say: the judges are AI models whose agreement with the reference labels is
-below the bar, and they left 45 to 49% of the checks to a person (no human has done those yet), so the
-supported and answers rows rest on the checks both judges agreed on. The test questions are drafted
-benchmark items checked by AI, not visitors' questions. A source page outside the first ten does not
-mean no other page answers the question.
+below the bar, and the adjudication that decided the rest is one AI's reading, not a human check. The
+test questions are drafted benchmark items checked by AI, not visitors' questions. A source page outside
+the first ten does not mean no other page answers the question.
 
 ## What comes next
 

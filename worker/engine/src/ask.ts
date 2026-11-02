@@ -2,6 +2,7 @@
 // the tests can run it under Node.
 import type { AskInput } from "./cache";
 import { ENGINE_CONFIG, flag, modelAllowed, scopeConfig, scopeServed, servedScopes, type Env } from "./config";
+import { COLLECTION, collectionServed, isCollection } from "./router";
 
 /** Which engine serves a scope: the single "engine" container, or the scope's own (split layout). */
 export function engineFor(env: Env, scope: string): string {
@@ -27,8 +28,13 @@ export interface ParsedAsk {
 export async function readAsk(request: Request, env: Pick<Env, "PUBLIC_MODELS" | "PUBLIC_NOCACHE" | "WRITER_CANDIDATE" | "SHARDS">): Promise<ParsedAsk | null> {
   const url = new URL(request.url);
   const scope = url.searchParams.get("scope") || ENGINE_CONFIG.default_scope;
-  if (!scopeServed(scope, env.SHARDS)) return null;
-  const configured = scopeConfig(scope, env.WRITER_CANDIDATE);
+  // The whole collection (src/router.ts) is a scope of its own wherever a shard is served: its writer
+  // is the shards' one engine config, and it is never served from the cache.
+  const collection = isCollection(scope);
+  if (collection ? !collectionServed(env.SHARDS) : !scopeServed(scope, env.SHARDS)) return null;
+  const configured = collection && COLLECTION
+    ? { context: "", provider: COLLECTION.provider, model: COLLECTION.model }
+    : scopeConfig(scope, env.WRITER_CANDIDATE);
   if (!configured) return null;
   let question: string;
   let filters: Record<string, string> | null;
@@ -66,7 +72,7 @@ export async function readAsk(request: Request, env: Pick<Env, "PUBLIC_MODELS" |
   const nocacheAllowed = flag(env.PUBLIC_NOCACHE, false);
   return {
     input: { scope, question, filters },
-    cacheable: !(nocache && nocacheAllowed) && !evidenceOnly && configuredModel,
+    cacheable: !collection && !(nocache && nocacheAllowed) && !evidenceOnly && configuredModel,
     allowed: modelAllowed(provider, model, configured, env.PUBLIC_MODELS),
     evidenceOnly,
     nocacheDropped: nocache && !nocacheAllowed,

@@ -72,3 +72,44 @@ A shard is served by an engine Worker deployment only when the deployment's `SHA
 it. Production starts with none. A shard is added there one at a time, after its audit and its smoke
 tests pass on staging. Run `scripts/v2/export_worker_config.py` after any change. The Worker's
 generated config marks each shard scope `shard: true` and carries its `tier`.
+
+## Router index (`router/v1/` on R2)
+
+Written by `scripts/v2/router_index.py build` from the coverage file of every shard in
+`config/shards/served.toml`. The engine Worker reads it to choose which shard engines to wake for a
+whole-collection question (`/ask?scope=collection`), without waking any.
+
+| Key | Content |
+|---|---|
+| `router/v1/<digest>/df/<bucket>.tsv` | one line per term: `term<TAB>shard:df,shard:df,...`, for every term in two or more of a shard's passages |
+| `router/v1/<digest>/complete` | written after the last bucket |
+| `router/v1/shards.json` | the pointer, written last: `format`, `digest`, `prefix` (`router/v1/<digest>`), `buckets`, `built_at`, `N`, `tokens`, `avgdl`, and `shards`: for each shard its `jurisdictions`, `years`, `passages`, `tokens` and `tier` |
+
+A term's bucket is FNV-1a (32 bit, over the term's UTF-8 bytes) modulo `buckets` (4096), written as
+four digits. Terms are the coverage file's: lower-cased words (letters and numbers), the frozen
+stopwords removed. The folder is named by a digest of its content, and the pointer moves last, so a
+reader never sees a half-written index; earlier folders stay.
+
+The Worker uses only the shards its deployment serves (`SHARDS`); N, the average length and the
+document frequencies are summed over those. A served shard missing from the index is reported as
+not searched ("not in the router index yet"). The Worker's settings (`max_engines`, `top_k`,
+`pool_size`) come from `config/shards/router.toml`, exported into its generated config.
+
+### The flow of one whole-collection question
+
+1. The Worker reads the pointer and the buckets of the question's words, and chooses at most
+   `max_engines` served shards. A shard is left out, with the reason, when its places or years cannot
+   satisfy the filters, when none of the question's words occur in it, or when it ranks below the
+   engines woken.
+2. It asks each chosen engine for its record (`POST /ask?scope=<shard>` with `evidence_only` and the
+   `x-civic-router: 1` header). For that header alone, the reply adds `router.hits`: the pool's rows
+   with their text, date method, counts of the question's words (`tf`) and length (`dl`). The Worker
+   sets the header itself and never forwards a visitor's headers, so a visitor never receives them.
+3. It scores every candidate again with collection-wide BM25 and keeps `pool_size` of them.
+4. It sends them to the first chosen engine's `POST /compose`, which makes the one writer call on the
+   top `top_k` and checks each citation against exactly the rows sent. It returns the answer, the
+   evidence (each row then marked with its `shard` and `tier`) and a `router` block that lists the
+   shards searched and the shards left out, each with why. Not searched is never "not in the archive".
+
+While a chosen engine wakes, the Worker answers 503 with each engine's state, as a single-scope
+question does, and the site retries. Whole-collection answers are never stored.

@@ -4,7 +4,9 @@ Everything the Worker needs to serve a stored answer without waking the engine, 
 engine's own code so the two cannot drift:
   - each scope's cache context for its configured provider and model (api/app.py
     scope_cache_context), and the engine's EXTRAS_VERSION;
-  - the stopword list salient_terms() uses (frozen archive_debugger.stopwords);
+  - the stopword list salient_terms() uses (frozen archive_debugger.stopwords), which the cross-shard
+    router's tokenizer also uses (shards/coverage.terms);
+  - the whole collection's virtual scope for the router (config/shards/router.toml), when shards are served;
   - the dated editorial notes about stored answers (config/editorial_notes.json);
   - the R2 object keys a container may read through the Worker (config/scopes.toml).
 
@@ -23,6 +25,7 @@ import sys
 from pathlib import Path
 
 OUT = Path("worker/engine/src/generated/engine_config.json")
+ROUTER = Path("config/shards/router.toml")
 
 
 def candidate_rows(scope: str, registry: dict, config_path: Path) -> dict:
@@ -77,6 +80,17 @@ def build() -> dict:
             # deployment's SHARDS names it, with its audit tier.
             scope_rows[name]["shard"] = True
             scope_rows[name]["tier"] = entry.get("tier") or "INDEXED"
+    collection = None
+    shard_rows = [row for row in scope_rows.values() if row.get("shard")]
+    if shard_rows:
+        # The whole collection as one virtual scope over the served shards (config/shards/router.toml):
+        # every shard shares one engine config, so one writer answers for the collection.
+        import tomllib
+        with ROUTER.open("rb") as fh:
+            router = tomllib.load(fh)
+        collection = {"scope": router["scope"], "label": router["label"], "max_engines": int(router["max_engines"]),
+                      "top_k": int(router["top_k"]), "pool_size": int(router["pool_size"]),
+                      "provider": shard_rows[0]["provider"], "model": shard_rows[0]["model"]}
     keys = [f.key for f in release_files.all_files(registry)]
     notes = editorial.load_notes(editorial.DEFAULT_NOTES)
     answer_notes = []
@@ -95,6 +109,7 @@ def build() -> dict:
         "extras_version": EXTRAS_VERSION,
         "default_scope": registry.get("default", "pilot"),
         "scopes": scope_rows,
+        "collection": collection,
         "stopwords": sorted(STOPWORDS),
         "answer_notes": answer_notes,
         "r2_keys": sorted(keys),

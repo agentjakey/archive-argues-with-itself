@@ -114,6 +114,49 @@ _RESTRICTED_MSG = ("records that match this question are restricted by the autho
 ENV_GOVERNANCE_PATH = "CIVIC_GOVERNANCE_PATH"
 
 
+ROUTER_HEADER = "x-civic-router"
+ROUTER_FIELDS = ("passage_id", "text", "item_id", "title", "leaf_index", "printed_page", "page_deep_link", "details_url",
+                 "year", "decade", "dated", "jurisdiction", "issuer", "doc_type", "ocr_quality", "later_years",
+                 "section_class", "bm25_rank", "dense_rank")
+
+
+def router_rows(question: str, rows: list, conn) -> list:
+    """One shard's candidates for the engine Worker's cross-shard merge: each pool row with its text,
+    its date method, and for BM25 over the whole collection its counts of the question's terms and its
+    length, with the tokenizer the shards' coverage files use (shards/coverage.terms), so the
+    document frequencies and these counts agree."""
+    from archive_debugger.shards.coverage import terms
+    q = list(dict.fromkeys(terms(question)))
+    out = [{k: r.get(k) for k in ROUTER_FIELDS} for r in rows]
+    _attach_date_method(conn, out)
+    for row in out:
+        words = terms(row.get("text") or "")
+        row["tf"] = {t: words.count(t) for t in q if t in words}
+        row["dl"] = len(words)
+    return out
+
+
+class SuppliedEvidence:
+    """Citation checks against evidence the engine Worker supplies (the cross-shard merge), where the
+    passages live in other shards' databases: a cited id is VALID when it is one of the supplied rows,
+    was among the passages the writer saw, and the row names its item and leaf (so its page link
+    resolves). Shaped like retrieve.citation.verify_citations."""
+
+    def __init__(self, rows: list):
+        self.rows = {r["passage_id"]: r for r in rows}
+
+    def __call__(self, cited_ids, retrieved_ids) -> list:
+        evidence = set(retrieved_ids)
+        out = []
+        for pid in cited_ids:
+            row = self.rows.get(pid)
+            ok_row = row is not None and row.get("item_id") and row.get("leaf_index") is not None
+            out.append(citation.CitationCheck(
+                passage_id=pid, exists=row is not None, in_evidence=pid in evidence, resolves=bool(ok_row),
+                deep_link=citation.deep_link(row["item_id"], row["leaf_index"]) if ok_row else None))
+        return out
+
+
 def collection_bounds(name: str) -> tuple:
     """(dated window, jurisdictions) from the collection config, for the v2 coverage state; (None,
     None) when the scope has no collection config."""
@@ -287,6 +330,15 @@ class AskRequest(BaseModel):
     model: Optional[str] = None
     nocache: bool = False
     evidence_only: bool = False
+
+
+class ComposeRequest(BaseModel):
+    """The engine Worker's merged evidence for one whole-collection question (POST /compose)."""
+    question: str
+    filters: Optional[dict] = None
+    hits: list = []          # router rows from the shards (router_rows), the merged pool
+    prompt_ids: list = []    # the merged top passages, in order: what the writer sees
+    evidence_only: bool = False   # the merged record alone, no model call
 
 
 
@@ -1291,9 +1343,36 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             raise HTTPException(status_code=404, detail=f"scope {name!r} is not served here")
         return b
 
+    def write_answer(b: Bundle, clean: str, hits: list, verify, filters: dict, *, kind: str, model_id: str, gcfg: dict,
+                     gen: dict, temp, v2: bool, model_budget: float, bounds_scope: str):
+        """The one model call of an answer, from hits already chosen: the v2 writer (compose_v2) or the
+        v1 model (compose). Shared by /ask and /compose; raises on a provider error."""
+        if v2:
+            if b.llm is not None and isinstance(b.llm, writers.V2_WRITERS):
+                writer = b.llm
+            elif kind == "stub":
+                writer = answer_v2.StubWriter(answer_v2.Draft2(sentences=[], evidence_state="insufficient",
+                                                               state_reason="stub writer"))
+            else:                        # anthropic, workers_ai or openai_compat (generate/writers.py)
+                writer = writers.make_writer(kind, model_id, gcfg["max_tokens"], effort=gcfg.get("effort"),
+                                             endpoint=gcfg.get("endpoint"), timeout=model_budget,
+                                             extra_body=gcfg.get("extra_body"))
+            window, jurisdictions = collection_bounds(bounds_scope)
+            return answer_v2.compose_v2(clean, hits, writer, verify, min_passages=gcfg["min_passages"],
+                                        generation=gen, filters=filters, window=window, jurisdictions=jurisdictions)
+        if b.llm is not None:
+            model = b.llm
+        elif kind == "stub":
+            model = make_llm("stub", model_id, gcfg["max_tokens"])
+        else:                            # real provider: budget-aware hard timeout, no retries (N5: llm.py untouched)
+            import anthropic
+            client = anthropic.Anthropic(timeout=model_budget, max_retries=0)
+            model = AnthropicLLM(model_id, gcfg["max_tokens"], client=client, temperature=temp)
+        return compose(clean, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
+
     def answer(b: Bundle, question: str, filters: Optional[dict], req_provider: Optional[str],
                req_model: Optional[str], nocache: bool, budget: Optional[str] = None,
-               evidence_only: bool = False):
+               evidence_only: bool = False, router: bool = False):
         r = b.retriever
         gcfg = b.gcfg
         # Answer with exactly the filter values the key sees, so one key never holds two answers.
@@ -1471,6 +1550,10 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                 _log_timing(b.name, t_ret, 0.0, "evidence_only", len(hits))
                 out = record_only(_EVIDENCE_ONLY_MSG, pool_rows, hits, pr.conn)
                 out["evidence_only"] = True
+                if router:
+                    # The engine Worker's cross-shard router (never a visitor: the Worker sets the
+                    # header and strips the visitor's): the pool with its text and query-term counts.
+                    out["router"] = {"hits": router_rows(clean, pool_rows, pr.conn)}
                 return out
 
             if kind == "anthropic" and b.llm is None and not _key_available():
@@ -1493,36 +1576,15 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
 
             t_model = time.monotonic()
             try:
-                if b.llm is not None:
-                    model = b.llm
-                elif kind == "stub":
-                    model = make_llm("stub", model_id, gcfg["max_tokens"])
-                elif not v2:                     # real provider: budget-aware hard timeout, no retries (N5: llm.py untouched)
-                    import anthropic
-                    client = anthropic.Anthropic(timeout=model_budget, max_retries=0)
-                    model = AnthropicLLM(model_id, gcfg["max_tokens"], client=client, temperature=temp)
                 verify = functools.partial(citation.verify_citations, pr.conn)
+                ans = write_answer(b, clean, hits, verify, filters, kind=kind, model_id=model_id, gcfg=gcfg, gen=gen,
+                                   temp=temp, v2=v2, model_budget=model_budget, bounds_scope=b.name)
                 if v2:
-                    if b.llm is not None and isinstance(b.llm, writers.V2_WRITERS):
-                        writer = b.llm
-                    elif kind == "stub":
-                        writer = answer_v2.StubWriter(answer_v2.Draft2(sentences=[], evidence_state="insufficient",
-                                                                       state_reason="stub writer"))
-                    else:                        # anthropic, workers_ai or openai_compat (generate/writers.py)
-                        writer = writers.make_writer(kind, model_id, gcfg["max_tokens"], effort=gcfg.get("effort"),
-                                                     endpoint=gcfg.get("endpoint"), timeout=model_budget,
-                                                     extra_body=gcfg.get("extra_body"))
-                    window, jurisdictions = collection_bounds(b.name)
-                    ans = answer_v2.compose_v2(clean, hits, writer, verify, min_passages=gcfg["min_passages"],
-                                               generation=gen, filters=filters, window=window,
-                                               jurisdictions=jurisdictions)
                     if notices and ans.state == "INSUFFICIENT_EVIDENCE":
                         # The records the question reached are restricted and what is left does not
                         # answer it: the restriction is why there is no answer.
                         ans.gate_notes.append("the unrestricted records do not answer this; restricted records were not used")
                         ans.state, ans.coverage_state = "RESTRICTED", None
-                else:
-                    ans = compose(clean, hits, model, verify, min_passages=gcfg["min_passages"], generation=gen)
             except Exception:  # noqa: BLE001 - offline / timeout / provider error -> show the record, not a raw error (N6)
                 _log_timing(b.name, t_ret, time.monotonic() - t_model, "degraded:model_unreachable", len(hits))
                 return degraded("model_unreachable", pool_rows, hits, pr.conn)
@@ -1685,13 +1747,91 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
 
     @app.post("/ask")
     def ask_post(req: AskRequest, background: BackgroundTasks, scope: Optional[str] = None,
-                 x_civic_model_budget: Optional[str] = Header(default=None)):
+                 x_civic_model_budget: Optional[str] = Header(default=None),
+                 x_civic_router: Optional[str] = Header(default=None)):
         if not app.state.ready.is_set():
             return starting_answer(req.question)
         out = answer(_bundle(scope), req.question, req.filters, req.provider, req.model, req.nocache,
-                     x_civic_model_budget, req.evidence_only)
+                     x_civic_model_budget, req.evidence_only, router=x_civic_router == "1")
         background.add_task(app.state.first_answer.set)   # runs once the response has been sent
         return out
+
+    @app.post("/compose")
+    def compose_post(req: ComposeRequest, scope: Optional[str] = None,
+                     x_civic_model_budget: Optional[str] = Header(default=None),
+                     x_civic_router: Optional[str] = Header(default=None)):
+        """One answer from evidence the engine Worker merged across shards (worker/engine/src/router.ts).
+        Only the Worker calls it (it sets the router header; a visitor's request never carries it, and
+        the Worker routes no public path here). This engine's scope supplies the writer; the answer is
+        never stored (a whole-collection question has no one scope's cache)."""
+        if x_civic_router != "1":
+            raise HTTPException(status_code=404, detail="not found")
+        b = _bundle(scope)
+        gcfg = b.gcfg
+        clean = clean_question(req.question)
+        try:
+            filters = answer_cache.applied_filters(req.filters)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=f"bad filter: {exc}")
+        rows = [r for r in req.hits if isinstance(r, dict) and r.get("passage_id") and r.get("item_id")
+                and r.get("leaf_index") is not None and isinstance(r.get("text"), str)]
+        prompt_ids = [p for p in req.prompt_ids if p in {r["passage_id"] for r in rows}][: gcfg["top_k"]]
+        by_id = {r["passage_id"]: r for r in rows}
+        hits = [by_id[p] for p in prompt_ids]
+        kind = b.provider or gcfg["provider"]
+        model_id = gcfg["model"]
+        temp = sent_temperature(kind, gcfg)
+        v2 = gcfg.get("answer_version", "v1") == "v2"
+        gen = (answer_v2.generation_meta(provider=kind, model=model_id, effort=gcfg.get("effort"),
+                                         max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"]) if v2 else
+               generation_meta(provider=kind, model=model_id, temperature=temp, max_tokens=gcfg["max_tokens"],
+                               top_k=gcfg["top_k"]))
+
+        def shown(ans) -> dict:
+            out = {"answer": ans.to_dict(),
+                   "evidence": evidence_rows(rows, ans.verified_citations, set(prompt_ids), b.pages_dir)}
+            methods = {r["passage_id"]: r.get("date_method") for r in rows}
+            for row in out["evidence"]:
+                row["date_method"] = methods.get(row["passage_id"])
+            sa = out["answer"]
+            out["flagged"] = (flags.detect(out["evidence"], question=clean, answer_text=sa.get("text"))
+                              if not sa.get("abstained") else None)
+            out["answer"]["cached"] = None
+            return out
+
+        def limited(reason: str) -> dict:
+            ans = Answer(text=_DEGRADE_MSG[reason].format(url=PUBLIC_URL), sentences=[], verified_citations=[],
+                         unsupported=[], abstained=True, coverage=coverage_of(clean, hits),
+                         abstention_text=_DEGRADE_MSG[reason].format(url=PUBLIC_URL), generation=gen)
+            out = shown(ans)
+            out["flagged"] = flags.detect(out["evidence"], question=clean if rows else None)
+            out["degraded"] = {"reason": reason, "live_url": PUBLIC_URL}
+            return out
+
+        if not clean:
+            return limited("empty")
+        if req.evidence_only:            # the merged record alone: no model call
+            ans = Answer(text=_EVIDENCE_ONLY_MSG, sentences=[], verified_citations=[], unsupported=[], abstained=True,
+                         coverage=coverage_of(clean, hits), abstention_text=_EVIDENCE_ONLY_MSG, generation=gen)
+            out = shown(ans)
+            out["flagged"] = flags.detect(out["evidence"], question=clean if rows else None)
+            out["evidence_only"] = True
+            return out
+        if not b.answers_allowed:
+            return limited("index_unavailable")
+        if kind == "anthropic" and b.llm is None and not _key_available():
+            return limited("no_key")
+        if kind == "anthropic" and b.llm is None and x_civic_model_budget == "exhausted":
+            return limited("daily_budget")
+        t_model = time.monotonic()
+        try:
+            ans = write_answer(b, clean, hits, SuppliedEvidence(rows), filters, kind=kind, model_id=model_id, gcfg=gcfg,
+                               gen=gen, temp=temp, v2=v2, model_budget=GEN_TIMEOUT_S, bounds_scope=b.name)
+        except Exception:  # noqa: BLE001 - a provider error shows the record, never a raw error (N6)
+            _log_timing("collection", 0.0, time.monotonic() - t_model, "degraded:model_unreachable", len(hits))
+            return limited("model_unreachable")
+        _log_timing("collection", 0.0, time.monotonic() - t_model, "abstain" if ans.abstained else "answer", len(hits))
+        return shown(ans)
 
     @app.get("/ask")
     def ask_get(background: BackgroundTasks, q: str = Query(..., min_length=1), period: Optional[str] = None,

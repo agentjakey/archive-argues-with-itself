@@ -1,0 +1,11 @@
+# The engine Worker's cross-shard router (worker/engine/src/router.ts), exported into its generated
+# config by scripts/v2/export_worker_config.py. A whole-collection question is asked with
+# /ask?scope=<scope>; the Worker chooses at most max_engines of the served shards from the router
+# index on R2 (scripts/v2/router_index.py), asks each for its record, merges the candidates with
+# collection-wide BM25, and makes one writer call on the top_k merged passages through the first
+# chosen shard's engine (POST /compose). pool_size merged passages are shown in the evidence trail.
+scope = "collection"
+label = "The whole collection"
+max_engines = 3
+top_k = 12
+pool_size = 30

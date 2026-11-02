@@ -1,0 +1,241 @@
+{
+ "choices": [
+  {
+   "chosen": [
+    [
+     "s-ontario",
+     9.421723897,
+     "holds the question's words"
+    ],
+    [
+     "s-alberta",
+     7.466098031,
+     "holds the question's words"
+    ]
+   ],
+   "filters": {},
+   "left": [
+    [
+     "s-federal",
+     "none of the question's words occur in it"
+    ]
+   ],
+   "max_engines": 2,
+   "question": "hospital beds vaccination"
+  },
+  {
+   "chosen": [
+    [
+     "s-alberta",
+     7.116554284,
+     "holds the question's words"
+    ]
+   ],
+   "filters": {
+    "jurisdiction": "alberta"
+   },
+   "left": [
+    [
+     "s-federal",
+     "other jurisdictions"
+    ],
+    [
+     "s-ontario",
+     "other jurisdictions"
+    ]
+   ],
+   "max_engines": 3,
+   "question": "hospital beds"
+  },
+  {
+   "chosen": [
+    [
+     "s-ontario",
+     4.660583294,
+     "holds the question's words"
+    ]
+   ],
+   "filters": {
+    "first_year": 1970,
+    "last_year": 1979
+   },
+   "left": [
+    [
+     "s-alberta",
+     "no documents in the period"
+    ],
+    [
+     "s-federal",
+     "no documents in the period"
+    ]
+   ],
+   "max_engines": 3,
+   "question": "vaccination"
+  }
+ ],
+ "coverages": [
+  {
+   "df": {
+    "beds": 12,
+    "hospital": 30,
+    "vaccination": 2
+   },
+   "jurisdictions": [
+    "alberta"
+   ],
+   "passages": 400,
+   "shard_id": "s-alberta",
+   "tokens": 40000,
+   "years": {
+    "alberta|1980": 4,
+    "alberta|undated": 1
+   }
+  },
+  {
+   "df": {
+    "hospital": 50,
+    "vaccination": 40
+   },
+   "jurisdictions": [
+    "ontario"
+   ],
+   "passages": 900,
+   "shard_id": "s-ontario",
+   "tokens": 81000,
+   "years": {
+    "ontario|1975": 7
+   }
+  },
+  {
+   "df": {
+    "tariff": 9
+   },
+   "jurisdictions": [
+    "federal"
+   ],
+   "passages": 100,
+   "shard_id": "s-federal",
+   "tokens": 9000,
+   "years": {
+    "federal|1990": 3
+   }
+  }
+ ],
+ "merge": {
+  "hits": {
+   "s-alberta": [
+    {
+     "dl": 80,
+     "passage_id": "a#1:0",
+     "tf": {
+      "beds": 1,
+      "hospital": 2
+     }
+    },
+    {
+     "dl": 120,
+     "passage_id": "a#2:0",
+     "tf": {
+      "beds": 1
+     }
+    }
+   ],
+   "s-ontario": [
+    {
+     "dl": 95,
+     "passage_id": "o#5:0",
+     "tf": {
+      "hospital": 1,
+      "vaccination": 3
+     }
+    },
+    {
+     "dl": 50,
+     "passage_id": "o#6:1",
+     "tf": {}
+    }
+   ]
+  },
+  "question": "hospital beds vaccination",
+  "result": [
+   [
+    "a#1:0",
+    "s-alberta",
+    9.089677763,
+    0.016393,
+    1
+   ],
+   [
+    "o#5:0",
+    "s-ontario",
+    8.295769503,
+    0.016129,
+    2
+   ],
+   [
+    "a#2:0",
+    "s-alberta",
+    4.215162055,
+    0.015873,
+    3
+   ]
+  ]
+ },
+ "terms": [
+  {
+   "terms": [
+    "sant\u00e9",
+    "publique",
+    "h\u00f4pital",
+    "dieu",
+    "1975",
+    "x",
+    "vaccination",
+    "12abc",
+    "o",
+    "brien"
+   ],
+   "text": "Sant\u00e9 publique: H\u00f4pital-Dieu, 1975 report_x the vaccination 12abc O\u2019Brien"
+  },
+  {
+   "terms": [
+    "hospital",
+    "beds",
+    "province",
+    "alberta",
+    "1980",
+    "81",
+    "patients",
+    "admitted",
+    "4",
+    "512"
+   ],
+   "text": "The HOSPITAL beds of the Province of Alberta, 1980-81; patients admitted: 4,512"
+  },
+  {
+   "terms": [
+    "\u00e9coles",
+    "et",
+    "h\u00f4pitaux",
+    "du",
+    "qu\u00e9bec",
+    "rapport",
+    "annuel",
+    "\u00bd",
+    "\u00b2",
+    "i\u0307stanbul"
+   ],
+   "text": "\u00c9COLES et h\u00f4pitaux du Qu\u00e9bec \u2014 rapport annuel \u00bd \u00b2 \u0130stanbul"
+  },
+  {
+   "terms": [
+    "score",
+    "snake",
+    "case",
+    "tabs",
+    "newlines"
+   ],
+   "text": "under_score snake_case and   tabs\tand\nnewlines"
+  }
+ ]
+}
