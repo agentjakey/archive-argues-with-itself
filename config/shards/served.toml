@@ -53,3 +53,81 @@ first_year = 2001
 jurisdictions = ["british_columbia"]
 last_year = 2003
 undated = false
+
+[scopes."federal-1899-1911"]
+blurb = "1,000 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/federal-1899-1911/civic.db"
+index_path = "data/shards/federal-1899-1911/index/vectors.db"
+jurisdiction_phrase = "Government of Canada"
+label = "Government of Canada, 1899 to 1911"
+national = false
+release_dir = "shards/federal-1899-1911"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."federal-1899-1911".r2]
+db_key = "shards/v1/federal-1899-1911/civic.db"
+db_sha256 = "ba0f1b83c0c6b24789aed7051330fabe65885c87d0ef139a74e597a1b1c84177"
+index_key = "shards/v1/federal-1899-1911/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."federal-1899-1911".shard]
+documents = 1000
+first_year = 1899
+jurisdictions = ["federal"]
+last_year = 1911
+undated = false
+
+[scopes."federal-1911-1921"]
+blurb = "1,205 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/federal-1911-1921/civic.db"
+index_path = "data/shards/federal-1911-1921/index/vectors.db"
+jurisdiction_phrase = "Government of Canada"
+label = "Government of Canada, 1911 to 1921"
+national = false
+release_dir = "shards/federal-1911-1921"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."federal-1911-1921".r2]
+db_key = "shards/v1/federal-1911-1921/civic.db"
+db_sha256 = "7ff6b7f3ef10f1a4a83b139e1faa96c6651f135cd524f5ab83ed49945bfe1b5e"
+index_key = "shards/v1/federal-1911-1921/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."federal-1911-1921".shard]
+documents = 1205
+first_year = 1911
+jurisdictions = ["federal"]
+last_year = 1921
+undated = false
+
+[scopes."unknown-1861-1993"]
+blurb = "2,986 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/unknown-1861-1993/civic.db"
+index_path = "data/shards/unknown-1861-1993/index/vectors.db"
+jurisdiction_phrase = "Unknown"
+label = "Unknown, 1861 to 1993"
+national = false
+release_dir = "shards/unknown-1861-1993"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."unknown-1861-1993".r2]
+db_key = "shards/v1/unknown-1861-1993/civic.db"
+db_sha256 = "f008f1db314e8c9b7c5ec14a2f2629d835f64f8de10a5e3a0b9a55b9ea6b7995"
+index_key = "shards/v1/unknown-1861-1993/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."unknown-1861-1993".shard]
+documents = 2986
+first_year = 1861
+jurisdictions = ["unknown"]
+last_year = 1993
+undated = false

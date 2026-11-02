@@ -66,7 +66,7 @@
         "WRITER_CANDIDATE": "",
         // Shards of the whole collection this deployment serves (config/shards/served.toml), comma-separated.
         // Staging: the bounded run's two British Columbia shards, to prove shard serving end to end.
-        "SHARDS": "british_columbia-1968-2001,british_columbia-2001-2003"
+        "SHARDS": "british_columbia-1968-2001,british_columbia-2001-2003,federal-1899-1911,federal-1911-1921,unknown-1861-1993"
       },
       // Workers AI for the open writer flag (WRITER_CANDIDATE names a candidate in config/writers.toml);
       // the container reaches it through AIProxy.

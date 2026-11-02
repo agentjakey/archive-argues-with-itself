@@ -41,7 +41,13 @@
   "shards/bounded/british_columbia-1968-2001/civic.db",
   "shards/bounded/british_columbia-1968-2001/vectors.db",
   "shards/bounded/british_columbia-2001-2003/civic.db",
-  "shards/bounded/british_columbia-2001-2003/vectors.db"
+  "shards/bounded/british_columbia-2001-2003/vectors.db",
+  "shards/v1/federal-1899-1911/civic.db",
+  "shards/v1/federal-1899-1911/vectors.db",
+  "shards/v1/federal-1911-1921/civic.db",
+  "shards/v1/federal-1911-1921/vectors.db",
+  "shards/v1/unknown-1861-1993/civic.db",
+  "shards/v1/unknown-1861-1993/vectors.db"
  ],
  "retention_days": 90,
  "scopes": {
@@ -85,6 +91,46 @@
    "shard": true,
    "tier": "INDEXED"
   },
+  "federal-1899-1911": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "ecde656d71ca5fead71b8c16799b3bd75e1aa7affce997ec7db082a9fa6c7f3d",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "5d08d9ef5d7373e7e81c5efc745230cc0ff4d7c7150d1ac1af5510f0035d0066",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "ec0ce55b1deccf15be71e76f6b226a5b977ac708433668adffd4d37f2ba3afd1",
+   "curated_context": "0dfaa4f302755cc8b233a1f5f59b8f8016b6deb35bd3799237bf3ddb2a17b295",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "federal-1911-1921": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "2c51253919a11b3092dfd9f2433bafbded9c6448b4613e10b0dad8c7e4af002e",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "71d0f05214ec07dab98296a5150e56f4584ad1fd858715383b91af54c9ff7d74",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "c44c0bb287df20eb73917d6f7a149cad0b5464426cda46e633d9ddc39cd1942a",
+   "curated_context": "bb9cb40365c43ab5fd527f497b8a13efe43579af3b7a25f38c80f84266584cdf",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
   "microlog": {
    "candidates": {
     "gemma4_26b": {
@@ -120,6 +166,26 @@
    "curated_context": "df10d4aacd93d46e63899e4b693eb278671e186c8c4bf2274e6d5d1c95db8f59",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic"
+  },
+  "unknown-1861-1993": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "ca8dbb134dc69da60562b3e0555b56dd3a210cbfe562033adfb56ea0fc2dc058",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "474a2c7cbec8e3454e395c8eaf739df8c9cb7a7254256a9da30a6405e8f7ee51",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "b3eda218a1d6c4870b3ab24cbaaef3bbb477a84e30ecbabcfa404944610c30ea",
+   "curated_context": "0d8b579af24b9af9b34c92e676016619311ab58296e13bfb7e74d1a64fce70a7",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
   }
  },
  "stopwords": [
