@@ -204,6 +204,17 @@ def test_sigterm_at_each_stage_exits_cleanly(tmp_path, fixture_env, stage):
         if want in line or time.monotonic() > deadline:
             break
     assert want in "\n".join(seen), seen
+    # The stage marker comes from a background thread and can print before uvicorn has finished its
+    # own startup; a signal in that window makes uvicorn return without running the app's shutdown at
+    # all. The container is stopped while it serves, so wait until the port accepts a connection.
+    port = int(env["TEST_PORT"])
+    until = time.monotonic() + 30
+    while time.monotonic() < until:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                break
+        except OSError:
+            time.sleep(0.1)
     proc.send_signal(signal.SIGTERM)
     out, _ = proc.communicate(timeout=30)
     seen += out.splitlines()
