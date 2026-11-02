@@ -11,7 +11,9 @@ rises one step, to at most MAX_CONCURRENCY, only after QUIET_S seconds at the cu
 429, 503, other server error or connection failure, and with latency flat: the median time to the
 first byte over the last LATENCY_WINDOW_S seconds is no more than LATENCY_RISE times the median at
 the start of the level. Any of those errors puts it straight back to START_CONCURRENCY and restarts
-the clock; so does latency that rises past the same bound after a step up."""
+the clock; so does latency that rises past the same bound after a step up. configure() sets the
+start, the ceiling and the step for a run (the cloud fetch: 4, 8, 2); nothing may set a ceiling
+above HARD_CEILING, the most requests the whole project ever sends archive.org at once."""
 from __future__ import annotations
 
 import socket
@@ -33,6 +35,7 @@ QUIET_S = 3600.0
 LATENCY_WINDOW_S = 900.0
 LATENCY_RISE = 1.25
 MIN_SAMPLES = 50
+HARD_CEILING = 8
 
 
 class HttpError(Exception):
@@ -68,8 +71,12 @@ class AdaptiveLimit:
 
     def __init__(self, start: int = START_CONCURRENCY, ceiling: int = MAX_CONCURRENCY, quiet_s: float = QUIET_S,
                  window_s: float = LATENCY_WINDOW_S, rise: float = LATENCY_RISE, min_samples: int = MIN_SAMPLES,
-                 clock: Callable[[], float] = time.monotonic, log: Optional[Callable[[str], None]] = None):
+                 clock: Callable[[], float] = time.monotonic, log: Optional[Callable[[str], None]] = None,
+                 step: int = 1):
+        if ceiling > HARD_CEILING or start > ceiling or start < 1 or step < 1:
+            raise ValueError(f"concurrency must satisfy 1 <= start <= ceiling <= {HARD_CEILING} (got {start}, {ceiling})")
         self.start, self.ceiling, self.quiet_s, self.window_s = start, ceiling, quiet_s, window_s
+        self.step = step
         self.rise, self.min_samples, self.clock, self.log = rise, min_samples, clock, log
         self.limit = start
         self.active = 0
@@ -78,12 +85,18 @@ class AdaptiveLimit:
         self.last_problem: Optional[float] = None
         self.samples: list = []          # (time, seconds to first byte) at the current level
         self.baseline: Optional[float] = None
+        self.hold_until = 0.0            # a Retry-After pauses every request, not just the refused one
 
     def acquire(self) -> None:
         with self.cond:
-            while self.active >= self.limit:
-                self.cond.wait()
+            while self.active >= self.limit or self.clock() < self.hold_until:
+                wait = self.hold_until - self.clock()
+                self.cond.wait(timeout=wait if wait > 0 else None)
             self.active += 1
+
+    def hold(self, seconds: float) -> None:
+        with self.cond:
+            self.hold_until = max(self.hold_until, self.clock() + seconds)
 
     def release(self) -> None:
         with self.cond:
@@ -121,7 +134,8 @@ class AdaptiveLimit:
                 return
             quiet = now - self.level_since >= self.quiet_s and (self.last_problem is None or now - self.last_problem >= self.quiet_s)
             if flat and quiet and self.limit < self.ceiling:
-                self._set(self.limit + 1, f"{self.quiet_s / 3600:.0f} h with no server errors and flat latency")
+                self._set(min(self.ceiling, self.limit + self.step),
+                          f"{self.quiet_s / 3600:.0f} h with no server errors and flat latency")
             # keep the window bounded
             cutoff = now - max(self.quiet_s, self.window_s) - self.window_s
             if self.samples and self.samples[0][0] < cutoff:
@@ -136,6 +150,13 @@ class AdaptiveLimit:
 
 
 LIMIT = AdaptiveLimit()
+
+
+def configure(start: int, ceiling: int, step: int = 1, log: Optional[Callable[[str], None]] = None) -> AdaptiveLimit:
+    """Replace the module's limit for this process (before any request is sent)."""
+    global LIMIT
+    LIMIT = AdaptiveLimit(start=start, ceiling=ceiling, step=step, log=log)
+    return LIMIT
 
 
 def get(url: str, params: dict | None = None, *, timeout_s: float = 120.0, sleep: Callable[[float], None] = time.sleep,
@@ -164,14 +185,37 @@ def get(url: str, params: dict | None = None, *, timeout_s: float = 120.0, sleep
                 raise HttpError(exc.code, text) from exc
             limit.problem(f"HTTP {exc.code}")
             last = HttpError(exc.code, text)
-            wait = exc.headers.get("retry-after") if exc.headers else None
-            delay = min(float(wait), MAX_WAIT_S) if wait and wait.replace(".", "", 1).isdigit() else 5.0 * 2 ** attempt
+            asked = retry_after_s(exc.headers.get("retry-after") if exc.headers else None)
+            if asked is not None and asked > MAX_RETRY_AFTER_S:
+                raise TooManyRefusals(f"HTTP {exc.code} with Retry-After {asked:.0f} s: stopping the fetch") from exc
+            if asked is not None:
+                limit.hold(asked)        # every request waits, as asked
+            delay = asked if asked is not None else min(5.0 * 2 ** attempt, MAX_WAIT_S)
         except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as exc:
             limit.problem(type(exc).__name__)
             last = exc
-            delay = 5.0 * 2 ** attempt
+            delay = min(5.0 * 2 ** attempt, MAX_WAIT_S)
         finally:
             limit.release()
         if attempt < ATTEMPTS - 1:
-            sleep(min(delay, MAX_WAIT_S))
+            sleep(delay)
     raise last if last else RuntimeError("request failed")
+
+
+MAX_RETRY_AFTER_S = 3600.0
+
+
+def retry_after_s(value: Optional[str]) -> Optional[float]:
+    """Seconds from a Retry-After header: a number of seconds or an HTTP date; None when absent or unreadable."""
+    if not value:
+        return None
+    value = value.strip()
+    if value.replace(".", "", 1).isdigit():
+        return float(value)
+    try:
+        from email.utils import parsedate_to_datetime
+        from datetime import datetime, timezone
+        when = parsedate_to_datetime(value)
+        return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError, IndexError):
+        return None
