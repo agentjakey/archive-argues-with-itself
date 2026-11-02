@@ -46,6 +46,9 @@ def main(argv=None) -> int:
     ap.add_argument("--indexed", default="", help="collections (config/collections) to add as indexed corpora")
     ap.add_argument("--documents-only", action="store_true", help="indexed corpora: documents and coverage, not pages and passages")
     ap.add_argument("--fulltext", type=Path, default=None, help="the full-text fetch's manifest.jsonl: text versions and coverage")
+    ap.add_argument("--served-shards", action="store_true",
+                    help="mark the documents of every shard production serves (worker/engine/wrangler.jsonc production SHARDS, "
+                         "members from data/shards/members.tsv) as indexed under that shard's scope")
     args = ap.parse_args(argv)
     args.db.parent.mkdir(parents=True, exist_ok=True)
     conn = build.open_registry(args.db)
@@ -77,6 +80,20 @@ def main(argv=None) -> int:
             build.audit(conn, "add_text", str(args.fulltext), {"versions": n})
             conn.commit()
             print("fulltext", n)
+        if args.served_shards:
+            served = production_shards()
+            members = REPO / "data" / "shards" / "members.tsv"
+            n = 0
+            import time
+            seen = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            for line in members.read_text(encoding="utf-8").splitlines():
+                did, _, shard = line.partition(chr(9))
+                if shard in served:
+                    conn.execute("INSERT OR IGNORE INTO coverage VALUES (?, 'indexed', ?, ?)", (did, shard, seen))
+                    n += 1
+            build.audit(conn, "add_served_shards", str(members), {"shards": sorted(served), "documents": n})
+            conn.commit()
+            print("served shards", sorted(served), n)
         print("governance", build.add_governance(conn, REGISTER))
     if args.command == "rights":
         from archive_debugger.registry import rights
@@ -94,6 +111,15 @@ def main(argv=None) -> int:
         return 0
     print(json.dumps(stats(conn), indent=1))
     return 0
+
+
+def production_shards() -> set:
+    """The shard scopes production's engine Worker serves (its SHARDS variable), read from the config."""
+    import re
+    text = (REPO / "worker" / "engine" / "wrangler.jsonc").read_text(encoding="utf-8")
+    production = text[text.index('"production"'):]
+    value = re.search(r'"SHARDS":\s*"([^"]*)"', production).group(1)
+    return {s.strip() for s in value.split(",") if s.strip()}
 
 
 def measured_tokens_per_page(limit: int = 2000) -> tuple:
