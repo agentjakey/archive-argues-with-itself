@@ -102,6 +102,11 @@ def _s(x, digits=1) -> str:
     return "-" if x is None else f"{x:.{digits}f}"
 
 
+def writer_cell(run_id: str, r: dict) -> str:
+    """The writer, with the run and its pipeline label, so two settings of one model stay apart."""
+    return f"{r['writer']} ({run_id}: {r.get('pipeline_label')})"
+
+
 def gap_markdown(result: dict) -> str:
     lines = ["# Public AI gap: writers on the same split", "",
              f"Generated {result['generated']} by scripts/v2/public_ai_gap.py; audit runs "
@@ -115,7 +120,7 @@ def gap_markdown(result: dict) -> str:
              "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for run_id, r in result["runs"].items():
         o = r["overall"]
-        lines.append(f"| {r['writer']} | {r['licence']} | {r['runs_on']} | {_v(o['supports_strict'])} | "
+        lines.append(f"| {writer_cell(run_id, r)} | {r['licence']} | {r['runs_on']} | {_v(o['supports_strict'])} | "
                      f"{_v(o['answers_failure'])} | {_v(o['false_refusal_rate'])} | "
                      f"{_v(o['refusal_rate_should_refuse'])} | {_v(o['state_accuracy'])} | "
                      f"{_s(r['latency_s']['p50'])} / {_s(r['latency_s']['p95'])} | {_v(r['over_production_cap'])} | "
@@ -126,11 +131,11 @@ def gap_markdown(result: dict) -> str:
         lines += ["", f"## Expected state: {state}", "",
                   "| Writer | Items | Strict SUPPORTS | ANSWERS failures | False refusals | Should-refuse refused |",
                   "| --- | --- | --- | --- | --- | --- |"]
-        for r in result["runs"].values():
+        for run_id, r in result["runs"].items():
             b = r["by_state"].get(state)
             if not b:
                 continue
-            lines.append(f"| {r['writer']} | {b['items']} | {_v(b['supports_strict'])} | {_v(b['answers_failure'])} | "
+            lines.append(f"| {writer_cell(run_id, r)} | {b['items']} | {_v(b['supports_strict'])} | {_v(b['answers_failure'])} | "
                          f"{_v(b['false_refusal_rate'])} | {_v(b['refusal_rate_should_refuse'])} |")
     return NL.join(lines) + NL
 
