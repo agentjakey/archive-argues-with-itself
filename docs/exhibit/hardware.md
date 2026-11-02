@@ -11,6 +11,12 @@ a full day without a network, a physical year dial, and optionally a receipt pri
 cards. The exhibit itself is a static page served from the computer by a small Python server
 (`exhibit/kiosk/serve.py`). Any screen and computer that run current Edge or Chrome will do.
 
+For people watching from two or three metres away, prefer a 55-inch screen or larger with a matte
+or anti-glare surface, and mount it so the touch area and the dial sit between 380 mm and 1220 mm
+above the floor (the Smithsonian's reach range for a forward approach in a wheelchair). The reasons
+are in [DESIGN_RESEARCH.md](DESIGN_RESEARCH.md). The type scales with the screen, so a 3840x2160
+panel shows the same layout at twice the pixels.
+
 ## Recommended parts
 
 ### Year dial: a USB keyboard knob

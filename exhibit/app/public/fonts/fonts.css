@@ -1,0 +1,11 @@
+/* Cinzel (display) and Crimson Text (body), self-hosted so the kiosk works with no network.
+   Both are under the SIL Open Font License 1.1: OFL-Cinzel.txt and OFL-CrimsonText.txt in this
+   folder. The woff2 files are the Latin subsets from the Fontsource packages @fontsource/cinzel
+   5.2.6 and @fontsource/crimson-text 5.2.6, unchanged. */
+@font-face { font-family: "Cinzel"; font-style: normal; font-weight: 400; font-display: swap; src: url("cinzel-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Cinzel"; font-style: normal; font-weight: 600; font-display: swap; src: url("cinzel-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Cinzel"; font-style: normal; font-weight: 700; font-display: swap; src: url("cinzel-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Crimson Text"; font-style: normal; font-weight: 400; font-display: swap; src: url("crimson-text-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Crimson Text"; font-style: italic; font-weight: 400; font-display: swap; src: url("crimson-text-latin-400-italic.woff2") format("woff2"); }
+@font-face { font-family: "Crimson Text"; font-style: normal; font-weight: 600; font-display: swap; src: url("crimson-text-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Crimson Text"; font-style: normal; font-weight: 700; font-display: swap; src: url("crimson-text-latin-700-normal.woff2") format("woff2"); }
