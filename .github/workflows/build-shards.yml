@@ -23,6 +23,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: write      # to start audit-shards.yml when the builds are done
 
 env:
   R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
@@ -81,3 +82,13 @@ jobs:
         run: |
           tail -n 20 data/build/builder.log || true
           python scripts/v2/catalogue.py status --r2
+
+  start-audits:
+    # Every shard built on R2 without an audit result is audited next (audit-shards.yml, one at a time).
+    needs: [plan, build]
+    if: always() && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - run: gh workflow run audit-shards.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" || true
