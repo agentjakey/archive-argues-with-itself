@@ -19,7 +19,10 @@ sample. A test split is never read: a path whose file name contains "test" is re
 Candidates (name, model, where it runs):
   minilm-128            paraphrase-multilingual-MiniLM-L12-v2 through fastembed, its default
                         128-token truncation (the production embedder)
-  minilm-512            the same model with the tokenizer's truncation raised to 512
+  minilm-256            the same model with the tokenizer's truncation raised to 256
+  minilm-512            the same model with the tokenizer's truncation raised to 512 (measured at
+                        3.5 passages a second on the laptop CPU, about 150 CPU-hours for the current
+                        index: run only with --candidates when that time is acceptable)
   minilm-chunks         the same model over windows of at most 128 model tokens (32 tokens of
                         overlap); a passage scores the best cosine of any of its windows
   bge-m3                @cf/baai/bge-m3 on Workers AI (paid)
@@ -442,6 +445,9 @@ def default_candidates(*, ledger_factory: Callable[[], Ledger], run_id: str, run
     cands = [
         Candidate("minilm-128", MINILM, 384, "Apache-2.0", "local (fastembed)",
                   make=lambda: FastEmbedEncoder(MINILM), input_note="fastembed default truncation, 128 tokens"),
+        Candidate("minilm-256", MINILM, 384, "Apache-2.0", "local (fastembed)",
+                  make=lambda: FastEmbedEncoder(MINILM, max_tokens=256),
+                  input_note="tokenizer truncation raised to 256 tokens (enable_truncation)"),
         Candidate("minilm-512", MINILM, 384, "Apache-2.0", "local (fastembed)",
                   make=lambda: FastEmbedEncoder(MINILM, max_tokens=512),
                   input_note="tokenizer truncation raised to 512 tokens (enable_truncation)"),
