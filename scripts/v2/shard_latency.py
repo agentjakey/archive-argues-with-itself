@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine_ops  # noqa: E402
 
 OUT = REPO / "reports" / "v2" / "scale" / "latency.jsonl"
+RETRY_S = 2.0
 
 
 def engine_state(api: str, scope: str) -> str:
@@ -35,14 +36,23 @@ def engine_state(api: str, scope: str) -> str:
 
 
 def ask(api: str, token: str, scope: str, question: str, evidence_only: bool, timeout: float) -> dict:
+    """One question, timed the way a visitor sees it: while the engine is starting the Worker answers
+    503, and the site asks again every few seconds, so the time runs from the first try to the first
+    answer that is not a 503 (at most `timeout` seconds). `tries` says how many asks it took."""
     body = {"question": question, "evidence_only": evidence_only, "nocache": True}
     started = time.time()
-    status, headers, parsed = engine_ops.request("POST", f"{api}/ask?scope={scope}", body=body, token=token,
-                                                 timeout=timeout)
+    tries = 0
+    while True:
+        tries += 1
+        status, headers, parsed = engine_ops.request("POST", f"{api}/ask?scope={scope}", body=body, token=token,
+                                                     timeout=timeout)
+        if status != 503 or time.time() - started > timeout:
+            break
+        time.sleep(RETRY_S)
     seconds = round(time.time() - started, 2)
     evidence = parsed.get("evidence") or []
     answer = parsed.get("answer") or {}
-    return {"status": status, "seconds": seconds, "evidence": len(evidence),
+    return {"status": status, "seconds": seconds, "tries": tries, "evidence": len(evidence),
             "abstained": answer.get("abstained") if not evidence_only else None,
             "source": headers.get("x-answer-source")}
 
@@ -81,7 +91,7 @@ def main(argv=None) -> int:
         for r in rows:
             fh.write(json.dumps(r) + "\n")
     for r in rows:
-        print(f"{r['kind']:18} {r['status']} {r['seconds']:7.2f} s  evidence {r['evidence']}")
+        print(f"{r['kind']:18} {r['status']} {r['seconds']:7.2f} s  tries {r['tries']}  evidence {r['evidence']}")
     return 0 if all(r["status"] == 200 for r in rows) else 1
 
 
