@@ -438,5 +438,5 @@ def test_public_ai_gap_breaks_down_by_expected_state(tmp_path):
     assert r["licence"] == "Apache 2.0" and r["provider"] == "workers_ai"
     assert r["by_state"]["SUPPORTED"]["false_refusal_rate"]["value"] == 0.5
     assert r["by_state"]["INSUFFICIENT_EVIDENCE"]["refusal_rate_should_refuse"]["value"] == 1.0
-    assert r["latency_s"]["p50"] == 4.0
+    assert r["latency_s"]["p50"] == 4.0 and r["over_production_cap"]["den"] == 3
     assert "Expected state: SUPPORTED" in gap_mod.gap_markdown(result)

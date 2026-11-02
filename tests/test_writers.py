@@ -154,3 +154,16 @@ def test_the_writer_candidate_flag_replaces_the_configured_writer():
     ep = writers.load_endpoints()["workers_ai_proxy"]
     url, headers = writers.resolve(ep, {"CIVIC_AI_PROXY_URL": "http://ai.internal", "CIVIC_CACHE_TOKEN": "t"})
     assert url == "http://ai.internal/v1/chat/completions" and headers == {"authorization": "Bearer t"}
+
+
+def test_the_whole_draft_must_finish_within_the_timeout():
+    import time as _time
+
+    def slow(url, headers, body, timeout_s=None, attempts=None):
+        _time.sleep(0.5)
+        return reply(json.dumps(GOOD))
+    w = writers.OpenAICompatWriter(endpoint(), "m", 512, timeout=0.1, env=ENV, post=slow)
+    t0 = _time.monotonic()
+    with pytest.raises(TimeoutError):
+        w.draft("S", "U")
+    assert _time.monotonic() - t0 < 0.4

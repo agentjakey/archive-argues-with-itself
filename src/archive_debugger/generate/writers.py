@@ -9,16 +9,19 @@ Every writer has draft(system, user) -> Draft2 and last_usage. Base URLs, the en
 that hold keys, and any extra headers come from config/writers.toml and the environment; no vendor
 endpoint or model name is written here. Keys are read from the environment only and never logged.
 
-The writer makes one try per draft, no retries, like the Anthropic writer (max_retries=0): the
-engine gives the model a time budget and a retry would overrun it. The OpenAI-compatible writer sends the same system prompt and user prompt as the Anthropic writer,
+The writer makes one try per draft, no retries, like the Anthropic writer (max_retries=0), and the
+whole draft must finish within its timeout (a total deadline, fallback included): the engine gives
+the model a time budget, and a retry or a slow trickle of bytes would overrun it. The OpenAI-compatible writer sends the same system prompt and user prompt as the Anthropic writer,
 temperature 0, and asks for the Draft2 JSON schema as a structured response. An endpoint that refuses
 a JSON schema (HTTP 400) gets the same request with the schema stated in the prompt instead and
 response_format json_object; the reply is validated against Draft2 either way. Plain HTTP goes through
 audit/net.py, the one module that reaches the network outside the Anthropic SDK (one retry rule)."""
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
+import time
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,6 +32,7 @@ from archive_debugger.generate import answer_v2
 PROVIDERS = ("anthropic", "workers_ai", "openai_compat")
 REPO = Path(__file__).resolve().parents[3]
 WRITERS_CONFIG = REPO / "config" / "writers.toml"
+_POOL = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="writer")
 SCHEMA_NOTE = ("Reply with one JSON object and nothing else, matching this JSON schema exactly:\n")
 
 
@@ -127,19 +131,31 @@ class OpenAICompatWriter:
                                    if structured else {"type": "json_object"})
         return body
 
+    def _post_by(self, deadline: float, body: dict) -> dict:
+        """One request that must finish by the deadline (time.monotonic()). A socket timeout bounds
+        each read, not the whole reply, so the request runs on a worker thread and is abandoned,
+        not waited for, once the deadline passes."""
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError("writer deadline passed")
+        future = _POOL.submit(self._post, self.url, self._headers, body, timeout_s=left, attempts=1)
+        try:
+            return future.result(timeout=left)
+        except concurrent.futures.TimeoutError:
+            raise TimeoutError(f"writer reply not finished within {self.timeout:.0f} s") from None
+
     def draft(self, system: str, user: str) -> answer_v2.Draft2:
         from archive_debugger.audit import net
         self.last_usage, self.last_meta = {}, {}
         structured = self.endpoint.json_schema
+        deadline = time.monotonic() + self.timeout        # the whole draft, fallback included
         try:
-            reply = self._post(self.url, self._headers, self.body(system, user, structured), timeout_s=self.timeout,
-                               attempts=1)
+            reply = self._post_by(deadline, self.body(system, user, structured))
         except net.HttpError as exc:
             if exc.status != 400 or not structured:
                 raise
             structured = False
-            reply = self._post(self.url, self._headers, self.body(system, user, False), timeout_s=self.timeout,
-                               attempts=1)
+            reply = self._post_by(deadline, self.body(system, user, False))
         usage = reply.get("usage") or {}
         self.last_usage = {"input_tokens": int(usage.get("prompt_tokens") or 0),
                            "output_tokens": int(usage.get("completion_tokens") or 0)}

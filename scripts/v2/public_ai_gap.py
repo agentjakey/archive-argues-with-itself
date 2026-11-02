@@ -39,6 +39,17 @@ def candidate_for(writer: str, candidates: dict) -> dict:
     return {"candidate": None, "licence": "not listed in config/writers.toml", "runs_on": "not listed"}
 
 
+PRODUCTION_CAP_S = 20.0      # the engine's cap on one generation call in production (api/app.py GEN_TIMEOUT_S)
+
+
+def over_cap(rows: list) -> dict:
+    """Answers that reached the writer and took longer than the production generation cap: in
+    production they would have been shown as the record without an answer. Benchmark writers run
+    with a 60 s timeout so their honesty is measured on real answers."""
+    called = [r for r in rows if r.get("model_called") and r.get("latency_s") is not None]
+    return rb.rate(sum(1 for r in called if float(r["latency_s"]) > PRODUCTION_CAP_S), len(called))
+
+
 def by_state(rows: list, supports: dict, answers: dict) -> dict:
     out: dict = {}
     for r in rows:
@@ -74,7 +85,8 @@ def gap(runs: list, audit_runs: list, *, out_root: Path = rb.DEFAULT_OUT, audit_
             "items": summary["items"], "answered": summary["answered"], "errors": summary["errors"],
             "overall": {m: summary["metrics"][m] for m in STATE_METRICS + ("state_accuracy", "recall_at_10")},
             "by_state": by_state(rows, supports, answers),
-            "latency_s": summary["latency_s"], "cost_per_answer": summary["metrics"]["cost_per_answer"]["value"],
+            "latency_s": summary["latency_s"], "over_production_cap": over_cap(rows),
+            "cost_per_answer": summary["metrics"]["cost_per_answer"]["value"],
             "spend_usd": summary["spend_usd"], "left_to_person": summary["left_to_person"],
         }
     return result
@@ -95,16 +107,19 @@ def gap_markdown(result: dict) -> str:
              f"Generated {result['generated']} by scripts/v2/public_ai_gap.py; audit runs "
              f"{', '.join(result['audit_runs']) or 'none'}. Same prompts and gates for every writer; temperature 0 "
              "where the endpoint takes it. SUPPORTS and ANSWERS are the audit panel's final verdicts (no judge from "
-             "the writer's family). Rates are over items answered without an error.", "",
+             "the writer's family). Rates are over items answered without an error. Every writer ran with a 60 s "
+             "timeout; Over 20 s is the share of writer calls slower than production's generation cap, which in "
+             "production would show the record without an answer.", "",
              "| Writer | Licence | Where it can run | Strict SUPPORTS | ANSWERS failures | False refusals | "
-             "Should-refuse refused | State accuracy | p50 / p95 s | USD per answer | Errors |",
-             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+             "Should-refuse refused | State accuracy | p50 / p95 s | Over 20 s | USD per answer | Errors |",
+             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for run_id, r in result["runs"].items():
         o = r["overall"]
         lines.append(f"| {r['writer']} | {r['licence']} | {r['runs_on']} | {_v(o['supports_strict'])} | "
                      f"{_v(o['answers_failure'])} | {_v(o['false_refusal_rate'])} | "
                      f"{_v(o['refusal_rate_should_refuse'])} | {_v(o['state_accuracy'])} | "
-                     f"{_s(r['latency_s']['p50'])} / {_s(r['latency_s']['p95'])} | {_s(r['cost_per_answer'], 4)} | "
+                     f"{_s(r['latency_s']['p50'])} / {_s(r['latency_s']['p95'])} | {_v(r['over_production_cap'])} | "
+                     f"{_s(r['cost_per_answer'], 4)} | "
                      f"{r['errors']} |")
     states = sorted({s for r in result["runs"].values() for s in r["by_state"]}, key=str)
     for state in states:
