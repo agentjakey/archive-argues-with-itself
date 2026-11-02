@@ -307,7 +307,11 @@ def curated_cache_context(scope: str, *, registry: Optional[dict] = None) -> str
     gcfg["answer_version"] = "v1"
     gcfg["rank"] = None      # the reviewed answers were ranked without [rank] weights
     model = gcfg.get("reviewed_model") or gcfg["model"]
-    return cache_context(scope, answer_cache.canonical_data_sha256(scope, registry), answer_cache.retrieve_settings(rcfg),
+    # ... and retrieved with the baseline fusion (dense_weight 1.0, which keys as if unset), whatever
+    # the collection's retrieval is now.
+    settings = answer_cache.retrieve_settings(rcfg)
+    settings.pop("dense_weight", None)
+    return cache_context(scope, answer_cache.canonical_data_sha256(scope, registry), settings,
                          gcfg, gcfg["provider"], model,
                          governance.load(env_path(ENV_GOVERNANCE_PATH, governance.DEFAULT_REGISTER)).digest)
 
