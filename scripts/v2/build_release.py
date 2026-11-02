@@ -101,7 +101,8 @@ def empty_folder(folder: Path) -> None:
 
 def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, api_origin: str,
              exhibit_app: Path | None = None, exhibit_deck: Path | None = None,
-             catalogue_page: Path | None = None, catalogue_data: Path | None = None) -> Path:
+             catalogue_page: Path | None = None, catalogue_data: Path | None = None,
+             web_commit: str | None = None) -> Path:
     if not (web / "index.html").exists():
         raise SystemExit(f"{web} has no index.html: build the web app first (npm run build:static)")
     if not (data / "export.json").exists():
@@ -141,6 +142,9 @@ def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, ap
     manifest = {
         "release_id": release_id,
         "git_commit": git_commit(),
+        # The web app may be built from an earlier commit than the release script (to keep the site
+        # matched to the engine in production); the manifest says which.
+        "web_commit": web_commit or git_commit(),
         "built_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "data_export": export,
         "data_version": version,
@@ -454,6 +458,7 @@ def main(argv=None) -> int:
     a.add_argument("--exhibit-deck", type=Path, default=None, help="the published deck (site/exhibit/deck.json)")
     a.add_argument("--catalogue-page", type=Path, default=None, help="the catalogue browser page (site/catalogue)")
     a.add_argument("--catalogue-data", type=Path, default=None, help="its compiled files (build/catalogue-data)")
+    a.add_argument("--web-commit", default=None, help="the commit --web was built from, when not this checkout's")
     g = sub.add_parser("gate")
     g.add_argument("--release", type=Path, default=REPO / "build" / "release")
     g.add_argument("--allow-missing", type=Path, default=REPO / "config" / "release_allow_missing.json")
@@ -468,7 +473,7 @@ def main(argv=None) -> int:
 
     if args.command == "assemble":
         assemble(args.release_id, args.web, args.data, args.static, args.out, args.api_origin,
-                 args.exhibit_app, args.exhibit_deck, args.catalogue_page, args.catalogue_data)
+                 args.exhibit_app, args.exhibit_deck, args.catalogue_page, args.catalogue_data, args.web_commit)
         return 0
     if args.command == "gate":
         problems = gate(args.release, args.allow_missing)
