@@ -3,7 +3,7 @@
     python scripts/v2/confirm_set.py exclusions
     python scripts/v2/confirm_set.py draft --collection pilot --cap 2.50
     python scripts/v2/confirm_set.py draft --collection microlog --cap 2.50
-    python scripts/v2/confirm_set.py render --batch-size 40
+    python scripts/v2/confirm_set.py render --collection pilot --batch-size 40
     python scripts/v2/confirm_set.py apply
     python scripts/v2/confirm_set.py freeze
 
@@ -17,11 +17,11 @@ cache, so a run stopped by a sleeping laptop or a network failure is resumed by 
 replays what it already paid for and drafts only the rest. Output: confirm1/drafts/<collection>.jsonl and
 .rejected.jsonl; item ids carry ":c1:" so they never collide with the frozen benchmark's.
 
-render: the drafts that passed the gates, in batches for adjudication (confirm1/adjudication/batchN.txt),
+render: the drafts that passed the gates, in batches for adjudication (confirm1/adjudication/<collection>-batchN.txt),
 each with its question, label, quotes, corpus checks and full page text. The adjudicator writes
 batchN.labels.jsonl: {"item_id", "well_formed": "pass"|"fail", "label_correct": "pass"|"fail", "note"}.
 
-apply: reads every batchN.labels.jsonl, checks each rendered item has exactly one label, and reports the
+apply: reads every <collection>-batchN.labels.jsonl, checks each rendered item has exactly one label, and reports the
 counts the pre-registration requires (at least 600 answerable and 150 should-refuse that pass both).
 
 freeze: writes confirm1/test.jsonl (the passing items, status "adjudicated-ai") and the lock
@@ -158,20 +158,23 @@ def render_item(it: dict) -> str:
 
 
 def cmd_render(args) -> int:
-    rows = drafts()
+    rows = [it for it in drafts() if it["collection"] == args.collection]
     adir = OUT / "adjudication"
     adir.mkdir(parents=True, exist_ok=True)
+    if list(adir.glob(f"{args.collection}-batch*.txt")):
+        raise SystemExit(f"{args.collection} is already rendered")
     batches = [rows[i:i + args.batch_size] for i in range(0, len(rows), args.batch_size)]
     for n, batch in enumerate(batches, 1):
-        (adir / f"batch{n}.txt").write_text("\n".join(render_item(it) for it in batch), encoding="utf-8")
-        (adir / f"batch{n}.ids").write_text("\n".join(it["item_id"] for it in batch) + "\n", encoding="utf-8")
+        name = f"{args.collection}-batch{n}"
+        (adir / f"{name}.txt").write_text("\n".join(render_item(it) for it in batch), encoding="utf-8")
+        (adir / f"{name}.ids").write_text("\n".join(it["item_id"] for it in batch) + "\n", encoding="utf-8")
     print(f"{len(rows)} drafts in {len(batches)} batches under {adir}")
     return 0
 
 
 def read_labels() -> dict:
     labels: dict = {}
-    for path in sorted((OUT / "adjudication").glob("batch*.labels.jsonl")):
+    for path in sorted((OUT / "adjudication").glob("*batch*.labels.jsonl")):
         for row in read_jsonl(path):
             labels[row["item_id"]] = row
     return labels
@@ -252,6 +255,7 @@ def main(argv=None) -> int:
     p.add_argument("--cap", type=float, required=True)
     p.add_argument("--seed-offset", type=int, default=0, help="1 for the pre-registered top-up (seed 20261111)")
     p = sub.add_parser("render")
+    p.add_argument("--collection", required=True)
     p.add_argument("--batch-size", type=int, default=40)
     sub.add_parser("apply")
     sub.add_parser("freeze")
