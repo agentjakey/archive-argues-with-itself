@@ -1,0 +1,161 @@
+name: exhibit soak
+
+# The library kiosk's soak test on a runner: the exhibit release is built and installed into a kiosk
+# folder exactly as on a kiosk machine (exhibit/kiosk/serve.py), then exhibit/app/soak/soak.mjs drives
+# headless Chromium through scripted visits for 5.5 hours, sampling memory, and fits the heap and
+# working-set slopes with their standard errors (the interval). It passes with no crash, no page or
+# console error, every walk-away reset, and both slopes under their limits (soak.mjs LIMITS).
+#
+# Publishing: only when the soak passes AND the repository has the CLOUDFLARE_API_TOKEN and
+# CLOUDFLARE_ACCOUNT_ID secrets, the publish job assembles production as it stands (the production web
+# at commit 0858543, the catalogue browsing, and this exhibit with the deck that was soaked), runs the
+# release gates and publishes with build_release.py, then checks the live pages. Without the secrets
+# the soak result is recorded and nothing is published.
+on:
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: "soak length in hours (at most 5.5 on a hosted runner)"
+        default: "5.5"
+      publish:
+        description: "publish to production if the soak passes (needs the Cloudflare secrets)"
+        type: boolean
+        default: true
+  push:
+    branches: [v2]
+    paths: [".github/workflows/exhibit-soak.yml"]
+
+concurrency:
+  group: exhibit-soak
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    outputs:
+      pass: ${{ steps.verdict.outputs.pass }}
+      deck_sha: ${{ steps.verdict.outputs.deck_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: exhibit/app/package-lock.json
+      - name: build the exhibit and install it as a kiosk would
+        working-directory: exhibit/app
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+          cd ../..
+          PYTHONPATH=src python scripts/v2/build_release.py assemble --release-id soak-${{ github.run_id }} \
+            --api-origin https://api.archiveargues.org --exhibit-app build/exhibit-app --exhibit-deck site/exhibit/deck.json
+          python exhibit/kiosk/serve.py --root build/kiosk-soak install build/release
+      - name: soak
+        working-directory: exhibit/app
+        run: |
+          python ../kiosk/serve.py --root ../../build/kiosk-soak --port 8765 > "$RUNNER_TEMP/serve.log" 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8765/exhibit/kiosk.json > /dev/null && break; sleep 1; done
+          node soak/soak.mjs --hours "${{ github.event.inputs.hours || '5.5' }}" --channel chromium --headless true \
+            --url http://127.0.0.1:8765/exhibit/ --out "$RUNNER_TEMP/soak" || true
+          tail -n 20 "$RUNNER_TEMP/serve.log" || true
+      - name: verdict
+        id: verdict
+        run: |
+          summary=$(ls -t "$RUNNER_TEMP"/soak/*-summary.json | head -n 1)
+          cat "$summary"
+          pass=$(python -c "import json,sys; s=json.load(open(sys.argv[1])); print('true' if s.get('pass') is True else 'false')" "$summary")
+          echo "pass=$pass" >> "$GITHUB_OUTPUT"
+          echo "deck_sha=$(sha256sum site/exhibit/deck.json | cut -c1-64)" >> "$GITHUB_OUTPUT"
+          echo "soak pass: $pass"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: soak-summary
+          path: ${{ runner.temp }}/soak/*-summary.json
+          if-no-files-found: warn
+
+  publish:
+    needs: soak
+    if: needs.soak.outputs.pass == 'true' && github.event.inputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      PYTHONPATH: src
+    steps:
+      - name: the Cloudflare secrets are set
+        id: creds
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "no Cloudflare secrets: the soak passed, nothing is published"; echo "go=no" >> "$GITHUB_OUTPUT"
+          else echo "go=yes" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.creds.outputs.go == 'yes'
+      - name: the deck is the deck that was soaked
+        if: steps.creds.outputs.go == 'yes'
+        run: test "$(sha256sum site/exhibit/deck.json | cut -c1-64)" = "${{ needs.soak.outputs.deck_sha }}"
+      - uses: actions/checkout@v4
+        if: steps.creds.outputs.go == 'yes'
+        with:
+          ref: 0858543b9cf8
+          path: prodsite
+      - uses: actions/setup-python@v5
+        if: steps.creds.outputs.go == 'yes'
+        with:
+          python-version: "3.11"
+          cache: pip
+      - if: steps.creds.outputs.go == 'yes'
+        run: python -m pip install -e .
+      - uses: actions/setup-node@v4
+        if: steps.creds.outputs.go == 'yes'
+        with:
+          node-version: "22"
+      - name: production web (commit 0858543), the exhibit app, the catalogue data
+        if: steps.creds.outputs.go == 'yes'
+        run: |
+          (cd prodsite/web && npm ci && npm run build:production)
+          (cd exhibit/app && npm ci && npm run build)
+          (cd site/worker && npm ci) || true
+          python - <<'EOF'
+          from pathlib import Path
+          from archive_debugger.jobs.store import R2Store
+          r2 = R2Store()
+          for key, dest in (("build-inputs/v1/registry.db", "data/registry/registry.db"),
+                            ("catalogue/v1/scrape/pages.json", "data/catalogue/scrape/pages.json")):
+              Path(dest).parent.mkdir(parents=True, exist_ok=True)
+              Path(dest).write_bytes(r2.get(key))
+          EOF
+          python scripts/v2/catalogue.py browse
+      - name: assemble, gate, publish
+        if: steps.creds.outputs.go == 'yes'
+        run: |
+          python scripts/v2/build_release.py assemble --release-id "$(date -u +%Y-%m-%d).exhibit-${{ github.run_id }}" \
+            --api-origin https://api.archiveargues.org --web prodsite/web/dist --web-commit 0858543b9cf8 \
+            --catalogue-page site/catalogue --catalogue-data build/catalogue-data \
+            --exhibit-app build/exhibit-app --exhibit-deck site/exhibit/deck.json
+          python scripts/v2/build_release.py gate
+          python scripts/v2/build_release.py publish --release build/release --env production
+      - name: live checks
+        if: steps.creds.outputs.go == 'yes'
+        working-directory: exhibit/app
+        run: |
+          npx playwright install --with-deps chromium
+          for u in https://archiveargues.org/exhibit/ https://archiveargues.org/catalogue/; do node soak/check-live.mjs "$u"; done
+          curl -sf https://archiveargues.org/exhibit/current-deck.json
