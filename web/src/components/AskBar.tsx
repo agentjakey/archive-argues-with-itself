@@ -90,6 +90,12 @@ export function AskBar({ question, filters, busy, kiosk, scope, onQuestion, onFi
             Ask
           </button>
         </div>
+        {!kiosk && (
+          <p className="text-sm text-muted max-w-prose">
+            A first question on a part of the collection that has been idle can take up to a minute while it
+            wakes; later questions are fast.
+          </p>
+        )}
         {/* The person check (Cloudflare Turnstile) draws here. Most visitors never see it; when
             Cloudflare asks for a click, it appears right under the button that was pressed. */}
         <div id={SLOT_ID} className="turnstile-slot" />
