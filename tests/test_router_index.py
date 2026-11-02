@@ -38,10 +38,20 @@ def test_buckets_hold_every_term_once_with_each_shards_df():
     files, pointer = ri.build(cov, {"s1": "INDEXED", "s2": "AI-AUDITED"}, buckets=16)
     lines = [l for body in files.values() for l in body.decode().splitlines()]
     assert sorted(lines) == ["beds\ts1:2", "hospital\ts1:3,s2:5"]
-    assert files[ri.bucket_name(ri.bucket_of("hospital", 16))].decode() .startswith("hospital\t") or \
-        "hospital\t" in files[ri.bucket_name(ri.bucket_of("hospital", 16))].decode()
+    assert "hospital\t" in files[ri.bucket_name(ri.bucket_of("hospital", 16))].decode()
     assert pointer["N"] == 40 and pointer["avgdl"] == 15.0 and pointer["buckets"] == 16
     assert pointer["shards"]["s2"]["tier"] == "AI-AUDITED"
     again, pointer2 = ri.build(cov, {}, buckets=16)
     assert pointer2["digest"] == pointer["digest"]                     # content-addressed
     json.dumps(pointer)
+
+
+def test_the_workers_parity_fixture_is_current():
+    """tests/fixtures/router_parity.json holds the Python router's results that the engine Worker's
+    port must reproduce (worker/engine/test/router.test.ts); regenerate it when the router changes."""
+    import os
+    import subprocess
+    import sys
+    done = subprocess.run([sys.executable, str(REPO / "tests" / "fixtures" / "make_router_parity.py"), "--check"],
+                          cwd=REPO, env={**os.environ, "PYTHONPATH": str(REPO / "src")})
+    assert done.returncode == 0, "run python tests/fixtures/make_router_parity.py"
