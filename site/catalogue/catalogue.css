@@ -1,23 +1,56 @@
-:root { --bg: #fbfaf7; --fg: #1d1d1b; --muted: #55534d; --line: #d9d5cb; --accent: #7a3e00; --known: #e9e5da; --fetched: #d8e6f4; --indexed: #d6efd8; }
-@media (prefers-color-scheme: dark) { :root { --bg: #141412; --fg: #f1efe8; --muted: #c4c0b4; --line: #3c3a35; --accent: #ffb366; --known: #33312c; --fetched: #1f3347; --indexed: #1f3d25; } }
+/* The catalogue in Agora's look, from the shared token file (design/tokens.css, published by the site
+   build at /tokens.css). Coverage states are square labels told apart by their words and a shape
+   (hollow, half, full), never by colour alone. Print stays light. */
+@import url("/tokens.css");
+
 * { box-sizing: border-box; }
-body { margin: 0 auto; max-width: 70rem; padding: 0 16px 3rem; background: var(--bg); color: var(--fg); font: 1rem/1.5 system-ui, "Segoe UI", sans-serif; }
-a { color: var(--accent); }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-.skip { position: absolute; left: -999px; } .skip:focus { left: 16px; top: 8px; background: var(--bg); padding: 4px 8px; }
-.crumb { margin: 1rem 0 0; } h1 { margin: 0.2rem 0; } .lede { color: var(--muted); max-width: 48rem; }
+body {
+  margin: 0 auto; max-width: 70rem; padding: 0 16px 3rem;
+  background: var(--bg) var(--noise); color: var(--text);
+  font: 1.0625rem/1.5 var(--reading);
+}
+h1, h2, h3, button, label, .badge, .crumb, .states dt {
+  font-family: var(--display); letter-spacing: var(--label-tracking);
+}
+h1, h2, h3 { text-transform: uppercase; font-weight: 600; }
+a { color: var(--gold); text-underline-offset: 0.18em; }
+:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.skip { position: absolute; left: -999px; }
+.skip:focus { left: 16px; top: 8px; background: var(--gold); color: var(--ink); padding: 4px 8px; }
+.crumb { margin: 1rem 0 0; font-size: 0.8rem; text-transform: uppercase; }
+h1 { margin: 0.2rem 0; font-size: clamp(1.5rem, 1rem + 2vw, 2.2rem); }
+.lede { color: var(--muted); max-width: 48rem; }
 .note { color: var(--muted); }
-.states { display: grid; gap: 0.4rem; } .states div { display: flex; gap: 0.8rem; align-items: baseline; } .states dt { min-width: 8rem; } .states dd { margin: 0; }
+.states { display: grid; gap: 0.4rem; }
+.states div { display: flex; gap: 0.8rem; align-items: baseline; }
+.states dt { min-width: 9rem; }
+.states dd { margin: 0; }
 .filters { display: flex; flex-wrap: wrap; gap: 0.8rem 1.2rem; align-items: end; }
-.filters label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.9rem; }
+.filters label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
 .filters .wide { flex: 1 1 16rem; }
-select, input { font: inherit; padding: 0.35rem 0.5rem; min-height: 2.6rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); max-width: 100%; }
-.results { list-style: none; padding: 0; margin: 1rem 0; }
-.doc { border-top: 1px solid var(--line); padding: 0.6rem 0; }
-.meta { margin: 0.2rem 0; color: var(--muted); display: flex; flex-wrap: wrap; gap: 0 1rem; font-size: 0.9rem; }
-.badges { margin: 0; display: flex; gap: 0.5rem; flex-wrap: wrap; font-size: 0.85rem; }
-.badge { border: 1px solid var(--line); border-radius: 999px; padding: 0 0.6rem; }
-.badge.known { background: var(--known); } .badge.text_fetched { background: var(--fetched); } .badge.indexed { background: var(--indexed); font-weight: 600; }
+select, input {
+  font: 1rem var(--reading); padding: 0.35rem 0.5rem; min-height: 2.75rem;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); color: var(--text); max-width: 100%;
+}
+.results { list-style: none; padding: 0; margin: 1rem 0; font-variant-numeric: lining-nums tabular-nums; }
+.doc { border-top: 1px solid var(--hair); padding: 0.6rem 0; }
+.meta { margin: 0.2rem 0; color: var(--muted); display: flex; flex-wrap: wrap; gap: 0 1rem; font-size: 0.95rem; }
+.badges { margin: 0; display: flex; gap: 0.6rem; flex-wrap: wrap; font-size: 0.75rem; }
+.badge { display: inline-flex; align-items: center; gap: 0.4em; text-transform: uppercase; color: var(--text); }
+.badge::before { content: ""; width: 0.65em; height: 0.65em; border: 1.5px solid currentColor; }
+.badge.known::before { background: transparent; }
+.badge.text_fetched::before { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+.badge.indexed::before { background: currentColor; }
+.badge.indexed { color: var(--gold); }
 .scope { color: var(--muted); }
-button { font: inherit; min-height: 2.6rem; padding: 0.3rem 1rem; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
-footer { border-top: 1px solid var(--line); margin-top: 2rem; color: var(--muted); }
+button {
+  font-size: 0.8rem; text-transform: uppercase; min-height: 2.75rem; padding: 0.3rem 1rem;
+  border-radius: var(--radius); border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer;
+}
+button:hover, button:focus-visible { border-color: var(--gold); color: var(--gold); }
+footer { border-top: 1px solid var(--hair); margin-top: 2rem; color: var(--muted); }
+@media print {
+  body { background: #ffffff; color: #000000; }
+  a, .badge.indexed { color: #000000; }
+}

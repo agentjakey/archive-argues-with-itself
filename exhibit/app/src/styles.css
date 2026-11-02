@@ -12,22 +12,14 @@
    Motion: reveals fade in step by step; with "Less motion" or the device's reduced-motion setting,
    nothing moves. Printing shows only the evidence card, sized for 80 mm receipt paper. */
 
+@import "../../../design/tokens.css";
+
 :root {
-  --bg: #0e0c09;
-  --surface: #1a1710;
-  --surface-2: #242016;
-  --hair: #3a3320;      /* decorative rules only, never the only edge of a control */
-  --line: #8a7f5f;      /* control edges: 4.9:1 on the ground */
-  --text: #e8dfc0;      /* parchment: 14.6:1 on the ground */
-  --muted: #c2b791;     /* secondary text: 9.7:1 on the ground, 8.1:1 on surface-2 */
-  --gold: #d4a017;      /* large text, focus and fills: 8.2:1 on the ground */
-  --ink: #0e0c09;       /* text on parchment or gold: 14.6:1 and 8.2:1 */
-  --display: "Cinzel", "Trajan Pro", Georgia, serif;
-  --reading: "Crimson Text", Georgia, "Times New Roman", serif;
+  /* Colours and type come from the shared token file (design/tokens.css), the same one the reading
+     room and the catalogue use. Only the exhibit's own sizes are set here. */
   --touch: max(64px, 2rem);
   --gap: 0.75rem;
   --tick: 1.4rem;
-  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
