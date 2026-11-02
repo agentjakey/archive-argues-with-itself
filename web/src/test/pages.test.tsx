@@ -92,6 +92,8 @@ describe("reading pages", () => {
     expect(screen.getByRole("link", { name: "Internet Archive Canada" })).toHaveAttribute("href", "https://internetarchivecanada.org");
     expect(screen.getByText(/Claude, an AI\s+model made by Anthropic/)).toBeInTheDocument();
     expect(screen.getByText(/88.6% to 96.1%/)).toBeInTheDocument();
+    expect(screen.getByText(/No human has checked those labels yet, and outside review is planned/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/human-verified/i);
     expect(screen.getByRole("link", { name: "ACCURACY.md" })).toHaveAttribute("href", expect.stringContaining("docs/ACCURACY.md"));
     expect(screen.getByRole("link", { name: "METHODS.md" })).toHaveAttribute("href", expect.stringContaining("docs/METHODS.md"));
     expect(screen.getByRole("link", { name: "Qipu" })).toBeInTheDocument();

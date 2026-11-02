@@ -60,6 +60,12 @@ export function About({ scope }: { scope?: ScopeInfo | null }) {
         and what the numbers do not say: <Ext href={`${DOCS}/ACCURACY.md`}>ACCURACY.md</Ext> and{" "}
         <Ext href={`${DOCS}/METHODS.md`}>METHODS.md</Ext>.
       </p>
+      <p>
+        A newer audit uses AI judges from two model families. The reference labels those judges are measured
+        against come from AI adjudication: each item was read against its page and decided with a written reason.
+        No human has checked those labels yet, and outside review is planned. Until it happens, treat the newer
+        audit figures as AI measurements, not as human checks.
+      </p>
 
       <h3>Where the pages come from</h3>
       <p>
