@@ -231,6 +231,10 @@ def cache_context(scope: str, data_sha256: dict, retrieve: dict, gcfg: dict, kin
     if rank_digest:
         # Ranking weights change which passages the model sees; all zero leaves every key as it was.
         context = hashlib.sha256(f"{context}|rank:{rank_digest}".encode("utf-8")).hexdigest()
+    extra = writers.extra_digest(gcfg.get("extra_body")) if gcfg.get("answer_version", "v1") == "v2" else ""
+    if extra:
+        # A writer's extra request fields (a reasoning setting) change its answers; none leaves keys as they were.
+        context = hashlib.sha256(f"{context}|writer_extra:{extra}".encode("utf-8")).hexdigest()
     return context
 
 
@@ -1503,7 +1507,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                                                                        state_reason="stub writer"))
                     else:                        # anthropic, workers_ai or openai_compat (generate/writers.py)
                         writer = writers.make_writer(kind, model_id, gcfg["max_tokens"], effort=gcfg.get("effort"),
-                                                     endpoint=gcfg.get("endpoint"), timeout=model_budget)
+                                                     endpoint=gcfg.get("endpoint"), timeout=model_budget,
+                                                     extra_body=gcfg.get("extra_body"))
                     window, jurisdictions = collection_bounds(b.name)
                     ans = answer_v2.compose_v2(clean, hits, writer, verify, min_passages=gcfg["min_passages"],
                                                generation=gen, filters=filters, window=window,

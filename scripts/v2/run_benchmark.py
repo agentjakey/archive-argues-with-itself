@@ -80,8 +80,8 @@ BOOTSTRAP_RESAMPLES = 2000
 BOOTSTRAP_SEED = 20261105
 RUN_ID = re.compile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
 RESUME_KEYS = ("split", "pipeline", "writer", "effort", "stub", "collections", "limit", "seed", "rank", "provider",
-               "endpoint", "max_tokens")
-CONFIG_DEFAULTS = {"provider": "anthropic", "endpoint": None, "max_tokens": None}    # keys older runs did not record
+               "endpoint", "max_tokens", "writer_extra")
+CONFIG_DEFAULTS = {"provider": "anthropic", "endpoint": None, "max_tokens": None, "writer_extra": None}    # keys older runs did not record
 
 
 class Refused(Exception):
@@ -180,7 +180,7 @@ def parse_rank(spec: Optional[str]) -> Optional[dict]:
 
 
 def pipeline_label(pipeline: str, writer: str, effort: Optional[str], stub: bool, rank: Optional[dict] = None,
-                   max_tokens: Optional[int] = None) -> str:
+                   max_tokens: Optional[int] = None, extra_body: Optional[dict] = None) -> str:
     # A provider's model path ("@cf/org/model") becomes one safe name ("cf_org_model"): the label
     # names a file under test_runs/.
     label = f"{pipeline}-{re.sub(r'[^A-Za-z0-9._-]+', '_', price_model(writer)).strip('_')}"
@@ -190,6 +190,8 @@ def pipeline_label(pipeline: str, writer: str, effort: Optional[str], stub: bool
         label += f"-rank{meta_rank.digest(rank)[:8]}"
     if max_tokens:
         label += f"-mt{int(max_tokens)}"
+    if extra_body:
+        label += f"-x{writers.extra_digest(extra_body)[:8]}"
     if stub:
         label += "-stub"
     return label
@@ -282,7 +284,8 @@ def real_writer(pipeline: str, writer: str, effort: Optional[str], stub: bool, g
         if name not in endpoints:
             raise Refused(f"no [endpoints.{name}] in config/writers.toml")
         try:
-            return MeteredOpenWriter(endpoints[name], writer, gcfg["max_tokens"], timeout=60.0)
+            return MeteredOpenWriter(endpoints[name], writer, gcfg["max_tokens"], timeout=60.0,
+                                     extra_body=gcfg.get("extra_body"))
         except RuntimeError as exc:
             raise Refused(str(exc))
     if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")):
@@ -313,8 +316,24 @@ def collection_config(collection: str) -> Path:
     return REPO / entry["config"]
 
 
+def toml_inline(value) -> str:
+    """A JSON-like value as TOML (inline tables, strings, numbers, booleans, arrays)."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        return json.dumps(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(toml_inline(v) for v in value) + "]"
+    if isinstance(value, dict):
+        return "{ " + ", ".join(f"{json.dumps(str(k))} = {toml_inline(v)}" for k, v in value.items()) + " }"
+    raise Refused(f"--writer-extra: {value!r} has no TOML form")
+
+
 def write_engine_config(source: Path, dest: Path, *, answer_version: str, model: str, effort: Optional[str],
-                        rank: Optional[dict] = None, max_tokens: Optional[int] = None) -> Path:
+                        rank: Optional[dict] = None, max_tokens: Optional[int] = None,
+                        extra_body: Optional[dict] = None) -> Path:
     """A copy of a collection config with [generate] answer_version, model, effort (and max_tokens when
     given) set, and with rank weights a [rank] section in place of any the config had. Every other line
     is kept as it is."""
@@ -331,11 +350,13 @@ def write_engine_config(source: Path, dest: Path, *, answer_version: str, model:
                     out.append(f'effort = "{effort}"')
                 if max_tokens:
                     out.append(f"max_tokens = {int(max_tokens)}")
+                if extra_body:
+                    out.append(f"extra_body = {toml_inline(extra_body)}")
                 placed = True
             continue
         if section == "[generate]":
             key = stripped.split("=", 1)[0].strip() if "=" in stripped else ""
-            if key in ("answer_version", "model", "effort") or (max_tokens and key == "max_tokens"):
+            if key in ("answer_version", "model", "effort", "extra_body") or (max_tokens and key == "max_tokens"):
                 continue
         if section == "[rank]" and rank:
             continue
@@ -508,7 +529,8 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
                   out_root: Path = DEFAULT_OUT, lock_path: Path = DEFAULT_LOCK, splits_dir: Path = DEFAULT_SPLITS,
                   ledger: Optional[Ledger] = None, engine_factory: Optional[Callable] = None,
                   writer_factory: Callable = real_writer, log: Callable = print, rank: Optional[dict] = None,
-                  provider: str = "anthropic", endpoint: Optional[str] = None, max_tokens: Optional[int] = None) -> int:
+                  provider: str = "anthropic", endpoint: Optional[str] = None, max_tokens: Optional[int] = None,
+                  writer_extra: Optional[dict] = None) -> int:
     """Answer the split's items; 0 when every item was answered, 1 when some came back with an
     error (a rerun asks them again), 2 when the run stopped before a call that could cross a cap."""
     if not RUN_ID.match(run_id or ""):
@@ -546,7 +568,9 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
         prices.price(model)       # an unpriced writer is refused before anything is asked
     if max_tokens is not None and max_tokens <= 0:
         raise Refused("--max-tokens must be positive")
-    label = pipeline_label(pipeline, writer, effort, stub, rank, max_tokens)
+    if writer_extra and provider == "anthropic":
+        raise Refused("--writer-extra is for the workers_ai and openai_compat providers")
+    label = pipeline_label(pipeline, writer, effort, stub, rank, max_tokens, writer_extra)
     out_root = Path(out_root)
     marker = out_root / "test_runs" / f"{label}.json"
     if split == "test":
@@ -565,7 +589,7 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
     answers_path = run_dir / "answers.jsonl"
     config = {"split": split, "pipeline": pipeline, "writer": writer, "effort": effort, "stub": stub,
               "collections": names, "limit": limit, "seed": seed, "rank": rank or None,
-              "provider": provider, "endpoint": endpoint, "max_tokens": max_tokens}
+              "provider": provider, "endpoint": endpoint, "max_tokens": max_tokens, "writer_extra": writer_extra or None}
     if run_json.exists():
         before = json.loads(run_json.read_text(encoding="utf-8"))
         changed = [k for k in RESUME_KEYS if before.get("config", {}).get(k, CONFIG_DEFAULTS.get(k)) != config[k]]
@@ -606,7 +630,7 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
                     continue
                 cfg_path = write_engine_config(configs[collection], Path(work) / f"{collection}.toml",
                                                answer_version=pipeline, model=writer, effort=effort, rank=rank,
-                                               max_tokens=max_tokens)
+                                               max_tokens=max_tokens, extra_body=writer_extra)
                 gcfg = load_generate_config(cfg_path)
                 restricted = restricted_items(pending)
                 groups = [(None, [it for it in pending if not it.get("governance")])]
@@ -1054,6 +1078,8 @@ def main(argv=None) -> int:
     p_run.add_argument("--provider", choices=writers.PROVIDERS, default="anthropic",
                        help="writer provider (v2 only for workers_ai and openai_compat)")
     p_run.add_argument("--endpoint", default=None, help="an [endpoints.<name>] entry in config/writers.toml")
+    p_run.add_argument("--writer-extra", type=json.loads, default=None,
+                       help='JSON object of extra request fields for an OpenAI-compatible writer, e.g. \'{"reasoning_effort": "low"}\'')
     p_run.add_argument("--max-tokens", type=int, default=None,
                        help="writer output limit for this run in place of [generate] max_tokens (in the label)")
     p_run.add_argument("--rank", default=None, help='[rank] weights for this run, e.g. "year=0.3,place=0.2" (meta_rank)')
@@ -1080,7 +1106,7 @@ def main(argv=None) -> int:
                                  collections=args.collections, stub=args.stub, final=args.final, out_root=out_root,
                                  lock_path=args.lock, splits_dir=args.splits_dir, ledger=ledger,
                                  rank=parse_rank(args.rank), provider=args.provider, endpoint=args.endpoint,
-                                 max_tokens=args.max_tokens)
+                                 max_tokens=args.max_tokens, writer_extra=args.writer_extra)
         if args.command == "judge-items":
             from archive_debugger.local_env import load_local_env
             load_local_env()

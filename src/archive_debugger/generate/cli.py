@@ -42,7 +42,8 @@ def apply_writer_candidate(g: dict, env: Optional[dict] = None) -> dict:
     if name not in candidates:
         raise ValueError(f"{WRITER_CANDIDATE_ENV}={name!r} is not a candidate in config/writers.toml")
     c = candidates[name]
-    out = dict(g, provider=c["provider"], model=c["model"], effort=c.get("effort"), answer_version="v2")
+    out = dict(g, provider=c["provider"], model=c["model"], effort=c.get("effort"), answer_version="v2",
+               extra_body=c.get("extra_body") or None)
     out["endpoint"] = env.get(WRITER_ENDPOINT_ENV) or c.get("endpoint")
     return out
 
@@ -65,6 +66,8 @@ def load_generate_config(config_path: Path) -> dict:
         # v2 only: the [endpoints.<name>] entry in config/writers.toml for a workers_ai or
         # openai_compat provider (default: the provider's own name).
         "endpoint": g.get("endpoint") or None,
+        # v2, OpenAI-compatible writers only: extra request fields (a model's reasoning setting).
+        "extra_body": dict(g.get("extra_body") or {}) or None,
         # Year, place and issuer ranking weights ([rank], retrieve/meta_rank.py); all zero by default.
         "rank": meta_rank.load_weights(config_path),
     }

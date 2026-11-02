@@ -8,6 +8,10 @@
 #   header_envs  extra headers, header name -> environment variable (an Access service token, say)
 #   temperature  0 by default; "omit" for an endpoint that refuses the parameter
 #   json_schema  false for an endpoint that takes only json_object
+#
+# A candidate may carry extra_body: extra fields for the OpenAI-compatible request (a model's reasoning
+# setting), never model, messages, max_tokens, temperature, response_format or stream. They join the
+# generation metadata's cache context.
 
 [endpoints.workers_ai]
 provider = "workers_ai"
@@ -60,6 +64,9 @@ runs_on = "API only"
 [candidates.glm53]
 provider = "workers_ai"
 model = "@cf/zai-org/glm-5.3"
+# A reasoning model: at its default effort its reasoning used up the 2,048-token limit on a quarter of
+# the validation asks (2026-11-02). Low effort keeps the answer inside the production limits.
+extra_body = { reasoning_effort = "low" }
 family = "glm"
 licence = "GLM-5.3 licence (MIT terms plus a Model-as-a-Service clause: operators over USD 10B revenue need Z.AI's security review)"
 runs_on = "multi-GPU node (753B parameters; FP8 weights about 750 GB): not one 96 GB GPU, not two 80 GB GPUs"
@@ -67,6 +74,8 @@ runs_on = "multi-GPU node (753B parameters; FP8 weights about 750 GB): not one 9
 [candidates.gemma4_26b]
 provider = "workers_ai"
 model = "@cf/google/gemma-4-26b-a4b-it"
+# Thinking off: with it on, its reasoning used up the 2,048-token limit on 51 of 140 validation asks.
+extra_body = { chat_template_kwargs = { enable_thinking = false } }
 family = "gemma"
 licence = "Apache 2.0"
 runs_on = "one 96 GB GPU (BF16 about 52 GB); laptop with a 4-bit quantization (about 16 GB)"

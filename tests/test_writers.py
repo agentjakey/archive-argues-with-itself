@@ -167,3 +167,24 @@ def test_the_whole_draft_must_finish_within_the_timeout():
     with pytest.raises(TimeoutError):
         w.draft("S", "U")
     assert _time.monotonic() - t0 < 0.4
+
+
+def test_extra_body_reaches_the_request_but_never_the_owned_fields():
+    post = FakePost(reply(json.dumps(GOOD)))
+    w = writers.OpenAICompatWriter(endpoint(), "m", 512, env=ENV, post=post, extra_body={"reasoning_effort": "low"})
+    w.draft("S", "U")
+    assert post.calls[0][2]["reasoning_effort"] == "low" and post.calls[0][2]["max_tokens"] == 512
+    with pytest.raises(ValueError, match="max_tokens"):
+        writers.OpenAICompatWriter(endpoint(), "m", 512, env=ENV, post=post, extra_body={"max_tokens": 9})
+    with pytest.raises(ValueError):
+        writers.make_writer("anthropic", "m", 10, client=object(), extra_body={"x": 1})
+    assert writers.extra_digest(None) == "" and len(writers.extra_digest({"a": 1})) == 16
+
+
+def test_extra_body_joins_the_v2_cache_context_only_when_set():
+    from archive_debugger.api.app import cache_context
+    gcfg = {"answer_version": "v2", "max_tokens": 10, "top_k": 3, "effort": None, "temperature": None}
+    args = ("pilot", {"db": "a" * 64, "index": "b" * 64}, {"k": 1})
+    plain = cache_context(*args, gcfg, "workers_ai", "m")
+    assert cache_context(*args, {**gcfg, "extra_body": None}, "workers_ai", "m") == plain
+    assert cache_context(*args, {**gcfg, "extra_body": {"reasoning_effort": "low"}}, "workers_ai", "m") != plain

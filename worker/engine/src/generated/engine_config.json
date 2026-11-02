@@ -35,12 +35,12 @@
   "microlog": {
    "candidates": {
     "gemma4_26b": {
-     "context": "3decacbcef4ba9a1bf42c91decbad0df9eebb99771762027ed9e361026fc11ee",
+     "context": "0791581c21eef904f4f25ec1cf48f63798d14118f3e377c9e8025c92d701d7a2",
      "model": "@cf/google/gemma-4-26b-a4b-it",
      "provider": "workers_ai"
     },
     "glm53": {
-     "context": "2125bf042237d2a9892baa2bf07157c33f0c9cd7f0aa834b2fab7756d98f4c1a",
+     "context": "6f0b9d1663f6b42b1b42958343f501ae7f7f64647d129c72f8e55eeaa11f317a",
      "model": "@cf/zai-org/glm-5.3",
      "provider": "workers_ai"
     }
@@ -53,12 +53,12 @@
   "pilot": {
    "candidates": {
     "gemma4_26b": {
-     "context": "0036b4b4f1a4a872a0fe8db4b364faebe8ed0038e6462f3a22bf40ae6b07422a",
+     "context": "d56fec300ed0a21f3f36fabf92573378e1c6b4bb38095464213b4b3bdfb00d1c",
      "model": "@cf/google/gemma-4-26b-a4b-it",
      "provider": "workers_ai"
     },
     "glm53": {
-     "context": "8754f905bd5febab9db6d71214b825805d23dd6e0f5085cfc841e5274e5c3df3",
+     "context": "f0979bb741cb33e6f166665c75713989bdf0925747dd727c5233a02390e68e32",
      "model": "@cf/zai-org/glm-5.3",
      "provider": "workers_ai"
     }

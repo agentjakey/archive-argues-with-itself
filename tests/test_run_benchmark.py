@@ -450,3 +450,14 @@ def test_max_tokens_reaches_the_engine_config_and_the_label(tmp_path, corpus):
     assert info["engine"]["pilot"]["max_tokens"] == 8192
     with pytest.raises(rb.Refused, match="different"):
         run(tmp_path, corpus, seen)
+
+
+def test_writer_extra_is_written_as_toml_and_named_in_the_label(tmp_path):
+    import tomllib
+    extra = {"chat_template_kwargs": {"enable_thinking": False}, "reasoning_effort": "low"}
+    dest = rb.write_engine_config(REPO / "config" / "pilot.toml", tmp_path / "p.toml", answer_version="v2",
+                                  model="m", effort=None, extra_body=extra)
+    assert tomllib.loads(dest.read_text(encoding="utf-8"))["generate"]["extra_body"] == extra
+    assert rb.load_generate_config(dest)["extra_body"] == extra
+    label = rb.pipeline_label("v2", "@cf/x/y", None, False, extra_body=extra)
+    assert label.startswith("v2-cf_x_y-x") and len(label.split("-x")[-1]) == 8

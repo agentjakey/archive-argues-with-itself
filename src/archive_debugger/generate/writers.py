@@ -19,6 +19,7 @@ audit/net.py, the one module that reaches the network outside the Anthropic SDK 
 from __future__ import annotations
 
 import concurrent.futures
+import hashlib
 import json
 import os
 import time
@@ -32,6 +33,9 @@ from archive_debugger.generate import answer_v2
 PROVIDERS = ("anthropic", "workers_ai", "openai_compat")
 REPO = Path(__file__).resolve().parents[3]
 WRITERS_CONFIG = REPO / "config" / "writers.toml"
+# Fields of the request the writer always sets itself; a candidate's extra_body may add others (a
+# model's reasoning setting, for example) but never these.
+OWNED_FIELDS = frozenset({"model", "messages", "max_tokens", "temperature", "response_format", "stream"})
 _POOL = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="writer")
 SCHEMA_NOTE = ("Reply with one JSON object and nothing else, matching this JSON schema exactly:\n")
 
@@ -108,8 +112,12 @@ class OpenAICompatWriter:
     tests (audit.net.post_json by default)."""
 
     def __init__(self, endpoint: Endpoint, model: str, max_tokens: int, *, timeout: float = 60.0,
-                 env: Optional[dict] = None, post: Optional[Callable] = None):
+                 env: Optional[dict] = None, post: Optional[Callable] = None, extra_body: Optional[dict] = None):
         self.endpoint, self.model, self.max_tokens, self.timeout = endpoint, model, max_tokens, timeout
+        clash = sorted(set(extra_body or {}) & OWNED_FIELDS)
+        if clash:
+            raise ValueError(f"extra_body may not set {clash}: the writer sets those itself")
+        self.extra_body = dict(extra_body or {})
         self.url, self._headers = resolve(endpoint, env)
         if post is None:
             from archive_debugger.audit import net
@@ -129,6 +137,7 @@ class OpenAICompatWriter:
             body["temperature"] = self.endpoint.temperature
         body["response_format"] = ({"type": "json_schema", "json_schema": {"name": "draft", "schema": schema}}
                                    if structured else {"type": "json_object"})
+        body.update(self.extra_body)
         return body
 
     def _post_by(self, deadline: float, body: dict) -> dict:
@@ -186,14 +195,24 @@ def _strip_fence(text: str) -> str:
 V2_WRITERS = (answer_v2.AnthropicWriter, answer_v2.StubWriter, OpenAICompatWriter)
 
 
+def extra_digest(extra_body: Optional[dict]) -> str:
+    """16 hex characters naming a writer's extra request fields; empty when there are none."""
+    if not extra_body:
+        return ""
+    return hashlib.sha256(json.dumps(extra_body, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
 def make_writer(provider: str, model: str, max_tokens: int, *, effort: Optional[str] = None,
                 endpoint: Optional[str] = None, timeout: float = 60.0, client=None,
-                endpoints: Optional[dict] = None, env: Optional[dict] = None, post: Optional[Callable] = None):
+                endpoints: Optional[dict] = None, env: Optional[dict] = None, post: Optional[Callable] = None,
+                extra_body: Optional[dict] = None):
     """The v2 writer for a provider. endpoint names an [endpoints.<name>] entry (default: the
     provider's own name)."""
     if provider not in PROVIDERS:
         raise ValueError(f"unknown writer provider {provider!r} (known: {', '.join(PROVIDERS)})")
     if provider == "anthropic":
+        if extra_body:
+            raise ValueError("extra_body is for OpenAI-compatible writers")
         return answer_v2.AnthropicWriter(model, max_tokens, effort=effort, client=client, timeout=timeout)
     endpoints = load_endpoints() if endpoints is None else endpoints
     name = endpoint or provider
@@ -202,4 +221,4 @@ def make_writer(provider: str, model: str, max_tokens: int, *, effort: Optional[
     ep = endpoints[name]
     if ep.provider != provider:
         raise ValueError(f"endpoint {name} is a {ep.provider} endpoint, not {provider}")
-    return OpenAICompatWriter(ep, model, max_tokens, timeout=timeout, env=env, post=post)
+    return OpenAICompatWriter(ep, model, max_tokens, timeout=timeout, env=env, post=post, extra_body=extra_body)
