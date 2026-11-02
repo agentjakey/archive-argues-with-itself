@@ -209,3 +209,16 @@ def test_fulltext_manifest_goes_to_r2_and_a_new_machine_resumes_from_it(tmp_path
     assert len(calls) == before                 # the new machine fetched nothing again
     status = json.loads((tmp_path / "server" / "status.json").read_text())
     assert status["done"] == 5 and status["remaining"] == 0
+
+def test_catalogue_browsing_lists_internet_archive_items_only():
+    from archive_debugger.catalogue import browse
+    from archive_debugger.registry import schema
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(schema.SCHEMA)
+    conn.execute("INSERT INTO archives VALUES ('ia', 'Internet Archive', 'https://archive.org')")
+    conn.execute("INSERT INTO archives VALUES ('wayback', 'Wayback Machine', 'https://web.archive.org')")
+    for doc, arch, ident in (("ia:report1990", "ia", "report1990"),
+                             ("wayback:20090215120000/http://x", "wayback", "20090215120000/http://x")):
+        conn.execute("INSERT INTO documents (doc_id, archive_id, identifier, title, record_sha256, first_seen) "
+                     "VALUES (?, ?, ?, 't', 'x', '2026-11-01')", (doc, arch, ident))
+    assert [r["id"] for r in browse.rows(conn)] == ["report1990"]

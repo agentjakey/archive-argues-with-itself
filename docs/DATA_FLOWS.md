@@ -21,6 +21,19 @@ Chromium browser (Playwright) or with curl, as stated.
 | Cloudflare Web Analytics | Off. Cloudflare still injects its beacon script into the HTML; the site's Content-Security-Policy does not allow its host, so the browser blocks it and no request is sent. | None | Live: Chromium reported the script blocked by CSP and no request to `cloudflareinsights.com` completed. Config: `site/static/_headers.template`; the release gate refuses a CSP that allows that host (`tests/test_release.py`). |
 | Network error reports | Cloudflare's edge sends `NEL` and `Report-To` headers with `success_fraction 0`: a browser may report a failed request (the URL and error type) to `a.nel.cloudflare.com`. | Cloudflare | Live: response headers (curl). This is a Cloudflare zone default, not set by this repository. |
 
+## The exhibit and the catalogue pages
+
+`/exhibit/` (the library exhibit's games) and `/catalogue/` (browsing the collection's catalogue) are
+static files on the same site Worker: no Worker code runs for them and they add no data flow of
+their own. Checked on 2026-11-01 against the release built for production that day and on staging.
+
+| What | Where it goes | Kept | How it was checked |
+| --- | --- | --- | --- |
+| Requests the pages make | `/exhibit/`: its deck pointer and deck from this site, and scanned page images from `archive.org` (as in the stories). `/catalogue/`: its summary and decade files from this site only. A link to archive.org is requested only when you follow it. | As for the site above | Code: `exhibit/app/src/lib/deck.ts`, `site/catalogue/catalogue.js` (the only `fetch` calls); live on staging: every request host recorded in Chromium. |
+| Answers you give in a game | Stay in the page's memory and are gone when it resets (after 60 seconds idle, or on reload). Never sent anywhere. | None | Code: the exhibit app has no network call that carries a choice; the end-to-end test "works offline and stores nothing" blocks every host but the site and checks storage and cookies after a visit. |
+| Counts of games played | Online: none. On a library kiosk only, the kiosk's own computer adds one word per event (a mode started or finished, a choice made) to that day's totals in a local file; no visitor, time of day or answer is recorded, and nothing leaves the kiosk. | On the kiosk | Code: `exhibit/app/src/lib/kiosk.ts` (counts only when the kiosk's local server answers `kiosk.json` with the kiosk setting, a file the site does not have), `exhibit/kiosk/serve.py`. |
+| Cookies and browser storage | None. | None | As for the site above; the exhibit's end-to-end test checks both after a visit. |
+
 ## A question
 
 | Step | Data | Who processes it | Kept | How it was checked |

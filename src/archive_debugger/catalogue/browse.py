@@ -41,8 +41,11 @@ def rows(conn: sqlite3.Connection) -> list:
         elif year is not None:
             der[doc_id] = {"year": year, "method": method}
     out = []
+    # Internet Archive items only: a second source's records (docs/INTEROP.md) are never published
+    # as part of the catalogue, and their links would not be archive.org item pages.
     for doc_id, ident, title, place, issuer in conn.execute(
-            "SELECT doc_id, identifier, title, jurisdiction, issuer FROM documents ORDER BY identifier"):
+            "SELECT doc_id, identifier, title, jurisdiction, issuer FROM documents WHERE doc_id LIKE 'ia:%' "
+            "ORDER BY identifier"):
         out.append({"id": ident, "t": (title or "")[:240], "y": cat.get(doc_id), "d": der.get(doc_id),
                     "p": place or "unknown", "i": None if issuer in (None, "unknown") else issuer,
                     "c": sorted(colls.get(doc_id, []))[:8], "s": sorted(states.get(doc_id, ["known"]))})
