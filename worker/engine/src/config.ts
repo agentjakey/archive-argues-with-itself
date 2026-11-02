@@ -26,10 +26,18 @@ export interface Env {
   PUBLIC_MODELS?: string;        // what a public /ask may choose besides the configured model: "" or e.g. "stub"
   PUBLIC_NOCACHE?: string;       // "true" lets a public /ask skip the answer cache (staging); off in production
   PUBLIC_URL: string;
+  WRITER_CANDIDATE?: string;     // staging flag: an open writer candidate (config/writers.toml) answers in place of the configured one
+  AI?: Ai;                       // Workers AI binding, staging only: the container reaches it through AIProxy
   // Secrets (wrangler secret put)
   ANTHROPIC_API_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
   ADMIN_WAKE_TOKEN?: string;     // the operator wake; unset means /admin/wake answers 404
+}
+
+export interface CandidateConfig {
+  context: string;
+  provider: string;
+  model: string;
 }
 
 export interface ScopeConfig {
@@ -37,6 +45,7 @@ export interface ScopeConfig {
   curated_context?: string;   // the v1 context reviewed answers were stored under
   provider: string;
   model: string;
+  candidates?: Record<string, CandidateConfig>;   // open writer candidates for the staging flag
 }
 
 export interface AnswerNote {
@@ -61,6 +70,17 @@ export interface EngineConfig {
 export const ENGINE_CONFIG = generated as EngineConfig;
 export const STOPWORDS: ReadonlySet<string> = new Set(ENGINE_CONFIG.stopwords);
 export const SCOPES = Object.keys(ENGINE_CONFIG.scopes);
+
+/** A scope's writer and cache context: the configured writer, or, while the staging flag
+ *  WRITER_CANDIDATE names one of the scope's generated candidates, that candidate (the engine reads
+ *  the same name from CIVIC_WRITER_CANDIDATE and computes the same context). */
+export function scopeConfig(scope: string, candidate?: string): ScopeConfig | undefined {
+  const configured = ENGINE_CONFIG.scopes[scope];
+  if (!configured || !candidate) return configured;
+  const c = configured.candidates?.[candidate];
+  if (!c) return configured;
+  return { context: c.context, curated_context: configured.curated_context, provider: c.provider, model: c.model };
+}
 
 /** The engine's robots.txt: it is an API, not pages, so nothing is for crawlers. */
 export const ROBOTS = ["User-agent: *", "Disallow: /", ""].join("\n");
@@ -108,4 +128,28 @@ export function instanceFor(engineName: string, instanceTypes: string | undefine
     // fall through to the default size
   }
   return fallback;
+}
+
+/** The open writer model the staging flag names, when the flag is set, the generated config lists
+ *  the candidate for every scope, all with one model, and the Workers AI binding is present; else null. */
+export function candidateModel(env: Pick<Env, "WRITER_CANDIDATE" | "AI">): string | null {
+  const name = env.WRITER_CANDIDATE;
+  if (!name || !env.AI) return null;
+  const models = new Set(Object.values(ENGINE_CONFIG.scopes).map((s) => s.candidates?.[name]?.model));
+  if (models.size !== 1) return null;
+  const model = [...models][0];
+  return model ?? null;
+}
+
+/** An OpenAI-style chat completion from whatever the Workers AI binding returned: newer models
+ *  already answer in that shape; older ones return {response, usage}. */
+export function asChatCompletion(model: string, result: any): Record<string, unknown> {
+  if (result && Array.isArray(result.choices)) return result;
+  const response = result?.response;
+  const content = typeof response === "string" ? response : JSON.stringify(response ?? "");
+  return {
+    model,
+    choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
+    usage: result?.usage ?? {},
+  };
 }

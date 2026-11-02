@@ -33,12 +33,36 @@
  "retention_days": 90,
  "scopes": {
   "microlog": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "3decacbcef4ba9a1bf42c91decbad0df9eebb99771762027ed9e361026fc11ee",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "2125bf042237d2a9892baa2bf07157c33f0c9cd7f0aa834b2fab7756d98f4c1a",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
    "context": "f8f179ef53522710552b7984c68c93f712f91971e83db2529c50248fe6431248",
    "curated_context": "f8f179ef53522710552b7984c68c93f712f91971e83db2529c50248fe6431248",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic"
   },
   "pilot": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "0036b4b4f1a4a872a0fe8db4b364faebe8ed0038e6462f3a22bf40ae6b07422a",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "8754f905bd5febab9db6d71214b825805d23dd6e0f5085cfc841e5274e5c3df3",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
    "context": "df10d4aacd93d46e63899e4b693eb278671e186c8c4bf2274e6d5d1c95db8f59",
    "curated_context": "df10d4aacd93d46e63899e4b693eb278671e186c8c4bf2274e6d5d1c95db8f59",
    "model": "claude-haiku-4-5-20251001",

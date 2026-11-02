@@ -1,6 +1,6 @@
 // The answer cache in D1 (format v2, docs/formats/answer_cache.md): the Worker reads it before
 // waking the engine, and the engine reads and writes it through the CacheProxy entrypoint.
-import { ENGINE_CONFIG, STOPWORDS, type AnswerNote } from "./config";
+import { ENGINE_CONFIG, STOPWORDS, scopeConfig, type AnswerNote } from "./config";
 import { cleanQuestion, contentKey, restoreTerms, salientTerms, sha256Hex, type Filters } from "./key";
 
 export const COLUMNS = [
@@ -81,8 +81,8 @@ export interface AskInput {
 /** The stored answer for a question, ready to serve exactly as the engine serves a cache hit, or
  *  null when the Worker cannot serve it (no row, an older extras version, terms that do not
  *  restore). A null always means: forward to the engine. */
-export async function servedHit(db: D1Database, input: AskInput): Promise<Record<string, unknown> | null> {
-  const scope = ENGINE_CONFIG.scopes[input.scope];
+export async function servedHit(db: D1Database, input: AskInput, candidate?: string): Promise<Record<string, unknown> | null> {
+  const scope = scopeConfig(input.scope, candidate);
   if (!scope) return null;
   const key = await contentKey(scope.context, input.question, input.filters);
   if (key === null) return null;

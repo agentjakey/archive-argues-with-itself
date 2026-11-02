@@ -137,3 +137,20 @@ def test_the_engine_answers_through_an_open_writer(tmp_path):
         body = c.post("/ask", json={"question": "vaccination hospital"}).json()
     assert body["answer"]["state"] == "CONFLICTING" and len(post.calls) == 1
     assert body["answer"]["generation"]["provider"] == "workers_ai"
+
+
+def test_the_writer_candidate_flag_replaces_the_configured_writer():
+    from archive_debugger.generate.cli import apply_writer_candidate
+    g = {"provider": "anthropic", "model": "claude-haiku-4-5-20251001", "answer_version": "v1", "top_k": 12}
+    assert apply_writer_candidate(g, {}) is g
+    cand = next(n for n, c in writers.load_candidates().items() if c["provider"] != "anthropic")
+    out = apply_writer_candidate(g, {"CIVIC_WRITER_CANDIDATE": cand, "CIVIC_WRITER_ENDPOINT": "workers_ai_proxy"})
+    c = writers.load_candidates()[cand]
+    assert out["provider"] == c["provider"] and out["model"] == c["model"] and out["answer_version"] == "v2"
+    assert out["endpoint"] == "workers_ai_proxy" and out["top_k"] == 12 and g["provider"] == "anthropic"
+    with pytest.raises(ValueError):
+        apply_writer_candidate(g, {"CIVIC_WRITER_CANDIDATE": "nobody"})
+    # Inside the container the proxy endpoint takes the per-start token and the proxy URL.
+    ep = writers.load_endpoints()["workers_ai_proxy"]
+    url, headers = writers.resolve(ep, {"CIVIC_AI_PROXY_URL": "http://ai.internal", "CIVIC_CACHE_TOKEN": "t"})
+    assert url == "http://ai.internal/v1/chat/completions" and headers == {"authorization": "Bearer t"}

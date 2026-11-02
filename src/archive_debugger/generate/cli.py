@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import os
 import tomllib
 from pathlib import Path
 from typing import Optional
@@ -24,9 +25,31 @@ from archive_debugger.retrieve.filters import Filters
 from archive_debugger.retrieve.search import Retriever
 
 
+WRITER_CANDIDATE_ENV = "CIVIC_WRITER_CANDIDATE"   # a [candidates.<name>] in config/writers.toml (staging flag)
+WRITER_ENDPOINT_ENV = "CIVIC_WRITER_ENDPOINT"     # the endpoint that candidate uses here (the container's proxy)
+
+
+def apply_writer_candidate(g: dict, env: Optional[dict] = None) -> dict:
+    """[generate] with the writer candidate named in CIVIC_WRITER_CANDIDATE in place of the configured
+    writer (provider, model, effort, endpoint), for the v2 answer only. Unset: g unchanged. The
+    staging flag for an open writer; the engine Worker keys answers with the same candidate."""
+    env = os.environ if env is None else env
+    name = env.get(WRITER_CANDIDATE_ENV)
+    if not name:
+        return g
+    from archive_debugger.generate import writers
+    candidates = writers.load_candidates()
+    if name not in candidates:
+        raise ValueError(f"{WRITER_CANDIDATE_ENV}={name!r} is not a candidate in config/writers.toml")
+    c = candidates[name]
+    out = dict(g, provider=c["provider"], model=c["model"], effort=c.get("effort"), answer_version="v2")
+    out["endpoint"] = env.get(WRITER_ENDPOINT_ENV) or c.get("endpoint")
+    return out
+
+
 def load_generate_config(config_path: Path) -> dict:
     with Path(config_path).open("rb") as fh:
-        g = tomllib.load(fh).get("generate", {})
+        g = apply_writer_candidate(tomllib.load(fh).get("generate", {}))
     temp = g.get("temperature")
     return {
         "provider": g.get("provider", "anthropic"),

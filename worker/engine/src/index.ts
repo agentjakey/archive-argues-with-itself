@@ -22,7 +22,7 @@ import { ENGINE_CONFIG, ROBOTS, type Env } from "./config";
 import { checkRate, checkTurnstile, clientKey, corsHeaders, takeModelBudget, type GuardResult } from "./guard";
 import { keepWarmNow } from "./schedule";
 
-export { EngineContainer, R2Proxy, CacheProxy } from "./container";
+export { EngineContainer, R2Proxy, CacheProxy, AIProxy } from "./container";
 
 const BUDGET_HEADER = "x-civic-model-budget";
 
@@ -61,7 +61,7 @@ async function handleAsk(request: Request, env: Env, cors: Record<string, string
     return json({ error: "that provider or model is not available here" }, 422, cors);
   }
   if (cacheable) {
-    const hit = await servedHit(env.DB, input);
+    const hit = await servedHit(env.DB, input, env.WRITER_CANDIDATE);
     if (hit) {
       log({ route: "/ask", scope: input.scope, outcome: "stored", ms: Date.now() - t0 });
       return storedAnswerResponse(request, hit, cors);

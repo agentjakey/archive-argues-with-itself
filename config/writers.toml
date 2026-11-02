@@ -70,3 +70,12 @@ model = "@cf/google/gemma-4-26b-a4b-it"
 family = "gemma"
 licence = "Apache 2.0"
 runs_on = "one 96 GB GPU (BF16 about 52 GB); laptop with a 4-bit quantization (about 16 GB)"
+
+# Inside the engine container, Workers AI is reached through the engine Worker's AI binding: the
+# container posts to its proxy host, authenticated with the per-start cache token, and no Workers
+# AI token is ever given to the container. Set by the engine Worker with the staging flag
+# WRITER_CANDIDATE (CIVIC_WRITER_ENDPOINT = workers_ai_proxy).
+[endpoints.workers_ai_proxy]
+provider = "workers_ai"
+base_url = "{CIVIC_AI_PROXY_URL}/v1"
+key_env = "CIVIC_CACHE_TOKEN"

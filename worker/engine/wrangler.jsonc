@@ -62,8 +62,12 @@
         "KEEP_WARM_WINDOWS": "",
         "PUBLIC_MODELS": "stub",
         "PUBLIC_NOCACHE": "true",
-        "PUBLIC_URL": "https://archive-argues-site-staging.jakemyguy.workers.dev"
-      }
+        "PUBLIC_URL": "https://archive-argues-site-staging.jakemyguy.workers.dev",
+        "WRITER_CANDIDATE": ""
+      },
+      // Workers AI for the open writer flag (WRITER_CANDIDATE names a candidate in config/writers.toml);
+      // the container reaches it through AIProxy. Not bound in production.
+      "ai": { "binding": "AI" }
     },
 
     "production": {
@@ -108,7 +112,8 @@
         "KEEP_WARM_WINDOWS": "",
         "PUBLIC_MODELS": "",
         "PUBLIC_NOCACHE": "",
-        "PUBLIC_URL": "https://archiveargues.org"
+        "PUBLIC_URL": "https://archiveargues.org",
+        "WRITER_CANDIDATE": ""
       }
     }
   }

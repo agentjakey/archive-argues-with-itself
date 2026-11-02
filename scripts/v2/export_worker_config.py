@@ -25,9 +25,37 @@ from pathlib import Path
 OUT = Path("worker/engine/src/generated/engine_config.json")
 
 
+def candidate_rows(scope: str, registry: dict, config_path: Path) -> dict:
+    """The cache context, provider and model each open writer candidate (config/writers.toml, any
+    provider but anthropic) would answer this scope with, for the staging flag WRITER_CANDIDATE: the
+    engine Worker keys with these while the flag names a candidate, and the engine computes the same
+    context from CIVIC_WRITER_CANDIDATE."""
+    from archive_debugger.api.app import scope_cache_context
+    from archive_debugger.generate import writers
+    from archive_debugger.generate.cli import WRITER_CANDIDATE_ENV, load_generate_config
+    out = {}
+    saved = os.environ.get(WRITER_CANDIDATE_ENV)
+    try:
+        for cand, c in sorted(writers.load_candidates().items()):
+            if c.get("provider") == "anthropic":
+                continue
+            os.environ[WRITER_CANDIDATE_ENV] = cand
+            gcfg = load_generate_config(config_path)
+            out[cand] = {"context": scope_cache_context(scope, registry=registry),
+                         "provider": gcfg["provider"], "model": gcfg["model"]}
+    finally:
+        if saved is None:
+            os.environ.pop(WRITER_CANDIDATE_ENV, None)
+        else:
+            os.environ[WRITER_CANDIDATE_ENV] = saved
+    return out
+
+
 def build() -> dict:
     if os.environ.get("CIVIC_EMBEDDER"):
         raise SystemExit("unset CIVIC_EMBEDDER: the exported contexts must match the production embedder")
+    if os.environ.get("CIVIC_WRITER_CANDIDATE"):
+        raise SystemExit("unset CIVIC_WRITER_CANDIDATE: the exported contexts must be the configured writer's")
     from archive_debugger import editorial, release_files, scopes
     from archive_debugger.api import cache as answer_cache
     from archive_debugger.api.app import EXTRAS_VERSION, curated_cache_context, scope_cache_context
@@ -41,7 +69,8 @@ def build() -> dict:
         gcfg = load_generate_config(Path(resolved.config_path))
         scope_rows[name] = {"context": scope_cache_context(name, registry=registry),
                             "curated_context": curated_cache_context(name, registry=registry),
-                            "provider": gcfg["provider"], "model": gcfg["model"]}
+                            "provider": gcfg["provider"], "model": gcfg["model"],
+                            "candidates": candidate_rows(name, registry, Path(resolved.config_path))}
     keys = [f.key for f in release_files.all_files(registry)]
     notes = editorial.load_notes(editorial.DEFAULT_NOTES)
     answer_notes = []

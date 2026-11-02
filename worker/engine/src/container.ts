@@ -6,7 +6,7 @@
 // platform timeout), and records how long every wake took.
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import { readRow, writeRow, isKey, type CacheRow } from "./cache";
-import { ENGINE_CONFIG, type Env, instanceFor, verifyPolicy, whole } from "./config";
+import { ENGINE_CONFIG, type Env, instanceFor, verifyPolicy, whole, asChatCompletion, candidateModel } from "./config";
 import { parseRange } from "./ranges";
 import { idleCheck } from "./schedule";
 
@@ -19,6 +19,7 @@ const LAST_ACTIVITY_KEY = "last_activity";
 const WAKE_LOG_LIMIT = 50;
 export const R2_HOST = "r2.internal";
 export const CACHE_HOST = "cache.internal";
+export const AI_HOST = "ai.internal";
 
 export type Stage = Record<string, string | number | null>;
 export type EngineState = "asleep" | "waking" | "ready" | "failed";
@@ -147,6 +148,13 @@ export class EngineContainer extends DurableObject<Env> {
       env.CIVIC_ENABLED_SCOPES = this.engineName;
     }
     if (this.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = this.env.ANTHROPIC_API_KEY;
+    const candidate = candidateModel(this.env);
+    if (candidate) {
+      // The staging flag: the engine answers with this open writer, through the AI proxy.
+      env.CIVIC_WRITER_CANDIDATE = this.env.WRITER_CANDIDATE as string;
+      env.CIVIC_WRITER_ENDPOINT = "workers_ai_proxy";
+      env.CIVIC_AI_PROXY_URL = `http://${AI_HOST}`;
+    }
     return env;
   }
 
@@ -176,6 +184,10 @@ export class EngineContainer extends DurableObject<Env> {
     }
     await this.container.interceptOutboundHttp(R2_HOST, this.ctx.exports.R2Proxy({ props: {} }));
     await this.container.interceptOutboundHttp(CACHE_HOST, this.ctx.exports.CacheProxy({ props: { token: this.cacheToken } }));
+    const candidate = candidateModel(this.env);
+    if (candidate) {
+      await this.container.interceptOutboundHttp(AI_HOST, this.ctx.exports.AIProxy({ props: { token: this.cacheToken, model: candidate } }));
+    }
     await this.applySleepAfter();
     await this.markActivity();
     this.wake = {
@@ -380,6 +392,38 @@ export class R2Proxy extends WorkerEntrypoint<Env> {
       status: 206,
       headers: { "content-length": String(range.length), "content-range": `bytes ${range.offset}-${end}/${object.size}` },
     });
+  }
+}
+
+/** Workers AI for the container, through the Worker's AI binding: POST /v1/chat/completions with
+ *  the per-start token, for the staging flag's one model only. No Workers AI token reaches the
+ *  container, and the binding is not bound in production. */
+export class AIProxy extends WorkerEntrypoint<Env, { token: string; model: string }> {
+  async fetch(request: Request): Promise<Response> {
+    const { token, model } = this.ctx.props;
+    if (!token || request.headers.get("authorization") !== `Bearer ${token}`) {
+      return new Response("forbidden", { status: 403 });
+    }
+    if (new URL(request.url).pathname !== "/v1/chat/completions") return new Response("not found", { status: 404 });
+    if (request.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (!this.env.AI) return new Response("no AI binding", { status: 503 });
+    let body: Record<string, any>;
+    try {
+      body = (await request.json()) as Record<string, any>;
+    } catch {
+      return new Response("not JSON", { status: 400 });
+    }
+    if (body.model !== model) return new Response("model not allowed here", { status: 400 });
+    const { model: _omit, ...inputs } = body;
+    try {
+      const result = await this.env.AI.run(model as any, inputs as any);
+      return Response.json(asChatCompletion(model, result));
+    } catch (err) {
+      const message = String((err as Error)?.message ?? err);
+      // A refused input (a schema the model does not take) is a 400, so the writer can fall back.
+      const status = /invalid|unsupported|schema|bad input/i.test(message) ? 400 : 502;
+      return new Response(message.slice(0, 300), { status });
+    }
   }
 }
 
