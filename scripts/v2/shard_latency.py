@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine_ops  # noqa: E402
 
 OUT = REPO / "reports" / "v2" / "scale" / "latency.jsonl"
-RETRY_S = 2.0
+RETRY_S = 5.0
 
 
 def engine_state(api: str, scope: str) -> str:
