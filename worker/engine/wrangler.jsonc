@@ -120,7 +120,7 @@
         // Workers AI, through AIProxy and the AI binding below; it also selects the v2 answer.
         "WRITER_CANDIDATE": "glm53",
         // A shard is added here, one at a time, after its audit and smoke tests pass on staging.
-        "SHARDS": ""
+        "SHARDS": "federal-1899-1911"
       },
       // Workers AI for the promoted open writer; the container reaches it only through AIProxy.
       "ai": { "binding": "AI" }
