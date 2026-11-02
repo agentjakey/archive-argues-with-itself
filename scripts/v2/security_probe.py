@@ -137,6 +137,31 @@ class MeteredClient:
         return resp
 
 
+class MeteredPost:
+    """The open writer's HTTP call (audit.net.post_json) with each request reserved and recorded in
+    the ledger, priced from the provider's own row in audit/prices.py."""
+
+    def __init__(self, ledger: Ledger, cap: float, fixture: str, model: str):
+        from archive_debugger.audit import net, prices
+        self._post, self._prices = net.post_json, prices
+        self.ledger, self.cap, self.fixture, self.model = ledger, cap, fixture, model
+
+    def __call__(self, url, headers, body, **kw):
+        chars = sum(len(m.get("content") or "") for m in body.get("messages") or []) + 4000
+        provider = self._prices.price(self.model).provider
+        worst = worst_case(self.model, chars, int(body.get("max_tokens") or 2048))
+        reservation = f"{RUN_ID}:{self.fixture}:{time.time_ns()}"
+        self.ledger.reserve(RUN_ID, self.cap, provider, self.model, reservation, worst)
+        try:
+            reply = self._post(url, headers, body, **kw)
+            usage = reply.get("usage") or {}
+            self.ledger.spend(RUN_ID, provider, self.model, int(usage.get("prompt_tokens") or 0),
+                              int(usage.get("completion_tokens") or 0), what=f"security probe {self.fixture}")
+        finally:
+            self.ledger.release(RUN_ID, reservation)
+        return reply
+
+
 def main(argv=None) -> int:
     from archive_debugger.local_env import load_local_env
     load_local_env(log=lambda m: None)
@@ -151,15 +176,27 @@ def main(argv=None) -> int:
                         help="v2 runs the evidence-state answer path with --writer (results go to v2_probe_<writer>.json)")
     parser.add_argument("--writer", default=None, help="v2 only: the writer model (default: the pilot config's model)")
     parser.add_argument("--effort", default=None, help="v2 only: output effort for the writer")
+    parser.add_argument("--provider", default="anthropic", choices=["anthropic", "workers_ai", "openai_compat"],
+                        help="v2 only: the writer's provider (generate/writers.py)")
+    parser.add_argument("--endpoint", default=None, help="v2 only: an [endpoints.<name>] in config/writers.toml")
+    parser.add_argument("--writer-extra", type=json.loads, default=None,
+                        help="v2 only: extra request fields for an OpenAI-compatible writer (JSON object)")
     args = parser.parse_args(argv)
+    if args.provider != "anthropic" and args.pipeline != "v2":
+        parser.error("--provider other than anthropic needs --pipeline v2")
     global RUN_ID
     gcfg = tomllib.loads((REPO / "config" / "pilot.toml").read_text(encoding="utf-8"))["generate"]
     model_id = args.writer or gcfg["model"]
     out_path = OUT
     config_path = REPO / "config" / "pilot.toml"
     if args.pipeline == "v2":
-        RUN_ID = f"security-probe-v2-{MeteredClient.priced(model_id)}"
-        out_path = OUT.parent / f"v2_probe_{MeteredClient.priced(model_id)}.json"
+        tag = MeteredClient.priced(model_id) if args.provider == "anthropic" else \
+            model_id.replace("@cf/", "").replace("/", "_")
+        if args.writer_extra:
+            from archive_debugger.generate import writers as _writers
+            tag += "-x" + _writers.extra_digest(args.writer_extra)[:8]
+        RUN_ID = f"security-probe-v2-{tag}"
+        out_path = OUT.parent / f"v2_probe_{tag}.json"
     ledger = Ledger(REPO / "reports" / "v2" / "audit" / "ledger.jsonl")
     results = []
     for name in args.fixtures:
@@ -167,7 +204,7 @@ def main(argv=None) -> int:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             folder = Path(tmp)
             retriever = build_corpus(folder, ORDINARY + [fx["page"]])
-            client = MeteredClient(ledger, args.cap, name)
+            client = MeteredClient(ledger, args.cap, name) if args.provider == "anthropic" else None
             previous_registry = scopes.REGISTRY_PATH
             if args.pipeline == "v2":
                 from archive_debugger.generate import answer_v2
@@ -175,12 +212,18 @@ def main(argv=None) -> int:
                 config_path = write_engine_config(REPO / "config" / "pilot.toml", folder / "pilot.toml",
                                                   answer_version="v2", model=model_id, effort=args.effort)
                 scopes.REGISTRY_PATH = _registry_pointing_at("pilot", config_path, folder / "scopes.toml")
-                llm = answer_v2.AnthropicWriter(model_id, gcfg["max_tokens"], effort=args.effort, client=client)
+                if args.provider == "anthropic":
+                    llm = answer_v2.AnthropicWriter(model_id, gcfg["max_tokens"], effort=args.effort, client=client)
+                else:
+                    from archive_debugger.generate import writers
+                    llm = writers.make_writer(args.provider, model_id, gcfg["max_tokens"], endpoint=args.endpoint,
+                                              extra_body=args.writer_extra,
+                                              post=MeteredPost(ledger, args.cap, name, model_id))
             else:
                 llm = AnthropicLLM(gcfg["model"], gcfg["max_tokens"], client=client,
                                    temperature=gcfg.get("temperature"))
             try:
-                app = create_app(config_path, retriever=retriever, llm=llm, provider="anthropic",
+                app = create_app(config_path, retriever=retriever, llm=llm, provider=args.provider,
                                  load_env=False, cache_path=folder / "cache" / "answers.db", web_dist=folder / "nodist")
                 with TestClient(app) as c:
                     body = c.post("/ask", json={"question": QUESTION, "nocache": True}).json()
@@ -206,7 +249,7 @@ def main(argv=None) -> int:
         print(name, {k: results[-1][k] for k in ("abstained", "hostile_text_in_answer", "hostile_page_cited")})
     totals = ledger.totals(RUN_ID)
     out = {"run_id": RUN_ID, "pipeline": args.pipeline, "model": model_id if args.pipeline == "v2" else gcfg["model"],
-           "effort": args.effort, "temperature": gcfg.get("temperature") if args.pipeline == "v1" else None,
+           "effort": args.effort, "provider": args.provider, "writer_extra": args.writer_extra, "temperature": gcfg.get("temperature") if args.pipeline == "v1" else None,
            "question": QUESTION,
            "spend_usd": round(totals.spent, 6), "by_provider": totals.by_provider, "results": results,
            "measured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
