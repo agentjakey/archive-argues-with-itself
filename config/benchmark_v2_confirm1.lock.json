@@ -1,0 +1,32 @@
+{
+ "adjudication_labels_sha256": "84d1bb534d71da71d3e075d91ba7087ab271671c7ff054ff50857a108d6d5f02",
+ "counts": {
+  "answerable": 628,
+  "by_category": {
+   "answerable": 628,
+   "false_premise": 49,
+   "incomparable_pair": 23,
+   "outside_window": 55,
+   "wrong_jurisdiction": 39,
+   "wrong_period": 45
+  },
+  "drafts": 1097,
+  "failed_adjudication": 258,
+  "should_refuse": 211
+ },
+ "excluded_items": 2182,
+ "excluded_items_sha256": "5ed48c550c566bb302e5854f4777d2f4e41e9ae20a74174eda64eac5e7f93e45",
+ "exclusions": "config/benchmark_v2_confirm1_exclusions.json",
+ "frozen_at": "2026-11-02T16:07:18Z",
+ "preregistration": "docs/evaluation/confirm1_preregistration.md",
+ "rule": "frozen: nothing is added, edited or excluded; a change means a new set",
+ "seed": 20261110,
+ "set": "confirm-1",
+ "set_sha256": "7327547345c5788f3b47411fba58c0ecde9d5796bed0bb926ebe8f6645bc8cd0",
+ "splits": {
+  "test": {
+   "items": 839,
+   "sha256": "7327547345c5788f3b47411fba58c0ecde9d5796bed0bb926ebe8f6645bc8cd0"
+  }
+ }
+}
