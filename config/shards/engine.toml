@@ -1,0 +1,72 @@
+# The engine configuration every shard of the whole collection serves with (config/shards/plan.json).
+#
+# One file for all shards: it declares no database or index path, so each shard's registry entry
+# (config/shards/served.toml, written by scripts/v2/serve_shards.py) supplies its own paths and the
+# scope drift guard has nothing to disagree with. Retrieval is BM25 alone: Phase 3 measured it best
+# on the frozen test (config/jobs/index_spec_v2.toml), and the whole collection is not embedded
+# (the measured embedding cost is over its ceiling; docs/v2/DECISIONS.md). Each shard ships an
+# empty vectors database so the engine's layout is unchanged; the dense leg never runs.
+
+[corpus]
+topic = "whole_collection"
+jurisdiction_scope = "Canada: federal, provincial, territorial and municipal government publications"
+query = ""
+mediatype = "texts"
+
+[corpus.window]
+start_year = 1851
+end_year = 2025
+comparison_years = []
+
+[corpus.collections]
+clean = ["governmentpublications"]
+reserve = []
+
+[corpus.limits]
+usable_floor = 0
+
+[harvest]
+user_agent_contact = ""
+request_delay_seconds = 0.5
+max_retries = 5
+fields = "identifier,title,creator,publisher,date,year,collection,language,mediatype"
+manifest_rows = 100
+
+[index]
+embedding_model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+embedding_dim = 384
+
+[retrieve]
+embedder = "fastembed"
+batch_size = 256
+candidates = 200
+rrf_k = 60
+dense_weight = 0.0
+downweight_high = 1.0
+downweight_medium = 0.9
+downweight_low = 0.75
+section_demote = true
+section_weight_front = 0.5
+section_weight_back = 0.5
+fts_drop_stopwords = true
+doc_type_family_filter = true
+pool_size = 30
+per_item_cap = 5
+later_years_flag = true
+
+[retrieve.doc_type_families]
+commission = ["commission", "royal_commission"]
+
+[generate]
+provider = "anthropic"
+model = "claude-haiku-4-5-20251001"
+max_tokens = 2048
+temperature = 0.0
+top_k = 12
+min_passages = 3
+
+[eval]
+label_top_n = 30
+recall_ks = [5, 10, 20]
+ndcg_k = 10
+abstention_min_relevant = 1

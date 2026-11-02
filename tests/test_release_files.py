@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 
-from archive_debugger import provision, release_files
+from archive_debugger import provision, release_files, scopes
 
 
 def _registry() -> dict:
@@ -59,8 +59,15 @@ def test_the_boot_plans_a_new_scope_with_no_code_naming_it(tmp_path, monkeypatch
 
 def test_the_published_registry_describes_both_collections_completely():
     files = release_files.all_files()
+    registry = scopes.load_registry()
     for scope in release_files.scope_names():
         kinds = {f.kind for f in files if f.scope == scope}
+        if registry["scopes"][scope].get("shard"):
+            # A shard of the whole collection (config/shards/served.toml) is BM25 alone: its database
+            # and an empty vectors database, both published with their hashes; no curated questions.
+            assert kinds == {"db", "index"}
+            assert all(len(f.sha256) == 64 for f in files if f.scope == scope)
+            continue
         assert {"db", "index", "dense_matrix", "dense_ids", "dense_manifest", "facts"} <= kinds
         assert all(len(f.sha256) == 64 for f in files if f.scope == scope)
         seed, stories = release_files.curated_files(scope)

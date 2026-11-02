@@ -253,3 +253,23 @@ def _seed_harvest_output(scope: scopes.Scope) -> None:
     with scope.items_path.open("w", encoding="utf-8") as fh:
         for rec in records:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+def test_served_shards_join_the_default_registry_and_may_not_reuse_a_name(tmp_path, monkeypatch):
+    registry = tmp_path / "scopes.toml"
+    registry.write_text('default = "pilot"\n[scopes.pilot]\nconfig = "config/pilot.toml"\ninherit = true\n', encoding="utf-8")
+    served = tmp_path / "served.toml"
+    served.write_text('[scopes."x-1900-1910"]\nconfig = "config/shards/engine.toml"\n'
+                      'db_path = "data/shards/x-1900-1910/civic.db"\nindex_path = "data/shards/x-1900-1910/index/vectors.db"\n'
+                      'tier = "INDEXED"\n', encoding="utf-8")
+    monkeypatch.setattr(scopes, "REGISTRY_PATH", registry)
+    monkeypatch.setattr(scopes, "SERVED_SHARDS_PATH", served)
+    reg = scopes.load_registry()
+    assert set(reg["scopes"]) == {"pilot", "x-1900-1910"}
+    resolved = scopes.resolve_scope("x-1900-1910")
+    assert resolved.db_path == Path("data/shards/x-1900-1910/civic.db") and not resolved.inherit
+    # An explicit registry path reads that file alone.
+    assert set(scopes.load_registry(registry)["scopes"]) == {"pilot"}
+    served.write_text('[scopes.pilot]\nconfig = "config/shards/engine.toml"\n', encoding="utf-8")
+    with pytest.raises(scopes.ScopeError, match="reuses registered scope names: pilot"):
+        scopes.load_registry()

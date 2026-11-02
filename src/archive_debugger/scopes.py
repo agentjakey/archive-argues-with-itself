@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 
 REGISTRY_PATH = Path("config/scopes.toml")
+SERVED_SHARDS_PATH = Path("config/shards/served.toml")   # the served shards (scripts/v2/serve_shards.py)
 
 
 class ScopeError(Exception):
@@ -79,11 +80,24 @@ class Scope:
 
 
 def load_registry(registry_path: Optional[Path] = None) -> dict:
+    """The scope registry. The default registry also takes the whole collection's served shards from
+    SERVED_SHARDS_PATH (written by scripts/v2/serve_shards.py), when that file exists; a shard may
+    not reuse a registered scope's name."""
     path = Path(registry_path or REGISTRY_PATH)
     if not path.exists():
         raise ScopeError(f"scope registry not found at {path}")
     with path.open("rb") as fh:
-        return tomllib.load(fh)
+        registry = tomllib.load(fh)
+    served = SERVED_SHARDS_PATH
+    if registry_path is None and served.exists():
+        with served.open("rb") as fh:
+            shards = tomllib.load(fh).get("scopes") or {}
+        table = registry.setdefault("scopes", {})
+        clash = sorted(set(shards) & set(table))
+        if clash:
+            raise ScopeError(f"{served} reuses registered scope names: {', '.join(clash)}")
+        table.update(shards)
+    return registry
 
 
 def _config_declared_paths(config_path: Path) -> tuple[Optional[str], Optional[str], Optional[str]]:
