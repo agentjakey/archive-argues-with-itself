@@ -125,6 +125,10 @@ HYBRID_TOP = 10
 POOL_TOP = 10
 BLOCK_ROWS = 2048           # rows embedded and saved per part file
 WORKERS_AI_CHARS = 2000
+# Texts per Workers AI embedding call. A batch's tokens are capped by the model (60,000 for bge-m3); a
+# batch of 50 noisy OCR passages of 2,000 characters reached 65,184 (2026-11-02: about 1,300 tokens a passage),
+# so 20 keeps well under.
+WORKERS_AI_BATCH = 20
 CHUNK_TOKENS = 128
 CHUNK_OVERLAP = 32
 BOOTSTRAP = 2000
@@ -407,7 +411,8 @@ class WorkersAIEncoder:
     def embed(self, texts: list) -> np.ndarray:
         cut = [(t or "")[:WORKERS_AI_CHARS] or " " for t in texts]
         result = ra.embed_workers_ai(self.model, cut, ledger=self.ledger, post=self.post, account=self.account,
-                                     headers=self.headers, run_id=self.run_id, run_cap=self.run_cap)
+                                     headers=self.headers, run_id=self.run_id, run_cap=self.run_cap,
+                                     batch_size=WORKERS_AI_BATCH)
         self.usd += result["usd"]
         self.calls += result["calls"]
         return np.stack(result["vectors"]).astype(np.float32)
