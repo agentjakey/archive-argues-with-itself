@@ -1,0 +1,58 @@
+# Serving the whole collection on Cloudflare Containers: one engine per shard of
+# config/shards/plan.json, each a container that sleeps when idle, behind the engine Worker, which
+# routes a question to the shards whose static coverage files can answer it and merges their
+# results. Shard names are read from the plan, never written in code. The router and the engine
+# Worker change wait for run A's Gate 3; this file is what they will read.
+
+[engines]
+plan = "config/shards/plan.json"
+instance_type = "standard-3"        # 2 vCPU, 8 GiB, 16 GB disk: a shard's wake data is about 4 GB
+sleep_after_minutes = 10            # an engine sleeps after this long without a question
+max_engines_per_question = 3        # the router's cap (src/archive_debugger/shards/router.py)
+r2_prefix = "shards/v1"             # where each shard's database, coverage and vectors are
+first_question_note_seconds = 60    # what the site tells a visitor a sleeping shard can take
+
+[promotion]
+# A shard serves production only after its audit and smoke tests pass, one shard at a time; its
+# audit tier is shown with every answer that cites it.
+order = "as built"
+require = ["release gates", "smoke questions answered or abstained correctly", "audit pipeline run", "tier assigned"]
+
+# Pricing, Workers Paid plan, developers.cloudflare.com/containers/pricing (last updated 2026-10-05)
+[price]
+memory_usd_per_gib_s = 0.0000025
+cpu_usd_per_vcpu_s = 0.000020
+disk_usd_per_gb_s = 0.00000007
+included_memory_gib_h = 25
+included_cpu_vcpu_min = 375
+included_disk_gb_h = 200
+
+[instance.standard-2]
+vcpu = 1
+memory_gib = 6
+disk_gb = 12
+
+[instance.standard-3]
+vcpu = 2
+memory_gib = 8
+disk_gb = 16
+
+[instance.standard-4]
+vcpu = 4
+memory_gib = 12
+disk_gb = 20
+
+# Traffic scenarios for the monthly estimate: questions a month that reach the engines (stored
+# answers are served from D1 without waking anything), and assumptions about them.
+[scenario.low]
+questions = 300
+[scenario.medium]
+questions = 3000
+[scenario.high]
+questions = 30000
+
+[assumptions]
+engines_per_question = 2.5          # the bounded run's router chose 2 to 3 of 5 shards; unmeasured at 41
+search_cpu_vcpu_s = 4.0             # per engine per question: 2 vCPU for about 2 s (bounded run: search 0.1 s locally)
+wake_cpu_vcpu_s = 120.0             # per wake: about 60 s of 2 vCPU to fetch and open 4 GB from R2 (unmeasured)
+overlap = 0.0                       # share of wakes absorbed by an engine already awake (0 = every question wakes its engines: the upper bound)
