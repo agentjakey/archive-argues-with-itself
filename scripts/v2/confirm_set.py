@@ -116,8 +116,24 @@ def cmd_draft(args) -> int:
                                 max_tokens=spec.max_tokens, cache_path=OUT / "draft_cache.jsonl")
     c = collections.load(args.collection)
     started = time.time()
-    items, rejected = generator.generate(corpus_connection(c), c, drafter, answerable=ANSWERABLE, per_trap=PER_TRAP,
-                                         seed=SEED + args.seed_offset, exclude=load_exclusions(), ocr_items=OCR_ITEMS)
+    exclude = load_exclusions()
+    answerable, per_trap = ANSWERABLE, PER_TRAP
+    if args.seed_offset:
+        # The pre-registered top-up: same generator and rules, the next seed, and every archive item the
+        # earlier rounds of this set drew on excluded too, so no document gives a second question.
+        for path in (OUT / "drafts").glob("*.jsonl"):
+            for row in read_jsonl(path):
+                for s in row.get("sources") or []:
+                    if isinstance(s, dict) and s.get("item_id"):
+                        exclude.add(s["item_id"])
+                if isinstance(row.get("source"), str) and "#" in row["source"]:
+                    exclude.add(row["source"].split("#", 1)[0])
+        answerable = ANSWERABLE if args.answerable is None else args.answerable
+        per_trap = PER_TRAP if args.per_trap is None else args.per_trap
+    elif args.answerable is not None or args.per_trap is not None:
+        raise SystemExit("--answerable and --per-trap are for the top-up (--seed-offset 1) only")
+    items, rejected = generator.generate(corpus_connection(c), c, drafter, answerable=answerable, per_trap=per_trap,
+                                         seed=SEED + args.seed_offset, exclude=exclude, ocr_items=OCR_ITEMS)
     for it in items + rejected:
         if "item_id" in it:
             it["item_id"] = it["item_id"].replace(":gen:", ":c1:" if not args.seed_offset else f":c1s{args.seed_offset}:")
@@ -161,11 +177,19 @@ def cmd_render(args) -> int:
     rows = [it for it in drafts() if it["collection"] == args.collection]
     adir = OUT / "adjudication"
     adir.mkdir(parents=True, exist_ok=True)
-    if list(adir.glob(f"{args.collection}-batch*.txt")):
-        raise SystemExit(f"{args.collection} is already rendered")
+    prefix = f"{args.collection}-batch"
+    if args.topup:
+        # The top-up's drafts: those of this collection no batch has rendered yet.
+        rendered = set()
+        for ids in adir.glob(f"{args.collection}-*.ids"):
+            rendered |= set(ids.read_text(encoding="utf-8").split())
+        rows = [it for it in rows if it["item_id"] not in rendered]
+        prefix = f"{args.collection}-topup-batch"
+    if list(adir.glob(f"{prefix}*.txt")):
+        raise SystemExit(f"{prefix} is already rendered")
     batches = [rows[i:i + args.batch_size] for i in range(0, len(rows), args.batch_size)]
     for n, batch in enumerate(batches, 1):
-        name = f"{args.collection}-batch{n}"
+        name = f"{prefix}{n}"
         (adir / f"{name}.txt").write_text("\n".join(render_item(it) for it in batch), encoding="utf-8")
         (adir / f"{name}.ids").write_text("\n".join(it["item_id"] for it in batch) + "\n", encoding="utf-8")
     print(f"{len(rows)} drafts in {len(batches)} batches under {adir}")
@@ -254,9 +278,12 @@ def main(argv=None) -> int:
     p.add_argument("--collection", required=True)
     p.add_argument("--cap", type=float, required=True)
     p.add_argument("--seed-offset", type=int, default=0, help="1 for the pre-registered top-up (seed 20261111)")
+    p.add_argument("--answerable", type=int, default=None, help="top-up only: answerable drafts per collection")
+    p.add_argument("--per-trap", type=int, default=None, help="top-up only: drafts per should-refuse category")
     p = sub.add_parser("render")
     p.add_argument("--collection", required=True)
     p.add_argument("--batch-size", type=int, default=40)
+    p.add_argument("--topup", action="store_true", help="render only the drafts no batch has rendered yet")
     sub.add_parser("apply")
     sub.add_parser("freeze")
     args = parser.parse_args(argv)
