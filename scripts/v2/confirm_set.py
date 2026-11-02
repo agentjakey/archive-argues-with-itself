@@ -177,11 +177,19 @@ def cmd_render(args) -> int:
     rows = [it for it in drafts() if it["collection"] == args.collection]
     adir = OUT / "adjudication"
     adir.mkdir(parents=True, exist_ok=True)
-    if list(adir.glob(f"{args.collection}-batch*.txt")):
-        raise SystemExit(f"{args.collection} is already rendered")
+    prefix = f"{args.collection}-batch"
+    if args.topup:
+        # The top-up's drafts: those of this collection no batch has rendered yet.
+        rendered = set()
+        for ids in adir.glob(f"{args.collection}-*.ids"):
+            rendered |= set(ids.read_text(encoding="utf-8").split())
+        rows = [it for it in rows if it["item_id"] not in rendered]
+        prefix = f"{args.collection}-topup-batch"
+    if list(adir.glob(f"{prefix}*.txt")):
+        raise SystemExit(f"{prefix} is already rendered")
     batches = [rows[i:i + args.batch_size] for i in range(0, len(rows), args.batch_size)]
     for n, batch in enumerate(batches, 1):
-        name = f"{args.collection}-batch{n}"
+        name = f"{prefix}{n}"
         (adir / f"{name}.txt").write_text("\n".join(render_item(it) for it in batch), encoding="utf-8")
         (adir / f"{name}.ids").write_text("\n".join(it["item_id"] for it in batch) + "\n", encoding="utf-8")
     print(f"{len(rows)} drafts in {len(batches)} batches under {adir}")
@@ -275,6 +283,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("render")
     p.add_argument("--collection", required=True)
     p.add_argument("--batch-size", type=int, default=40)
+    p.add_argument("--topup", action="store_true", help="render only the drafts no batch has rendered yet")
     sub.add_parser("apply")
     sub.add_parser("freeze")
     args = parser.parse_args(argv)
