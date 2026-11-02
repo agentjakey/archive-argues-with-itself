@@ -418,3 +418,25 @@ def test_an_open_writer_provider_is_v2_only_and_metered_under_its_own_provider(t
     assert spend[0]["usd"] == round(rb.prices.cost("@cf/zai-org/glm-5.3", 1000, 100), 6)
     info = json.loads((tmp_path / "out" / "runs" / "t1" / "run.json").read_text(encoding="utf-8"))
     assert info["config"]["provider"] == "workers_ai" and info["pipeline_label"] == "v2-cf_zai-org_glm-5.3"
+
+
+def test_public_ai_gap_breaks_down_by_expected_state(tmp_path):
+    spec = importlib.util.spec_from_file_location("public_ai_gap", REPO / "scripts" / "v2" / "public_ai_gap.py")
+    gap_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gap_mod)
+    run_dir = tmp_path / "runs" / "r1"
+    run_dir.mkdir(parents=True)
+    rows = [row("a", "answerable", "SUPPORTED", "SUPPORTED", False, usd=0.01, latency=2.0),
+            row("b", "answerable", "SUPPORTED", "INSUFFICIENT_EVIDENCE", False, usd=0.01, latency=4.0),
+            row("c", "false_premise", "INSUFFICIENT_EVIDENCE", "INSUFFICIENT_EVIDENCE", True, usd=0.01, latency=6.0)]
+    write_jsonl(run_dir / "answers.jsonl", rows)
+    (run_dir / "run.json").write_text(json.dumps({"config": {"writer": "open-m", "provider": "workers_ai",
+                                                             "split": "validation"}}), encoding="utf-8")
+    result = gap_mod.gap(["r1"], [], out_root=tmp_path,
+                         candidates={"o": {"model": "open-m", "licence": "Apache 2.0", "runs_on": "laptop"}})
+    r = result["runs"]["r1"]
+    assert r["licence"] == "Apache 2.0" and r["provider"] == "workers_ai"
+    assert r["by_state"]["SUPPORTED"]["false_refusal_rate"]["value"] == 0.5
+    assert r["by_state"]["INSUFFICIENT_EVIDENCE"]["refusal_rate_should_refuse"]["value"] == 1.0
+    assert r["latency_s"]["p50"] == 4.0
+    assert "Expected state: SUPPORTED" in gap_mod.gap_markdown(result)
