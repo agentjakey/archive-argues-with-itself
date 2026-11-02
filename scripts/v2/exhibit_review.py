@@ -129,11 +129,13 @@ def latest_reviews() -> dict:
 def rounds_to_review(all_rounds: bool) -> list:
     decided = json.loads((WORK / "decided.json").read_text(encoding="utf-8"))
     if all_rounds:
-        return [r for r in decided if r["status"] in ("flagged", "model-reviewed", "author-reviewed")]
+        return [r for r in decided if r["status"] in ("flagged", "model-reviewed", "ai-adjudicated", "ai-rejected",
+                                                      "author-reviewed")]
     # A card flagged only because the reviewer did not read it (the budget covered a sample) is not
-    # a finding: it waits until the deck needs it.
-    return [r for r in decided if r["status"] == "flagged"
-            and (r["review"] or {}).get("flags") != ["review:missing"]]
+    # a finding: it waits until the deck needs it. Rounds a model adjudicated, approved or dropped,
+    # wait for a person's decision, which replaces the adjudication.
+    return [r for r in decided if r["status"] in ("ai-adjudicated", "ai-rejected")
+            or (r["status"] == "flagged" and (r["review"] or {}).get("flags") != ["review:missing"])]
 
 
 def make_handler(rounds: list, reviewer: str):

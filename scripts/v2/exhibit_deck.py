@@ -555,6 +555,21 @@ def adjudicate(rnd: dict, adj: dict, corpora, s: settings.Settings) -> None:
     rnd["status"] = "ai-adjudicated"
 
 
+def apply_author(rnd: dict, decision: dict) -> None:
+    rnd["review"]["author"] = {k: decision.get(k) for k in ("decision", "date", "notes", "reviewer")}
+    if decision["decision"] == "approve":
+        rnd["status"] = "author-reviewed"
+        if decision.get("explanation"):
+            rnd["explanation"] = decision["explanation"]
+            rnd["explanation_status"] = "author-edited"
+            rnd["provenance"]["edits"].append({"date": decision["date"], "by": decision.get("reviewer", "Jake"),
+                                               "field": "explanation", "note": "edited in review"})
+        else:
+            rnd["explanation_status"] = "author-reviewed"
+    elif decision["decision"] == "reject":
+        rnd["status"] = "author-rejected"
+
+
 def cmd_decide(args, s: settings.Settings) -> int:
     load_env()
     corpora = Corpora()
@@ -585,22 +600,13 @@ def cmd_decide(args, s: settings.Settings) -> int:
         }
         rnd["status"] = "flagged" if flags else "model-reviewed"
         decision = authors.get(rnd["id"])
-        if decision and decision.get("fingerprint") == fp:
-            rnd["review"]["author"] = {k: decision.get(k) for k in ("decision", "date", "notes", "reviewer")}
-            if decision["decision"] == "approve":
-                rnd["status"] = "author-reviewed"
-                if decision.get("explanation"):
-                    rnd["explanation"] = decision["explanation"]
-                    rnd["explanation_status"] = "author-edited"
-                    rnd["provenance"]["edits"].append({"date": decision["date"], "by": decision.get("reviewer", "Jake"),
-                                                       "field": "explanation", "note": "edited in review"})
-                else:
-                    rnd["explanation_status"] = "author-reviewed"
-            elif decision["decision"] == "reject":
-                rnd["status"] = "author-rejected"
-        elif rnd["status"] == "flagged" and adjudged.get(rnd["id"], {}).get("fingerprint") == fp:
-            # A person's decision always wins; an adjudication covers only flagged rounds nobody decided.
+        if not (decision and decision.get("fingerprint") == fp) and rnd["status"] == "flagged" \
+                and adjudged.get(rnd["id"], {}).get("fingerprint") == fp:
+            # An adjudication covers flagged rounds no person decided as drafted. A person who later
+            # reads the adjudicated (perhaps fixed) round decides that version, and the decision wins.
             adjudicate(rnd, adjudged[rnd["id"]], corpora, s)
+        if decision and decision.get("fingerprint") == rnd["checks"]["fingerprint"] and rnd["status"] != "refused":
+            apply_author(rnd, decision)
         decided.append(rnd)
     write_json(WORK / "decided.json", decided)
     counts = {}
