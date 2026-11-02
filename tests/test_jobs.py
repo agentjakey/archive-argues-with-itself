@@ -243,6 +243,29 @@ def test_workers_ai_embedding_uses_only_the_index_specs_own_model(monkeypatch, t
     assert name == "workers_ai:@cf/baai/bge-m3"
     fn(["a passage"])
     assert sent["headers"]["cf-aig-gateway-id"] == "archive-argues-audit"
+    # The spec's batch_texts sets the texts per call (bge-m3's 60,000-token limit).
+    sizes = []
+
+    def counting_post(url, headers, body):
+        sizes.append(len(body["text"]))
+        return {"result": {"data": [[1.0, 0.0]] * len(body["text"]), "usage": {"prompt_tokens": 3}}}
+    _, fn = embed.make_backend(spec, "workers_ai", {"index": {"model": "BAAI/bge-m3", "workers_ai_model": "@cf/baai/bge-m3",
+                                                              "batch_texts": 20}}, post=counting_post)
+    assert len(fn([f"p{i}" for i in range(45)])) == 45 and sizes == [20, 20, 5]
+
+def test_embed_cuts_each_passage_to_the_specs_max_chars(tmp_path, monkeypatch):
+    st = store_mod.LocalStore(tmp_path)
+    s = write_spec(tmp_path, "embed")
+    st.put(f"{s.input_prefix}/shards/s0.jsonl.gz",
+           embed.write_shard([{"passage_id": "p0", "text": "x" * 50}, {"passage_id": "p1", "text": "short"}]))
+    monkeypatch.setattr(embed, "load_index_spec", lambda _spec: {"index": {"name": "t", "model": "m", "dim": 4, "normalize": True, "max_chars": 10}})
+    seen = []
+
+    def fake(texts):
+        seen.extend(texts)
+        return np.ones((len(texts), 4), dtype=np.float32)
+    embed.make_process(s, "local", embed_fn=fake, backend_name="fake")({"id": "s0"}, st, s)
+    assert seen == ["x" * 10, "short"]
 
 def test_serve_renders_no_public_entry_and_secrets_by_name_only():
     import importlib.util

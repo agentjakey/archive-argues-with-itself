@@ -54,11 +54,14 @@ def _sentence_transformers(index: dict) -> Callable:
     return lambda texts: model.encode(texts, batch_size=128, convert_to_numpy=True).astype(np.float32)
 
 
-def _workers_ai(model: str, post: Callable = None, meter: tuple = None, gateway: str = None) -> Callable:
+def _workers_ai(model: str, post: Callable = None, meter: tuple = None, gateway: str = None,
+               batch_texts: int = 100) -> Callable:
     """Workers AI embeddings, metered in the scale ledger: the worst case (every character a token)
     is reserved before each call and the provider's count recorded after. With a gateway (the
     executor's `gateway`, for example archive-argues-audit), each request names it and carries the
-    gateway's token, as the audit's judges do; batch text only, never visitor data."""
+    gateway's token, as the audit's judges do; batch text only, never visitor data. `batch_texts` is
+    the index spec's texts per call (bge-m3 rejects calls over 60,000 tokens: 50 noisy OCR passages
+    crossed it, so the v2 spec says 20)."""
     from archive_debugger.audit.judges import workers_ai_headers
     post = post or net.post_json
     account, token = os.environ.get("CF_ACCOUNT_ID"), os.environ.get("CF_AI_TOKEN")
@@ -69,8 +72,8 @@ def _workers_ai(model: str, post: Callable = None, meter: tuple = None, gateway:
 
     def embed(texts):
         out = []
-        for i in range(0, len(texts), 100):            # Workers AI takes up to 100 texts per call
-            chunk = texts[i:i + 100]
+        for i in range(0, len(texts), batch_texts):
+            chunk = texts[i:i + batch_texts]
             reservation = None
             if meter is not None:
                 ledger, run_id, run_cap = meter
@@ -110,7 +113,8 @@ def make_backend(spec: JobSpec, executor: str, index: dict, post: Callable = Non
         phase_cap = float(settings.get("phase_cap_usd", PHASE_CAP_USD))
         meter = (Ledger(ledger_path, phase_cap=phase_cap), f"{spec.name}:{settings.get('run', 'run-1')}",
                  float(settings["run_cap_usd"]))
-        return "workers_ai:" + model, _workers_ai(model, post, meter, settings.get("gateway"))
+        batch_texts = int((index.get("index") or {}).get("batch_texts", 100))
+        return "workers_ai:" + model, _workers_ai(model, post, meter, settings.get("gateway"), batch_texts)
     if backend == "sentence_transformers":
         return backend, _sentence_transformers(index["index"])
     if backend == "fastembed":
@@ -127,7 +131,9 @@ def make_process(spec: JobSpec, executor: str, *, embed_fn: Callable = None, bac
 
     def process(unit: dict, store, _spec: JobSpec) -> tuple:
         ids, texts = read_shard(store.get(f"{spec.input_prefix.rstrip('/')}/shards/{unit['id']}.jsonl.gz"))
-        texts = [idx.get("passage_prefix", "") + t for t in texts]
+        # The index spec's max_chars cuts each passage before the prefix is added (the v2 spec: 2,000).
+        max_chars = int(idx.get("max_chars") or 0)
+        texts = [idx.get("passage_prefix", "") + (t[:max_chars] if max_chars else t) for t in texts]
         parts = [embed_fn(texts[i:i + batch]) for i in range(0, len(texts), batch)]
         matrix = np.vstack(parts) if parts else np.zeros((0, int(idx["dim"])), dtype=np.float32)
         if matrix.shape != (len(ids), int(idx["dim"])):

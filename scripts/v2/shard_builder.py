@@ -343,30 +343,23 @@ def write_state(state: dict) -> None:
 # --- embed ----------------------------------------------------------------------------------------
 
 EMBED_SPEC = "embed-shard"
-WORKERS_AI_USD_PER_M_TOKENS = 0.0118      # bge-m3 on Workers AI, developers.cloudflare.com 2026-10-31
-CHARS_PER_TOKEN = 3.5                     # OCR text, multilingual tokenizer: a cautious ratio (chars / 4 measured 294 tokens a passage)
+USD_PER_M_PASSAGES = 7.25                 # bge-m3 through Workers AI, measured by Phase 3 (config/jobs/index_spec_v2.toml:
+                                          # noisy OCR runs about 1,300 tokens a passage at the 2,000-character cut)
 EMBED_CEILING_USD = 150.0                 # Jake's ceiling for the whole collection's embedding
 
 
 def cmd_estimate(args) -> int:
-    """The full embedding cost, before any is spent: the plan's passages times measured characters
-    per passage (the bounded run's shards, or the built shards when there are any)."""
-    import glob
-    chars = n = 0
-    for path in glob.glob(str(REPO / "data" / "bounded" / "*" / "shards" / "*" / "civic.db")):
-        for (text,) in sqlite3.connect(path).execute("SELECT text FROM passages"):
-            chars, n = chars + len(text or ""), n + 1
-    per_passage = chars / max(1, n) / CHARS_PER_TOKEN
+    """The full embedding cost, before any is spent: the plan's passages times the measured cost per
+    passage. Over the ceiling, it says so and names the cheapest alternative, and exits 1."""
     plan = json.loads(PLAN.read_text(encoding="utf-8"))
-    passages = plan["totals"]["est_passages"] if "est_passages" in plan.get("totals", {}) else \
-        sum(s["est_passages"] for s in plan["shards"])
+    passages = plan["totals"]["est_passages"] if "est_passages" in plan.get("totals", {}) else         sum(s["est_passages"] for s in plan["shards"])
     built = sum(v.get("built_passages", 0) for v in read_state().values())
-    usd = passages * per_passage / 1e6 * WORKERS_AI_USD_PER_M_TOKENS
-    out = {"plan_passages": passages, "built_passages": built, "tokens_per_passage": round(per_passage, 1),
-           "basis": f"{n:,} measured passages, characters / {CHARS_PER_TOKEN}", "usd_per_m_tokens": WORKERS_AI_USD_PER_M_TOKENS,
+    usd = passages / 1e6 * USD_PER_M_PASSAGES
+    out = {"plan_passages": passages, "built_passages": built, "usd_per_m_passages": USD_PER_M_PASSAGES,
+           "basis": "measured through Workers AI in Phase 3 (bge-m3, inputs cut to 2,000 characters)",
            "estimate_usd": round(usd, 2), "ceiling_usd": EMBED_CEILING_USD, "over_ceiling": usd > EMBED_CEILING_USD,
-           "cheapest_alternative": "the laptop's CPU (fastembed, free): measured 29-33 passages a second, about "
-                                   f"{passages / 31 / 3600:,.0f} hours for the whole plan"}
+           "cheapest_alternative": "no dense index: BM25 alone ($0), which Phase 3 measured as the best retrieval "
+                                   "on the frozen test (dense_weight 0, +13.5 points recall@10 over today's fusion)"}
     print(json.dumps(out, indent=1))
     return 1 if out["over_ceiling"] else 0
 

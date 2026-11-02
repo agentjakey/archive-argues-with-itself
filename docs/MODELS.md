@@ -38,7 +38,7 @@ then to a person. A judge is used only when it meets the bar set from the calibr
 | Model | Licence | Hardware | Measured | Cost |
 |---|---|---|---|---|
 | paraphrase-multilingual-MiniLM-L12-v2 (today's index) | Apache-2.0 | CPU | Embeds 29 to 33 passages a second on this laptop (bounded run). Passages longer than 128 tokens are cut | Free on CPU: about 323 hours for the whole collection's estimated 36 million passages |
-| bge-m3 on Workers AI | MIT | Workers AI | Not yet measured on our recall checks | $0.0118 per million tokens; estimated $143 for the whole collection (336 tokens a passage, measured characters / 3.5) |
+| bge-m3 on Workers AI | MIT | Workers AI | Phase 3 ablation: the source page in the first ten for 97 of 160 questions, within noise of BM25 alone (93 of 160); BM25 alone measured best on the frozen test | $7.25 per million passages, measured in Phase 3 (inputs cut to 2,000 characters; noisy OCR runs about 1,300 tokens a passage): about $261 for the plan's 36 million passages, over the $150 embedding ceiling, so the whole collection is indexed BM25-only |
 
 The index model is chosen in Phase 3 (`config/jobs/index_spec.toml`). An embedding job may only use
 the model the index names. A question's embedding costs a fraction of a cent.
