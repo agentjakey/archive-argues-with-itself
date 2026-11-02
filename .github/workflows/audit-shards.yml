@@ -1,0 +1,86 @@
+name: audit shards
+
+# Audits each built shard of the whole collection (scripts/v2/audit_shard.py): questions drafted from a
+# seeded sample of its pages, answered through the real engine with the shard's own writer, and every
+# cited sentence judged on SUPPORTS by the panel that met the bar (DeepSeek V4 Flash through the
+# archive-argues-audit AI Gateway, Claude Sonnet 5.5 in Anthropic batches). Undecided checks are queued
+# on R2 for adjudication in a later session. Every paid call goes through one ledger on R2 with a hard
+# $60 cap for all shard audits; a call that could cross it is not made. Results: audits/v1/<shard>/ on R2.
+#
+# One audit job at a time (max-parallel 1 and the concurrency group), so the ledger has one writer.
+# Started by build-shards.yml after its builds, or by hand. The push trigger only registers the
+# workflow from this branch; on a push every job is skipped.
+on:
+  workflow_dispatch:
+    inputs:
+      max_shards:
+        description: "at most this many shards in this run"
+        default: "41"
+  push:
+    branches: [v2]
+    paths: [".github/workflows/audit-shards.yml"]
+
+concurrency:
+  group: audit-shards
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+  R2_BUCKET: ${{ secrets.R2_BUCKET }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+  CF_AI_TOKEN: ${{ secrets.CF_AI_TOKEN }}
+  CF_AIG_TOKEN: ${{ secrets.CF_AIG_TOKEN }}
+  PYTHONPATH: src
+  CIVIC_DENSE_BACKEND: numpy
+
+jobs:
+  plan:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      shards: ${{ steps.pending.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e .
+      - name: the money left and the size per shard
+        run: python scripts/v2/audit_shard.py estimate
+      - id: pending
+        run: |
+          shards=$(python scripts/v2/audit_shard.py pending --max "${{ github.event.inputs.max_shards || '41' }}")
+          echo "pending: $shards"
+          echo "shards=$shards" >> "$GITHUB_OUTPUT"
+
+  audit:
+    needs: plan
+    if: needs.plan.outputs.shards != '[]' && needs.plan.outputs.shards != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        shard: ${{ fromJson(needs.plan.outputs.shards) }}
+    steps:
+      - name: room on the runner's disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          df -h /
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e .
+      - name: audit ${{ matrix.shard }}
+        run: python scripts/v2/audit_shard.py run --shard "${{ matrix.shard }}" --work "$RUNNER_TEMP/audit"
