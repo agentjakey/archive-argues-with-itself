@@ -14,7 +14,8 @@ set as asked; the config files themselves are never changed. A collection's rest
 of a second engine whose governance register holds exactly those items' fixtures. Every item is asked
 with nocache true, and the engine's answer cache lives in a temporary folder that is thrown away.
 Paid calls go through the audit ledger under the run id: the worst case is reserved before each ask,
-the actual tokens (v2) or the worst case marked estimated (v1, which reports no usage) are recorded
+the actual tokens (v2, and v1 through a client that keeps the usage the frozen code drops; the worst
+case marked estimated when a reply reports none) are recorded
 after it, and the reservation is released. A call that could cross the run cap or the phase cap is not
 made: the run stops there and keeps what it did, and the same command resumes it. --stub uses a stub
 writer that cites the first passage it is given: no paid call, nothing written to the ledger.
@@ -239,14 +240,54 @@ class EchoStubLLM:
 
 
 class CountingLLM:
-    """Wraps the frozen v1 AnthropicLLM to count calls (v1 reports no token usage)."""
+    """Wraps the frozen v1 AnthropicLLM to count calls. The frozen code drops the token usage; when
+    its client is a UsageClient, the usage of the call just made is read back from it (last_usage),
+    so the ledger records actual tokens instead of the worst case."""
 
-    def __init__(self, inner):
-        self.inner, self.calls = inner, 0
+    def __init__(self, inner, usage_client=None):
+        self.inner, self.calls, self.usage_client = inner, 0, usage_client
+        self.last_usage: dict = {}
 
     def draft(self, system: str, user: str):
         self.calls += 1
-        return self.inner.draft(system, user)
+        self.last_usage = {}
+        if self.usage_client is not None:
+            self.usage_client.last_usage = {}
+        try:
+            return self.inner.draft(system, user)
+        finally:
+            if self.usage_client is not None:
+                self.last_usage = dict(self.usage_client.last_usage)
+
+
+class _UsageMessages:
+    def __init__(self, owner, messages):
+        self._owner, self._messages = owner, messages
+
+    def _keep(self, resp):
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            self._owner.last_usage = {"input_tokens": int(getattr(usage, "input_tokens", 0) or 0)
+                                      + int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+                                      + int(getattr(usage, "cache_creation_input_tokens", 0) or 0),
+                                      "output_tokens": int(getattr(usage, "output_tokens", 0) or 0)}
+        return resp
+
+    def parse(self, **kwargs):
+        return self._keep(self._messages.parse(**kwargs))
+
+    def create(self, **kwargs):
+        return self._keep(self._messages.create(**kwargs))
+
+
+class UsageClient:
+    """An Anthropic client for the frozen v1 writer that remembers the token usage of its last call.
+    The request itself is unchanged: every argument goes to the real client as given."""
+
+    def __init__(self, client):
+        self._client = client
+        self.last_usage: dict = {}
+        self.messages = _UsageMessages(self, client.messages)
 
 
 class MeteredWriter(answer_v2.AnthropicWriter):
@@ -298,9 +339,9 @@ def real_writer(pipeline: str, writer: str, effort: Optional[str], stub: bool, g
         return MeteredWriter(writer, gcfg["max_tokens"], effort=effort, timeout=60.0)
     import anthropic
     from archive_debugger.generate.llm import AnthropicLLM
-    client = anthropic.Anthropic(timeout=60.0, max_retries=0)
+    client = UsageClient(anthropic.Anthropic(timeout=60.0, max_retries=0))
     return CountingLLM(AnthropicLLM(writer, gcfg["max_tokens"], client=client,
-                                    temperature=sent_temperature("anthropic", gcfg)))
+                                    temperature=sent_temperature("anthropic", gcfg)), usage_client=client)
 
 
 def worst_case_usd(model: str, question: str, top_k: int, max_tokens: int) -> tuple:
@@ -728,7 +769,7 @@ def ask(client, item: dict, collection: str, llm, *, pipeline: str, writer: str,
     usage, usd = {}, 0.0
     try:
         if model_called and not stub:
-            tokens = dict(getattr(llm, "last_usage", None) or {}) if pipeline == "v2" else {}
+            tokens = dict(getattr(llm, "last_usage", None) or {})
             if tokens.get("input_tokens") or tokens.get("output_tokens"):
                 usage = {"input_tokens": int(tokens.get("input_tokens") or 0),
                          "output_tokens": int(tokens.get("output_tokens") or 0), "estimated": False}
@@ -835,13 +876,26 @@ def panel_finals(judge_items: list, decisions: dict) -> tuple:
             unjudged += 1
             continue
         judged += 1
-        if d.get("human_queue"):
-            human += 1
         check = "supports" if it.get("kind", "sentence") == "sentence" else "answers"
         final = ((d.get("checks") or {}).get(check) or {}).get("final")
+        if d.get("adjudicated") is not None:
+            # Scored with adjudication: an item is left to a person only when its scored check is still empty.
+            human += 1 if final is None else 0
+        elif d.get("human_queue"):
+            human += 1
         if final is not None:
             (supports if check == "supports" else answers).setdefault(bench_id_of(it), []).append(final)
     return supports, answers, judged, human, unjudged
+
+
+def adjudicated_count(judge_items: list, decisions: dict) -> int:
+    """Judge items whose scored check was decided by AI adjudication, not by the panel."""
+    n = 0
+    for it in judge_items:
+        d = decisions.get(it["item_id"]) or {}
+        check = "supports" if it.get("kind", "sentence") == "sentence" else "answers"
+        n += 1 if check in (d.get("adjudicated") or {}) else 0
+    return n
 
 
 def contributions(row: dict, supports: dict, answers: dict) -> dict:
@@ -913,6 +967,7 @@ def score_run(rows: list, judge_items: list, decisions: dict) -> dict:
         "confusion": {k: dict(sorted(v.items())) for k, v in sorted(confusion.items())},
         "judge_items": len(judge_items), "judged": judged, "unjudged": unjudged,
         "left_to_person": rate(human, judged),
+        "adjudicated_ai": rate(adjudicated_count(judge_items, decisions), judged),
         "latency_s": {"p50": percentile(latencies, 0.5), "p95": percentile(latencies, 0.95)},
         "spend_usd": round(sum(float(r.get("usd") or 0.0) for r in rows), 6),
     }
@@ -955,7 +1010,10 @@ def paired_bootstrap(rows_a: list, rows_b: list, extra_a: tuple, extra_b: tuple,
     return out
 
 
-def load_decisions(audit_runs: list, audit_dir: Path) -> dict:
+def load_decisions(audit_runs: list, audit_dir: Path, *, adjudicated: bool = False) -> dict:
+    """The panel decisions by judge item id. With adjudicated, each run's adjudicated.jsonl (written by
+    scripts/v2/adjudicate_checks.py, source "adjudicated-ai") fills the finals the panel left empty; a
+    final the panel reached is never replaced. Such decisions carry "adjudicated": {check: note}."""
     decisions: dict = {}
     for name in audit_runs or []:
         path = Path(audit_dir) / "runs" / name / "panel.jsonl"
@@ -963,6 +1021,21 @@ def load_decisions(audit_runs: list, audit_dir: Path) -> dict:
             raise Refused(f"{path} is missing")
         for d in read_jsonl(path):
             decisions[d["item_id"]] = d
+        if not adjudicated:
+            continue
+        adj_path = Path(audit_dir) / "runs" / name / "adjudicated.jsonl"
+        if not adj_path.exists():
+            raise Refused(f"{adj_path} is missing (run scripts/v2/adjudicate_checks.py apply)")
+        for row in read_jsonl(adj_path):
+            d = decisions.get(row["item_id"])
+            entry = ((d or {}).get("checks") or {}).get(row["check"])
+            if entry is None or entry.get("final") is not None:
+                raise Refused(f"{adj_path}: {row['item_id']} {row['check']} is not an empty panel final")
+            entry["final"] = row["final"]
+            entry["route"] = "adjudicated-ai"
+            d.setdefault("adjudicated", {})[row["check"]] = row.get("note")
+        for d in decisions.values():
+            d.setdefault("adjudicated", {})
     return decisions
 
 
@@ -979,8 +1052,8 @@ def fill_source_pages(rows: list, split: Optional[str], lock_path: Path, splits_
 
 def score(runs: list, audit_runs: list, name: str, *, out_root: Path = DEFAULT_OUT,
           audit_dir: Path = DEFAULT_AUDIT_DIR, lock_path: Path = DEFAULT_LOCK,
-          splits_dir: Path = DEFAULT_SPLITS) -> dict:
-    decisions = load_decisions(audit_runs, audit_dir)
+          splits_dir: Path = DEFAULT_SPLITS, adjudicated: bool = False) -> dict:
+    decisions = load_decisions(audit_runs, audit_dir, adjudicated=adjudicated)
     loaded = {}
     for run_id in runs:
         run_dir = Path(out_root) / "runs" / run_id
@@ -992,7 +1065,7 @@ def score(runs: list, audit_runs: list, name: str, *, out_root: Path = DEFAULT_O
         fill_source_pages(rows, (info.get("config") or {}).get("split"), lock_path, splits_dir)
         loaded[run_id] = (rows, judge_items, info)
     result = {"format": 1, "name": name, "runs": {}, "comparisons": [], "audit_runs": list(audit_runs or []),
-              "scored_at": now_iso(),
+              "scored_at": now_iso(), "adjudicated": adjudicated,
               "notes": ["Rates are over items answered without an error; Wilson 95% intervals.",
                         "SUPPORTS and ANSWERS come from the audit panel's final verdicts; a check left to a "
                         "person has no final verdict and is counted in left_to_person, not in the rate.",
@@ -1047,6 +1120,7 @@ def scores_markdown(result: dict) -> str:
                   f"| ANSWERS failure (answer items not passing) | {_fmt(m['answers_failure'])} |",
                   f"| Recall@10 (source page in the first ten passages) | {_fmt(m['recall_at_10'])} |",
                   f"| Judge items left to a person | {_fmt(s['left_to_person'])} |",
+                  f"| Scored checks decided by AI adjudication | {_fmt(s['adjudicated_ai']) if s.get('adjudicated_ai') else 'n/a'} |",
                   f"| Cost per answer (USD) | {m['cost_per_answer']['value'] if m['cost_per_answer']['value'] is not None else 'n/a'} |",
                   f"| Latency p50 / p95 (s) | {s['latency_s']['p50']} / {s['latency_s']['p95']} |",
                   "", f"Judge items: {s['judge_items']}, judged {s['judged']}, not judged {s['unjudged']}.", "",
@@ -1109,6 +1183,8 @@ def main(argv=None) -> int:
     p_score.add_argument("--audit", nargs="*", default=[])
     p_score.add_argument("--name", required=True)
     p_score.add_argument("--audit-dir", type=Path, default=DEFAULT_AUDIT_DIR)
+    p_score.add_argument("--adjudicated", action="store_true",
+                         help="fill the panel's empty SUPPORTS/ANSWERS finals from each audit run's adjudicated.jsonl")
     args = parser.parse_args(argv)
     out_root = args.out.resolve()
     os.chdir(REPO)      # configs and scope paths are relative to the repo root
@@ -1135,7 +1211,8 @@ def main(argv=None) -> int:
             kinds = sum(1 for it in items if it["kind"] == "answer")
             print(f"{n} judge items ({kinds} answer items, {n - kinds} sentence items) in {run_dir / 'judge_items.jsonl'}")
             return 0
-        result = score(args.runs, args.audit, args.name, out_root=out_root, audit_dir=args.audit_dir)
+        result = score(args.runs, args.audit, args.name, out_root=out_root, audit_dir=args.audit_dir,
+                       adjudicated=args.adjudicated)
         print(f"scores: {out_root / 'scores' / args.name / 'scores.md'} ({len(result['runs'])} runs, "
               f"{len(result['comparisons'])} comparisons)")
         return 0

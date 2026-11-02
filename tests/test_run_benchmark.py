@@ -470,3 +470,37 @@ def test_dense_weight_reaches_the_retrieve_section_and_the_label(tmp_path):
     raw = tomllib.loads(dest.read_text(encoding="utf-8"))
     assert raw["retrieve"]["dense_weight"] == 0.5 and raw["retrieve"]["rrf_k"] == 60
     assert rb.pipeline_label("v2", "claude-haiku-4-5", None, True, dense_weight=0.0) == "v2-claude-haiku-4-5-dw0-stub"
+
+
+def test_v1_usage_client_reports_the_tokens_the_frozen_writer_drops():
+    class Usage:
+        input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens = 900, 120, 0, 0
+
+    class Resp:
+        usage = Usage()
+        content = []
+
+    class Messages:
+        def __init__(self):
+            self.seen = None
+
+        def parse(self, **kwargs):
+            self.seen = kwargs
+            return Resp()
+
+    class Inner:
+        def __init__(self, client):
+            self.client = client
+
+        def draft(self, system, user):
+            self.client.messages.parse(model="m", system=system, messages=[{"role": "user", "content": user}])
+            return "draft"
+
+    real = type("Client", (), {})()
+    real.messages = Messages()
+    client = rb.UsageClient(real)
+    llm = rb.CountingLLM(Inner(client), usage_client=client)
+    assert llm.draft("s", "u") == "draft"
+    assert llm.calls == 1
+    assert llm.last_usage == {"input_tokens": 900, "output_tokens": 120}
+    assert real.messages.seen["system"] == "s"          # the request reaches the real client unchanged
