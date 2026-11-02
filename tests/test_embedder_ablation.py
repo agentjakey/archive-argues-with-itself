@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 from archive_debugger.audit.records import read_jsonl, write_jsonl
+from archive_debugger.audit.budget import Ledger
 from archive_debugger.retrieve.embed import StubEmbedder
 
 REPO = Path(__file__).resolve().parent.parent
@@ -440,3 +441,22 @@ def test_source_recall_counts_the_source_page_in_the_first_ten():
     assert out[ea.REFERENCE_SYSTEM]["found"] == 1 and out[ea.REFERENCE_SYSTEM]["questions"] == 2
     assert out["other"]["found"] == 1                     # q1's source is 11th: not in the first ten
     assert out["other"]["vs_reference"]["diff"] == 0.0
+
+
+def test_workers_ai_encoder_keeps_input_order_across_concurrent_batches(tmp_path):
+    import random as _random
+    import time as _time
+
+    def fake_post(url, headers, body, response_headers=None, **kw):
+        _time.sleep(_random.random() / 200)        # replies come back out of order
+        data = [{"index": i, "embedding": [float(t.split()[-1]), 1.0]} for i, t in enumerate(body["input"])]
+        return {"data": data, "usage": {"prompt_tokens": 5 * len(body["input"])}}
+    ledger = Ledger(tmp_path / "l.jsonl", phase="test", phase_cap=10.0)
+    enc = ea.WorkersAIEncoder("@cf/baai/bge-m3", ledger=ledger, run_id="e", run_cap=1.0, post=fake_post,
+                              account="a", headers={})
+    texts = [f"passage {n}" for n in range(ea.WORKERS_AI_BATCH * 5 + 3)]
+    out = enc.embed(texts)
+    assert out[:, 0].tolist() == [float(n) for n in range(len(texts))]
+    assert enc.calls == 6
+    kinds = [e["kind"] for e in read_jsonl(tmp_path / "l.jsonl")]
+    assert kinds.count("spend") == kinds.count("release") == 6

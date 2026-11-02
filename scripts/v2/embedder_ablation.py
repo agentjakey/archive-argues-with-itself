@@ -78,6 +78,7 @@ Writes under --out (default reports/v2/raw/embedder_ablation):
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import importlib.util
 import json
@@ -129,6 +130,7 @@ WORKERS_AI_CHARS = 2000
 # batch of 50 noisy OCR passages of 2,000 characters reached 65,184 (2026-11-02: about 1,300 tokens a passage),
 # so 20 keeps well under.
 WORKERS_AI_BATCH = 20
+WORKERS_AI_WORKERS = 4      # concurrent Workers AI calls while embedding (polite; each reserves its own worst case)
 CHUNK_TOKENS = 128
 CHUNK_OVERLAP = 32
 BOOTSTRAP = 2000
@@ -409,13 +411,23 @@ class WorkersAIEncoder:
         self.calls = 0
 
     def embed(self, texts: list) -> np.ndarray:
+        """Batches of WORKERS_AI_BATCH texts, WORKERS_AI_WORKERS at a time (each call metered on its
+        own), vectors returned in input order."""
         cut = [(t or "")[:WORKERS_AI_CHARS] or " " for t in texts]
-        result = ra.embed_workers_ai(self.model, cut, ledger=self.ledger, post=self.post, account=self.account,
-                                     headers=self.headers, run_id=self.run_id, run_cap=self.run_cap,
-                                     batch_size=WORKERS_AI_BATCH)
-        self.usd += result["usd"]
-        self.calls += result["calls"]
-        return np.stack(result["vectors"]).astype(np.float32)
+        chunks = [cut[i:i + WORKERS_AI_BATCH] for i in range(0, len(cut), WORKERS_AI_BATCH)]
+
+        def one(chunk):
+            return ra.embed_workers_ai(self.model, chunk, ledger=self.ledger, post=self.post, account=self.account,
+                                       headers=self.headers, run_id=self.run_id, run_cap=self.run_cap,
+                                       batch_size=WORKERS_AI_BATCH)
+        with ThreadPoolExecutor(max_workers=WORKERS_AI_WORKERS) as pool:
+            results = list(pool.map(one, chunks))
+        vectors = []
+        for result in results:
+            self.usd += result["usd"]
+            self.calls += result["calls"]
+            vectors.extend(result["vectors"])
+        return np.stack(vectors).astype(np.float32)
 
 
 @dataclass
