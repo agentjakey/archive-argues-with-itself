@@ -4,6 +4,7 @@
   write     the records, checked against their page checksums, into catalogue.jsonl.gz
   upload    the raw pages, the catalogue and their checksums to the private R2 bucket
   fulltext  every item's OCR text, page by page, to data/fulltext and R2 (resumes; polite)
+  status    one line: how far the full-text fetch has got and its projected finish
   browse    the registry as static files for the site's /catalogue/ page (build/catalogue-data)
 
     python scripts/v2/catalogue.py fetch
@@ -30,7 +31,7 @@ R2_PREFIX = "catalogue/v1"
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["fetch", "write", "upload", "fulltext", "browse"])
+    ap.add_argument("command", choices=["fetch", "write", "upload", "fulltext", "status", "browse"])
     ap.add_argument("--collection", default=COLLECTION)
     ap.add_argument("--limit", type=int, default=None, help="fulltext: at most this many items this run")
     ap.add_argument("--no-r2", action="store_true", help="fulltext: keep files locally only")
@@ -43,6 +44,18 @@ def main(argv=None) -> int:
         return 0 if index["complete"] else 1
     if args.command == "write":
         print(json.dumps(fetch.write_catalogue(CACHE, OUT)))
+        return 0
+    if args.command == "status":
+        path = REPO / "data" / "fulltext" / "status.json"
+        if not path.exists():
+            print("no status yet: the full-text fetch has not written data/fulltext/status.json")
+            return 1
+        s = json.loads(path.read_text(encoding="utf-8"))
+        c = s["concurrency"]
+        print(f"{s['at']}: {s['done']:,} of {s['total']:,} items ({100 * s['done'] / max(1, s['total']):.1f}%), "
+              f"{s['per_hour_last_hour']}/h last hour, {s['per_hour_last_day']}/h last day, "
+              f"projected finish {s['projected_finish'] or 'unknown'}; concurrency {c['limit']}, "
+              f"{'no server error yet' if c['since_problem_s'] is None else str(c['since_problem_s'] // 60) + ' min since the last server error'}")
         return 0
     if args.command == "browse":
         import sqlite3

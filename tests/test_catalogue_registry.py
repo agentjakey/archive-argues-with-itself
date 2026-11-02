@@ -161,3 +161,51 @@ def test_governance_refuses_a_fixture_and_maps_production_policies(tmp_path):
     register.write_text(json.dumps({"policy_id": "f", "fixture": True, "targets": {}}) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="fixture"):
         build.add_governance(conn, register)
+
+class Clock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
+def test_concurrency_steps_up_only_after_a_quiet_flat_hour_and_drops_on_errors():
+    clock = Clock()
+    lim = net.AdaptiveLimit(start=2, ceiling=4, quiet_s=3600, window_s=900, min_samples=5, clock=clock)
+    for minute in range(59):
+        clock.t = minute * 60
+        lim.observe(0.5)
+    assert lim.limit == 2                       # not yet an hour
+    clock.t = 3600
+    lim.observe(0.5)
+    assert lim.limit == 3                       # quiet hour, flat latency
+    lim.problem("HTTP 503")
+    assert lim.limit == 2                       # any error goes back to the start, clock restarts
+    for minute in range(61, 130):
+        clock.t = minute * 60
+        lim.observe(0.5 if minute < 100 else 2.0)
+    assert lim.limit == 2                       # latency rose: no step up
+
+
+def test_fulltext_manifest_goes_to_r2_and_a_new_machine_resumes_from_it(tmp_path, monkeypatch):
+    from archive_debugger.jobs.store import LocalStore
+    monkeypatch.setattr(fulltext, "SYNC_EVERY", 2)
+    store = LocalStore(tmp_path / "r2")
+    served = {f"item{i}_hocr_searchtext.txt.gz": gzip.compress(b"text") for i in range(5)}
+    calls = []
+
+    def get(url, refusals=None):
+        calls.append(url)
+        name = url.rsplit("/", 1)[-1]
+        if name in served:
+            return served[name]
+        raise net.HttpError(404, "missing")
+    idents = [f"item{i}" for i in range(5)]
+    fulltext.run(idents, tmp_path / "laptop", store=store, get=get, log=lambda m: None)
+    assert sorted(store.list(fulltext.STATE_PREFIX + "/")) == [f"{fulltext.STATE_PREFIX}/{n:08d}.jsonl" for n in (0, 2, 4)]
+    before = len(calls)
+    fulltext.run(idents, tmp_path / "server", store=store, get=get, log=lambda m: None)
+    assert len(calls) == before                 # the new machine fetched nothing again
+    status = json.loads((tmp_path / "server" / "status.json").read_text())
+    assert status["done"] == 5 and status["remaining"] == 0

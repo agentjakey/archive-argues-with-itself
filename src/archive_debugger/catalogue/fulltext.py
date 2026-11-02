@@ -107,12 +107,90 @@ def fetch_item(ident: str, get: Callable, refusals) -> dict:
     return {"identifier": ident, "kind": "djvu_txt", "files": files}
 
 
-def run(identifiers: list, out: Path, *, store=None, get: Callable = None, workers: int = 2,
+STATE_PREFIX = f"{R2_PREFIX}/_state/manifest"
+SYNC_EVERY = 500
+
+
+def _complete_lines(manifest: Path) -> list:
+    if not manifest.exists():
+        return []
+    raw = manifest.read_bytes()
+    end = raw.rfind(b"\n") + 1          # a line cut short by a stop is not synced
+    return raw[:end].decode("utf-8").splitlines(keepends=True)
+
+
+def sync_manifest(store, out: Path, *, final: bool = False) -> int:
+    """Copy manifest lines not yet on R2 there, as numbered chunks (_state/manifest/<first line>.jsonl).
+    A chunk is written only when it holds SYNC_EVERY lines, or at the end of a run, so the chunks
+    never overlap. Returns how many lines R2 now holds."""
+    synced_path = out / "manifest.synced"
+    synced = int(synced_path.read_text(encoding="ascii")) if synced_path.exists() else 0
+    lines = _complete_lines(out / "manifest.jsonl")
+    while len(lines) - synced >= SYNC_EVERY or (final and len(lines) > synced):
+        chunk = lines[synced: synced + SYNC_EVERY]
+        store.put(f"{STATE_PREFIX}/{synced:08d}.jsonl", "".join(chunk).encode("utf-8"))
+        synced += len(chunk)
+        synced_path.write_text(str(synced), encoding="ascii")
+    return synced
+
+
+def restore_manifest(store, out: Path) -> int:
+    """On a machine with no local manifest, rebuild it from the chunks on R2, so the fetch resumes
+    without fetching again any item R2 already holds. Returns the number of lines restored."""
+    manifest = out / "manifest.jsonl"
+    if manifest.exists() and manifest.stat().st_size:
+        return 0
+    keys = sorted(store.list(STATE_PREFIX + "/"))
+    out.mkdir(parents=True, exist_ok=True)
+    total = 0
+    with manifest.open("wb") as fh:
+        for key in keys:
+            data = store.get(key)
+            fh.write(data)
+            total += data.count(b"\n")
+    (out / "manifest.synced").write_text(str(total), encoding="ascii")
+    return total
+
+
+def write_status(out: Path, total: int, counts: dict, limit_state: dict) -> dict:
+    """status.json: items recorded, the rate over the last hour and the last day, and a projected
+    finish at the last day's rate."""
+    from datetime import timedelta
+    times = []
+    done = set()
+    for line in _complete_lines(out / "manifest.jsonl"):
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if row.get("kind") != "error":
+            done.add(row["identifier"])
+            times.append(row["at"])
+    stamp = datetime.now(timezone.utc)
+    parsed = [datetime.fromisoformat(t.replace("Z", "+00:00")) for t in times]
+    hour = sum(1 for t in parsed if (stamp - t).total_seconds() <= 3600)
+    day = sum(1 for t in parsed if (stamp - t).total_seconds() <= 86400)
+    span_h = min(24.0, max(1.0, (stamp - min(parsed)).total_seconds() / 3600)) if parsed else 1.0
+    per_hour = day / span_h if day else 0.0
+    remaining = max(0, total - len(done))
+    status = {"at": now(), "done": len(done), "total": total, "remaining": remaining,
+              "per_hour_last_hour": hour, "per_hour_last_day": round(per_hour, 1),
+              "projected_finish": (stamp + timedelta(hours=remaining / per_hour)).strftime("%Y-%m-%d")
+              if per_hour else None, "concurrency": limit_state, "this_run": dict(counts)}
+    (out / "status.json").write_text(json.dumps(status, indent=1, sort_keys=True), encoding="utf-8")
+    return status
+
+
+def run(identifiers: list, out: Path, *, store=None, get: Callable = None, workers: int = net.MAX_CONCURRENCY,
         log: Callable[[str], None] = print, stop_after: Optional[int] = None) -> dict:
     get = get or net.get
     refusals = net.RefusalCounter()
     out.mkdir(parents=True, exist_ok=True)
     manifest = out / "manifest.jsonl"
+    if store is not None:
+        restored = restore_manifest(store, out)
+        if restored:
+            log(f"restored {restored} manifest lines from R2")
     done = done_identifiers(manifest)
     todo = [i for i in identifiers if i not in done]
     if stop_after is not None:
@@ -160,7 +238,14 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
                 fh.write(json.dumps(record, sort_keys=True) + "\n")
             n = counts["fetched"] + counts["no_text"] + counts["errors"]
             if n % 200 == 0:
-                log(f"{n} of {len(todo)} this run ({counts})")
+                log(f"{n} of {len(todo)} this run ({counts}; {net.LIMIT.state()})")
+            if n % 50 == 0:
+                write_status(out, len(identifiers), counts, net.LIMIT.state())
+                if store is not None:
+                    try:
+                        sync_manifest(store, out)
+                    except Exception as exc:       # retried at the next sync; never stops the fetch
+                        log(f"manifest sync to R2 failed: {str(exc)[:200]}")
 
     def upload_then_record(record: dict, folder: Path, files: dict) -> None:
         try:
@@ -173,9 +258,13 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
             return
         write_record(record)
 
+    # The pool has a thread for the highest concurrency allowed; net.LIMIT decides how many
+    # requests actually run at once.
     with ThreadPoolExecutor(max_workers=min(workers, net.MAX_CONCURRENCY)) as pool:
         list(pool.map(one, todo))
     if uploads is not None:
         uploads.shutdown(wait=True)
+        sync_manifest(store, out, final=True)
     counts["stopped"] = stop.is_set()
+    write_status(out, len(identifiers), counts, net.LIMIT.state())
     return counts
