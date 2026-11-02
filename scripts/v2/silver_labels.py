@@ -14,6 +14,9 @@ seeded random 40 of the agreed kit items, then up to 20 benchmark approval items
 Open it with: python scripts/v2/calibration_form.py --kit reports/v2/audit/review/queue.jsonl
 (labels go to reports/v2/audit/review/labels.jsonl).
 
+extend: a second seeded random 40 of the agreed kit items not yet queued (queue_more.jsonl), drawn once;
+the recompute counts both random samples.
+
 recompute: reads the queue's labels (reports/v2/audit/review/labels.jsonl, the form's format) when
 there are any and writes reports/v2/audit/review/status.json and status.md: (a) the panel's error
 against the adjudicated labels on the random 40, (b) the silver labels' error rate on the random 40,
@@ -27,6 +30,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import random
 import sys
 from collections import Counter
 from pathlib import Path
@@ -149,6 +153,39 @@ def cmd_queue(args) -> int:
     return 0
 
 
+RANDOM_SECTIONS = ("random_agreed", "random_agreed_2")
+
+
+def cmd_extend(args) -> int:
+    """A second seeded random sample of agreed kit items, drawn from those not yet in any queue section,
+    written to queue_more.jsonl in the form's format; its section is recorded in queue.json beside the
+    first, and the recompute reads both random samples together. Run once; it refuses to draw again."""
+    manifest = json.loads((REVIEW_DIR / "queue.json").read_text(encoding="utf-8"))
+    sections = manifest["sections"]
+    if any(s == "random_agreed_2" for s in sections.values()):
+        raise SystemExit("the second random sample is already drawn (queue.json); it is drawn once")
+    kit = {it["item_id"]: it for it in read_jsonl(KIT)}
+    kit_rows = read_jsonl(REF_DIR / "silver_kit.jsonl")
+    queued = set(sections) | {it["item_id"] for it in read_jsonl(REVIEW_DIR / "queue_extra.jsonl")}
+    pool = sorted(r["item_id"] for r in kit_rows if r["agreed"] and r["item_id"] not in queued)
+    rng = random.Random(f"queue-extend:{args.seed}")
+    sample = sorted(rng.sample(pool, min(args.count, len(pool))), key=lambda i: kit[i].get("kit_position", 0))
+    version = manifest["queue_version"] + "-more"
+    out = []
+    for n, item_id in enumerate(sample, 1):
+        row = dict(kit[item_id])
+        row.update({"kit_position": n, "kit_batch": 1, "kit_version": version, "queue_format": silver.QUEUE_FORMAT})
+        out.append(row)
+    write_jsonl(REVIEW_DIR / "queue_more.jsonl", out)
+    for item_id in sample:
+        sections[item_id] = "random_agreed_2"
+    manifest["random_agreed_2"] = {"seed": args.seed, "items": len(sample), "pool": len(pool),
+                                   "file": "queue_more.jsonl"}
+    (REVIEW_DIR / "queue.json").write_text(json.dumps(manifest, indent=1, sort_keys=True), encoding="utf-8")
+    print(f"second random sample: {len(sample)} of {len(pool)} agreed items not yet queued -> queue_more.jsonl")
+    return 0
+
+
 ADJUDICATED = "adjudicated-ai"
 
 
@@ -193,7 +230,7 @@ def cmd_recompute(args) -> int:
     cfg = judges.load_panel()
     manifest = json.loads((REVIEW_DIR / "queue.json").read_text(encoding="utf-8"))
     sections = manifest["sections"]
-    random_ids = sorted(i for i, s in sections.items() if s == "random_agreed")
+    random_ids = sorted(i for i, s in sections.items() if s in RANDOM_SECTIONS)
     labels_path = REVIEW_DIR / "labels.jsonl"
     sources = {}
     author = author_labels(labels_path, sources)
@@ -255,7 +292,7 @@ def cmd_recompute(args) -> int:
         lines += [f"Silver labels' error on the random agreed sample, per item: {silver_err['item_errors']} of "
                   f"{silver_err['items']} (upper 95% bound {silver_err['wilson'][1]:.3f}; must be at most "
                   f"{silver.SILVER_ERROR_MAX})." , ""]
-    lines += ["| Check | Agreement with reference labels | Against best labels | Panel vs adjudicated (random 40) | Status |",
+    lines += [f"| Check | Agreement with reference labels | Against best labels | Panel vs adjudicated (random {len(random_ids)}) | Status |",
               "| --- | --- | --- | --- | --- |"]
     for c, v in report["checks"].items():
         lines.append(f"| {c} | {fmt(v['agreement_with_reference_labels'])} | {fmt(v['against_best_labels'])} | "
@@ -273,11 +310,14 @@ def main(argv=None) -> int:
     p.add_argument("--approval-run", default=None)
     p = sub.add_parser("queue")
     p.add_argument("--seed", type=int, required=True)
+    p = sub.add_parser("extend")
+    p.add_argument("--seed", type=int, required=True)
+    p.add_argument("--count", type=int, default=40)
     p = sub.add_parser("recompute")
     p.add_argument("--panel-run", default="kit2-judges")
     p.add_argument("--panel", nargs=2, default=None, help="default: the panel in config/audit.toml")
     args = parser.parse_args(argv)
-    return {"build": cmd_build, "queue": cmd_queue, "recompute": cmd_recompute}[args.command](args)
+    return {"build": cmd_build, "queue": cmd_queue, "extend": cmd_extend, "recompute": cmd_recompute}[args.command](args)
 
 
 if __name__ == "__main__":
