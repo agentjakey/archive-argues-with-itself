@@ -24,7 +24,7 @@ on:
         description: "how many 5.5-hour fetch slots this run may use (at most 20)"
         default: "20"
   push:
-    branches: [v2]
+    branches: [main]
     paths: [".github/workflows/build-index.yml"]
 
 concurrency:

@@ -23,7 +23,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [v2]
+    branches: [main]
     paths: [".github/workflows/exhibit-soak.yml"]
 
 concurrency:

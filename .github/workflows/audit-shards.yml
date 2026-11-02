@@ -17,7 +17,7 @@ on:
         description: "at most this many shards in this run"
         default: "41"
   push:
-    branches: [v2]
+    branches: [main]
     paths: [".github/workflows/audit-shards.yml"]
 
 concurrency:
