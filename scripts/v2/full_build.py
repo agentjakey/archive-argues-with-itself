@@ -15,7 +15,7 @@ Steps, for every shard in config/shards/plan.json whose text is all fetched:
                Workers AI through the archive-argues-audit gateway, metered against the embedding cap
   4. gates     each shard's manifest read back from R2; the release gates run when shards are served
 Every step resumes where it stopped. The build and the fetch normally run as scheduled tasks
-(scripts/v2/install-fulltext-task.ps1); this command does one pass by hand.
+(.github/workflows/build-shards.yml); this command does one pass by hand.
 """
 from __future__ import annotations
 

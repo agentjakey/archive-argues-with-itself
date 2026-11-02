@@ -25,7 +25,7 @@ the list names every identifier.
 `run` loops (a detached background job; it resumes from its own state after any stop): for each shard
 of config/shards/plan.json whose documents all have a fetch record, it builds the shard:
 
-  1. waits for the heavy lock (.cc-heavy.lock in the main checkout), at least MIN_FREE_MEMORY_GB of
+  1. waits (with --heavy-lock) for .cc-heavy.lock in the main checkout, at least MIN_FREE_MEMORY_GB of
      free memory, and the shard's estimated size plus KEEP_FREE_DISK_GB of free disk;
   2. compiles the fetched text into units of UNIT_ITEMS documents (data/build/<shard>/units/,
      resumable: a unit already written is not compiled again);
@@ -117,7 +117,7 @@ def free_disk_gb(path: Path) -> float:
     return shutil.disk_usage(path).free / 2 ** 30
 
 
-USE_LOCK = True
+USE_LOCK = False     # one session works at a time now; --heavy-lock restores the laptop rule
 
 
 def take_lock() -> bool:
@@ -648,14 +648,15 @@ def main(argv=None) -> int:
     ap.add_argument("--allow-partial", action="store_true", help="build: with the documents fetched so far")
     ap.add_argument("--upload", action="store_true", help="order: also put it on R2 for the cloud fetch")
     ap.add_argument("--from-r2", action="store_true", help="read the fetch record, text and inputs from R2")
-    ap.add_argument("--no-lock", action="store_true", help="skip the laptop's heavy lock (a cloud runner)")
+    ap.add_argument("--heavy-lock", action="store_true", help="wait for and hold .cc-heavy.lock (off by default)")
+    ap.add_argument("--no-lock", action="store_true", help="no heavy lock (the default; kept for older command lines)")
     ap.add_argument("--keep-free-disk-gb", type=float, default=None)
     ap.add_argument("--min-free-memory-gb", type=float, default=None)
     ap.add_argument("--embed-inputs", action="store_true", help="build: also write the embedding input")
     ap.add_argument("--max", type=int, default=40, help="ready: at most this many shards")
     args = ap.parse_args(argv)
     global FROM_R2, USE_LOCK, KEEP_FREE_DISK_GB, MIN_FREE_MEMORY_GB, WITH_EMBED_INPUTS, BUILDER
-    FROM_R2, USE_LOCK, WITH_EMBED_INPUTS = args.from_r2, not args.no_lock, args.embed_inputs
+    FROM_R2, USE_LOCK, WITH_EMBED_INPUTS = args.from_r2, args.heavy_lock and not args.no_lock, args.embed_inputs
     if args.keep_free_disk_gb is not None:
         KEEP_FREE_DISK_GB = args.keep_free_disk_gb
     if args.min_free_memory_gb is not None:
