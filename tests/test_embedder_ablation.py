@@ -429,3 +429,14 @@ def test_rerank_reorders_the_fused_top_and_is_metered(env, tmp_path):
     assert report["systems"]["hybrid stub-a"]["usd"] > 0
     kinds = [e["kind"] for e in read_jsonl(ledger)]
     assert kinds.count("reserve") == kinds.count("release") == kinds.count("spend") == len(calls)
+
+
+def test_source_recall_counts_the_source_page_in_the_first_ten():
+    items = {"q1": {"sources": [{"passage_id": "a#3:0"}]}, "q2": {"sources": [{"passage_id": "b#1:2"}]},
+             "q3": {"sources": []}}
+    systems = {ea.REFERENCE_SYSTEM: {"q1": ["a#3:1"], "q2": ["c#1:0"]},      # a different chunk of the same page counts
+               "other": {"q1": ["x#1:0"] * 10 + ["a#3:0"], "q2": ["b#1:0"]}}
+    out = ea.source_recall(systems, items, ["q1", "q2", "q3"], seed=1)
+    assert out[ea.REFERENCE_SYSTEM]["found"] == 1 and out[ea.REFERENCE_SYSTEM]["questions"] == 2
+    assert out["other"]["found"] == 1                     # q1's source is 11th: not in the first ten
+    assert out["other"]["vs_reference"]["diff"] == 0.0

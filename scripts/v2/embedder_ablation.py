@@ -100,7 +100,7 @@ _spec = importlib.util.spec_from_file_location("retrieval_ablation", Path(__file
 ra = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ra)
 
-from archive_debugger.audit import prices  # noqa: E402
+from archive_debugger.audit import calibration, prices  # noqa: E402
 from archive_debugger.audit.budget import BudgetExceeded, Ledger  # noqa: E402
 from archive_debugger.audit.records import iter_jsonl, read_jsonl, write_jsonl  # noqa: E402
 from archive_debugger.eval import metrics  # noqa: E402
@@ -1147,15 +1147,52 @@ def whole_collection_cost(candidates: dict, builds: dict, *, run_id: Optional[st
     return out
 
 
+def page_key(passage_id: str) -> str:
+    """item#leaf from item#leaf:chunk: the page a passage is on."""
+    return passage_id.rsplit(":", 1)[0]
+
+
+def source_recall(systems: dict, items_by_id: dict, question_ids: list, seed: int, k: int = HYBRID_TOP) -> dict:
+    """Per system, the share of questions whose source page is among its first k passages (the
+    benchmark runner's recall@10, judged by no one), with Wilson 95% and a paired bootstrap difference
+    from the reference system. Questions without a source passage are left out."""
+    qids = [q for q in question_ids if source_ids(items_by_id.get(q) or {})]
+    hits = {}
+    for name, ranked in systems.items():
+        row = []
+        for q in qids:
+            pages = {page_key(pid) for pid in source_ids(items_by_id[q])}
+            row.append(1.0 if pages & {page_key(pid) for pid in (ranked.get(q) or [])[:k]} else 0.0)
+        hits[name] = row
+    ref = hits.get(REFERENCE_SYSTEM)
+    out = {}
+    for name, row in hits.items():
+        n, found = len(row), int(sum(row))
+        low, high = calibration.wilson(found, n) if n else (None, None)
+        out[name] = {"questions": n, "found": found, "rate": round(found / n, 4) if n else None,
+                     "wilson95": [round(low, 4), round(high, 4)] if n else None,
+                     "vs_reference": paired_bootstrap(row, ref, seed=seed) if ref is not None and name != REFERENCE_SYSTEM
+                     else None}
+    return out
+
+
 def score(out_dir: Path, runs: list, *, runs_dir: Path = RUNS_DIR, seed: int = 0, spot: int = 0,
-          build_run_id: Optional[str] = None, ledger_path: Path = LEDGER_PATH) -> dict:
+          build_run_id: Optional[str] = None, ledger_path: Path = LEDGER_PATH,
+          questions: Optional[list] = None) -> dict:
     out_dir = Path(out_dir)
+    items_by_id = {}
+    for path in questions or DEFAULT_QUESTIONS:
+        refuse_test_split(path)
+        if Path(path).exists():
+            for item in read_jsonl(path):
+                items_by_id[item["item_id"]] = item
     decisions = load_decisions(runs, runs_dir)
     result = {"format": 1, "generated": now_iso(), "runs": runs, "reference_system": REFERENCE_SYSTEM,
               "bootstrap": {"resamples": BOOTSTRAP, "seed": seed}, "collections": {}, "candidates": {}}
     scored = {}
     builds = {}
     all_items = []
+    all_question_ids, all_systems = [], []
     for rank_path in sorted(out_dir.glob("*/rankings.json")):
         coll_dir = rank_path.parent
         collection = coll_dir.name
@@ -1164,6 +1201,10 @@ def score(out_dir: Path, runs: list, *, runs_dir: Path = RUNS_DIR, seed: int = 0
         systems = json.loads(rank_path.read_text(encoding="utf-8"))["systems"]
         scored[collection] = score_collection(items, systems, decisions, seed)
         result["collections"][collection] = {k: v for k, v in scored[collection].items() if not k.startswith("_")}
+        question_ids = json.loads(rank_path.read_text(encoding="utf-8")).get("questions") or []
+        result["collections"][collection]["source_recall_at_10"] = source_recall(systems, items_by_id, question_ids, seed)
+        all_question_ids.extend(question_ids)
+        all_systems.append(systems)
         build_path = coll_dir / "build.json"
         if build_path.exists():
             build = json.loads(build_path.read_text(encoding="utf-8"))
@@ -1182,6 +1223,10 @@ def score(out_dir: Path, runs: list, *, runs_dir: Path = RUNS_DIR, seed: int = 0
                 if emb:
                     row.setdefault("embedding", {})[collection] = emb
     result["pooled"] = pooled_scores(scored, seed) if scored else {}
+    if all_systems:
+        names = set.intersection(*(set(sy) for sy in all_systems))
+        merged = {n: {q: r for sy in all_systems for q, r in sy[n].items()} for n in names}
+        result["source_recall_at_10_pooled"] = source_recall(merged, items_by_id, all_question_ids, seed)
     if builds:
         result["whole_collection_cost"] = whole_collection_cost(result["candidates"], builds, run_id=build_run_id,
                                                                 ledger_path=ledger_path)
@@ -1226,6 +1271,18 @@ def scores_markdown(result: dict) -> str:
                           for coll, s in (c.get("index_size_whole_collection") or {}).items() if s)
         status = ", ".join(f"{k}: {v}" for k, v in (c.get("status") or {}).items())
         lines.append(f"| {name} | {c.get('model')} | {c.get('licence')} | {c.get('runs_on')} | {status} | {sizes} |")
+    sr = result.get("source_recall_at_10_pooled")
+    if sr:
+        lines += ["", "## Source page in the first ten (both collections, judged by no one)", "",
+                  "The benchmark runner's recall@10: the share of questions whose source page is among a system's "
+                  f"first ten passages, with Wilson 95%; the difference from {result['reference_system']} has a "
+                  "paired bootstrap 95% interval.", "",
+                  "| System | Found | Rate [Wilson 95%] | Minus reference [95%] |", "| --- | --- | --- | --- |"]
+        for name, r in sorted(sr.items(), key=lambda kv: -(kv[1]["rate"] or 0)):
+            vs = r.get("vs_reference")
+            diff = "-" if not vs or vs.get("diff") is None else f"{vs['diff']:+.4f} [{vs['low']:+.4f}, {vs['high']:+.4f}]"
+            ci = r["wilson95"] or [None, None]
+            lines.append(f"| {name} | {r['found']}/{r['questions']} | {r['rate']} [{ci[0]}, {ci[1]}] | {diff} |")
     cost = result.get("whole_collection_cost")
     if cost:
         lines += ["", "## Embedding everything: estimated cost per candidate", "",
