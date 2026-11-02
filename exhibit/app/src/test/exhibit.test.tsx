@@ -6,8 +6,8 @@ import { clampYear, stepFromKey, wheelAccumulator } from "../lib/input";
 import { buildArc, totalPoints } from "../lib/arc";
 import { STRINGS } from "../lib/strings";
 
-const ONLINE = { kiosk: false, idle_reset_seconds: 60, printer: false };
-const KIOSK = { kiosk: true, idle_reset_seconds: 60, printer: true };
+const ONLINE = { kiosk: false, idle_reset_seconds: 60, printer: false, counting: false };
+const KIOSK = { kiosk: true, idle_reset_seconds: 60, printer: true, counting: true };
 const en = STRINGS.en;
 const SAMPLE_FR = "Le programme de sant\u00e9\npublique a COMMENC\u00c9 au printemps.";
 

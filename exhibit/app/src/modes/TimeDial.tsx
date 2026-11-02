@@ -85,7 +85,8 @@ export function TimeDial({ round, lang, t, first, last, progress, nextLabel, onN
           </button>
         </div>
       </div>
-      <div className="round-main">
+      {/* In kiosk mode this pane may scroll: it takes focus so the keyboard can scroll it too. */}
+      <div className="round-main" tabIndex={0} role="region" aria-labelledby="dialq-heading">
         <div className="answer" aria-live="polite">
           {step === null ? (
             <p className="answer-text">{t.dial.nothingYet(year)}</p>

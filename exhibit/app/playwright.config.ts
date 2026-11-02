@@ -23,17 +23,32 @@ export default defineConfig({
     trace: "off",
   },
   projects: [
-    { name: "kiosk", use: { ...devices["Desktop Chrome"], viewport: { width: 1920, height: 1080 }, hasTouch: true } },
-    { name: "uhd", use: { ...devices["Desktop Chrome"], viewport: { width: 3840, height: 2160 }, hasTouch: true } },
+    // The layout check (e2e/layout.e2e.ts): the release served as plain static files, the way the
+    // public site serves it, so the normal web view and ?kiosk=1 can both be measured. Sizes are set
+    // inside the test.
+    { name: "layout", testMatch: "layout.e2e.ts", use: { ...devices["Desktop Chrome"], baseURL: "http://127.0.0.1:8798" } },
+    { name: "kiosk", testIgnore: "layout.e2e.ts", use: { ...devices["Desktop Chrome"], viewport: { width: 1920, height: 1080 }, hasTouch: true } },
+    { name: "uhd", testIgnore: "layout.e2e.ts", use: { ...devices["Desktop Chrome"], viewport: { width: 3840, height: 2160 }, hasTouch: true } },
     {
       name: "phone",
+      testIgnore: "layout.e2e.ts",
       use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 }, screen: { width: 390, height: 844 } },
     },
   ],
-  webServer: {
-    command: `${PYTHON} ../kiosk/serve.py --root ../../build/kiosk-e2e --port 8799 --printer`,
-    url: "http://127.0.0.1:8799/exhibit/kiosk.json",
-    reuseExistingServer: false,
-    timeout: 30_000,
-  },
+  // The visit tests run against the kiosk server; the layout check against the plain release.
+  testIgnore: process.env.LAYOUT_ONLY ? ["exhibit.e2e.ts"] : [],
+  webServer: [
+    {
+      command: `${PYTHON} ../kiosk/serve.py --root ../../build/kiosk-e2e --port 8799 --printer`,
+      url: "http://127.0.0.1:8799/exhibit/kiosk.json",
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
+      command: `${PYTHON} -m http.server 8798 --bind 127.0.0.1 --directory ../../build/release`,
+      url: "http://127.0.0.1:8798/exhibit/",
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+  ],
 });

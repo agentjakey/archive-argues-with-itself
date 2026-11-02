@@ -38,6 +38,8 @@
   --accent: #b8860b;      --accent-rgb: 184 134 11;
   --split-a: #7ec8a0;     --split-a-rgb: 126 200 160;
   --split-b: #d4936a;     --split-b-rgb: 212 147 106;
+  --panel-a: #1f2e27;     /* Agora's option panels, deepened: parchment text 10.7:1, muted 7.1:1 */
+  --panel-b: #2b2017;     /* parchment 11.9:1, muted 7.9:1 */
   --ink: #0e0c09;         /* text on parchment or gold fills */
 
   --display: "Cinzel", "Trajan Pro", Georgia, serif;

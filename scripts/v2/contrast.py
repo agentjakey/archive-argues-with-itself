@@ -61,6 +61,11 @@ def main() -> int:
             misses += 0 if ok else 1
             cells.append(f"{r:.1f}{'' if ok else ' MISS'}{' (AA: large text only)' if need != bar else ''}")
         print(f"| {name} {t[name]} | {use} | {bar}:1 | " + " | ".join(cells) + " |")
+    for panel in ("panel-a", "panel-b"):
+        for name in ("text", "muted"):
+            r = ratio(t[name], t[panel])
+            misses += 0 if r >= 7.0 else 1
+            print(f"| {name} on {panel} | text on an option panel | 7.0:1 | {r:.1f}{'' if r >= 7.0 else ' MISS'} | | |")
     print(f"| ink on gold | text on a gold fill | 7.0:1 | {ratio(t['ink'], t['gold']):.1f} | | |")
     misses += 0 if ratio(t["ink"], t["gold"]) >= 7.0 else 1
     print(f"| print | black on white | 7.0:1 | {ratio('#000000', '#ffffff'):.1f} | | |")

@@ -95,13 +95,16 @@ export function SameOrNot({ round, lang, t, players, progress, nextLabel, onEven
   const soloPick = !players && picks.length > 0 ? picks[0] : null;
   const answerBeat = players ? 3 : 2;
   return (
-    <section className="round round-same" data-step="same_or_not" aria-labelledby="son-heading">
-      <p className="kicker">
-        {progress}
-        {players && !revealed ? ` . ${t.same.playerTurn(picks.length + 1, players)}` : ""}
-      </p>
-      <h2 id="son-heading">{t.same.prompt}</h2>
-      {round.level === 1 && !revealed && <p className="note level-one">{t.same.levelOneNote}</p>}
+    <section className={`round round-same${revealed ? " is-revealed" : ""}`} data-step="same_or_not" aria-labelledby="son-heading">
+      <header className="round-head">
+        <p className="kicker">
+          {progress}
+          {players && !revealed ? ` . ${t.same.playerTurn(picks.length + 1, players)}` : ""}
+        </p>
+        <h2 id="son-heading">{t.same.prompt}</h2>
+        {!revealed && <p className="lede">{t.same.instruction}</p>}
+        {round.level === 1 && !revealed && <p className="note level-one">{t.same.levelOneNote}</p>}
+      </header>
       <div className="claims">
         {[pa, pb].map((page, i) => (
           <div className="claim" key={page.ref}>

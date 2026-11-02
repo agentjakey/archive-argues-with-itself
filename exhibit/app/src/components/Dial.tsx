@@ -54,6 +54,7 @@ export function Dial({ year, first, last, onChange, t, valueText, locked = false
         </button>
         <div
           className="dial-window"
+          data-allow-clip
           role="slider"
           tabIndex={0}
           aria-label={t.dial.label}

@@ -32,7 +32,7 @@ function prefersReducedMotion(): boolean {
 
 export function App({ initialDeck, initialKiosk }: { initialDeck?: Deck; initialKiosk?: KioskConfig }) {
   const [deck, setDeck] = useState<Deck | null>(initialDeck ?? null);
-  const [kiosk, setKiosk] = useState<KioskConfig>(initialKiosk ?? { kiosk: false, idle_reset_seconds: 60, printer: false });
+  const [kiosk, setKiosk] = useState<KioskConfig>(initialKiosk ?? { kiosk: false, idle_reset_seconds: 60, printer: false, counting: false });
   const [failed, setFailed] = useState(false);
   const [lang, setLang] = useState<Lang>("en");
   const [screen, setScreen] = useState<Screen>("attract");
@@ -59,6 +59,10 @@ export function App({ initialDeck, initialKiosk }: { initialDeck?: Deck; initial
   useEffect(() => {
     document.documentElement.classList.toggle("reduce-motion", reducedMotion);
   }, [reducedMotion]);
+  // Kiosk presentation (the kiosk server, or ?kiosk=1 online): the kiosk type scale, one screen per round.
+  useEffect(() => {
+    document.documentElement.classList.toggle("kiosk", kiosk.kiosk);
+  }, [kiosk.kiosk]);
 
   // The attract screen shows one real line at a time from the When Was This? clues (page text,
   // with no year in it), changing every few seconds unless the visitor asked for less motion.
@@ -146,21 +150,46 @@ export function App({ initialDeck, initialKiosk }: { initialDeck?: Deck; initial
           </p>
           <div className="top-actions">
             <button type="button" className="btn btn-quiet" onClick={() => setLang(lang === "en" ? "fr" : "en")} lang={lang === "en" ? "fr" : "en"}>
-              {t.language}
+              <span className="label-long">{t.language}</span>
+              <span className="label-short" aria-hidden="true">{t.short.language}</span>
             </button>
             <button type="button" className="btn btn-quiet toggle" aria-pressed={sound} onClick={() => setSound(!sound)}>
-              {t.sound}
+              <span className="label-long">{t.sound}</span>
+              <span className="label-short" aria-hidden="true">{t.short.sound}</span>
             </button>
             <button type="button" className="btn btn-quiet toggle" aria-pressed={reducedMotion} onClick={() => setReducedMotion(!reducedMotion)}>
-              {t.reducedMotion}
+              <span className="label-long">{t.reducedMotion}</span>
+              <span className="label-short" aria-hidden="true">{t.short.reducedMotion}</span>
             </button>
             {screen !== "attract" && (
               <button type="button" className="btn btn-quiet" onClick={reset}>
-                {t.home}
+                <span className="label-long">{t.home}</span>
+                <span className="label-short" aria-hidden="true">{t.short.home}</span>
               </button>
             )}
           </div>
         </header>
+        <div className="trail">
+          {run && (screen === "run" || screen === "chronicle") && (
+            <nav aria-label={t.trail}>
+              <div className="trail-bar" aria-hidden="true">
+                <div className="trail-fill" style={{ width: `${((screen === "chronicle" ? run.steps.length : run.index) / run.steps.length) * 100}%` }} />
+              </div>
+              <ol className="trail-steps">
+                {run.steps.map((s, i) => {
+                  const current = screen === "run" && i === run.index;
+                  const done = screen === "chronicle" || i < run.index;
+                  return (
+                    <li key={i} aria-current={current ? "step" : undefined} className={done ? "trail-done" : undefined}>
+                      <span className="trail-num">{i + 1}</span>
+                      <span className="trail-name">{t.modes[s.kind].name}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            </nav>
+          )}
+        </div>
         <main className="main" id="main" ref={main} tabIndex={-1}>
           {screen === "attract" && (
             <section className="attract" aria-labelledby="attract-heading">

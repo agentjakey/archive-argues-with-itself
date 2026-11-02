@@ -3,3 +3,7 @@
 # are kept.
 /ask      /       301
 /health   https://api.archiveargues.org/health   302
+# The exhibit in kiosk presentation (attract loop, 60 s idle reset, kiosk type scale), counting and
+# printing off, nothing stored: the short link for a screen in a library or a classroom.
+/kiosk    /exhibit/?kiosk=1   302
+/kiosk/   /exhibit/?kiosk=1   302
