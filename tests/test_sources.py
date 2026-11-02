@@ -6,6 +6,7 @@ import io
 import json
 import socket
 import urllib.error
+import urllib.parse
 
 import pytest
 
@@ -118,3 +119,38 @@ def test_the_contract_refuses_a_capture_date_passed_off_as_publication():
 def test_no_date_on_the_page_means_no_publication_date():
     page = wayback.parse_page(b"<html><body><p>No dates here.</p></body></html>")
     assert wayback.publication_date(page).method == "not_found"
+
+def test_robots_rules_for_ai_agents_and_content_usage():
+    from archive_debugger.sources import signals
+    text = "User-agent: *\nDisallow: /private/\n\nUser-agent: GPTBot\nUser-agent: CCBot\nDisallow: /\n\nContent-Usage: train-ai=n\n"
+    got = signals.parse_robots(text, "/hc-ps/tobac-tabac/index-eng.php")
+    assert got["agents"]["*"]["disallowed"] is False
+    assert got["agents"]["GPTBot"]["disallowed"] is True and got["agents"]["CCBot"]["disallowed"] is True
+    assert got["content_usage"] == ["train-ai=n"]
+
+
+def test_a_file_is_in_effect_only_when_the_captures_around_the_page_agree():
+    from archive_debugger.sources import signals
+    cdx = {"www.x.gc.ca/robots.txt": [["timestamp", "digest", "statuscode"], ["20080101000000", "AAA", "200"],
+                                      ["20100101000000", "BBB", "200"]],
+           "www.x.gc.ca/.well-known/tdmrep.json": [["timestamp", "digest", "statuscode"]]}
+    calls = []
+
+    def get(url):
+        calls.append(url)
+        if url.startswith(signals.CDX):
+            key = next(k for k in cdx if urllib.parse.quote(k, safe="") in url)
+            return url, json.dumps(cdx[key]).encode()
+        return url, b"User-agent: *\nDisallow:\n"
+
+    def get_response(url):
+        return url, {"x-archive-orig-x-robots-tag": "noindex"}, b"<html><meta name='robots' content='noai'></html>"
+    reader = signals.SignalReader(get=get, get_response=get_response)
+    between = reader.for_capture("http://www.x.gc.ca/a.html", "20090101000000")
+    assert between.robots.state == "unknown"            # it changed between the captures around the page
+    assert between.tdmrep.state == "unknown"            # never captured: unknown, not "none"
+    assert between.headers == {"x-robots-tag": "noindex"} and between.meta[0]["content"] == "noai"
+    assert between.restricts_ai is True                 # the page's own meta tag restricts it
+    on = reader.for_capture("http://www.x.gc.ca/a.html", "20080101000000")
+    assert on.robots.state == "in_effect" and on.robots.before["digest"] == "AAA"
+    assert all(c.startswith("https://web.archive.org/") for c in calls)

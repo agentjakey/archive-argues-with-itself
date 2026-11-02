@@ -70,6 +70,35 @@ They come from the Wayback CDX API and are stored in the registry as the archive
 This is on staging only. Nothing from a second source is published, searched by the engine or cited
 in an answer yet.
 
+## AI and text-and-data-mining signals at capture time
+
+For each capture in a web-archive set, `scripts/v2/capture_signals.py` records what the site said
+about automated reading and AI use when the page was captured. It reads only the archive's own
+captures (`src/archive_debugger/sources/signals.py`):
+
+- `robots.txt`: the rules for named AI crawlers and for every agent, whether the captured path was
+  disallowed, and any aipref `Content-Usage` line;
+- `/.well-known/tdmrep.json` (W3C TDMRep) and the `tdm-reservation` header;
+- the captured `X-Robots-Tag` header, and robots or TDM meta tags in the page.
+
+A file counts as in effect at a capture only when the archive holds a capture of it at or before the
+page's capture and one at or after it, with the same content. Otherwise its state is unknown, with the
+nearest captures named. A missing capture is never read as "no restriction". Each signal names the
+capture (timestamp and digest) it came from.
+
+A restriction found this way becomes a candidate policy record for a person to review. It never goes
+into the governance register by itself.
+
+On 2026-11-01, the 30 Health Canada captures gave these results:
+
+| Signal | In effect | No file in effect | Unknown |
+|---|---|---|---|
+| `robots.txt` | 9 captures | 12 | 9 |
+| TDMRep | none | none | all 30 (the archive holds no capture of the file) |
+
+No capture carried an AI header or meta tag. No signal restricted AI use, but because TDMRep is
+unknown everywhere, the overall state is unknown for every capture, not "unrestricted".
+
 ## Federated Internet Archive search
 
 Searching the wider Internet Archive at question time is not built. Its full-text search endpoint
