@@ -133,7 +133,7 @@ const en = {
     footer: "archiveargues.org/exhibit",
   },
   status: {
-    modelReviewed: "Checked by two AI judges and an AI reviewer. Their accuracy has not been measured yet.",
+    modelReviewed: "Checked by AI against the pages; human review pending. The accuracy of the AI checks has not been measured yet.",
     authorReviewed: "Checked by a person.",
     drafted: "Explanation drafted by AI.",
   },
@@ -282,7 +282,7 @@ const fr: Strings = {
     footer: "archiveargues.org/exhibit",
   },
   status: {
-    modelReviewed: "V\u00e9rifi\u00e9 par deux juges IA et un r\u00e9viseur IA. Leur exactitude n'a pas encore \u00e9t\u00e9 mesur\u00e9e.",
+    modelReviewed: "V\u00e9rifi\u00e9 par l'IA d'apr\u00e8s les pages; r\u00e9vision humaine \u00e0 venir. L'exactitude des v\u00e9rifications par IA n'a pas encore \u00e9t\u00e9 mesur\u00e9e.",
     authorReviewed: "V\u00e9rifi\u00e9 par une personne.",
     drafted: "Explication r\u00e9dig\u00e9e par IA.",
   },

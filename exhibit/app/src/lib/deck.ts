@@ -52,7 +52,7 @@ type RoundBase = {
   quotes: Quote[];
   explanation: Text;
   explanation_status: "model-drafted" | "author-reviewed" | "author-edited";
-  status: "model-reviewed" | "author-reviewed";
+  status: "model-reviewed" | "ai-adjudicated" | "author-reviewed";
   review: Review;
   provenance: { drafted_by: string; prompt_version: string; drafted_at: string; edits: unknown[] };
 };

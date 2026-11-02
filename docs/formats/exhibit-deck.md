@@ -24,7 +24,7 @@ the deck. The source of the published deck is `site/exhibit/deck.json`.
 | `deck_id` | the deck's name, such as `starter-1` |
 | `built_at` | UTC time the deck was built |
 | `builder_version` | the version of the builder's refusal checks |
-| `settings` | `collections`, `dial` (`[first_year, last_year]`), `idle_reset_seconds`, `offline_image_cache`, `panel_calibrated` |
+| `settings` | `collections`, `dial` (`[first_year, last_year]`), `idle_reset_seconds`, `offline_image_cache`, `panel_calibrated`, `review_label` (`{en, fr}`: how the deck's rounds were checked, shown with each round until a person has reviewed them) |
 | `counts` | rounds per mode |
 | `rounds` | the rounds, described below |
 | `gap_hunt` | the Gap Hunt grid, or `null` |
@@ -45,9 +45,9 @@ Every round has these fields:
 | `explanation` | `{en, fr}` |
 | `explanation_status` | `model-drafted`, `author-reviewed` or `author-edited` |
 | `care_flags` | always empty in a published deck. A round with a care flag is refused |
-| `status` | `model-reviewed` or `author-reviewed` in a published deck. The builder also uses `draft`, `refused`, `flagged` and `author-rejected` |
+| `status` | `model-reviewed`, `ai-adjudicated` or `author-reviewed` in a published deck. The builder also uses `draft`, `refused`, `flagged`, `ai-rejected` and `author-rejected` |
 | `checks` | `{builder_version, refusals, checked_at, fingerprint}`. `refusals` is empty in a published deck |
-| `review` | `{panel, panel_calibrated, panel_prompt_version, reviewer, flags, author}` (below) |
+| `review` | `{panel, panel_calibrated, panel_prompt_version, reviewer, flags, author, adjudication}` (below) |
 | `provenance` | `{drafted_by, prompt_version, drafted_at, draft_kind, edits}` |
 
 ### A page
@@ -101,7 +101,8 @@ Points go by closeness: 100 for the exact year, 10 fewer for each year off. Only
 - `panel`: each audit panel judge's verdicts on `supports`, `answer_correct` and `fair_to_visitor` (`pass`, `partial`, `unsure` or `fail`), plus `needs_person` and `notes`.
 - `panel_calibrated`: `false`. No calibration covers exhibit rounds yet. The exhibit says on screen that the AI judges' accuracy has not been measured.
 - `reviewer`: `{model, verdicts, prompt_version, date}`. This is the strongest Claude model the account could call, reading the whole round. It also gives `french_ok` and `year_is_publication`.
-- `flags`: why a person must look at the round. A flagged round is not published until a person approves it.
+- `flags`: why a person must look at the round. A flagged round is not published until a person approves it or an adjudication approves or fixes it.
+- `adjudication`: `{decision, reason, reviewer, date, label}` when a flagged round was decided by the strongest model reading it against its page text, before any person did. `decision` is `approve`, `fix` or `drop`, and `reason` is written out. A fixed round lists each change in `provenance.edits`, passes the builder's checks again and gets a new `checks.fingerprint` (the one it was read at is `checks.adjudicated_from`). Its status is `ai-adjudicated`; a dropped round is `ai-rejected`. A person's decision always replaces an adjudication.
 - `author`: `{decision, date, notes, reviewer}` when a person reviewed the round. The decision was recorded against the round's `checks.fingerprint`, so a round that changed afterwards needs reading again.
 
 The panel never includes the model that drafted the round. While Sonnet 5.5 drafts, the reviewer model takes the place of the escalation judge.

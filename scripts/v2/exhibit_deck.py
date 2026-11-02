@@ -42,6 +42,10 @@ DECK_SOURCE = REPO / "exhibit" / "decks" / "starter"
 WORK = REPO / "reports" / "v2" / "exhibit" / "work"
 PUBLISHED = REPO / "site" / "exhibit"
 AUTHOR_REVIEWS = DECK_SOURCE / "author_reviews.jsonl"
+ADJUDICATIONS = DECK_SOURCE / "adjudications.jsonl"
+# What the deck says about how its rounds were checked, until a person has reviewed them.
+REVIEW_LABEL = {"en": "Checked by AI against the pages; human review pending.",
+                "fr": "V\u00e9rifi\u00e9 par l'IA d'apr\u00e8s les pages; r\u00e9vision humaine \u00e0 venir."}
 BUILDER_VERSION = "1"
 # The prompt each draft was written under, stamped on the draft when it is written.
 PROMPT_VERSIONS = {"when": prompts.WHEN_VERSION, "same": prompts.SAME_VERSION, "dial": prompts.DIAL_VERSION}
@@ -504,11 +508,61 @@ def author_decisions() -> dict:
     return latest(AUTHOR_REVIEWS, lambda r: r["round_id"])
 
 
+def adjudications() -> dict:
+    """Decisions on flagged rounds made by the strongest model reading each round against its page
+    text (approve, fix or drop, with a written reason), standing in until a person reviews. The last
+    one for a round wins, and each names the fingerprint of the round it read."""
+    return latest(ADJUDICATIONS, lambda r: r["round_id"])
+
+
+def apply_fixes(rnd: dict, fixes: list) -> None:
+    """Apply an adjudication's fixes in place. A fix sets the value at a dotted path
+    ("play.epochs.3.answer") or replaces one exact occurrence of `old` with `new` in the string there."""
+    for fix in fixes:
+        parts = fix["path"].split(".")
+        target = rnd
+        for key in parts[:-1]:
+            target = target[int(key)] if isinstance(target, list) else target[key]
+        last = int(parts[-1]) if isinstance(target, list) else parts[-1]
+        if "set" in fix:
+            target[last] = fix["set"]
+            continue
+        current = target[last]
+        if not isinstance(current, str) or current.count(fix["old"]) != 1:
+            raise ValueError(f"{rnd['id']}: fix at {fix['path']} does not match the text exactly once")
+        target[last] = current.replace(fix["old"], fix["new"])
+
+
+def adjudicate(rnd: dict, adj: dict, corpora, s: settings.Settings) -> None:
+    """Apply one adjudication to a decided round. A fixed round goes through the builder's checks
+    again and gets a new fingerprint; a fix that breaks a check refuses the round."""
+    fp = rnd["checks"]["fingerprint"]
+    rnd["review"]["adjudication"] = {k: adj.get(k) for k in ("decision", "reason", "reviewer", "date", "label")}
+    if adj["decision"] == "drop":
+        rnd["status"] = "ai-rejected"
+        return
+    if adj.get("fixes"):
+        apply_fixes(rnd, adj["fixes"])
+        for fix in adj["fixes"]:
+            rnd["provenance"]["edits"].append({"date": adj["date"], "by": adj["reviewer"], "field": fix["path"],
+                                               "note": "fixed in adjudication against the page text"})
+        reasons = deck_mod.check_round(rnd, corpora, s.care)
+        rnd["checks"] = dict(rnd["checks"], refusals=reasons, fingerprint=deck_mod.round_fingerprint(rnd),
+                             adjudicated_from=fp, checked_at=now())
+        if reasons:
+            rnd["status"] = "refused"
+            return
+    rnd["status"] = "ai-adjudicated"
+
+
 def cmd_decide(args, s: settings.Settings) -> int:
+    load_env()
+    corpora = Corpora()
     checked = read_json(WORK / "checked.json") or []
     panel = latest(WORK / "panel.jsonl", lambda r: (r["round_id"], r["judge"], r["fingerprint"]))
     review = latest(WORK / "review.jsonl", lambda r: (r["round_id"], r["fingerprint"]))
     authors = author_decisions()
+    adjudged = adjudications()
     names = judges.load_panel().judges
     decided = []
     for rnd in checked:
@@ -544,6 +598,9 @@ def cmd_decide(args, s: settings.Settings) -> int:
                     rnd["explanation_status"] = "author-reviewed"
             elif decision["decision"] == "reject":
                 rnd["status"] = "author-rejected"
+        elif rnd["status"] == "flagged" and adjudged.get(rnd["id"], {}).get("fingerprint") == fp:
+            # A person's decision always wins; an adjudication covers only flagged rounds nobody decided.
+            adjudicate(rnd, adjudged[rnd["id"]], corpora, s)
         decided.append(rnd)
     write_json(WORK / "decided.json", decided)
     counts = {}
@@ -601,13 +658,13 @@ def cmd_build(args, s: settings.Settings) -> int:
     grid = read_json(WORK / "gaphunt.json")
     summary = {"collections": list(s.collections), "dial": [s.dial_first_year, s.dial_last_year],
                "idle_reset_seconds": s.idle_reset_seconds, "offline_image_cache": s.offline_image_cache,
-               "panel_calibrated": False}
+               "panel_calibrated": False, "review_label": REVIEW_LABEL}
     doc = deck_mod.deck_document(args.deck_id, now(), BUILDER_VERSION, chosen, grid, summary)
     PUBLISHED.mkdir(parents=True, exist_ok=True)
     write_json(PUBLISHED / "deck.json", doc)
     rejected = [{"id": r["id"], "mode": r["mode"], "status": r["status"],
                  "reasons": r["checks"]["refusals"] or (r.get("review") or {}).get("flags") or []}
-                for r in decided if r["status"] in ("refused", "author-rejected")]
+                for r in decided if r["status"] in ("refused", "author-rejected", "ai-rejected")]
     write_json(WORK / "rejected.json", rejected)
     short = {m: doc["counts"][m] for m in deck_mod.MODES}
     want = {"same_or_not": s.same_or_not_rounds, "when_was_this": s.when_was_this_cards,

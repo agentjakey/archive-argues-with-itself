@@ -27,9 +27,12 @@ FORMAT = "exhibit-deck/1"
 MODES = ("same_or_not", "when_was_this", "time_dial")
 SAME_OR_NOT_CHOICES = ("same_thing_changed", "real_disagreement", "not_comparable", "not_enough_evidence")
 QUOTE_ROLES = ("claim", "decisive", "clue", "date", "evidence")
-STATUSES = ("draft", "refused", "flagged", "model-reviewed", "author-reviewed", "author-rejected")
-# Only these reach a published deck. A model-reviewed round carries its status to the screen.
-PUBLISHABLE = ("model-reviewed", "author-reviewed")
+STATUSES = ("draft", "refused", "flagged", "model-reviewed", "ai-adjudicated", "author-reviewed",
+            "ai-rejected", "author-rejected")
+# Only these reach a published deck, and each carries its status to the screen. ai-adjudicated: a
+# flagged round the strongest model read against its page text and approved or fixed, until a person
+# reviews it.
+PUBLISHABLE = ("model-reviewed", "ai-adjudicated", "author-reviewed")
 EXPLANATION_STATES = ("model-drafted", "author-reviewed", "author-edited")
 
 

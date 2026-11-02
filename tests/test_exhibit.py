@@ -256,3 +256,56 @@ def test_round_fingerprint_ignores_review_fields(corpus):
     assert deck.round_fingerprint(rnd) == deck.round_fingerprint(other)
     other["explanation"]["en"] = "changed"
     assert deck.round_fingerprint(rnd) != deck.round_fingerprint(other)
+
+
+def load_deck_script():
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("exhibit_deck", Path(__file__).resolve().parents[1] / "scripts" / "v2" / "exhibit_deck.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def flagged_round(corpus):
+    rnd = when_round(corpus)
+    rnd["checks"] = {"builder_version": "1", "refusals": [], "fingerprint": deck.round_fingerprint(rnd)}
+    rnd["status"] = "flagged"
+    rnd["review"] = {"flags": ["panel:x:fair_to_visitor:fail"], "author": None}
+    return rnd
+
+
+def adjudication(decision, fixes=()):
+    return {"decision": decision, "reason": "read against the page", "fixes": list(fixes),
+            "reviewer": "model", "date": "2026-11-01", "label": "ai-adjudicated"}
+
+
+def test_adjudication_fix_is_rechecked_and_refingerprinted(corpus, rules):
+    mod = load_deck_script()
+    s = settings.load()
+    rnd = flagged_round(corpus)
+    before = rnd["checks"]["fingerprint"]
+    mod.adjudicate(rnd, adjudication("fix", [{"path": "explanation.en", "old": "a new safety", "new": "a new sawmill safety"}]),
+                   lambda name: corpus, s)
+    assert rnd["status"] == "ai-adjudicated" and rnd["status"] in deck.PUBLISHABLE
+    assert rnd["explanation"]["en"] == "The page talks about a new sawmill safety program."
+    assert rnd["checks"]["adjudicated_from"] == before
+    assert rnd["checks"]["fingerprint"] == deck.round_fingerprint(rnd) != before
+    assert rnd["provenance"]["edits"][-1]["field"] == "explanation.en"
+
+
+def test_adjudication_fix_that_breaks_a_check_refuses_the_round(corpus, rules):
+    mod = load_deck_script()
+    rnd = flagged_round(corpus)
+    mod.adjudicate(rnd, adjudication("fix", [{"path": "quotes.0.text", "set": "Words that are not on the page."}]),
+                   lambda name: corpus, settings.load())
+    assert rnd["status"] == "refused" and "quote_not_on_page:c1" in rnd["checks"]["refusals"]
+
+
+def test_adjudication_drop_and_inexact_fix(corpus, rules):
+    mod = load_deck_script()
+    rnd = flagged_round(corpus)
+    mod.adjudicate(rnd, adjudication("drop"), lambda name: corpus, settings.load())
+    assert rnd["status"] == "ai-rejected" and rnd["status"] not in deck.PUBLISHABLE
+    with pytest.raises(ValueError):
+        mod.apply_fixes(flagged_round(corpus), [{"path": "explanation.en", "old": "not there", "new": "x"}])
