@@ -9,7 +9,8 @@ Every writer has draft(system, user) -> Draft2 and last_usage. Base URLs, the en
 that hold keys, and any extra headers come from config/writers.toml and the environment; no vendor
 endpoint or model name is written here. Keys are read from the environment only and never logged.
 
-The OpenAI-compatible writer sends the same system prompt and user prompt as the Anthropic writer,
+The writer makes one try per draft, no retries, like the Anthropic writer (max_retries=0): the
+engine gives the model a time budget and a retry would overrun it. The OpenAI-compatible writer sends the same system prompt and user prompt as the Anthropic writer,
 temperature 0, and asks for the Draft2 JSON schema as a structured response. An endpoint that refuses
 a JSON schema (HTTP 400) gets the same request with the schema stated in the prompt instead and
 response_format json_object; the reply is validated against Draft2 either way. Plain HTTP goes through
@@ -131,12 +132,14 @@ class OpenAICompatWriter:
         self.last_usage, self.last_meta = {}, {}
         structured = self.endpoint.json_schema
         try:
-            reply = self._post(self.url, self._headers, self.body(system, user, structured), timeout_s=self.timeout)
+            reply = self._post(self.url, self._headers, self.body(system, user, structured), timeout_s=self.timeout,
+                               attempts=1)
         except net.HttpError as exc:
             if exc.status != 400 or not structured:
                 raise
             structured = False
-            reply = self._post(self.url, self._headers, self.body(system, user, False), timeout_s=self.timeout)
+            reply = self._post(self.url, self._headers, self.body(system, user, False), timeout_s=self.timeout,
+                               attempts=1)
         usage = reply.get("usage") or {}
         self.last_usage = {"input_tokens": int(usage.get("prompt_tokens") or 0),
                            "output_tokens": int(usage.get("completion_tokens") or 0)}

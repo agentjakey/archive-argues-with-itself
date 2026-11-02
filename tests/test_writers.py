@@ -24,7 +24,8 @@ class FakePost:
     def __init__(self, *replies):
         self.replies, self.calls = list(replies), []
 
-    def __call__(self, url, headers, body, timeout_s=None):
+    def __call__(self, url, headers, body, timeout_s=None, attempts=None):
+        assert attempts == 1          # the writer never retries inside the engine's time budget
         self.calls.append((url, headers, body))
         r = self.replies.pop(0)
         if isinstance(r, Exception):

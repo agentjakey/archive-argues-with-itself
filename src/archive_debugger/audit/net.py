@@ -30,12 +30,13 @@ def _retryable(status: int) -> bool:
 
 
 def post_json(url: str, headers: dict, body: dict, *, timeout_s: float = 120.0,
-              sleep: Callable[[float], None] = time.sleep, response_headers: dict | None = None) -> dict:
+              sleep: Callable[[float], None] = time.sleep, response_headers: dict | None = None,
+              attempts: int = ATTEMPTS) -> dict:
     """The decoded JSON reply. When response_headers is given, the reply's headers are copied into
-    it, with lower-case names."""
+    it, with lower-case names. attempts=1 makes one try only (a caller with its own time budget)."""
     data = json.dumps(body).encode("utf-8")
     last: Exception | None = None
-    for attempt in range(ATTEMPTS):
+    for attempt in range(attempts):
         req = urllib.request.Request(url, data=data, method="POST",
                                      headers={"content-type": "application/json", "user-agent": USER_AGENT, **headers})
         try:
@@ -53,6 +54,6 @@ def post_json(url: str, headers: dict, body: dict, *, timeout_s: float = 120.0,
         except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as exc:
             last = exc
             delay = 2.0 * 2 ** attempt
-        if attempt < ATTEMPTS - 1:
+        if attempt < attempts - 1:
             sleep(delay)
     raise last if last else RuntimeError("request failed")
