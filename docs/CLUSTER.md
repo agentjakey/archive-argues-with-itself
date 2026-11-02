@@ -83,6 +83,52 @@ scanned pages, and 25 to 50 million passages. The shard plan estimates 36 millio
 The owner's cost is the GPU-hours times their own rate. Storage is in our R2 bucket and costs the
 owner nothing. Network is the pods reading inputs from and writing outputs to R2.
 
+## Serving a model from the cluster
+
+An open-weight writer or judge can also be served from the cluster for as long as it is lent. The
+server is a Deployment with an OpenAI-compatible API. The model comes from a preset in the values
+file:
+
+| Preset | Model and hardware |
+|---|---|
+| `mistral-small-4-nvfp4-96gb` | Mistral Small 4, NVFP4, one 96 GB GPU |
+| `mistral-small-4-tp2-80gb` | Mistral Small 4, two 80 GB GPUs |
+| `gpt-oss-120b` | gpt-oss-120b, one 80 GB GPU |
+| `ministral-3-14b` | Ministral 3 14B, one 24 GB GPU |
+| `ollama-cpu` | a CPU check of the same API with a small model |
+
+Each preset uses the vLLM flags from its model card. Our changes only shorten the context and cap
+concurrent requests.
+
+The server has startup, readiness and liveness probes. It is reachable only through an outbound-only
+Cloudflare Tunnel:
+
+- no Ingress, LoadBalancer or NodePort;
+- a NetworkPolicy that admits only the tunnel's pods;
+- no public port opened on anyone's cluster.
+
+```
+python scripts/v2/cluster.py render --values k8s/values.toml --job serve    # look first
+python scripts/v2/cluster.py up --values k8s/values.toml --job serve
+python scripts/v2/cluster.py down --values k8s/values.toml                  # removes it with everything else
+```
+
+Jake's steps (the token and DNS are his):
+
+1. In Cloudflare Zero Trust, create a tunnel (for example `archive-argues-model`). Copy its token.
+2. Give the tunnel a public hostname, for example `model.archiveargues.org`, pointing to
+   `http://model-server:8000` (`http://model-server:11434` for the CPU preset).
+3. Create an Access application for that hostname with a Service Auth policy that admits only one
+   service token, `archive-argues-engine`. Copy the token's client id and secret.
+4. In the cluster's namespace, create the tunnel Secret:
+   `kubectl -n <namespace> create secret generic archive-argues-tunnel --from-literal=token=<tunnel token>`.
+   The values file names it in `[secrets] tunnel`.
+5. Give the engine Worker the service token as secrets (`wrangler secret put CF_ACCESS_CLIENT_ID` and
+   `CF_ACCESS_CLIENT_SECRET`). Set its `openai_compat` provider's base URL to
+   `https://model.archiveargues.org/v1`. Every request then carries the two `CF-Access-Client-*` headers.
+6. When the loan ends: `cluster.py down`, then delete the tunnel, the Access application and the
+   service token.
+
 ## Credit
 
 When a cluster is lent, the site's About page and the release notes say: "Batch processing for the
