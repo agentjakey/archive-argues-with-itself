@@ -15,9 +15,11 @@ its state lives on R2 under audits/v1/<shard>/state/, so a fresh runner resumes 
      generator's "answerable" task (audit/generator.py, model-drafted, its quote and form gates), on
      gpt-oss-120b through the archive-argues-audit gateway: about a tenth of a cent a question, and a
      model that is neither the writer nor on the SUPPORTS panel;
-  3. answers each through the real engine with the writer the shard serves with ([generate] in the
-     engine config: today Claude Haiku 4.5, the v1 pipeline), until the answers hold the target number
-     of cited sentences;
+  3. answers each through the real engine with the writer production serves the shard with: the writer
+     candidate named in CIVIC_WRITER_CANDIDATE (config/writers.toml; production's engine Worker sets the
+     same name in WRITER_CANDIDATE: today glm53, GLM-5.3 with low reasoning, the v2 answer), or, when that
+     is unset, [generate] in the engine config (Claude Haiku 4.5, the v1 pipeline), until the answers
+     hold the target number of cited sentences;
   4. turns the answers into sentence judge items (run_benchmark.py judge-items), runs the
      deterministic gates on the shard's own pages, and has the SUPPORTS panel judge every item (config/
      audit.toml [panel.checks.supports]: DeepSeek V4 Flash on Workers AI through the gateway, and
@@ -315,7 +317,10 @@ class ShardAudit:
         self.run_id = f"audit-{sid}"
         self.run_dir = self.work / self.run_id
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        self.state_prefix = f"{AUDIT_PREFIX}/{sid}/state"
+        # A resumed audit continues with the writer it started with: state for a writer candidate lives
+        # apart (state-<candidate>/), so answers from another writer are never mixed in.
+        candidate = os.environ.get("CIVIC_WRITER_CANDIDATE")
+        self.state_prefix = f"{AUDIT_PREFIX}/{sid}/state" + (f"-{candidate}" if candidate else "")
         self._sync_lock = threading.Lock()
         self.restore_state()
         self.ledger = ledger if ledger is not None else R2Ledger(store, self.work / "ledger.jsonl",
@@ -350,11 +355,32 @@ class ShardAudit:
     # stages -----------------------------------------------------------------------------------
     def engine_config(self) -> tuple:
         from archive_debugger.generate.cli import load_generate_config
+        candidate = self.candidate()
+        if candidate:
+            # The writer production serves with (the engine's WRITER_CANDIDATE): the v2 answer, its model
+            # and extra request fields; the engine is handed that writer, as the container is.
+            cfg_path = rb.write_engine_config(ENGINE_CONFIG, self.work / "engine.toml", answer_version="v2",
+                                              model=candidate["model"], effort=candidate.get("effort"),
+                                              extra_body=candidate.get("extra_body"))
+            return cfg_path, load_generate_config(cfg_path), candidate["model"], candidate["provider"]
         gcfg = load_generate_config(ENGINE_CONFIG)
         writer = gcfg["model"]
         cfg_path = rb.write_engine_config(ENGINE_CONFIG, self.work / "engine.toml", answer_version="v1",
                                           model=writer, effort=None)
         return cfg_path, load_generate_config(cfg_path), writer, gcfg.get("provider") or "anthropic"
+
+    @staticmethod
+    def candidate() -> Optional[dict]:
+        """The writer candidate named in CIVIC_WRITER_CANDIDATE (config/writers.toml), or None."""
+        from archive_debugger.generate import writers
+        from archive_debugger.generate.cli import WRITER_CANDIDATE_ENV
+        name = os.environ.get(WRITER_CANDIDATE_ENV)
+        if not name:
+            return None
+        candidates = writers.load_candidates()
+        if name not in candidates:
+            raise SystemExit(f"{WRITER_CANDIDATE_ENV}={name!r} is not a candidate in config/writers.toml")
+        return dict(candidates[name], name=name)
 
     def sentences_so_far(self) -> int:
         rows = rb.latest_rows(self.run_dir / "answers.jsonl")
@@ -404,7 +430,13 @@ class ShardAudit:
         max_questions = max(10, int(math.ceil(target / (y["answered"] * y["sentences_per_answer"]) * 2)))
         answers_path = self.run_dir / "answers.jsonl"
         model = rb.price_model(writer)
-        llm = self.writer_factory("v1", writer, None, self.stub, gcfg)
+        candidate = self.candidate()
+        self.pipeline = "v2" if candidate else "v1"
+        if candidate:
+            llm = self.writer_factory("v2", writer, candidate.get("effort"), self.stub, gcfg,
+                                      provider=candidate["provider"], endpoint=candidate.get("endpoint"))
+        else:
+            llm = self.writer_factory("v1", writer, None, self.stub, gcfg)
         try:
             with shard_engine(self.work, cfg_path, db, vec, llm, "stub" if self.stub else provider) as client:
                 batch = 0
@@ -424,7 +456,7 @@ class ShardAudit:
                         if self.sentences_so_far() >= target:
                             break
                         try:
-                            row = rb.ask(client, q, SCOPE, llm, pipeline="v1", writer=writer, effort=None, model=model,
+                            row = rb.ask(client, q, SCOPE, llm, pipeline=self.pipeline, writer=writer, effort=None, model=model,
                                          gcfg=gcfg, stub=self.stub, ledger=self.ledger, run_id=self.run_id, cap=cap)
                         except BudgetExceeded as exc:
                             return str(exc)
@@ -534,7 +566,9 @@ class ShardAudit:
                       "open_reservations_usd": round(totals.reserved, 6), "ledger": LEDGER_KEY, "phase": PHASE,
                       "phase_cap_usd": TOTAL_CAP_USD},
             "sizing": sizing,
-            "writer": {"model": getattr(self, "writer", None), "pipeline": "v1", "engine_config": "config/shards/engine.toml"},
+            "writer": {"model": getattr(self, "writer", None), "pipeline": getattr(self, "pipeline", "v1"),
+                       "candidate": os.environ.get("CIVIC_WRITER_CANDIDATE") or None,
+                       "engine_config": "config/shards/engine.toml"},
             "drafter": {"model": getattr(self.drafter, "model", None), "task": "answerable",
                         "draft_prompt_version": generator.DRAFT_PROMPT_VERSION, "generator_version": generator.GENERATOR_VERSION},
             "panel": {"judges": [a, b], "models": [self.cfg.specs[a].model, self.cfg.specs[b].model],

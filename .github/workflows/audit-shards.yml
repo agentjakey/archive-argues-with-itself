@@ -28,6 +28,9 @@ permissions:
   contents: read
 
 env:
+  # The writer production serves every scope with (worker/engine/wrangler.jsonc production WRITER_CANDIDATE);
+  # tests/test_audit_shard.py keeps the two the same.
+  CIVIC_WRITER_CANDIDATE: glm53
   R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
   R2_BUCKET: ${{ secrets.R2_BUCKET }}
   R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

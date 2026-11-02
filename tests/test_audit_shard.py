@@ -185,3 +185,29 @@ def test_sizing_shares_what_is_left_equally_and_says_when_it_cannot_reach_the_ta
     # After an audited shard, the measured cost per sentence replaces the estimate.
     store.put("audits/v1/some-shard/result.json", json.dumps({"spend": {"usd": 1.0}, "sentences_judged": 200}).encode())
     assert mod.cost_per_sentence(mod.audited_shards(store))[0] == pytest.approx(0.005)
+
+
+def test_the_audit_writes_with_the_writer_production_serves(tmp_path, monkeypatch):
+    # Production's engine Worker sets WRITER_CANDIDATE; the audit reads the same candidate name and
+    # answers with that writer and the v2 answer, never with a writer production does not serve.
+    from archive_debugger.jobs.store import LocalStore
+    mod = load_module()
+    monkeypatch.setenv("CIVIC_WRITER_CANDIDATE", "glm53")
+    audit = mod.ShardAudit("federal-1899-1911", LocalStore(tmp_path / "r2"), tmp_path / "work", stub=True, log=lambda m: None)
+    cfg_path, gcfg, writer, provider = audit.engine_config()
+    text = cfg_path.read_text(encoding="utf-8")
+    assert writer == "@cf/zai-org/glm-5.3" and provider == "workers_ai"
+    assert 'answer_version = "v2"' in text and '"reasoning_effort" = "low"' in text
+    monkeypatch.delenv("CIVIC_WRITER_CANDIDATE")
+    _, _, writer, provider = audit.engine_config()
+    assert provider == "anthropic" and writer.startswith("claude-haiku-4-5")
+
+
+def test_the_audit_workflow_names_the_production_writer():
+    import re
+    repo = Path(__file__).resolve().parents[1]
+    wrangler = (repo / "worker" / "engine" / "wrangler.jsonc").read_text(encoding="utf-8")
+    production = wrangler[wrangler.index('"production"'):]
+    served = re.search(r'"WRITER_CANDIDATE":\s*"([^"]*)"', production).group(1)
+    workflow = (repo / ".github" / "workflows" / "audit-shards.yml").read_text(encoding="utf-8")
+    assert re.search(r"CIVIC_WRITER_CANDIDATE:\s*(\S+)", workflow).group(1).strip("'\"") == served
