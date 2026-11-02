@@ -157,10 +157,14 @@ federal Auditor General: the speaker shifted.
 4. Supports fail. The passage says the booklet is part of a series from the Centre; the sentence says \
 the Centre is part of a series. The claim is reversed.
 5. In scope fail. Question: "What did United States Medicaid reports describe about eligibility \
-rules?" The sentences are word-for-word supported by a 2002 Canadian Senate report on health care \
-systems in other countries. Supports: pass. In scope: fail, because the question asks for United \
-States reports and the page is a Canadian committee report. Answers, for the whole answer: partial \
-at best (a Canadian report describing Medicaid, not Medicaid reports).
+rules?" The cited page is a 2002 Canadian Senate report on health care systems in other countries, \
+and it describes Medicaid's eligibility rules. A sentence that says "United States Medicaid reports \
+described that each State sets its own eligibility standards" is Supports partial: the facts are on \
+the page, but the sentence names a kind of source the page is not (the source shifted, as in example \
+3). A sentence that states the same facts without naming a source ("Each State sets its own \
+eligibility standards") is Supports pass. Either way In scope: fail, because the question asks for \
+United States reports and the page is a Canadian committee report. Answers, for the whole answer: \
+partial at best (a Canadian report describing Medicaid, not Medicaid reports).
 
 """
 

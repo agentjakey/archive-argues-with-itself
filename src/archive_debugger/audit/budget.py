@@ -8,6 +8,7 @@ A batch reserves its worst case when it is submitted; the reservation is replace
 cost when its results are read, so a crash leaves the ledger erring high, never low."""
 from __future__ import annotations
 
+import json
 import threading
 import time
 from dataclasses import dataclass
@@ -60,10 +61,36 @@ class Ledger:
         # A check and the reservation it allows are one step, and no entry is read while another
         # thread is writing one.
         self._lock = threading.RLock()
+        # The ledger only grows (appends from this and other processes), so entries already read are
+        # kept and only the complete lines after them are read on the next check. A file that got
+        # shorter is read again from the start.
+        self._read: list = []
+        self._offset = 0
 
     def _entries(self) -> list:
         with self._lock:
-            return list(iter_jsonl(self.path))
+            try:
+                size = self.path.stat().st_size
+            except FileNotFoundError:
+                self._read, self._offset = [], 0
+                return []
+            if size < self._offset:
+                self._read, self._offset = [], 0
+            if size > self._offset:
+                with self.path.open("rb") as fh:
+                    fh.seek(self._offset)
+                    data = fh.read(size - self._offset)
+                end = data.rfind(b"\n") + 1          # complete lines only; a line being written waits
+                for line_no, raw in enumerate(data[:end].split(b"\n"), 1):
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    try:
+                        self._read.append(json.loads(line.decode("utf-8")))
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(f"{self.path}: byte {self._offset}: not a JSON line ({exc.msg})") from exc
+                self._offset += end
+            return list(self._read)
 
     def totals(self, run_id: Optional[str] = None, *, phase: Optional[str] = None) -> Totals:
         """Spend and open reservations for one run, or for the whole of this ledger's phase (or the

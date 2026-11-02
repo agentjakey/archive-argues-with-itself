@@ -24,10 +24,14 @@ and matches, quotes are on it, the trap's corpus check holds) and is marked mode
 judge panel then reads each item (prompts.py, kind "benchmark"), and a person approves a sample."""
 from __future__ import annotations
 
+import hashlib
 import json
 import random
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Callable, Optional
 
 from archive_debugger.audit import gates, net
@@ -102,11 +106,12 @@ def _source(row) -> dict:
 
 
 def sample_pages(conn, count: int, rng: random.Random, *, quality: tuple, min_words: int = 80,
-                 need_digits: bool = False, max_tries: int = 40) -> list:
+                 need_digits: bool = False, max_tries: int = 40, exclude=None) -> list:
     """`count` passages chosen at random by rowid from dated items with a known jurisdiction, with
-    OCR quality in [low, high) and at least min_words words, one per item."""
+    OCR quality in [low, high) and at least min_words words, one per item. Items in `exclude`
+    (archive item ids already used elsewhere) are never chosen."""
     top = conn.execute("SELECT max(rowid) FROM passages").fetchone()[0]
-    out, seen = [], set()
+    out, seen = [], set(exclude or ())
     for _ in range(max_tries):
         if len(out) >= count:
             break
@@ -196,7 +201,7 @@ class Drafter:
     """One drafting model on Workers AI, through the audit gateway, every call metered."""
 
     def __init__(self, model: str, ledger: Ledger, run_id: str, cap: float, *, gateway: Optional[str],
-                 post: Callable = None, credentials: Callable = None, max_tokens: int = 1500):
+                 post: Callable = None, credentials: Callable = None, max_tokens: int = 1500, cache_path=None):
         from archive_debugger.audit import judges
         self.model, self.ledger, self.run_id, self.cap = model, ledger, run_id, cap
         self.gateway, self.max_tokens = gateway, max_tokens
@@ -204,10 +209,38 @@ class Drafter:
         self.credentials = credentials or judges.workers_ai_credentials
         self.calls = 0
         self.errors: list = []
+        # A draft cache (optional): each model reply is kept by a hash of the model and the messages,
+        # so a stopped run replays what it already paid for and drafts only the rest.
+        self.cache_path = cache_path
+        self.cache: dict = {}
+        self._cache_lock = threading.Lock()
+        if cache_path is not None and Path(cache_path).exists():
+            for line in Path(cache_path).read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    row = json.loads(line)
+                    self.cache[row["key"]] = row["content"]
+
+    def cache_key(self, system: str, user: str) -> str:
+        text = "\n".join([self.model, str(self.max_tokens), system, user])
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    def prefetch(self, task: str, source_lists: list, workers: int = 3) -> None:
+        """Draft several items a few at a time, so the sequential pass after it reads them from the
+        cache. Only used with a cache; the items drafted and their order do not change."""
+        if self.cache_path is None:
+            return
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(lambda sources: self.draft(task, sources), source_lists))
 
     def draft(self, task: str, sources: list) -> Optional[dict]:
         from archive_debugger.audit import judges
         system, user = draft_message(task, sources)
+        key = self.cache_key(system, user)
+        if key in self.cache:
+            try:
+                return parse_draft(self.cache[key], task)
+            except (ValueError, json.JSONDecodeError):
+                return None
         account, token = self.credentials()
         url = judges.WORKERS_AI_URL.format(account=account)
         headers = judges.workers_ai_headers(token, self.gateway)
@@ -230,10 +263,16 @@ class Drafter:
                                   int(usage.get("completion_tokens") or self.max_tokens), what=f"draft {task}")
         finally:
             self.ledger.release(self.run_id, reservation)
-        self.calls += 1
         choice = (reply.get("choices") or [{}])[0]
+        content = (choice.get("message") or {}).get("content")
+        with self._cache_lock:
+            self.calls += 1
+            if self.cache_path is not None and content is not None:
+                self.cache[key] = content
+                with open(self.cache_path, "a", encoding="utf-8", newline="") as fh:
+                    fh.write(json.dumps({"key": key, "task": task, "content": content}) + "\n")
         try:
-            return parse_draft((choice.get("message") or {}).get("content"), task)
+            return parse_draft(content, task)
         except (ValueError, json.JSONDecodeError):
             return None
 
@@ -285,8 +324,13 @@ def templated(kind: str, topic: str, *, place: str = None, decade: str = None, y
     return f"What did {place} government publications from {year} report about {topic}?"
 
 
-def generate(conn, collection, drafter: Drafter, *, answerable: int, per_trap: int, seed: int, log=print) -> tuple:
-    """(items, rejected) for one collection. `collection` is a collections.Collection."""
+def generate(conn, collection, drafter: Drafter, *, answerable: int, per_trap: int, seed: int, log=print,
+             exclude=None, ocr_items: Optional[int] = None) -> tuple:
+    """(items, rejected) for one collection. `collection` is a collections.Collection. `exclude` is a
+    set of archive item ids no source page may come from (both pages of a pair); `ocr_items` is the
+    poor-OCR count when it differs from per_trap (0 drafts none)."""
+    exclude = set(exclude or ())
+    ocr_items = per_trap if ocr_items is None else ocr_items
     rng = random.Random(f"{seed}:{collection.name}")
     items, rejected, counters = [], [], {c: 0 for c in CATEGORIES}
 
@@ -306,7 +350,10 @@ def generate(conn, collection, drafter: Drafter, *, answerable: int, per_trap: i
 
     # Answerable items, and the traps derived from them (wrong period, wrong place, outside the window).
     newest = newest_year(conn)
-    for page in sample_pages(conn, answerable + per_trap * 2, rng, quality=(0.66, 1.01)):
+    pages = sample_pages(conn, answerable + per_trap * 2, rng, quality=(0.66, 1.01), exclude=exclude)
+    if hasattr(drafter, "prefetch"):
+        drafter.prefetch("answerable", [[p] for p in pages])
+    for page in pages:
         if kept("answerable") >= answerable and all(kept(c) >= per_trap for c in
                                                      ("wrong_period", "wrong_jurisdiction", "outside_window")):
             break
@@ -350,7 +397,7 @@ def generate(conn, collection, drafter: Drafter, *, answerable: int, per_trap: i
     log(f"[{collection.name}] answerable and derived traps drafted: {dict(counters)}")
 
     # False premises.
-    for page in sample_pages(conn, per_trap * 2, rng, quality=(0.66, 1.01), need_digits=True):
+    for page in sample_pages(conn, per_trap * 2, rng, quality=(0.66, 1.01), need_digits=True, exclude=exclude):
         if kept("false_premise") >= per_trap:
             break
         d = drafter.draft("false_premise", [page])
@@ -362,7 +409,7 @@ def generate(conn, collection, drafter: Drafter, *, answerable: int, per_trap: i
 
     # Incomparable pairs: a second page sharing the first one's key terms, from another place or a
     # period at least 20 years away.
-    for page in sample_pages(conn, per_trap * 4, rng, quality=(0.66, 1.01)):
+    for page in sample_pages(conn, per_trap * 4, rng, quality=(0.66, 1.01), exclude=exclude):
         if kept("incomparable_pair") >= per_trap:
             break
         terms = key_terms(page["text"], 2)
@@ -375,7 +422,7 @@ def generate(conn, collection, drafter: Drafter, *, answerable: int, per_trap: i
             "i.item_id = p.item_id WHERE passages_fts MATCH ? AND i.dated = 1 AND i.item_id != ? "
             "AND (i.jurisdiction_norm != ? OR abs(i.year - ?) >= 20) AND i.jurisdiction_norm NOT IN ('unknown', '') "
             "LIMIT 50", [expr, page["item_id"], page["jurisdiction"], page["year"]]).fetchall()
-        rows = [r for r in rows if float(r["ocr_quality"] or 0) >= 0.66]
+        rows = [r for r in rows if float(r["ocr_quality"] or 0) >= 0.66 and r["item_id"] not in exclude]
         if not rows:
             continue
         other = _source(rng.choice(rows))
@@ -390,8 +437,9 @@ def generate(conn, collection, drafter: Drafter, *, answerable: int, per_trap: i
                        {"why_not_comparable": d["why_not_comparable"], "shared_terms": terms}))
 
     # Poor OCR.
-    for page in sample_pages(conn, per_trap * 2, rng, quality=(0.33, 0.55), min_words=60, need_digits=True):
-        if kept("misleading_ocr") >= per_trap:
+    for page in (sample_pages(conn, ocr_items * 2, rng, quality=(0.33, 0.55), min_words=60, need_digits=True,
+                              exclude=exclude) if ocr_items else []):
+        if kept("misleading_ocr") >= ocr_items:
             break
         d = drafter.draft("misleading_ocr", [page])
         if not d:
