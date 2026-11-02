@@ -99,6 +99,26 @@ def empty_folder(folder: Path) -> None:
         else:
             child.unlink()
 
+TEXT_SUFFIXES = {".html", ".js", ".css", ".json", ".svg", ".txt", ".xml", ".geojson", ".webmanifest", ""}
+# Folders whose files are named or pointed to by their own content hash: never rewritten here.
+HASHED_FOLDERS = ("data/", "exhibit/")
+
+
+def normalize_line_endings(out: Path) -> int:
+    """Text files are published with LF line endings, whatever the checkout used (a Windows checkout
+    writes CRLF), so a release built on any machine is byte-identical to one built on CI."""
+    changed = 0
+    for path in out.rglob("*"):
+        rel = path.relative_to(out).as_posix()
+        if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES or rel.startswith(HASHED_FOLDERS):
+            continue
+        raw = path.read_bytes()
+        if b"\r\n" in raw:
+            path.write_bytes(raw.replace(b"\r\n", b"\n"))
+            changed += 1
+    return changed
+
+
 def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, api_origin: str,
              exhibit_app: Path | None = None, exhibit_deck: Path | None = None,
              catalogue_page: Path | None = None, catalogue_data: Path | None = None,
@@ -138,6 +158,7 @@ def assemble(release_id: str, web: Path, data: Path, static: Path, out: Path, ap
         # The catalogue browser: a static page and the registry's compiled files (catalogue/data/).
         shutil.copytree(catalogue_page, out / "catalogue", dirs_exist_ok=True)
         shutil.copytree(catalogue_data, out / "catalogue" / "data", dirs_exist_ok=True)
+    normalize_line_endings(out)
     export = json.loads((data / "export.json").read_text(encoding="utf-8"))
     manifest = {
         "release_id": release_id,
