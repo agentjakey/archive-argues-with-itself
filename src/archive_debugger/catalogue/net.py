@@ -8,10 +8,13 @@ rather than pressing on.
 
 How many requests run at once is set by LIMIT (AdaptiveLimit). It starts at START_CONCURRENCY. It
 rises one step, to at most MAX_CONCURRENCY, only after QUIET_S seconds at the current level with no
-429, 503, other server error or connection failure, and with latency flat: the median time to the
-first byte over the last LATENCY_WINDOW_S seconds is no more than LATENCY_RISE times the median at
-the start of the level. Any of those errors puts it straight back to START_CONCURRENCY and restarts
-the clock; so does latency that rises past the same bound after a step up. configure() sets the
+429 or 503 (LOAD_SIGNALS) and with latency flat: the median time to the first byte over the last
+LATENCY_WINDOW_S seconds is no more than LATENCY_RISE times the median at the start of the level. A
+429 or 503 puts it straight back to START_CONCURRENCY and restarts the clock; so does latency that
+rises past the same bound after a step up. Other server errors, timeouts and dropped connections
+are retried with backoff and counted (AdaptiveLimit.seen, written to the fetch status) but do not
+restart the hour: Jake's rule is an hour with no 429 or 503 and flat latency, and a slow or broken
+host shows up in the latency check. configure() sets the
 start, the ceiling and the step for a run (the cloud fetch: 4, 8, 2); nothing may set a ceiling
 above HARD_CEILING, the most requests the whole project ever sends archive.org at once."""
 from __future__ import annotations
@@ -36,7 +39,7 @@ LATENCY_WINDOW_S = 900.0
 LATENCY_RISE = 1.25
 MIN_SAMPLES = 50
 HARD_CEILING = 8
-LOAD_SIGNALS = (408, 429, 502, 503, 504)   # these, timeouts and connection failures reset the limit
+LOAD_SIGNALS = (429, 503)   # these reset the limit; every response that is not a success is counted
 
 
 class HttpError(Exception):
@@ -87,6 +90,7 @@ class AdaptiveLimit:
         self.samples: list = []          # (time, seconds to first byte) at the current level
         self.baseline: Optional[float] = None
         self.hold_until = 0.0            # a Retry-After pauses every request, not just the refused one
+        self.seen: dict = {}             # count of each response that was not a success, by status or error
 
     def acquire(self) -> None:
         with self.cond:
@@ -112,6 +116,10 @@ class AdaptiveLimit:
         self.samples = []
         self.baseline = None
         self.cond.notify_all()
+
+    def count(self, what: str) -> None:
+        with self.cond:
+            self.seen[what] = self.seen.get(what, 0) + 1
 
     def problem(self, what: str) -> None:
         with self.cond:
@@ -147,7 +155,8 @@ class AdaptiveLimit:
             now = self.clock()
             return {"limit": self.limit, "level_for_s": round(now - self.level_since),
                     "since_problem_s": None if self.last_problem is None else round(now - self.last_problem),
-                    "baseline_ttfb_s": None if self.baseline is None else round(self.baseline, 3)}
+                    "baseline_ttfb_s": None if self.baseline is None else round(self.baseline, 3),
+                    "not_ok": dict(self.seen)}
 
 
 LIMIT = AdaptiveLimit()
@@ -180,13 +189,13 @@ def get(url: str, params: dict | None = None, *, timeout_s: float = 120.0, sleep
             return data
         except urllib.error.HTTPError as exc:
             text = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+            limit.count(str(exc.code))
             if exc.code in (429, 503) and refusals:
                 refusals.refused(exc.code)
             if not (exc.code in (408, 429) or exc.code >= 500):
                 raise HttpError(exc.code, text) from exc
             if exc.code in LOAD_SIGNALS:
-                # A sign the servers are under load: back to the start and restart the quiet hour. A
-                # plain 500 is about one item (the same item fails again) and is only retried.
+                # The server asking us to slow down: back to the start and restart the quiet hour.
                 limit.problem(f"HTTP {exc.code}")
             last = HttpError(exc.code, text)
             asked = retry_after_s(exc.headers.get("retry-after") if exc.headers else None)
@@ -196,7 +205,7 @@ def get(url: str, params: dict | None = None, *, timeout_s: float = 120.0, sleep
                 limit.hold(asked)        # every request waits, as asked
             delay = asked if asked is not None else min(5.0 * 2 ** attempt, MAX_WAIT_S)
         except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError) as exc:
-            limit.problem(type(exc).__name__)
+            limit.count(type(exc).__name__)
             last = exc
             delay = min(5.0 * 2 ** attempt, MAX_WAIT_S)
         finally:
