@@ -1,0 +1,57 @@
+# The v2 index spec (Phase 3, Gate 3, 2026-11-02), in the format of config/jobs/index_spec.toml so the
+# embed job can read it unchanged once run B swaps it in (every embed build key changes with it).
+# Evidence: docs/v2/DECISIONS.md "Phase 3" entries; reports/v2/raw/embedder_ablation/ (scores, quantize,
+# rerank) and reports/v2/benchmark/scores/ (dev-fusion, test-final).
+#
+# What the measurements say, in short:
+# - Retrieval is BM25 first. On the frozen test split, BM25 alone (dense_weight 0) put the source page
+#   in the first ten for 60.7% of answerable questions against 47.2% for today's BM25 + MiniLM-128
+#   fusion (+13.5 points, 95% interval +7.0 to +20.4). The 128-token MiniLM leg costs recall.
+# - The embedder, when a dense leg is wanted, is bge-m3 on Workers AI: on the ablation sub-corpora it
+#   is the best candidate (source page in the first ten 97/160 dense, 95/160 fused with BM25) and costs
+#   the same per row as qwen3-embedding-0.6b (89/160); it is within noise of BM25 alone (93/160), so
+#   the dense leg is optional and off by default (dense_weight 0 in the collection configs).
+# - Stored as int8: no loss measured (97/160 and 95/160 again; 99.2 to 99.7% of the fused top ten
+#   unchanged); a quarter of float32. Sign bits with an int8 rerank lose 2 fused hits of 160.
+# - Cost to embed: $7.25 per million passages measured through Workers AI (noisy OCR runs about 1,300
+#   tokens a passage); the current index (1.88 M passages) about $14; the whole collection (about 35 M
+#   passages at 1.585 a page) about $254. Laptop CPU for MiniLM-128 was 30.7 ms a passage (16 CPU-hours
+#   for the current index).
+
+[index]
+name = "bge-m3-int8-v2"
+model = "BAAI/bge-m3"
+workers_ai_model = "@cf/baai/bge-m3"
+licence = "MIT"
+dim = 1024
+max_seq_length = 8192         # tokens the model accepts; inputs are cut to max_chars first
+max_chars = 2000              # characters sent per passage (the ablation's cut; about 1,300 tokens of OCR text)
+batch_texts = 20              # texts per Workers AI call: 50 noisy OCR passages crossed the model's 60,000-token limit
+normalize = true              # unit vectors, so a dot product is the cosine
+dtype = "float32"             # what the embed job writes; the serving index stores int8 (below)
+passage_prefix = ""           # bge-m3 takes passages and questions as they are
+query_prefix = ""
+
+[storage]
+# The serving form: symmetric per-dimension int8 (codes * scale / 127), 1,024 bytes a passage plus one
+# float32 scale vector per index (scripts/v2/embedder_ablation.py int8_rows). Measured equivalent to
+# float32 on the source-page recall; sign bits (128 bytes a passage) with an int8 rerank of the top
+# 400 are the fallback when memory is tight.
+dtype = "int8"
+scale = "per_dimension_absmax"
+fallback = "sign_bits_then_int8_top_400"
+
+[retrieval]
+# How a query uses the index (config/<collection>.toml [retrieve]).
+bm25 = "fts5"                 # required; the fusion's first leg and, at dense_weight 0, the only one
+dense_weight = 0.0            # measured best on the frozen test; raise only with a re-measured gain
+rrf_k = 60
+query_embedding = "workers_ai"   # bge-m3 queries: median 0.58 to 0.62 s per question through Workers AI
+reranker = ""                 # @cf/baai/bge-reranker-base over BM25's top 30: +6.9 points on the
+                              # sub-corpora (95% +2.5 to +11.3), median 1.0 s; not adopted yet (staging trial)
+
+[backends]
+# How each executor computes the same embedding. Workers AI is the build path (no GPU needed);
+# sentence_transformers on a GPU gives the same model locally. fastembed does not list bge-m3.
+workers_ai = "workers_ai"
+k8s = "sentence_transformers"
