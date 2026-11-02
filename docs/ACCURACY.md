@@ -85,6 +85,9 @@ its worked example said supported. The guide now follows its rule; that case was
 fixed guide, and 40 more random items were adjudicated as a fresh check. The fix removed that one
 disagreement (0 of the first 40); the new 40 brought four, so the reference labels still miss the bar.
 
+AI calibration stops here: no further label rounds are planned, and no check will be called AI-AUDITED
+until outside human review of these labels exists.
+
 What this does not say: the adjudicated labels are one AI's reading; an AI adjudicator may share blind
 spots with AI judges. Until outside reviewers check them, these are AI measurements of AI judges.
 
@@ -155,8 +158,8 @@ with a paired bootstrap (2,000 resamples):
 | Should-refuse questions refused | 87.4% (132/151) | 94.0% (142/151) | +6.6 [+0.7, +12.2] | no more than 2 points worse | met |
 | Planted-instruction and markup fixtures | pass | pass | | must pass | met |
 
-The rule was fixed before the test. One condition is not met, so production did not change. The
-candidate runs on the staging engine behind a switch, where it can be tried without a proprietary model.
+The rule was fixed before the test. One condition is not met, so production did not change on this
+result; the confirmatory test below decided it.
 
 The judges left 45 to 49% of the supported and answers checks undecided (one judge failed to reply, or
 the two split), so the rows above rest on the checks both judges agreed on. On 2026-11-02 every undecided
@@ -175,8 +178,50 @@ below the bar, and the adjudication that decided the rest is one AI's reading, n
 test questions are drafted benchmark items checked by AI, not visitors' questions. A source page outside
 the first ten does not mean no other page answers the question.
 
+### The confirmatory test (confirm-1, 2026-11-02): promoted
+
+The frozen test missed on one condition, false refusals, with 201 answerable questions. A second, larger
+set decided the same question, under a plan committed before any of its questions existed
+([pre-registration](evaluation/confirm1_preregistration.md), with an amendment committed before any
+result was read): the same candidate, the same rule, run once.
+
+The set: 839 questions (628 answerable, 211 that should be refused) drafted by the same generator from
+documents never used in the earlier splits (2,182 archive items excluded), each draft adjudicated by AI
+(Claude Opus 5.5, with a written reason; 258 of 1,097 drafts failed and were dropped). No human has checked
+these questions. Frozen by sha256 before either pipeline answered it.
+
+Candidate minus production, all 839 questions, paired bootstrap (2,000 resamples):
+
+| Measure | Production | Candidate | Difference [95%] | Rule | Result |
+| --- | --- | --- | --- | --- | --- |
+| Source page in the first ten | 54.8% (344/628) | 67.7% (425/628) | +12.9 [+9.5, +16.3] | must improve | met |
+| Answerable questions refused | 47.1% (296/628) | 38.1% (239/628) | -9.1 [-12.7, -5.3] | may rise at most 2 points (upper bound) | met |
+| Should-refuse questions refused | 91.0% (192/211) | 96.2% (203/211) | +5.2 [+1.4, +9.3] | no more than 2 points worse | met |
+| Planted-instruction and markup fixtures | pass | pass | | must pass | met |
+
+Supported sentences and off-target answers were checked as a guardrail on a seeded sample of 100
+questions both pipelines answered (same two-judge panel; the 36 checks it left undecided adjudicated by
+AI, blind to the pipeline). It fails only if the candidate is shown worse by more than 2 points:
+
+| Guardrail (100 questions) | Production | Candidate | Difference [95%] | Result |
+| --- | --- | --- | --- | --- |
+| Sentences fully supported | 95.9% (of 194) | 97.9% (of 285) | +2.0 [-0.7, +5.1] | holds |
+| Answers that do not answer the question | 7% | 4% | -3.0 [-9.0, +3.0] | holds |
+
+Every condition holds, so the candidate was promoted. Since release 2026-11-02.3, production answers with the
+v2 evidence states, written by GLM-5.3 (an open-weight model, reasoning low, on Cloudflare Workers AI),
+from keyword search alone. Reviewed answers keep the version they were reviewed under. Cost per answer
+in this test: $0.0084 against production's $0.0059; median latency 3.4 s against 2.3 s (95th percentile
+14.2 s against 6.5 s).
+
+What this does not say: the questions are drafted and AI-checked, not visitors' questions; the guardrail
+is a sample of 100, so it rules out large losses, not small ones; the judges and the adjudication are AI
+readings, not human checks. The frozen test's result above stands as published: on that set the false
+refusal bound missed. Both sets are reported, and the decision followed the plan written before the
+second one was run.
+
 ## What comes next
 
-Outside review of the adjudicated reference labels; a fix to the review guide's contradictory case and a
-new calibration round; a staging trial of the reranker; and the whole collection, indexed by keyword
-search first. Results will be published here with the same detail.
+Outside human review of the AI-adjudicated labels and questions, which is what any AI-AUDITED claim now
+waits for; a staging trial of the reranker; and the whole collection, indexed by keyword search first.
+Results will be published here with the same detail.

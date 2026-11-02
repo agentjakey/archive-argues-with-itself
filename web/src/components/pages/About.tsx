@@ -66,6 +66,14 @@ export function About({ scope }: { scope?: ScopeInfo | null }) {
         No human has checked those labels yet, and outside review is planned. Until it happens, treat the newer
         audit figures as AI measurements, not as human checks.
       </p>
+      <p>
+        Since 2 November 2026, new answers carry an evidence state (answered, partly answered, records disagree,
+        not comparable, not enough evidence, restricted) and are written by GLM-5.3, an open-weight model, running
+        on Cloudflare Workers AI, from pages found by keyword search. It replaced the earlier writer only after
+        passing a test fixed in advance, on 839 questions it had never seen:{" "}
+        <Ext href={`${DOCS}/ACCURACY.md#the-confirmatory-test-confirm-1-2026-11-02-promoted`}>the promotion test</Ext>,
+        with what it does not show. Answers reviewed earlier keep the version they were reviewed under.
+      </p>
 
       <h3>Where the pages come from</h3>
       <p>

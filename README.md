@@ -33,6 +33,15 @@ data from Cloudflare R2 (the pilot is also mirrored on a GitHub Release). Neithe
 reaches the present: scanned government OCR runs out in the 2010s, and there is no 2020s
 material in this archive.
 
+Since release 2026-11-02.3, answers carry one of six evidence states and are written by
+GLM-5.3, an open-weight model on Cloudflare Workers AI, from pages found by keyword search.
+That change shipped only after it passed a promotion rule fixed in advance, on a fresh set
+of 839 AI-checked questions ([ACCURACY.md](docs/ACCURACY.md#the-confirmatory-test-confirm-1-2026-11-02-promoted),
+[pre-registration](docs/evaluation/confirm1_preregistration.md)). The labels and questions
+behind that test were checked by AI, not by people; outside review is planned. The site, the
+catalogue and the exhibit share one look and one token file, [design/tokens.css](design/tokens.css),
+with contrast measured by `scripts/v2/contrast.py`.
+
 ## Contents
 
 - [What it is, and is not](#what-it-is-and-is-not)
