@@ -69,7 +69,7 @@
         "SHARDS": "british_columbia-1968-2001,british_columbia-2001-2003"
       },
       // Workers AI for the open writer flag (WRITER_CANDIDATE names a candidate in config/writers.toml);
-      // the container reaches it through AIProxy. Not bound in production.
+      // the container reaches it through AIProxy.
       "ai": { "binding": "AI" }
     },
 
@@ -116,10 +116,14 @@
         "PUBLIC_MODELS": "",
         "PUBLIC_NOCACHE": "",
         "PUBLIC_URL": "https://archiveargues.org",
-        "WRITER_CANDIDATE": "",
+        // The writer promoted on 2026-11-02 (confirm-1, docs/ACCURACY.md): GLM-5.3 with low reasoning on
+        // Workers AI, through AIProxy and the AI binding below; it also selects the v2 answer.
+        "WRITER_CANDIDATE": "glm53",
         // A shard is added here, one at a time, after its audit and smoke tests pass on staging.
         "SHARDS": ""
-      }
+      },
+      // Workers AI for the promoted open writer; the container reaches it only through AIProxy.
+      "ai": { "binding": "AI" }
     }
   }
 }

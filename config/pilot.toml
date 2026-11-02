@@ -73,6 +73,7 @@ embedder = "fastembed"               # tests/CI override to "stub"
 batch_size = 256
 candidates = 200                     # top-N per arm fed into RRF
 rrf_k = 60
+dense_weight = 0.0                   # keyword search alone: promoted 2026-11-02 on confirm-1 (docs/ACCURACY.md); 1.0 = the old fusion
 downweight_high = 1.0
 downweight_medium = 0.9
 downweight_low = 0.75

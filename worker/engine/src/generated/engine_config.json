@@ -59,7 +59,7 @@
     }
    },
    "context": "f0f071d6682649bcbbfa71752fe38af116d9fc7e24d9e12c7bde597c15530f85",
-   "curated_context": "f0f071d6682649bcbbfa71752fe38af116d9fc7e24d9e12c7bde597c15530f85",
+   "curated_context": "ff84343133178d6b5467a9cba5df9e4e12e10c9291609494cbdedddc94503ffc",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic",
    "shard": true,
@@ -79,7 +79,7 @@
     }
    },
    "context": "57e371afcd9226ec8e2b1244dd6ec8b77d21d3a6841125db51ed9d8db9b723a0",
-   "curated_context": "57e371afcd9226ec8e2b1244dd6ec8b77d21d3a6841125db51ed9d8db9b723a0",
+   "curated_context": "4a08b79318d75b8d34086b380ead5b3b59f6a10cc786f6188fe7b9abb828d514",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic",
    "shard": true,
@@ -88,17 +88,17 @@
   "microlog": {
    "candidates": {
     "gemma4_26b": {
-     "context": "0791581c21eef904f4f25ec1cf48f63798d14118f3e377c9e8025c92d701d7a2",
+     "context": "a92ab7afb724612d593bf9f0c4252c6717923ebb61299673ebf840bd7f7dc189",
      "model": "@cf/google/gemma-4-26b-a4b-it",
      "provider": "workers_ai"
     },
     "glm53": {
-     "context": "6f0b9d1663f6b42b1b42958343f501ae7f7f64647d129c72f8e55eeaa11f317a",
+     "context": "f3ab52c56e8b05e3f2f24482e7484cd26448aee0fb36cd8a4d46aca31974a100",
      "model": "@cf/zai-org/glm-5.3",
      "provider": "workers_ai"
     }
    },
-   "context": "f8f179ef53522710552b7984c68c93f712f91971e83db2529c50248fe6431248",
+   "context": "1a982926650f9aa77078f602aff70a985ba079634305c78956664d14efa73bd9",
    "curated_context": "f8f179ef53522710552b7984c68c93f712f91971e83db2529c50248fe6431248",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic"
@@ -106,17 +106,17 @@
   "pilot": {
    "candidates": {
     "gemma4_26b": {
-     "context": "d56fec300ed0a21f3f36fabf92573378e1c6b4bb38095464213b4b3bdfb00d1c",
+     "context": "5cc90b659bec98f47efef908d3a21dc9ae38d5d8b3f0f8425f187e35648309a4",
      "model": "@cf/google/gemma-4-26b-a4b-it",
      "provider": "workers_ai"
     },
     "glm53": {
-     "context": "f0979bb741cb33e6f166665c75713989bdf0925747dd727c5233a02390e68e32",
+     "context": "a28bd06d6bb0489129e259c2c809536087f8e6307034f73642b43f6774b88ef0",
      "model": "@cf/zai-org/glm-5.3",
      "provider": "workers_ai"
     }
    },
-   "context": "df10d4aacd93d46e63899e4b693eb278671e186c8c4bf2274e6d5d1c95db8f59",
+   "context": "18135b2a71c20c9a0d24278d90b968dc24143d0b594423d828d716f7f8986a0a",
    "curated_context": "df10d4aacd93d46e63899e4b693eb278671e186c8c4bf2274e6d5d1c95db8f59",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic"
