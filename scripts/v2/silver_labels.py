@@ -1,4 +1,4 @@
-"""Silver labels, the author's review queue, and the one recompute after the author labels it.
+"""Silver labels, the review queue, and the recompute once the queue is labelled.
 
     python scripts/v2/silver_labels.py build   --kit-run ref-kit-1 --approval-run ref-approval-1
     python scripts/v2/silver_labels.py queue   --seed 20261105
@@ -8,17 +8,19 @@ build: from the reference judges' runs, a silver row per item (docs/formats/audi
 reports/v2/audit/reference/silver_kit.jsonl and silver_approval.jsonl, plus silver_labels.jsonl in the
 calibration labels format (labeler "silver") so the calibration report can read it.
 
-queue: the author's queue, at most 80 items, in the form's kit format, at
+queue: the review queue, at most 80 items, in the form's kit format, at
 reports/v2/audit/review/queue.jsonl. Every reference disagreement on the calibration kit first, then a
 seeded random 40 of the agreed kit items, then up to 20 benchmark approval items, flagged ones first.
 Open it with: python scripts/v2/calibration_form.py --kit reports/v2/audit/review/queue.jsonl
 (labels go to reports/v2/audit/review/labels.jsonl).
 
-recompute: reads the author's queue labels when there are any and writes
-reports/v2/audit/review/status.json and status.md: (a) the panel's error against the author on the
-random 40, (b) the silver labels' error rate on the random 40, the panel measured against the best
-labels available (the author's where present, otherwise silver), and the status each check may claim.
-Before the author labels anything, it reports agreement with reference labels and grants nothing.
+recompute: reads the queue's labels (reports/v2/audit/review/labels.jsonl, the form's format) when
+there are any and writes reports/v2/audit/review/status.json and status.md: (a) the panel's error
+against the adjudicated labels on the random 40, (b) the silver labels' error rate on the random 40,
+the panel measured against the best labels available (adjudicated where present, otherwise silver),
+and the status each check may claim. Queue labels come from AI adjudication (source "adjudicated-ai";
+no human has checked them) or from the author's form; an author label wins over an adjudicated one.
+Before the queue is labelled, it reports agreement with reference labels and grants nothing.
 Reads files only; no model is called."""
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ import argparse
 import hashlib
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
@@ -146,12 +149,26 @@ def cmd_queue(args) -> int:
     return 0
 
 
-def author_labels(path: Path) -> dict:
+ADJUDICATED = "adjudicated-ai"
+
+
+def label_source(row: dict) -> str:
+    return row.get("source") or row.get("labeler") or "author"
+
+
+def author_labels(path: Path, sources: dict = None) -> dict:
+    """{check: {item_id: class}} from the queue's labels: the latest row per item, an author's row
+    winning over an adjudicated one. sources, when given, gets {item_id: source}."""
     latest = {}
     for row in read_jsonl(path):
+        held = latest.get(row["item_id"])
+        if held is not None and label_source(held) != ADJUDICATED and label_source(row) == ADJUDICATED:
+            continue
         latest[row["item_id"]] = row
     out = {c: {} for c in prompts.ALL_CHECKS}
     for item_id, row in latest.items():
+        if sources is not None:
+            sources[item_id] = label_source(row)
         for c in prompts.ALL_CHECKS:
             if row.get(c):
                 out[c][item_id] = row[c]
@@ -178,7 +195,8 @@ def cmd_recompute(args) -> int:
     sections = manifest["sections"]
     random_ids = sorted(i for i, s in sections.items() if s == "random_agreed")
     labels_path = REVIEW_DIR / "labels.jsonl"
-    author = author_labels(labels_path)
+    sources = {}
+    author = author_labels(labels_path, sources)
     labelled = {i for c in author.values() for i in c}
     random_labelled = [i for i in random_ids if i in labelled]
     author_ready = len(random_labelled) == len(random_ids) and bool(random_ids)
@@ -194,7 +212,8 @@ def cmd_recompute(args) -> int:
         for c in prompts.CHECKS)
 
     report = {"panel": list(chosen), "escalation": cfg.escalation, "panel_run": args.panel_run,
-              "queue_version": manifest["queue_version"], "author_labelled_items": len(labelled),
+              "queue_version": manifest["queue_version"], "labelled_items": len(labelled),
+              "label_sources": dict(sorted(Counter(sources.values()).items())),
               "random_agreed": {"items": len(random_ids), "labelled": len(random_labelled)},
               "author_ready": author_ready, "checks": {}}
     silver_err = silver.silver_error(kit_rows, author, random_labelled) if random_labelled else None
@@ -207,7 +226,7 @@ def cmd_recompute(args) -> int:
         report["checks"][c] = {
             "agreement_with_reference_labels": vs_silver,
             "against_best_labels": vs_best,
-            "panel_error_vs_author_random_agreed": vs_author_random,
+            "panel_error_vs_adjudicated_random_agreed": vs_author_random,
             "status": silver.status(c, vs_best["bar"], author_ready, silver_err),
         }
     REVIEW_DIR.mkdir(parents=True, exist_ok=True)
@@ -223,20 +242,24 @@ def cmd_recompute(args) -> int:
                 f"false-pass {fpr}, not-pass recall {m['not_pass_recall']['hits']}/{m['not_pass_recall']['n']}")
 
     lines = [f"# Audit status: panel {'; '.join(chosen)}", "",
-             f"Queue {manifest['queue_version']}; author labels on {len(labelled)} items; random agreed sample "
-             f"{len(random_labelled)} of {len(random_ids)} labelled.", ""]
+             f"Queue {manifest['queue_version']}; labels on {len(labelled)} items (by source: "
+             f"{', '.join(f'{k} {v}' for k, v in report['label_sources'].items()) or 'none'}); random agreed "
+             f"sample {len(random_labelled)} of {len(random_ids)} labelled.", ""]
+    if report["label_sources"].get(ADJUDICATED):
+        lines += ["Labels with source adjudicated-ai come from AI adjudication: each item read against its page "
+                  "and decided with a one-line reason. No human has checked them yet; outside review is planned.", ""]
     if not author_ready:
-        lines += ["The author's queue is not labelled yet. Everything below is agreement with reference labels "
+        lines += ["The review queue is not labelled yet. Everything below is agreement with reference labels "
                   "(two reference judges, silver where both agree). No check is AI-AUDITED.", ""]
     if silver_err:
         lines += [f"Silver labels' error on the random agreed sample, per item: {silver_err['item_errors']} of "
                   f"{silver_err['items']} (upper 95% bound {silver_err['wilson'][1]:.3f}; must be at most "
                   f"{silver.SILVER_ERROR_MAX})." , ""]
-    lines += ["| Check | Agreement with reference labels | Against best labels | Panel vs author (random 40) | Status |",
+    lines += ["| Check | Agreement with reference labels | Against best labels | Panel vs adjudicated (random 40) | Status |",
               "| --- | --- | --- | --- | --- |"]
     for c, v in report["checks"].items():
         lines.append(f"| {c} | {fmt(v['agreement_with_reference_labels'])} | {fmt(v['against_best_labels'])} | "
-                     f"{fmt(v['panel_error_vs_author_random_agreed'])} | {v['status']['status']}: {v['status']['why']} |")
+                     f"{fmt(v['panel_error_vs_adjudicated_random_agreed'])} | {v['status']['status']}: {v['status']['why']} |")
     (REVIEW_DIR / "status.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
     return 0

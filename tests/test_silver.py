@@ -1,6 +1,8 @@
 """Silver labels, the author's queue and the status rule (audit/silver.py)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from archive_debugger.audit import silver
 
 
@@ -81,3 +83,22 @@ def test_nothing_is_ai_audited_before_the_author_labels_and_both_conditions_are_
     assert silver.status("supports", good_bar, True, ok_silver)["ai_audited"]
     assert not silver.status("supports", good_bar, True, bad_silver)["ai_audited"]
     assert not silver.status("supports", {"meets": False, "reasons": ["kappa"]}, True, ok_silver)["ai_audited"]
+    assert silver.status("supports", good_bar, True, bad_silver)["status"] == "NOT-AI-AUDITED"
+
+
+def test_queue_labels_prefer_the_author_over_adjudication(tmp_path):
+    import importlib.util
+    import json
+    spec = importlib.util.spec_from_file_location(
+        "silver_labels_cli", Path(__file__).resolve().parent.parent / "scripts" / "v2" / "silver_labels.py")
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    path = tmp_path / "labels.jsonl"
+    rows = [{"item_id": "a", "supports": "fail", "labeler": "author"},
+            {"item_id": "a", "supports": "pass", "source": "adjudicated-ai", "labeler": "adjudicated-ai"},
+            {"item_id": "b", "supports": "partial", "source": "adjudicated-ai", "labeler": "adjudicated-ai"}]
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    sources = {}
+    labels = cli.author_labels(path, sources)
+    assert labels["supports"] == {"a": "fail", "b": "partial"}
+    assert sources == {"a": "author", "b": "adjudicated-ai"}

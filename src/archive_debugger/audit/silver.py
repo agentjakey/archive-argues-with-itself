@@ -1,17 +1,20 @@
-"""Silver labels from two reference judges, the author's review queue, and the status rule.
+"""Silver labels from two reference judges, the review queue, and the status rule.
 
 A silver label exists for an item's check when both reference judges gave a verdict and the two
 verdicts are the same class. Anything else (a disagreement, or a missing verdict) is a reference
-disagreement and goes to the author first. The queue then takes a seeded random sample of the items
+disagreement and goes to the review queue first. The queue then takes a seeded random sample of the items
 whose every check has a silver label, and then drafted-benchmark approval items, flagged ones first.
 
-The status rule (Jake, 2026-11-01): until the author's queue is labelled, results are reported as
-agreement with reference labels and nothing earns AI-AUDITED. Afterwards a check earns AI-AUDITED
-only when the panel meets the judge bar against the labels and the silver labels' own error, measured
-on the random agreed sample against the author, has an upper 95% Wilson bound of at most 10%. The
-silver error is counted per item (an item is wrong when any of its silver labels differs from the
-author's), so the unit is independent; with 40 items only zero errors keep the bound under 10%
-(one error gives 0.129)."""
+The status rule (Jake, 2026-11-01, amended 2026-11-02): until the review queue is labelled, results
+are reported as agreement with reference labels and nothing earns AI-AUDITED. The queue's labels are
+adjudicated reference labels: each item read and decided against its page, with a one-line reason.
+Since 2026-11-02 they come from AI adjudication (source "adjudicated-ai"); no human has checked them
+yet, and a label from the author, when there is one, takes the item's place. A check earns AI-AUDITED
+only when the panel meets the judge bar against those labels and the silver labels' own error,
+measured on the random agreed sample against the adjudicated labels, has an upper 95% Wilson bound of
+at most 10%. The silver error is counted per item (an item is wrong when any of its silver labels
+differs from the adjudicated one), so the unit is independent; with 40 items only zero errors keep the
+bound under 10% (one error gives 0.129). Nothing here is ever called human-verified."""
 from __future__ import annotations
 
 import random
@@ -81,7 +84,7 @@ def approval_flagged(item_id: str, silver_row: Optional[dict], panel_row: Option
 
 def queue(kit_rows: list, approval_items: list, approval_silver: dict, approval_panel: dict, seed: int, *,
           max_items: int = QUEUE_MAX, random_agreed: int = RANDOM_AGREED, approval_max: int = APPROVAL_MAX) -> tuple:
-    """The author's queue: every reference disagreement on the kit first, then a seeded random
+    """The review queue: every reference disagreement on the kit first, then a seeded random
     `random_agreed` of the agreed kit items, then up to `approval_max` approval items, flagged ones
     first, never more than `max_items` in all. kit_rows are silver rows for the kit. Returns
     (ordered [(item_id, section)], counts). When the disagreements alone would leave no room for the
@@ -111,8 +114,8 @@ def queue(kit_rows: list, approval_items: list, approval_silver: dict, approval_
 
 
 def silver_error(kit_rows: list, author: dict, sample_ids: list) -> dict:
-    """The silver labels' error against the author's labels on the random agreed sample, per item
-    and per check. author is {check: {item_id: class}}."""
+    """The silver labels' error against the queue's adjudicated labels on the random agreed sample,
+    per item and per check. author is {check: {item_id: class}}."""
     by_id = {r["item_id"]: r for r in kit_rows}
     item_errors = 0
     n_items = 0
@@ -145,16 +148,17 @@ def silver_error(kit_rows: list, author: dict, sample_ids: list) -> dict:
             "meets": upper is not None and upper <= SILVER_ERROR_MAX, "max_upper": SILVER_ERROR_MAX}
 
 
-def status(check: str, panel_bar: dict, author_labelled: bool, silver: Optional[dict]) -> dict:
-    """The audit status a check may claim. Before the author's queue is labelled, never AI-AUDITED."""
-    if not author_labelled:
+def status(check: str, panel_bar: dict, queue_labelled: bool, silver: Optional[dict]) -> dict:
+    """The audit status a check may claim. Before the review queue is labelled, never AI-AUDITED."""
+    if not queue_labelled:
         return {"check": check, "status": "AGREEMENT-WITH-REFERENCE-ONLY", "ai_audited": False,
-                "why": "the author's queue is not labelled yet: results are agreement with reference labels"}
+                "why": "the review queue is not labelled yet: results are agreement with reference labels"}
     reasons = []
     if not panel_bar.get("meets"):
         reasons.append("panel misses the bar: " + "; ".join(panel_bar.get("reasons") or []))
     if silver is None or not silver.get("meets"):
         upper = None if silver is None else silver["wilson"][1]
         reasons.append(f"silver error upper bound {upper if upper is None else round(upper, 3)} over {SILVER_ERROR_MAX}")
-    return {"check": check, "status": "AI-AUDITED" if not reasons else "HUMAN-REVIEWED",
-            "ai_audited": not reasons, "why": "; ".join(reasons) or "panel meets the bar and the silver error bound holds"}
+    return {"check": check, "status": "AI-AUDITED" if not reasons else "NOT-AI-AUDITED",
+            "ai_audited": not reasons,
+            "why": "; ".join(reasons) or "panel meets the bar against adjudicated labels and the silver error bound holds"}
