@@ -79,6 +79,10 @@ test("axe finds nothing on an answer, a story and the page drawer", async ({ pag
 test("keyboard: skip link, menu, footer pages, a question, the drawer and the filters", async ({ page }) => {
   await engineOff(page);
   await page.goto("/");
+  // Tab only once the page is loaded and the skip link is in place: a Tab pressed before then went to
+  // the browser, not the page (the test failed now and then on CI).
+  await page.waitForLoadState("load");
+  await expect(page.locator(".skip-link")).toBeAttached();
 
   // The first Tab lands on the skip link, visibly, and it moves focus to the main content.
   await page.keyboard.press("Tab");
