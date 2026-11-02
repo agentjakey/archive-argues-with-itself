@@ -4,10 +4,23 @@
     python scripts/v2/shard_builder.py status           # one line per shard: fetched, built, uploaded
     python scripts/v2/shard_builder.py run [--once]     # build every shard whose text is all fetched
     python scripts/v2/shard_builder.py build --shard <id> [--allow-partial]   # one shard now
+    python scripts/v2/shard_builder.py order --upload    # also put the order on R2 for the cloud fetch
+    python scripts/v2/shard_builder.py upload-inputs     # the build's inputs to R2 for the cloud builders
+    python scripts/v2/shard_builder.py ready --from-r2   # JSON list: shards fetched in full, not built yet
+    python scripts/v2/shard_builder.py build --shard <id> --from-r2 --no-lock --keep-free-disk-gb 2
 
-`order` writes data/fulltext/order.txt, which the full-text fetch follows: the shards with the most
-text already fetched come first, then the smaller ones, so shards complete one at a time instead of
-all at the end.
+On GitHub Actions (.github/workflows/build-index.yml) the builder reads everything from R2 (--from-r2):
+the fetch manifest from its chunks, each item's text files, and the build inputs (members.tsv, the
+catalogue, the registry) from build-inputs/v1/. The heavy lock is a laptop rule (--no-lock on a
+runner). Shards are keyword-only (BM25): no embedding input unless --embed-inputs. Before anything is
+uploaded, the release gates (gates() below) read the built database; a shard that fails one is not
+uploaded.
+
+`order` writes data/fulltext/order.txt, which the full-text fetch follows: first the items whose
+rights status is public domain (the registry's rights table: PD_CA_CROWN), then everything else; in
+each group, the shards with the most text already fetched come first, then the smaller ones, so
+shards complete one at a time instead of all at the end. Catalogue texts in no shard come last, so
+the list names every identifier.
 
 `run` loops (a detached background job; it resumes from its own state after any stop): for each shard
 of config/shards/plan.json whose documents all have a fetch record, it builds the shard:
@@ -38,6 +51,7 @@ import socket
 import sqlite3
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -57,6 +71,8 @@ MAIN_CHECKOUT = Path(os.environ.get("ARCHIVE_ARGUES_MAIN", r"C:\Users\profe\OneD
 LOCK = MAIN_CHECKOUT / ".cc-heavy.lock"
 R2_PREFIX = "shards/v1"
 TRIAL_PREFIX = "shards/trial"
+INPUTS_PREFIX = "build-inputs/v1"
+PD_STATUSES = ("PD_CA_CROWN",)
 UNIT_ITEMS = 200
 EMBED_UNIT = 10_000
 MIN_FREE_MEMORY_GB = 4.0
@@ -101,8 +117,13 @@ def free_disk_gb(path: Path) -> float:
     return shutil.disk_usage(path).free / 2 ** 30
 
 
+USE_LOCK = True
+
+
 def take_lock() -> bool:
     """True when this process holds the heavy lock. A lock held by anyone else is waited for."""
+    if not USE_LOCK:
+        return True
     try:
         fd = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
@@ -116,6 +137,8 @@ def take_lock() -> bool:
 
 
 def release_lock() -> None:
+    if not USE_LOCK:
+        return
     try:
         if LOCK.read_text(encoding="ascii").strip() == OWNER:
             LOCK.unlink()
@@ -126,6 +149,7 @@ def release_lock() -> None:
 def wait_for_resources(need_disk_gb: float) -> None:
     """Block until the lock, memory and disk allow a build; say what is being waited for."""
     said = None
+    BUILD.mkdir(parents=True, exist_ok=True)
     while True:
         reasons = []
         if free_memory_gb() < MIN_FREE_MEMORY_GB:
@@ -158,13 +182,25 @@ def members() -> dict:
     return out
 
 
+FROM_R2 = False
+
+
 def fetched() -> dict:
-    """{identifier: manifest record} for every item the fetch recorded (errors excluded)."""
+    """{identifier: manifest record} for every item the fetch recorded (errors excluded). With
+    --from-r2, from the manifest's chunks on R2 (the cloud fetch's record), read fresh each time."""
     out = {}
-    path = FULLTEXT / "manifest.jsonl"
-    if not path.exists():
-        return out
-    for line in path.read_text(encoding="utf-8").splitlines():
+    if FROM_R2:
+        from archive_debugger.catalogue import fulltext
+        r2 = store()
+        lines = []
+        for key in sorted(r2.list(fulltext.STATE_PREFIX + "/")):
+            lines += r2.get(key).decode("utf-8").splitlines()
+    else:
+        path = FULLTEXT / "manifest.jsonl"
+        if not path.exists():
+            return out
+        lines = path.read_text(encoding="utf-8").splitlines()
+    for line in lines:
         try:
             row = json.loads(line)
         except ValueError:
@@ -174,32 +210,89 @@ def fetched() -> dict:
     return out
 
 
+def public_domain() -> set:
+    """Identifiers whose rights status (the registry's rights table) is public domain."""
+    conn = sqlite3.connect(REGISTRY)
+    marks = ",".join("?" * len(PD_STATUSES))
+    rows = conn.execute(f"SELECT doc_id FROM rights WHERE status IN ({marks})", PD_STATUSES).fetchall()
+    conn.close()
+    return {d[3:] for d, in rows if d.startswith("ia:")}
+
+
 def cmd_order(args) -> int:
     got = set(fetched())
     by_shard = members()
     shards = load_plan()
+    pd = public_domain()
 
     def key(s):
         ids = by_shard.get(s["shard_id"], [])
         done = sum(1 for i in ids if i in got)
         return (-(done / max(1, len(ids))), len(ids), s["shard_id"])
     ordered = sorted(shards, key=key)
-    lines = []
+    first, rest = [], []
     for s in ordered:
-        lines += sorted(by_shard.get(s["shard_id"], []))
-    (FULLTEXT / "order.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"{len(lines)} identifiers in {len(ordered)} shards; first: " +
-          ", ".join(f"{s['shard_id']} ({len(by_shard.get(s['shard_id'], []))})" for s in ordered[:5]))
+        ids = sorted(by_shard.get(s["shard_id"], []))
+        first += [i for i in ids if i in pd]
+        rest += [i for i in ids if i not in pd]
+    in_shards = set(first) | set(rest)
+    others = sorted(i for i, r in catalogue_records().items()
+                    if i not in in_shards and (r.get("mediatype") or "texts") == "texts")
+    lines = first + rest + others
+    body = "\n".join(lines) + "\n"
+    FULLTEXT.mkdir(parents=True, exist_ok=True)
+    (FULLTEXT / "order.txt").write_text(body, encoding="utf-8")
+    if args.upload:
+        from archive_debugger.catalogue import fulltext
+        store().put(fulltext.ORDER_KEY, body.encode("utf-8"))
+    print(f"{len(lines)} identifiers: {len(first)} public domain first, {len(rest)} more in {len(ordered)} shards, "
+          f"{len(others)} in no shard; {sum(1 for i in lines if i in got)} already fetched; first shards: " +
+          ", ".join(f"{s['shard_id']} ({len(by_shard.get(s['shard_id'], []))})" for s in ordered[:5]) +
+          ("; uploaded to R2" if args.upload else ""))
     return 0
+
+
+INPUT_FILES = {"members.tsv": MEMBERS, "catalogue.jsonl.gz": CATALOGUE, "registry.db": REGISTRY}
+
+
+def cmd_upload_inputs(args) -> int:
+    """Put the build's inputs on R2 for the cloud builders, with their sha256."""
+    r2 = store()
+    out = {}
+    for name, path in INPUT_FILES.items():
+        out[name] = r2.put_file(f"{INPUTS_PREFIX}/{name}", path)["sha256"]
+    r2.put(f"{INPUTS_PREFIX}/manifest.json", json.dumps({"at": now(), "sha256": out}, indent=1).encode("utf-8"))
+    print(json.dumps(out))
+    return 0
+
+
+def download_inputs() -> None:
+    """On a runner: fetch the build inputs from R2 into their usual places, checked against the manifest."""
+    from archive_debugger.jobs.store import sha256_file
+    r2 = store()
+    want = json.loads(r2.get(f"{INPUTS_PREFIX}/manifest.json"))["sha256"]
+    for name, path in INPUT_FILES.items():
+        if path.exists() and sha256_file(path) == want[name]:
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(r2.get(f"{INPUTS_PREFIX}/{name}"))
+        if sha256_file(path) != want[name]:
+            raise RuntimeError(f"{name} from R2 does not match its manifest")
 
 
 # --- build ----------------------------------------------------------------------------------------
 
+_STORE = []
+
+
 def store():
-    from archive_debugger.jobs.store import R2Store
-    from archive_debugger.local_env import load_local_env
-    load_local_env(log=None)
-    return R2Store()
+    """One R2 client per process, shared by the download threads."""
+    if not _STORE:
+        from archive_debugger.jobs.store import R2Store
+        from archive_debugger.local_env import load_local_env
+        load_local_env(log=None)
+        _STORE.append(R2Store())
+    return _STORE[0]
 
 
 def built_on_r2(r2, shard_id: str) -> bool:
@@ -207,6 +300,10 @@ def built_on_r2(r2, shard_id: str) -> bool:
 
 
 def item_files(record: dict) -> dict:
+    if FROM_R2:
+        r2 = store()
+        return {role: r2.get(f["r2_key"]) for role, f in (record.get("files") or {}).items()
+                if role in ("searchtext", "pageindex", "page_numbers") and f.get("r2_key")}
     folder = FULLTEXT / record["identifier"][:2] / record["identifier"]
     return {role: (folder / f["name"]).read_bytes() for role, f in (record.get("files") or {}).items()
             if role in ("searchtext", "pageindex", "page_numbers") and (folder / f["name"]).exists()}
@@ -227,9 +324,12 @@ def compile_units(shard_id: str, idents: list, have: dict, records: dict, folder
         if path.exists():
             continue
         lines = []
-        for ident in idents[n:n + UNIT_ITEMS]:
+        batch = idents[n:n + UNIT_ITEMS]
+        with ThreadPoolExecutor(max_workers=10 if FROM_R2 else 1) as pool:
+            got = dict(zip(batch, pool.map(lambda i: item_files(have[i]) if have.get(i) else {}, batch)))
+        for ident in batch:
             rec = have.get(ident)
-            files = item_files(rec) if rec else {}
+            files = got[ident]
             if "searchtext" not in files or "pageindex" not in files:
                 lines.append({"kind": "skipped", "identifier": ident,
                               "reason": f"no page-indexed text ({(rec or {}).get('kind', 'not fetched')})"})
@@ -295,14 +395,23 @@ def build_shard(shard: dict, idents: list, have: dict, records: dict, r2, *, all
         conn = sqlite3.connect(folder / "civic.db")
         cov = coverage_mod.compute(conn, sid)
         (folder / "coverage.json").write_text(json.dumps(cov), encoding="utf-8")
-        inputs = embed_inputs(conn, folder)
+        files = {"civic.db": folder / "civic.db", "coverage.json": folder / "coverage.json"}
+        if WITH_EMBED_INPUTS:
+            inputs = embed_inputs(conn, folder)
+            # The embed job's input layout: <input_prefix>/shards/<unit>.jsonl.gz and units.jsonl.
+            units_file = folder / "units.jsonl"
+            units_file.write_text("".join(json.dumps({"id": p.name.split(".")[0]}) + "\n" for p in inputs),
+                                  encoding="utf-8")
+            files.update({"embed-job/units.jsonl": units_file, **{f"embed-job/shards/{p.name}": p for p in inputs}})
         conn.close()
-        # The embed job's input layout: <input_prefix>/shards/<unit>.jsonl.gz and units.jsonl.
-        units_file = folder / "units.jsonl"
-        units_file.write_text("".join(json.dumps({"id": p.name.split(".")[0]}) + "\n" for p in inputs), encoding="utf-8")
-        files = {"civic.db": folder / "civic.db", "coverage.json": folder / "coverage.json",
-                 "embed-job/units.jsonl": units_file, **{f"embed-job/shards/{p.name}": p for p in inputs}}
-        manifest = {"shard_id": sid, "built_at": now(), "builder": OWNER, "documents": len(idents),
+        failures = gates(folder / "civic.db", idents, counts)
+        (folder / "gates.json").write_text(json.dumps({"passed": not failures, "failures": failures, "counts": counts},
+                                                      indent=1), encoding="utf-8")
+        if failures:
+            raise RuntimeError(f"{sid}: release gates failed, nothing uploaded: {failures}")
+        files["gates.json"] = folder / "gates.json"
+        manifest = {"shard_id": sid, "built_at": now(), "builder": BUILDER, "documents": len(idents),
+                    "index": "keyword (SQLite FTS5, BM25); no dense vectors", "gates": "passed",
                     "not_fetched": len(missing), "partial": bool(missing), **{f"built_{k}": v for k, v in counts.items()},
                     "plan": {k: shard.get(k) for k in ("jurisdiction", "first_year", "last_year", "undated", "documents",
                                                        "est_passages", "documents_sha256")},
@@ -326,6 +435,51 @@ def build_shard(shard: dict, idents: list, have: dict, records: dict, r2, *, all
         return manifest
     finally:
         release_lock()
+
+
+WITH_EMBED_INPUTS = False
+BUILDER = OWNER
+
+
+def gates(db_path: Path, idents: list, counts: dict) -> list:
+    """The shard's release gates, read from the built database itself. Returns the failures (empty
+    when it may be uploaded)."""
+    failures = []
+    conn = sqlite3.connect(db_path)
+    try:
+        if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            failures.append("integrity_check is not ok")
+        items = conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
+        pages = conn.execute("SELECT COUNT(*) FROM pages").fetchone()[0]
+        passages = conn.execute("SELECT COUNT(*) FROM passages").fetchone()[0]
+        if items == 0 or passages == 0:
+            failures.append(f"empty shard ({items} items, {passages} passages)")
+        if (items, pages, passages) != (counts["items"], counts["pages"], counts["passages"]):
+            failures.append(f"database counts {(items, pages, passages)} differ from the packed counts")
+        if items + counts.get("skipped", 0) != len(idents):
+            failures.append(f"{items} built + {counts.get('skipped', 0)} skipped != {len(idents)} documents")
+        fts = conn.execute("SELECT COUNT(*) FROM passages_fts").fetchone()[0]
+        if fts != passages:
+            failures.append(f"keyword index holds {fts} rows for {passages} passages")
+        planned = set(idents)
+        strangers = [i for i, in conn.execute("SELECT item_id FROM items") if i not in planned]
+        if strangers:
+            failures.append(f"{len(strangers)} items not in the shard's plan (first {strangers[0]})")
+        orphans = conn.execute("SELECT COUNT(*) FROM passages p LEFT JOIN pages g ON g.page_id = p.page_id "
+                               "WHERE g.page_id IS NULL").fetchone()[0]
+        if orphans:
+            failures.append(f"{orphans} passages on no page")
+        bad_ids = conn.execute("SELECT COUNT(*) FROM pages WHERE page_id != item_id || '#' || leaf_index").fetchone()[0]
+        if bad_ids:
+            failures.append(f"{bad_ids} page ids are not <identifier>#<leaf>")
+        sample = conn.execute("SELECT text FROM passages WHERE length(text) > 200 LIMIT 1").fetchone()
+        word = next((w for w in (sample[0] if sample else "").split() if w.isalpha() and len(w) > 4), None)
+        if word and not conn.execute("SELECT COUNT(*) FROM passages_fts WHERE passages_fts MATCH ?",
+                                     (f'"{word}"',)).fetchone()[0]:
+            failures.append(f"a keyword search for {word!r} finds nothing")
+    finally:
+        conn.close()
+    return failures
 
 
 def read_state() -> dict:
@@ -413,6 +567,26 @@ def cmd_embed(args) -> int:
     return 0
 
 
+def ready_shards(r2, have: dict) -> list:
+    by_shard = members()
+    out = []
+    for s in load_plan():
+        ids = by_shard.get(s["shard_id"]) or []
+        if ids and all(i in have for i in ids) and not built_on_r2(r2, s["shard_id"]):
+            out.append(s["shard_id"])
+    return out
+
+
+def cmd_ready(args) -> int:
+    """Print a JSON list of the shards whose text is all fetched and that are not on R2 yet (the
+    cloud build's matrix), at most --max of them."""
+    r2 = store()
+    if FROM_R2:
+        download_inputs()
+    print(json.dumps(ready_shards(r2, fetched())[: args.max]))
+    return 0
+
+
 def cmd_status(args) -> int:
     have = fetched()
     state = read_state()
@@ -428,6 +602,11 @@ def cmd_status(args) -> int:
 
 def cmd_build(args) -> int:
     r2 = store()
+    if FROM_R2:
+        download_inputs()
+    if built_on_r2(r2, args.shard) and not args.allow_partial:
+        print(f"{args.shard} is already on R2")
+        return 0
     shard = next(s for s in load_plan() if s["shard_id"] == args.shard)
     build_shard(shard, members().get(args.shard, []), fetched(), catalogue_records(), r2, allow_partial=args.allow_partial)
     return 0
@@ -461,14 +640,30 @@ def cmd_run(args) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["order", "status", "run", "build", "embed", "estimate"])
+    ap.add_argument("command", choices=["order", "status", "run", "build", "embed", "estimate", "ready",
+                                        "upload-inputs"])
     ap.add_argument("--executor", choices=["local", "workers_ai", "k8s"], default="workers_ai")
     ap.add_argument("--shard", default=None)
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--allow-partial", action="store_true", help="build: with the documents fetched so far")
+    ap.add_argument("--upload", action="store_true", help="order: also put it on R2 for the cloud fetch")
+    ap.add_argument("--from-r2", action="store_true", help="read the fetch record, text and inputs from R2")
+    ap.add_argument("--no-lock", action="store_true", help="skip the laptop's heavy lock (a cloud runner)")
+    ap.add_argument("--keep-free-disk-gb", type=float, default=None)
+    ap.add_argument("--min-free-memory-gb", type=float, default=None)
+    ap.add_argument("--embed-inputs", action="store_true", help="build: also write the embedding input")
+    ap.add_argument("--max", type=int, default=40, help="ready: at most this many shards")
     args = ap.parse_args(argv)
+    global FROM_R2, USE_LOCK, KEEP_FREE_DISK_GB, MIN_FREE_MEMORY_GB, WITH_EMBED_INPUTS, BUILDER
+    FROM_R2, USE_LOCK, WITH_EMBED_INPUTS = args.from_r2, not args.no_lock, args.embed_inputs
+    if args.keep_free_disk_gb is not None:
+        KEEP_FREE_DISK_GB = args.keep_free_disk_gb
+    if args.min_free_memory_gb is not None:
+        MIN_FREE_MEMORY_GB = args.min_free_memory_gb
+    if os.environ.get("GITHUB_RUN_ID"):
+        BUILDER = f"actions run {os.environ['GITHUB_RUN_ID']} on {socket.gethostname()}"
     return {"order": cmd_order, "status": cmd_status, "run": cmd_run, "build": cmd_build, "embed": cmd_embed,
-            "estimate": cmd_estimate}[args.command](args)
+            "estimate": cmd_estimate, "ready": cmd_ready, "upload-inputs": cmd_upload_inputs}[args.command](args)
 
 
 if __name__ == "__main__":
