@@ -7,7 +7,9 @@
 //   GET|POST /ask     a stored answer straight from D1 when there is one; otherwise Turnstile, the
 //                     rate limit and the daily model budget, then the engine (woken if asleep).
 //                     A provider or model other than the scope's own is refused unless
-//                     PUBLIC_MODELS names it; evidence_only asks for the record alone (no model)
+//                     PUBLIC_MODELS names it; evidence_only asks for the record alone (no model).
+//                     scope=collection (where SHARDS names a shard): the whole collection through the
+//                     cross-shard router (src/collection.ts), never from the cache
 //   GET  /coverage    forwarded only while the engine is awake
 //   GET  /flag        forwarded only while the engine is awake
 //   GET  /__bench/cache?key=K&reads=N   staging only (needs the BENCH_* bindings): D1, KV and R2 read times
@@ -21,6 +23,8 @@ import { benchCacheStores, type BenchBindings } from "./bench";
 import { ENGINE_CONFIG, ROBOTS, scopeServed, type Env } from "./config";
 import { checkRate, checkTurnstile, clientKey, corsHeaders, takeModelBudget, type GuardResult } from "./guard";
 import { keepWarmNow } from "./schedule";
+import { askCollection } from "./collection";
+import { isCollection } from "./router";
 
 export { EngineContainer, R2Proxy, CacheProxy, AIProxy } from "./container";
 
@@ -74,6 +78,14 @@ async function handleAsk(request: Request, env: Env, cors: Record<string, string
   if (!checked.ok) {
     log({ route: "/ask", scope: input.scope, outcome: checked.reason, ms: Date.now() - t0 });
     return json({ error: checked.reason }, checked.status ?? 403, cors);
+  }
+  if (isCollection(input.scope)) {
+    // The whole collection: the router chooses the shard engines and merges their records (src/collection.ts).
+    const exhausted = !evidenceOnly && !(await takeModelBudget(env.DB, env));
+    const resp = await askCollection(env, input, evidenceOnly, exhausted,
+                                     (name, req) => stub(env, engineFor(env, name)).forward(req, true), new URL(request.url).origin);
+    log({ route: "/ask", scope: input.scope, outcome: resp.status === 200 ? "collection" : `collection_${resp.status}`, operator, ms: Date.now() - t0 });
+    return withHeaders(resp, { ...cors, "x-answer-source": "collection" });
   }
   const forwarded = await engineRequest(request, parsed);
   // The record alone makes no model call, so it does not spend the daily model budget.
