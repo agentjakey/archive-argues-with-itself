@@ -54,14 +54,18 @@ def _sentence_transformers(index: dict) -> Callable:
     return lambda texts: model.encode(texts, batch_size=128, convert_to_numpy=True).astype(np.float32)
 
 
-def _workers_ai(model: str, post: Callable = None, meter: tuple = None) -> Callable:
+def _workers_ai(model: str, post: Callable = None, meter: tuple = None, gateway: str = None) -> Callable:
     """Workers AI embeddings, metered in the scale ledger: the worst case (every character a token)
-    is reserved before each call and the provider's count recorded after."""
+    is reserved before each call and the provider's count recorded after. With a gateway (the
+    executor's `gateway`, for example archive-argues-audit), each request names it and carries the
+    gateway's token, as the audit's judges do; batch text only, never visitor data."""
+    from archive_debugger.audit.judges import workers_ai_headers
     post = post or net.post_json
     account, token = os.environ.get("CF_ACCOUNT_ID"), os.environ.get("CF_AI_TOKEN")
     if not account or not token:
         raise RuntimeError("the Workers AI executor needs CF_ACCOUNT_ID and CF_AI_TOKEN")
     url = WORKERS_AI_RUN.format(account=account, model=model)
+    headers = workers_ai_headers(token, gateway)
 
     def embed(texts):
         out = []
@@ -73,7 +77,7 @@ def _workers_ai(model: str, post: Callable = None, meter: tuple = None) -> Calla
                 reservation = f"{run_id}:embed:{i}:{len(chunk)}:{sum(map(len, chunk))}"
                 ledger.reserve(run_id, run_cap, "workers-ai", model, reservation, worst_case(model, sum(map(len, chunk)), 0))
             try:
-                reply = post(url, {"authorization": f"Bearer {token}"}, {"text": chunk})
+                reply = post(url, headers, {"text": chunk})
                 if meter is not None:
                     tokens = int((reply.get("result") or {}).get("usage", {}).get("prompt_tokens") or sum(map(len, chunk)) // 3)
                     ledger.spend(run_id, "workers-ai", model, tokens, 0, what=f"embed {len(chunk)} passages")
@@ -89,15 +93,24 @@ def make_backend(spec: JobSpec, executor: str, index: dict, post: Callable = Non
     settings = executor_settings(spec, executor)
     backend = settings.get("backend") or (index.get("backends") or {}).get(executor)
     if executor == "workers_ai" or backend == "workers_ai":
-        model = settings.get("model")
+        # The index spec, when it names a Workers AI model for itself, decides; a job's own setting
+        # may only repeat it, so the vectors are always the index's model.
+        spec_model = (index.get("index") or {}).get("workers_ai_model")
+        model = settings.get("model") or spec_model
+        if spec_model and model != spec_model:
+            raise RuntimeError(f"the job names {model} but the index spec's Workers AI model is {spec_model}")
         if not model:
-            raise RuntimeError("this job's model is not on Workers AI: no [executor.workers_ai] model")
+            raise RuntimeError("this index's model is not on Workers AI: the index spec names no workers_ai_model")
         if "run_cap_usd" not in settings:
             raise RuntimeError("a paid endpoint needs run_cap_usd in [executor.workers_ai]")
         from archive_debugger.jobs.judge import LEDGER, PHASE_CAP_USD
-        meter = (Ledger(LEDGER, phase_cap=PHASE_CAP_USD), f"{spec.name}:{settings.get('run', 'run-1')}",
+        # The whole-collection embedding has its own ledger and cap (docs/v2/DECISIONS.md); other
+        # embed jobs share the scale ledger.
+        ledger_path = REPO / settings["ledger"] if settings.get("ledger") else LEDGER
+        phase_cap = float(settings.get("phase_cap_usd", PHASE_CAP_USD))
+        meter = (Ledger(ledger_path, phase_cap=phase_cap), f"{spec.name}:{settings.get('run', 'run-1')}",
                  float(settings["run_cap_usd"]))
-        return "workers_ai:" + model, _workers_ai(model, post, meter)
+        return "workers_ai:" + model, _workers_ai(model, post, meter, settings.get("gateway"))
     if backend == "sentence_transformers":
         return backend, _sentence_transformers(index["index"])
     if backend == "fastembed":

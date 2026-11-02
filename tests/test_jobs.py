@@ -221,3 +221,25 @@ def test_compile_numbers_pages_by_the_viewers_leaves_and_never_guesses(tmp_path)
     del files["page_numbers"]
     lines = comp.compile_item("itemx", files, {}, target_tokens=300, overlap_tokens=40)
     assert [l["kind"] for l in lines] == ["item", "skipped"]
+
+def test_workers_ai_embedding_uses_only_the_index_specs_own_model(monkeypatch, tmp_path):
+    import dataclasses
+    from archive_debugger.jobs import embed, spec as spec_mod
+    monkeypatch.setenv("CF_ACCOUNT_ID", "acct")
+    monkeypatch.setenv("CF_AI_TOKEN", "tok")
+    monkeypatch.setenv("CF_AIG_TOKEN", "aig")
+    spec = spec_mod.load("embed-shard")
+    executors = {**spec.executors, "workers_ai": {**spec.executors["workers_ai"], "ledger": str(tmp_path / "ledger.jsonl")}}
+    spec = dataclasses.replace(spec, executors=executors)
+    with pytest.raises(RuntimeError, match="names no workers_ai_model"):
+        embed.make_backend(spec, "workers_ai", {"index": {"model": "sentence-transformers/x"}})
+    sent = {}
+
+    def post(url, headers, body):
+        sent.update(url=url, headers=headers)
+        return {"result": {"data": [[1.0, 0.0]] * len(body["text"]), "usage": {"prompt_tokens": 3}}}
+    name, fn = embed.make_backend(spec, "workers_ai", {"index": {"model": "BAAI/bge-m3", "workers_ai_model": "@cf/baai/bge-m3"}},
+                                  post=post)
+    assert name == "workers_ai:@cf/baai/bge-m3"
+    fn(["a passage"])
+    assert sent["headers"]["cf-aig-gateway-id"] == "archive-argues-audit"

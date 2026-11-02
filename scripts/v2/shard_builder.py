@@ -297,8 +297,11 @@ def build_shard(shard: dict, idents: list, have: dict, records: dict, r2, *, all
         (folder / "coverage.json").write_text(json.dumps(cov), encoding="utf-8")
         inputs = embed_inputs(conn, folder)
         conn.close()
+        # The embed job's input layout: <input_prefix>/shards/<unit>.jsonl.gz and units.jsonl.
+        units_file = folder / "units.jsonl"
+        units_file.write_text("".join(json.dumps({"id": p.name.split(".")[0]}) + "\n" for p in inputs), encoding="utf-8")
         files = {"civic.db": folder / "civic.db", "coverage.json": folder / "coverage.json",
-                 **{f"embed-input/{p.name}": p for p in inputs}}
+                 "embed-job/units.jsonl": units_file, **{f"embed-job/shards/{p.name}": p for p in inputs}}
         manifest = {"shard_id": sid, "built_at": now(), "builder": OWNER, "documents": len(idents),
                     "not_fetched": len(missing), "partial": bool(missing), **{f"built_{k}": v for k, v in counts.items()},
                     "plan": {k: shard.get(k) for k in ("jurisdiction", "first_year", "last_year", "undated", "documents",
@@ -335,6 +338,86 @@ def write_state(state: dict) -> None:
     tmp = BUILD / "state.json.tmp"
     tmp.write_text(json.dumps(state, indent=1, sort_keys=True), encoding="utf-8")
     tmp.replace(BUILD / "state.json")
+
+
+# --- embed ----------------------------------------------------------------------------------------
+
+EMBED_SPEC = "embed-shard"
+WORKERS_AI_USD_PER_M_TOKENS = 0.0118      # bge-m3 on Workers AI, developers.cloudflare.com 2026-10-31
+CHARS_PER_TOKEN = 3.5                     # OCR text, multilingual tokenizer: a cautious ratio (chars / 4 measured 294 tokens a passage)
+EMBED_CEILING_USD = 150.0                 # Jake's ceiling for the whole collection's embedding
+
+
+def cmd_estimate(args) -> int:
+    """The full embedding cost, before any is spent: the plan's passages times measured characters
+    per passage (the bounded run's shards, or the built shards when there are any)."""
+    import glob
+    chars = n = 0
+    for path in glob.glob(str(REPO / "data" / "bounded" / "*" / "shards" / "*" / "civic.db")):
+        for (text,) in sqlite3.connect(path).execute("SELECT text FROM passages"):
+            chars, n = chars + len(text or ""), n + 1
+    per_passage = chars / max(1, n) / CHARS_PER_TOKEN
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    passages = plan["totals"]["est_passages"] if "est_passages" in plan.get("totals", {}) else \
+        sum(s["est_passages"] for s in plan["shards"])
+    built = sum(v.get("built_passages", 0) for v in read_state().values())
+    usd = passages * per_passage / 1e6 * WORKERS_AI_USD_PER_M_TOKENS
+    out = {"plan_passages": passages, "built_passages": built, "tokens_per_passage": round(per_passage, 1),
+           "basis": f"{n:,} measured passages, characters / {CHARS_PER_TOKEN}", "usd_per_m_tokens": WORKERS_AI_USD_PER_M_TOKENS,
+           "estimate_usd": round(usd, 2), "ceiling_usd": EMBED_CEILING_USD, "over_ceiling": usd > EMBED_CEILING_USD,
+           "cheapest_alternative": "the laptop's CPU (fastembed, free): measured 29-33 passages a second, about "
+                                   f"{passages / 31 / 3600:,.0f} hours for the whole plan"}
+    print(json.dumps(out, indent=1))
+    return 1 if out["over_ceiling"] else 0
+
+
+def cmd_embed(args) -> int:
+    """Embed built shards with the index spec's model: resumable units (a unit already embedded is not
+    embedded again), cost per shard in the embedding ledger, vectors assembled to R2."""
+    import dataclasses
+    import io
+    import numpy as np
+    from archive_debugger.jobs import runner, spec as spec_mod
+    r2 = store()
+    base = spec_mod.load(EMBED_SPEC)
+    index = embed_job.load_index_spec(base)["index"]
+    targets = [args.shard] if args.shard else sorted(read_state())
+    for sid in targets:
+        out_prefix = f"{R2_PREFIX}/{sid}/vectors/{index['name']}"
+        if r2.head(f"{out_prefix}/manifest.json") is not None:
+            continue
+        spec = dataclasses.replace(base, name=f"embed-{sid}", input_prefix=f"{R2_PREFIX}/{sid}/embed-job")
+        started = time.time()
+        result = runner.run(spec, r2, embed_job.make_process(spec, args.executor), executor=args.executor, log=log)
+        manifest = runner.finish(spec, r2)
+        if not manifest["complete"]:
+            log(f"{sid}: embedding incomplete ({result}); run again to resume")
+            return 1
+        mats, ids = [], []
+        for uid in sorted(manifest["units"]):
+            z = np.load(io.BytesIO(r2.get(manifest["units"][uid]["key"])))
+            mats.append(z["matrix"])
+            ids.extend(z["ids"].tolist())
+        folder = BUILD / f"vectors-{sid}"
+        folder.mkdir(parents=True, exist_ok=True)
+        np.save(folder / "matrix.npy", np.vstack(mats))
+        np.save(folder / "ids.npy", np.array(ids))
+        files = {}
+        for name in ("matrix.npy", "ids.npy"):
+            meta = r2.put_file(f"{out_prefix}/{name}", folder / name)
+            files[name] = meta
+        spent = None
+        if args.executor == "workers_ai":
+            from archive_debugger.audit.budget import Ledger
+            ledger = Ledger(REPO / "reports" / "v2" / "scale" / "embed_ledger.jsonl", phase_cap=EMBED_CEILING_USD)
+            spent = round(ledger.totals(f"embed-{sid}:run-1").spent, 4)
+        r2.put(f"{out_prefix}/manifest.json", json.dumps({"shard_id": sid, "index": index, "rows": len(ids),
+                                                          "executor": args.executor, "spent_usd": spent,
+                                                          "seconds": round(time.time() - started, 1), "files": files,
+                                                          "at": now()}, indent=1).encode("utf-8"))
+        shutil.rmtree(folder)
+        log(f"{sid}: {len(ids)} vectors ({index['name']}) on R2; spent {spent}")
+    return 0
 
 
 def cmd_status(args) -> int:
@@ -385,12 +468,14 @@ def cmd_run(args) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["order", "status", "run", "build"])
+    ap.add_argument("command", choices=["order", "status", "run", "build", "embed", "estimate"])
+    ap.add_argument("--executor", choices=["local", "workers_ai", "k8s"], default="workers_ai")
     ap.add_argument("--shard", default=None)
     ap.add_argument("--once", action="store_true")
     ap.add_argument("--allow-partial", action="store_true", help="build: with the documents fetched so far")
     args = ap.parse_args(argv)
-    return {"order": cmd_order, "status": cmd_status, "run": cmd_run, "build": cmd_build}[args.command](args)
+    return {"order": cmd_order, "status": cmd_status, "run": cmd_run, "build": cmd_build, "embed": cmd_embed,
+            "estimate": cmd_estimate}[args.command](args)
 
 
 if __name__ == "__main__":

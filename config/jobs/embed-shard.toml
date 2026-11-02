@@ -1,0 +1,39 @@
+# Embed one engine shard's passages (written by scripts/v2/shard_builder.py to
+# shards/v1/<shard>/embed-job/) into the index format of config/jobs/index_spec.toml. The builder
+# names each run embed-<shard> and points its input there; this file holds what every shard shares.
+#
+# Workers AI runs only a model the index spec names for it ([index] workers_ai_model): the vectors
+# must be the index's own model, never a stand-in. Every call is metered in the embedding ledger,
+# whose cap is the whole-collection embedding's (docs/v2/DECISIONS.md), and each shard has its own
+# run cap; requests go through the archive-argues-audit AI Gateway.
+[job]
+name = "embed-shard"
+kind = "embed"
+code_version = "1"
+
+[input]
+prefix = "shards/v1/_template/embed-job"
+
+[output]
+prefix = "jobs"
+
+[model]
+name = "from config/jobs/index_spec.toml"
+licence = "from config/jobs/index_spec.toml"
+
+[params]
+index_spec = "config/jobs/index_spec.toml"
+batch = 256
+
+[executor.local]
+backend = "fastembed"
+
+[executor.k8s]
+backend = "sentence_transformers"
+gpu = true
+
+[executor.workers_ai]
+gateway = "archive-argues-audit"
+ledger = "reports/v2/scale/embed_ledger.jsonl"
+phase_cap_usd = 150.0
+run_cap_usd = 12.0
