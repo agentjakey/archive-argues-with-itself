@@ -1,12 +1,17 @@
 // Measures the WCAG contrast ratio of every text and control colour pair the kiosk uses, from the
-// colour tokens in src/styles.css, and fails when a pair is under its bar: 7:1 for body text (AAA),
+// colour tokens (the shared design/tokens.css, then any :root override in src/styles.css), and fails when a pair is under its bar: 7:1 for body text (AAA),
 // 4.5:1 for large text (AAA large), 3:1 for control edges and graphics (WCAG 1.4.11).
 //   node scripts/contrast.mjs
 import { readFileSync } from "node:fs";
 
-const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
-const root = css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {")));
-const tokens = Object.fromEntries([...root.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]));
+function rootColours(path) {
+  const css = readFileSync(new URL(path, import.meta.url), "utf8");
+  const start = css.indexOf(":root {");
+  if (start < 0) return {};
+  const root = css.slice(start, css.indexOf("}", start));
+  return Object.fromEntries([...root.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)].map((m) => [m[1], m[2]]));
+}
+const tokens = { ...rootColours("../../../design/tokens.css"), ...rootColours("../src/styles.css") };
 
 function luminance(hex) {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
