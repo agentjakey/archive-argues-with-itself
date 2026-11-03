@@ -73,7 +73,7 @@ python scripts/v2/build_release.py publish --env <env>
 python scripts/v2/build_release.py rollback --env <env> [--version <worker version id>]
 ```
 
-`publish` refuses a release that fails a gate before anything is uploaded. The gates read the
+`publish` refuses a release that fails a check before anything is uploaded. The checks read the
 release exactly as it will be served: the manifest lists every file with its sha256, the file count
 and sizes fit Workers static assets, every recorded answer says when and with which model and prompt
 it was generated, every citation resolves to a page in its own evidence, every dated note is
@@ -81,8 +81,8 @@ attached, no story's caption claims more than its comparability block, no retire
 and nothing looks like a secret. Going live is moving the site Worker to the new version; rollback
 moves it back. Caching is described in `docs/formats/site_data.md`.
 
-The GitHub `deploy` workflow does the same on a manual run or a `v2.*` tag, with the Cloudflare
-token and account id as Actions secrets.
+The GitHub `deploy` workflow does the same when started by hand (a tag never deploys), with the
+Cloudflare token and account id as Actions secrets.
 
 ## Adding a collection
 
@@ -153,3 +153,31 @@ old service, with no volume, and its address keeps working. Build it from `redir
 `redirect/` as the build context, health check `/__redirect_health`, and `REDIRECT_TARGET` set to the
 new origin. The repository has no config-as-code file for any host, so these go in the host's own
 settings.
+
+## Without Cloudflare: one Docker image on any host
+
+The engine also runs as one plain Docker image, with the site built into it, on any host with a
+persistent disk (it ran this way on Railway until October 2026). Build `Dockerfile`, mount a disk at
+`/data`, expose `$PORT` (default 8080) and point the health check at `/health` with a long start period:
+the first boot downloads the data. On boot each enabled collection's two files are fetched, checked
+against the sha256 in `config/scopes.toml`, and served; a file already on disk with the right hash is
+not fetched again, so later boots take seconds.
+
+| Variable | Meaning |
+| --- | --- |
+| `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | where the data files are (upload once with `scripts/upload_scopes_to_r2.py`) |
+| `CIVIC_ENABLED_SCOPES` | the collections to serve, for example `pilot,microlog` (unset: the federal pilot only) |
+| `CIVIC_DB_PATH`, `CIVIC_INDEX_PATH`, `CIVIC_CACHE_PATH` | the pilot's files under `/data` |
+| `MICROLOG_DB_PATH`, `MICROLOG_INDEX_PATH` | the national collection's files under `/data` |
+| `DATA_RELEASE_URL` | fallback for the pilot only: its GitHub data release, used when the R2 variables are absent |
+| `ANTHROPIC_API_KEY` | the writer's key when the configured writer is Anthropic's |
+| `PORT` | set by most hosts; uvicorn listens on it |
+
+Sizing, measured: both collections are about 10.5 GiB on disk, so give the volume 15 GB. The pilot
+alone needs 2 GB of memory; 4 GB keeps its files in the page cache, which keeps a question near two
+seconds. Smoke test a running copy with `python scripts/smoke.py <url>` (no key, no model call).
+
+If the log says `missing [...] and DATA_RELEASE_URL is not set`, set the data source; the container
+retries every 30 seconds. A 404 on download means the release tag or asset name is wrong. A checksum
+mismatch means the files and `data-release.sha256` come from different builds. Use a named Docker
+volume, not a Windows bind mount: Docker Desktop's file share is too slow for the search.

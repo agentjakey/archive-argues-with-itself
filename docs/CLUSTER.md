@@ -66,7 +66,7 @@ namespace if we created it. The outputs stay in our R2 bucket, outside the clust
 
 ## How much it uses (estimates)
 
-Whole-collection sizes come from docs/v2 sizing (a 200-item sample, 95% intervals): 16 to 24 million
+Whole-collection sizes come from a sizing sample (200 items, 95% intervals): 16 to 24 million
 scanned pages, and 25 to 50 million passages. The shard plan estimates 36 million.
 
 - **embed.** Measured on this laptop's CPU at 17.7 passages a second, that is 388 to 789 CPU-hours.

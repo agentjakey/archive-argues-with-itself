@@ -84,5 +84,5 @@ prints the D1 command (it can match only the exact wording and filters).
 the engine it disallows everything. `/.well-known/security.txt` names security@archiveargues.org.
 The Content-Security-Policy allows scripts only from the site and `challenges.cloudflare.com`,
 frames only from Turnstile and archive.org, images from archive.org, and connections only to the
-engine; the release gate refuses a policy that allows inline or eval scripts, a wildcard, or the
+engine; the release check refuses a policy that allows inline or eval scripts, a wildcard, or the
 Web Analytics host.

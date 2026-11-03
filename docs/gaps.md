@@ -112,10 +112,10 @@ of 15 should-abstain would answer. The amendment was made after reading sweep 1
 on these same 50 questions, so sweep 2 is in-sample and not an estimate of how
 the rule behaves on new questions. On the final retriever the same
 frozen rule reads 0 answerable would abstain and 9 of 15 should-abstain would
-answer: the wider evidence pool covers more question terms, so the gate fires
-less. Six probes still abstain on their out-of-window years or absent topics
-(covid, 2020, vaping, 1905, 2015, 2017). Whether the nine that now pass the
-gate produce a supported answer or a verified-citation abstention is decided
+answer: the wider evidence pool covers more question terms, so the rule refuses
+less often. Six probes still abstain on their out-of-window years or absent topics
+(covid, 2020, vaping, 1905, 2015, 2017). Whether the nine that now get past the
+rule produce a supported answer or a verified-citation abstention is decided
 downstream, sentence by sentence.
 
 ## The evaluation judge is not independent of the system
@@ -123,7 +123,7 @@ downstream, sentence by sentence.
 Source: `eval/labeling_notes.md` (Methods).
 
 All labels and judgments were decided by the author. To speed adjudication,
-candidate labels for the Phase 13 extension and the Phase 16 support judgments
+candidate labels for the gold extension and the sentence-support judgments
 were first proposed by an assistant model and each was reviewed and decided by
 the author; the same model family generates the tool's answers, so this judge is
 not independent of the system. The retrieval table and the support rates
@@ -163,8 +163,8 @@ the passages simply did not bear on the question's period or subject. The
 three structural checks and the fact-leak guard guarantee that a kept sentence
 is supported by its page; nothing in the pipeline guarantees that the page is
 about what was asked. The frozen thinness rule predicted 9 of these 15 would
-pass the gate (`retrieval_report.md`, final sweep); five did and answered off
-target, four passed the gate and then abstained downstream when no sentence
+get past it (`retrieval_report.md`, final sweep); five did and answered off
+target, four got past it and then abstained downstream when no sentence
 survived. False abstentions on the 35 answerable questions: 0 in the run (95% CI
 0.0-9.9%), as the sweep predicted.
 
@@ -177,22 +177,22 @@ was designed. The two misses, recorded after that single run with no rule
 changed:
 
 - **h009, "What did reports say about injuries from electric scooters?"
-  answered.** The gate covers a term if any retrieved passage contains it, and
+  answered.** The rule counts a term as covered if any retrieved passage contains it, and
   "scooters" is covered: the two kept sentences cite an undated child-safety
   pamphlet ("tricycles, carts, wagons and scooters are very dangerous under a
   child's care") and a 1988 occupational-health report ("steering on scooters
-  needs adjusting" under equipment maintenance). The lexical gate cannot
+  needs adjusting" under equipment maintenance). The word-matching rule cannot
   separate electric scooters from toy or workplace scooters, and every sentence
   is supported by its page. Same class as the five in-sample off-target answers:
   verification checks support, not relevance.
 - **h015, "What did federal reports say about the mass influenza vaccination
-  program announced in 1976?" abstained at the gate.** "federal" is a salient
+  program announced in 1976?" was refused by the rule.** "federal" is a salient
   term under the frozen rule and no retrieved passage contains the word; the
   passages that describe the program refer to the federal government by other
   names. The frozen stoplist's actor-noun criterion holds "government",
   "department", "ministry" and "agency" but not "federal" (nor "provincial").
-  "federal" is the first candidate for a v2 stoplist, if one is ever opened; the
-  v1 rule stands unchanged, and this false abstention counts against it.
+  "federal" is the first candidate for a future stoplist, if one is ever opened; the
+  rule stands unchanged, and this false abstention counts against it.
 
 ## British Columbia is not a second scope on this archive
 

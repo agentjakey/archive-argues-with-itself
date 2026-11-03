@@ -1,6 +1,8 @@
-"""The confirmatory benchmark set confirm-1 (pre-registered in docs/evaluation/confirm1_preregistration.md).
+"""The confirmatory benchmark sets: confirm-1 (docs/evaluation/confirm1_preregistration.md) and confirm-2
+(docs/evaluation/confirm2_preregistration.md). --set picks one (default confirm1); confirm-2 has its own
+folder, lock, seed and id tag, and excludes every archive item confirm-1 drew on as well.
 
-    python scripts/v2/confirm_set.py exclusions
+    python scripts/v2/confirm_set.py [--set confirm2] exclusions
     python scripts/v2/confirm_set.py draft --collection pilot --cap 2.50
     python scripts/v2/confirm_set.py draft --collection microlog --cap 2.50
     python scripts/v2/confirm_set.py render --collection pilot --batch-size 40
@@ -59,6 +61,26 @@ RUN_ID = "confirm1-draft"
 NEED_ANSWERABLE = 600
 NEED_SHOULD_REFUSE = 150
 ADJUDICATED = "adjudicated-ai"
+ID_TAG = "c1"
+PREREG = "docs/evaluation/confirm1_preregistration.md"
+EARLIER_SETS: list = []       # folders of earlier confirmatory sets whose items are excluded too
+
+SETS = {
+    "confirm1": {"dir": "confirm1", "name": "confirm-1", "seed": 20261110, "tag": "c1", "earlier": []},
+    "confirm2": {"dir": "confirm2", "name": "confirm-2", "seed": 20261120, "tag": "c2", "earlier": ["confirm1"]},
+}
+
+
+def configure(name: str) -> None:
+    """Point the module at one confirmatory set."""
+    global OUT, LOCK, SET_NAME, SEED, RUN_ID, ID_TAG, PREREG, EARLIER_SETS
+    s = SETS[name]
+    OUT = BENCH / s["dir"]
+    LOCK = REPO / "config" / f"benchmark_v2_{s['dir']}.lock.json"
+    SET_NAME, SEED, ID_TAG = s["name"], s["seed"], s["tag"]
+    RUN_ID = f"{s['dir']}-draft"
+    PREREG = f"docs/evaluation/{s['dir']}_preregistration.md"
+    EARLIER_SETS = [BENCH / d for d in s["earlier"]]
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -77,6 +99,8 @@ def gold_items(name: str) -> set:
 def cmd_exclusions(args) -> int:
     used: set = set()
     files = sorted((BENCH / "drafts").glob("*.jsonl")) + sorted((BENCH / "v2").glob("*.jsonl"))
+    for earlier in EARLIER_SETS:          # every draft (kept or rejected) of an earlier confirmatory set
+        files += sorted((earlier / "drafts").glob("*.jsonl"))
     for path in files:
         for row in read_jsonl(path):
             for s in row.get("sources") or []:
@@ -136,7 +160,7 @@ def cmd_draft(args) -> int:
                                          seed=SEED + args.seed_offset, exclude=exclude, ocr_items=OCR_ITEMS)
     for it in items + rejected:
         if "item_id" in it:
-            it["item_id"] = it["item_id"].replace(":gen:", ":c1:" if not args.seed_offset else f":c1s{args.seed_offset}:")
+            it["item_id"] = it["item_id"].replace(":gen:", f":{ID_TAG}:" if not args.seed_offset else f":{ID_TAG}s{args.seed_offset}:")
             it["benchmark_set"] = SET_NAME
     suffix = "" if not args.seed_offset else f"_s{args.seed_offset}"
     write_jsonl(OUT / "drafts" / f"{args.collection}{suffix}.jsonl", items)
@@ -252,14 +276,14 @@ def cmd_freeze(args) -> int:
     label_bytes = "\n".join(json.dumps(labels[i], sort_keys=True) for i in sorted(labels)).encode("utf-8")
     excluded = json.loads((OUT / "excluded_items.json").read_text(encoding="utf-8"))
     lock = {"set": SET_NAME, "frozen_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "preregistration": "docs/evaluation/confirm1_preregistration.md", "seed": SEED,
+            "preregistration": PREREG, "seed": SEED,
             "splits": {"test": {"items": len(out), "sha256": split_sha}},
             "set_sha256": split_sha, "excluded_items_sha256": excluded["sha256"],
             "excluded_items": excluded["count"], "adjudication_labels_sha256": sha256_bytes(label_bytes),
             "counts": {"answerable": answerable, "should_refuse": refuse,
                        "by_category": dict(sorted(Counter(it["category"] for it in out).items())),
                        "drafts": len(rows), "failed_adjudication": len(rows) - len(kept)},
-            "exclusions": "config/benchmark_v2_confirm1_exclusions.json",
+            "exclusions": str((OUT / "excluded_items.json").relative_to(REPO)).replace("\\", "/"),
             "rule": "frozen: nothing is added, edited or excluded; a change means a new set"}
     LOCK.write_text(json.dumps(lock, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(lock["counts"]), "sha256", split_sha[:12])
@@ -271,7 +295,8 @@ def main(argv=None) -> int:
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(errors="replace")
     load_local_env(log=lambda m: None)
-    parser = argparse.ArgumentParser(description="The confirmatory benchmark set confirm-1")
+    parser = argparse.ArgumentParser(description="The confirmatory benchmark sets")
+    parser.add_argument("--set", choices=sorted(SETS), default="confirm1")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("exclusions")
     p = sub.add_parser("draft")
@@ -287,6 +312,7 @@ def main(argv=None) -> int:
     sub.add_parser("apply")
     sub.add_parser("freeze")
     args = parser.parse_args(argv)
+    configure(args.set)
     return {"exclusions": cmd_exclusions, "draft": cmd_draft, "render": cmd_render, "apply": cmd_apply,
             "freeze": cmd_freeze}[args.cmd](args)
 

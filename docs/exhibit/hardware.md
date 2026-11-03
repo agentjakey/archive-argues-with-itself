@@ -50,7 +50,7 @@ helps in a quiet library.
 
 | Example | Price found | Source |
 |---|---|---|
-| MINIX Z150 fanless, 16 GB, 512 GB (sold out when checked) | AUD 589 | [evotech](https://evotech.au/products/minix-z150-fanless-mini-pc-16gb) |
+| MINIX Z150 fanless, 16 GB, 512 GB (sold out when checked) | AUD 589 | evotech.au listing (removed since it was checked) |
 | Generic fanless N100 | USD 165 (eBay.de listing) | [eBay](https://www.ebay.de/itm/356790862873) |
 
 Run Windows 11 Pro with Assigned Access, or the kiosk account set to sign in automatically and run

@@ -17,7 +17,7 @@ separate scope with its own build and audit; its numbers live under
 
 Source: `reports/coverage_audit/discovery.md`, `reports/coverage_audit/finalist_sizing.md`.
 
-The proposal (`docs/PROPOSAL.md`) named housing as an illustrative topic and set
+The proposal (`docs/archive/PROPOSAL.md`) named housing as an illustrative topic and set
 a floor of 2,500 usable items for a pilot corpus. The initial audit sized three candidate
 topics against the Internet Archive's Canadian-government collections using
 `advancedsearch.php` counts (the scrape API returned a canned baseline under
@@ -185,7 +185,7 @@ estimate of abstention quality.
 
 Source: README "Serve"; `src/archive_debugger/api/coverage.py`.
 
-For a question, the same salient-term rule as the abstention gate is expressed
+For a question, the same salient-term rule as the abstention check is expressed
 as FTS5 queries (a prefix query where the rule allows it), and the count of
 matching passages is reported per decade and per jurisdiction under the active
 filters, beside the count of all passages there. These are lexical matches, not
@@ -231,7 +231,7 @@ answer; the baseline sweep still reads 1 / 6.
 
 Disclosure, from `eval/labeling_notes.md` (Methods): All labels and judgments
 were decided by the author. To speed adjudication, candidate labels for the
-Phase 13 extension and the Phase 16 support judgments were first proposed by an
+gold extension and the sentence-support judgments were first proposed by an
 assistant model and each was reviewed and decided by the author; the same model
 family generates the tool's answers, so this judge is not independent of the
 system.
@@ -259,7 +259,7 @@ it carries none.
 | Abstention on should-abstain questions, in-sample (15) | 10 of 15 abstained (66.7%, 95% CI 41.7-84.8%) |
 | Off-target answers, in-sample (should-abstain answered on the wrong question) | 5 of 15 (33.3%, 95% CI 15.2-58.3%): q015, q030, q036, q037, q049 |
 | False abstentions, in-sample (35 answerable) | 0 of 35 (0%, 95% CI 0.0-9.9%) |
-| Abstention, held-out (`eval/holdout_questions.jsonl`, one run) | 9 of 10 probes abstained (h009 answered); 4 of 5 answerable answered (h015 abstained at the gate on the word "federal") |
+| Abstention, held-out (`eval/holdout_questions.jsonl`, one run) | 9 of 10 probes abstained (h009 answered); 4 of 5 answerable answered (h015 was refused by the abstention rule on the word "federal") |
 | Retrieval recall@10 on the final gold, before -> after the retrieval changes | 0.3470 -> 0.4581 (a per-question mean, not a proportion; no interval) |
 | Cited passages resolving to a recorded page | 119 of 119 (100%, 95% CI 96.9-100%; verifier check 3 guarantees it) |
 
@@ -279,7 +279,7 @@ its own audit computed it, and no number is changed.
 
 ## 9. What is fixed by rule
 
-Four standing rules bind every phase (the project's standing rules): the only network
+Four standing rules bind every stage of the work: the only network
 call outside harvest is the configured LLM API; citation verification is the
 three structural checks and text overlap is never reported as correctness;
 citations are page-level deep links with no coordinate storage; evaluation gold

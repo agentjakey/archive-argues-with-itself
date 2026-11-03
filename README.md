@@ -1,328 +1,82 @@
 # Archive Argues With Itself
 
-The public record disagrees with itself across decades. This tool shows you the pages.
-
 [![CI](https://github.com/agentjakey/archive-argues-with-itself/actions/workflows/ci.yml/badge.svg)](https://github.com/agentjakey/archive-argues-with-itself/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](pyproject.toml)
-[![Node 20](https://img.shields.io/badge/node-20-blue.svg)](web/.nvmrc)
-[![Live demo](https://img.shields.io/badge/live-demo-2a7ae2.svg)](https://archiveargues.org)
-[![Data release](https://img.shields.io/github/v/release/agentjakey/archive-argues-with-itself?filter=data-*&label=data%20release)](https://github.com/agentjakey/archive-argues-with-itself/releases)
 
-**Live demo:** https://archiveargues.org
-
-The earlier address, `archive-argues-with-itself-production.up.railway.app`, is being retired and
-will forward here with the path and query kept.
+Ask Canada's public record a question in plain words. The site searches Internet Archive Canada's
+scanned government publications, writes a short answer, and ties every sentence to the page it came
+from, so you can open the scan and check. When the record cannot answer, it says so and shows you the
+gap instead of guessing. Official wording changes from one decade's report to the next, and that
+change is often the point: the site lets you put two pages, years apart, side by side.
 
 ![Two Alberta government records on mental health policy, from 1988 and 1993, marked comparable and agreeing, with the note on how to read them and both scanned pages](docs/images/v2/story-laptop.png)
 
-An official answer is not fixed: what a government said caused a problem, or how it
-described a program, changes from one decade's report to the next, and the wording of
-that change is often the point. This tool puts the scanned Canadian government
-public-health pages (held by the Internet Archive) in front of you, ties every sentence
-of its answer to a page you can open, and says plainly where the record is too thin to
-answer instead of guessing.
+## Use it
 
-It serves two corpora from one app, switchable in the interface: a clean federal pilot
-(Government of Canada publications, federal plus Ontario and Alberta, roughly 1960-2009)
-and the national microlog microfiche corpus (federal, provincial, and municipal
-issuers, 1963-2018). The site is a static release on Cloudflare, so the stories and the
-recorded answers to the example questions work even when the engine is asleep; the engine
-runs in a Cloudflare container that wakes when someone asks a new question and fetches its
-data from Cloudflare R2 (the pilot is also mirrored on a GitHub Release). Neither corpus
-reaches the present: scanned government OCR runs out in the 2010s, and there is no 2020s
-material in this archive.
-
-Since release 2026-11-02.3, answers carry one of six evidence states and are written by
-GLM-5.3, an open-weight model on Cloudflare Workers AI, from pages found by keyword search.
-That change shipped only after it passed a promotion rule fixed in advance, on a fresh set
-of 839 AI-checked questions ([ACCURACY.md](docs/ACCURACY.md#the-confirmatory-test-confirm-1-2026-11-02-promoted),
-[pre-registration](docs/evaluation/confirm1_preregistration.md)). The labels and questions
-behind that test were checked by AI, not by people; outside review is planned. The site, the
-catalogue and the exhibit share one look and one token file, [design/tokens.css](design/tokens.css),
-with contrast measured by `scripts/v2/contrast.py`.
-
-## What's live
-
-| Where | What it is |
+| | |
 | --- | --- |
-| [archiveargues.org](https://archiveargues.org) | The reading room: ask a question of the federal pilot or the national microlog collection; every sentence links to its scanned page. Stories and recorded answers work while the engine sleeps. |
-| [archiveargues.org/exhibit](https://archiveargues.org/exhibit/) | The exhibit: date a real page, decide whether two records are the same thing, turn the Time Dial; alone or as a group passing one screen. Desktop and phone sizes. |
-| [archiveargues.org/kiosk](https://archiveargues.org/kiosk) | The same exhibit in kiosk presentation (attract loop, reset after a quiet minute, kiosk type scale), with counting and printing off and nothing stored: for a screen in a library or a classroom. |
-| [archiveargues.org/catalogue](https://archiveargues.org/catalogue/) | Every record of Internet Archive Canada's government collection known to this site, by decade, place, issuer and sub-collection, with what the site holds of each: known, text fetched, or indexed. |
+| [Ask](https://archiveargues.org) | Ask a question; every sentence links to its scanned page. |
+| [Explore](https://archiveargues.org/?view=explore) | Browse by decade, by province, by collection, or the [full catalogue](https://archiveargues.org/catalogue/). |
+| [Exhibit](https://archiveargues.org/exhibit/) | Short games built from real pages: date a page, decide whether two records are the same thing. |
+| [Kiosk](https://archiveargues.org/kiosk) | The exhibit for a screen in a library or classroom: resets after a quiet minute, stores nothing. |
 
-Current numbers, all measured and published with their limits in [docs/ACCURACY.md](docs/ACCURACY.md):
+## How it works
 
-- Answers: since release 2026-11-02.3 the v2 answer (six evidence states) written by GLM-5.3 on Workers AI from
-  keyword search. On the confirmatory test (839 fresh questions, drafts AI-checked), against the previous pipeline:
-  source page in the first ten +12.9 points [+9.5, +16.3]; answerable questions refused -9.1 [-12.7, -5.3];
-  should-refuse questions refused +5.2 [+1.4, +9.3].
-- The whole collection: the full-text fetch has 17,867 of 104,529 records (17%, on GitHub Actions, resumable;
-  projected to finish 2026-11-06 to 2026-11-08). Three of 41 shards are built and served in production, searchable
-  one by one or together as "the whole collection": federal 1899-1911, federal 1911-1921 and the undated-place
-  shard 1861-1993 (5,191 documents, 3.8 million passages). Their audit, with the production writer: strict SUPPORTS
-  95.1% [88.1, 98.1], 95.4% [87.3, 98.4] and 90.7% [80.1, 96.0] (54 to 82 sentences each; undecided sentences decided
-  by AI adjudication). Tier: INDEXED.
-- Audit status: nothing is AI-AUDITED. The labels the judges are measured against come from AI adjudication; no
-  human has checked them yet, and no AI-AUDITED claim will be made until outside review exists.
+1. Every catalogue record of the collection is listed; the scanned text of each document is fetched and indexed in parts.
+2. A question searches the parts that hold its words, by keyword search (BM25).
+3. A writer model (GLM-5.3, open-weight, on Cloudflare Workers AI) drafts sentences from those pages only.
+4. Each sentence must cite a page that was retrieved; sentences that fail the checks are dropped.
+5. The answer says how well its pages support it (one of six states), or refuses when the record is thin.
 
-Honest limits: scanned government OCR runs out in the 2010s; a record the site has not indexed is "not indexed",
-never "not in the archive"; the shards of the whole collection carry the tier INDEXED (searchable, unaudited by
-people); a cold engine takes 20 seconds to a few minutes to wake.
+The site is a static release on Cloudflare, so the examples and stories work even while the engine sleeps.
 
-## Contents
+## What it can and cannot do
 
-- [What's live](#whats-live)
-- [What it is, and is not](#what-it-is-and-is-not)
-- [The four rules](#the-four-rules)
-- [The numbers](#the-numbers)
-- [Quickstart](#quickstart)
-- [Run it yourself](#run-it-yourself)
-- [How it works](#how-it-works)
-- [Methods and gaps](#methods-and-gaps)
-- [Reproducing the evaluation](#reproducing-the-evaluation)
-- [Contributing](#contributing)
-- [Acknowledgements](#acknowledgements)
-- [Citation](#citation)
-- [License](#license)
+- Every cited passage resolves to a recorded page (100% in every audit). Sentences fully supported by
+  their cited page: 93.3% and 98.0% in the hand audits of the first two collections; 90.7% to 95.4% in
+  the AI-checked audits of the newer parts.
+- Against the previous pipeline, on 839 fresh test questions, the current one put the right page in the
+  first ten 12.9 points more often and wrongly refused answerable questions 9.1 points less often.
+- It still refuses many answerable questions (38% on that test), most often because search did not bring
+  back enough. A refusal means "not found in what is indexed", never "not in the archive".
+- The newer checks were made by AI judges and AI adjudication, not by people. Nothing is called
+  AI-audited until outside human review exists.
+- Scanned government text thins out after 2009 and stops in the 2010s. There is no 2020s material.
 
-## What it is, and is not
+Every number, how it was measured, and what it does not say: [docs/ACCURACY.md](docs/ACCURACY.md).
 
-It is a civic memory debugger: page-level provenance on every claim, a comparison
-view for how official language changes between decades, and a coverage view that shows
-where the archive is silent or undated. It is not a chatbot. Provenance, coverage, and
-uncertainty rank above fluency. The model may only write sentences it can cite to a
-retrieved page, and the tool abstains when the evidence is thin. It never claims to
-reach the present: the federal pilot's scanned OCR effectively stops around 2009, the
-national microlog corpus reaches 2018, and neither holds 2020s material.
+## Coverage
 
-## The four rules
+As of 2026-11-03: answers can draw on 21,988 documents with searchable text, out of 118,044 in the
+catalogue. The full-text fetch was 23% done and is expected to finish between 2026-11-06 and 2026-11-08;
+parts are added as they are built and checked. Live figures: the [catalogue](https://archiveargues.org/catalogue/)
+and the line under the question box.
 
-Four rules held through every stage of the work. The only network call outside the
-harvest layer is the configured language-model API; nothing downstream re-fetches the
-archive. Citation verification is three structural checks (the cited passage exists,
-it was in the evidence retrieved for that question, it resolves to a recorded page),
-and text overlap is never reported as correctness. Citations are page-level deep links
-of one fixed form, with no coordinate storage. Evaluation gold is never edited to
-improve a run; configuration changes are logged in `eval_runs`, and gold extensions
-are additive and recorded with who decided what.
-
-## The numbers
-
-Each scope is evaluated on its own audit run with the shipped configuration; all labels
-and judgments are by the author, and every figure links to the report it comes from.
-
-**Federal pilot** (3,477 items, 745,893 passages; 1960-2009), audit over the 50
-evaluation questions, reports under [`docs/evaluation/`](docs/evaluation/):
-
-| what | value | source |
-| --- | --- | --- |
-| Citation support, strict: every claim in the sentence appears in the cited page (178 kept sentences on the 35 answerable questions) | 93.3% (166/178, 95% CI 88.6-96.1%) | [audit report](docs/evaluation/audit_report.md) |
-| Citation support, lenient: supported or partly supported | 99.4% (177/178, 95% CI 96.9-99.9%) | [audit report](docs/evaluation/audit_report.md) |
-| Cited passages that resolve to a recorded page | 100% (119/119, 95% CI 96.9-100%) | [audit report](docs/evaluation/audit_report.md) |
-| Abstention on questions the archive cannot answer | 66.7% (10/15, 95% CI 41.7-84.8%) in-sample; 9/10 held out | [audit report](docs/evaluation/audit_report.md), [held-out run](docs/evaluation/holdout_run.md) |
-| Off-target answers: should-abstain questions answered on the wrong question (q015, q030, q036, q037, q049) | 33.3% (5/15, 95% CI 15.2-58.3%) in-sample | [audit report](docs/evaluation/audit_report.md) |
-| False abstention on answerable questions | 0% (0/35, 95% CI 0.0-9.9%) in-sample; 1/5 held out | [held-out run](docs/evaluation/holdout_run.md) |
-| Retrieval recall@10 on the fully judged gold, before and after the retrieval changes (per-question mean, not a proportion; no interval) | 0.347 to 0.4581 | [retrieval report](docs/evaluation/retrieval_report.md) |
-
-**National microlog** (13,539 items, 1,136,827 passages; 1963-2018), audit over 47
-evaluation questions, machine-readable numbers in
-[`reports/microlog/audit_numbers.json`](reports/microlog/audit_numbers.json):
-
-| what | value | source |
-| --- | --- | --- |
-| Claim-level citation support, strict (fully supported only), 304 kept sentences (298 supported / 6 partly / 0 not) | 98.0% (298/304, 95% CI 95.8-99.1%) | [audit numbers](reports/microlog/audit_numbers.json) |
-| Claim-level citation support, lenient (supported or partly) | 100% (304/304, 95% CI 98.8-100%) | [audit numbers](reports/microlog/audit_numbers.json) |
-| Cited passages that resolve to a recorded page | 100% (200/200, 95% CI 98.1-100%) | [audit numbers](reports/microlog/audit_numbers.json) |
-| Abstention on should-abstain questions | 71.4% (5/7, 95% CI 35.9-91.8%) | [audit numbers](reports/microlog/audit_numbers.json) |
-| Off-target answers: should-abstain questions answered on the wrong question (mq43, mq44) | 28.6% (2/7, 95% CI 8.2-64.1%) | [audit numbers](reports/microlog/audit_numbers.json) |
-| False abstention on answerable questions | 2.5% (1/40, 95% CI 0.4-12.9%) (mq28) | [audit numbers](reports/microlog/audit_numbers.json) |
-| Jurisdiction is an issuer proxy, a floor with no per-province claim (~15% unplaced, shown as its own figure) | 14.9% unknown (2,018/13,539; corpus census, no interval) | [audit numbers](reports/microlog/audit_numbers.json) |
-
-Every rate above carries a Wilson 95% confidence interval, computed in code from the
-committed judgment files by `scripts/audit_report.py`. Off-target answers (a cited,
-supported answer to a different question than the one asked) are reported with equal billing
-next to abstention: the two share the should-abstain denominator. Recall is a per-question
-mean rather than a binomial proportion, so it carries no interval and is sourced from the
-committed retrieval report (it needs the index, which is not committed); the microlog
-jurisdiction figure is a corpus census, not a sample.
-
-Two caveats, stated in the reports: the pilot's abstention rule was amended once against
-its 50 questions (its held-out set is the exception), and the candidate labels behind
-the gold extensions and the sentence judgments were proposed by an assistant model of
-the same family that writes the answers, then reviewed and decided by the author. See
-[`docs/evaluation/abstention_sweeps.md`](docs/evaluation/abstention_sweeps.md) for the
-pilot's unedited sweeps.
-
-## Quickstart
-
-Python 3.11 (`requires-python = ">=3.11,<3.12"`).
+## Run it yourself
 
 ```powershell
 git clone https://github.com/agentjakey/archive-argues-with-itself
 cd archive-argues-with-itself
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m pytest        # hermetic: no network, no model, no index
+.\.venv\Scripts\python.exe -m pytest          # no network, no model, no data needed
+cd web; npm ci; npm test; cd ..
 ```
 
-The tests need no data files, no key, and no network. To serve the app you need the
-corpus (next section). For synthesis, copy `.env.example` to `.env` and fill in the API
-key line; the key is never committed.
+To serve answers you need the data. The quickest path is the federal pilot from the
+[data release](https://github.com/agentjakey/archive-argues-with-itself/releases/tag/data-v1). Running
+your own copy, on Cloudflare or on any Docker host: [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md). All
+documentation, by reader: [docs/README.md](docs/README.md).
 
-## Run it yourself
+## Credits
 
-Two ways to get the federal pilot's corpus database and dense index (about 3.2 GiB).
-The national microlog corpus is larger and is hosted on Cloudflare R2 (see
-[`docs/DEPLOY.md`](docs/DEPLOY.md)); the pilot below is the quickest way to run the app
-locally.
+Built during the AI Builders Fellowship of the BC + AI Ecosystem, with
+[Internet Archive Canada](https://archive.org/details/governmentpublications), whose collections, scans
+and OCR make it possible. Page images are served by archive.org and not copied here; the publications
+remain under their own terms. The release design follows
+[Qipu](https://github.com/AbstractsMachine/qipu-vancouver): anything that does not depend on a visitor's
+question is computed ahead, checked, and published as a versioned static release. Ideas borrowed, no
+code copied.
 
-**Fast path: download the data release** and verify the checksums:
-
-```powershell
-$R = "https://github.com/agentjakey/archive-argues-with-itself/releases/download/data-v1"
-New-Item -ItemType Directory -Force C:\civic-data\index | Out-Null
-curl.exe -L -o C:\civic-data\civic.db            "$R/civic.db"
-curl.exe -L -o C:\civic-data\index\vectors.db    "$R/vectors.db"
-curl.exe -L -o C:\civic-data\data-release.sha256 "$R/data-release.sha256"
-# verify (Git Bash): cd /c/civic-data && sha256sum -c data-release.sha256   (vectors.db is under index/)
-```
-
-Put `CIVIC_DB_PATH=C:\civic-data\civic.db` and
-`CIVIC_INDEX_PATH=C:\civic-data\index\vectors.db` in `.env` (keep the files out of
-synced folders), build the web app once, and serve:
-
-```powershell
-cd web; npm ci; npm run build; cd ..
-.\.venv\Scripts\python.exe -m uvicorn archive_debugger.api.app:app --host 127.0.0.1 --port 8000
-```
-
-Open `http://127.0.0.1:8000/`. Append `?kiosk=1` for the exhibit mode; see
-[`docs/DEMO.md`](docs/DEMO.md) for the unattended, offline setup and
-[`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) for the Cloudflare hosting (the static site,
-the engine Worker and its container, releases and rollback). [`docs/DEPLOY.md`](docs/DEPLOY.md)
-describes the earlier single-image deployment, which still runs on any Docker host.
-
-**Reproducible path: rebuild from the manifest.** The item set is fixed by
-[`data/manifest/`](data/manifest/); the rebuild yields the same corpus, and the dense
-index is deterministic for the pinned model. Only step 1 touches the network.
-
-```powershell
-python -m archive_debugger.harvest.fetch --download-all --contact you@example.com   # 1. cache metadata + OCR under raw/
-python -m archive_debugger.ingest.loader                                              # 2. load items
-python -m archive_debugger.ingest.build --fresh                                       #    parse OCR into pages and passages
-python -m archive_debugger.ingest.normalize                                           # 3. dates, jurisdiction, issuer, doc type
-python -m archive_debugger.ingest.sections                                            #    front / body / back page classes
-python -m archive_debugger.retrieve.index                                             # 4. dense index (45-90 min on CPU)
-python -m archive_debugger.eval.questions --file eval/seed_questions.jsonl            # 5. evaluation questions and gold
-python -m archive_debugger.eval.label --from-worksheet reports/phase7/label_worksheet.jsonl --apply-decisions eval/gold_decisions.json
-python -m archive_debugger.eval.report
-```
-
-## How it works
-
-`harvest/` caches Internet Archive metadata and existing OCR derivatives. `ingest/`
-parses them into a SQLite database of items, pages, and passages, fills dates,
-jurisdiction, issuer, and document type without imputation, and classifies front and
-back matter. `retrieve/` fuses BM25 and dense cosine search (384-dim multilingual
-MiniLM in sqlite-vec) with Reciprocal Rank Fusion, a soft OCR down-weight, front and
-back demotion, and a per-item cap, then attaches page-level provenance to every hit.
-`generate/` drafts cited sentences with the configured model, verifies each citation
-with the three checks, drops what fails, and abstains by rule when the record is thin.
-`eval/` scores retrieval against human labels and holds the labeling tools. `api/` is a
-read-only FastAPI layer with an answer cache that can serve several scopes from one
-process, each with its own isolated databases and a scope switcher in the UI; `web/` is
-the Vite and React interface.
-
-An answer names its sources. Every sentence carries a numbered mark, the Sources list
-gives each page, and the evidence trail shows what was retrieved by decade.
-
-![An answered question with its verified page-level citations](docs/images/answer-tobacco.png)
-
-![The Sources list and the decade-by-decade evidence trail](docs/images/sources-timeline.png)
-
-When the record cannot answer, the tool refuses and shows why: the terms no retrieved
-page mentions, and the coverage grid of what the archive does hold.
-
-| The tool refusing, with the uncovered terms | The coverage behind the refusal |
-| --- | --- |
-| ![Abstention card for a COVID-19 question, with uncovered-term chips](docs/images/abstention-covid.png) | ![Coverage grid and nearest evidence for the refused question](docs/images/abstention-coverage.png) |
-
-## Methods and gaps
-
-- [`docs/METHODS.md`](docs/METHODS.md): how the federal pilot corpus was chosen, parsed,
-  indexed, retrieved, cited, and measured, every number tied to its report file.
-- [`docs/gaps.md`](docs/gaps.md): what the pilot archive cannot tell you (45% undated
-  passages, the pilot's record stopping around 2009, front-matter pollution, metadata
-  dates that disagree with the text, why housing was not the pilot, what the abstention
-  sweeps showed, and why verification checks support and not relevance).
-- The national microlog scope has its own audit under
-  [`reports/microlog/`](reports/microlog/) (support, abstention, the jurisdiction proxy,
-  and a sensitivity review); its dated span reaches 2018.
-- The same content is in the app under "How this works" and "Gaps", per scope.
-
-## Reproducing the evaluation
-
-The evaluation gold is committed: 50 questions in `eval/seed_questions.jsonl`, the
-relevance decisions in `eval/gold_decisions.json` and the two additive extensions
-`eval/gold_extension_decisions*.json`, the held-out set in
-`eval/holdout_questions.jsonl`, and the sentence judgments in
-`eval/judgments_phase16.json`, each with a notes file giving the reasons. The
-reproducibility artifacts (worksheets, per-phase build reports, machine JSON) live
-under [`reports/`](reports/). `python scripts/audit_report.py` recomputes every pilot
-headline number from the committed judgment files alone, with a Wilson 95% interval on each
-rate and off-target as a first-class metric, into `docs/evaluation/audit_report.md` and
-`reports/phase16/audit_numbers.json`; `python scripts/audit_report.py --scope microlog` does
-the same for the national corpus into `reports/microlog/audit_numbers.json`. Both refuse to
-write and print the mismatch if a recomputed value differs from what is published, so the
-tables cannot drift from the judgments. Two figures are not judgment-derived and are sourced,
-not typed: retrieval recall needs the built index, so it is read from the committed retrieval
-report (`python -m archive_debugger.eval.report` and `python -m archive_debugger.eval.retrieval_sweep`
-regenerate it with a built `civic.db` and index), and the microlog jurisdiction share is a
-corpus census from the built database. Every rate in this README and the reports is computed
-by code; none is typed in by hand.
-
-## Contributing
-
-Issues are welcome, especially corpus gaps: a question the archive should answer and
-does not, a page that resolves to the wrong scan, or a date the metadata gets wrong.
-The national microlog corpus is the worked example of a second scope: a new config
-(query, collections, window, and its own `[index].db_path` / `[retrieve].index_path`
-under an isolated data root) registered in [`config/scopes.toml`](config/scopes.toml)
-with its name and paths, then built with one resumable command; the code does not
-change. The frozen public_health pilot is the base scope and stays byte-identical
-whether it is served alone or alongside another scope.
-
-```powershell
-python -m archive_debugger.build_scope --scope microlog --contact you@example.com
-```
-
-The builder runs harvest -> loader -> build -> normalize -> sections -> embed for the
-named scope, prints structured status only, and resumes on rerun. A scoped run uses only
-that scope's registry paths and cannot open another scope's databases; the `CIVIC_DB_PATH`
-/ `CIVIC_INDEX_PATH` env overrides apply to the default scope only. Every pipeline stage
-also takes `--scope <name>` on its own, and the server reads `CIVIC_SCOPE`. Run the sizing
-audit first. The British Columbia sizing in
-[`reports/bc_audit/bc_sizing.md`](reports/bc_audit/bc_sizing.md) shows what a scope
-that does not clear the item floor looks like. See [`CONTRIBUTING.md`](CONTRIBUTING.md)
-and [`SECURITY.md`](SECURITY.md).
-
-## Acknowledgements
-
-Built during the AI Builders Fellowship of the BC + AI Ecosystem, with Internet
-Archive Canada, whose collections, OCR, and page images make the tool possible. Page images
-are served by archive.org and are not redistributed here. The publications are Canadian
-government documents and remain under their own terms.
-
-The hosting design follows [Qipu](https://github.com/AbstractsMachine/qipu-vancouver): whatever
-does not depend on a visitor's own question is computed offline, checked by gates and published as
-a versioned static release that goes live, and rolls back, by moving one pointer. The ideas are
-borrowed; no Qipu code is copied.
-
-## Citation
-
-See [`CITATION.cff`](CITATION.cff). Author: Jacob Ortiz.
-
-## License
-
-MIT. See [`LICENSE`](LICENSE).
+MIT licence ([LICENSE](LICENSE)). Cite with [CITATION.cff](CITATION.cff). Contact: Jacob Ortiz,
+hello@archiveargues.org. Contributions welcome: [CONTRIBUTING.md](CONTRIBUTING.md).

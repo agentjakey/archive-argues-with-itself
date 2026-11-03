@@ -60,6 +60,7 @@ from archive_debugger.audit import items as audit_items  # noqa: E402
 from archive_debugger.audit.budget import BudgetExceeded, Ledger  # noqa: E402
 from archive_debugger.audit.records import append_jsonl, read_jsonl, write_jsonl  # noqa: E402
 from archive_debugger.generate import answer_v2, writers  # noqa: E402
+from archive_debugger.retrieve import rerank as rerank_mod  # noqa: E402
 from archive_debugger.generate.cli import load_generate_config, sent_temperature  # noqa: E402
 from archive_debugger.retrieve import meta_rank  # noqa: E402
 
@@ -81,9 +82,10 @@ BOOTSTRAP_RESAMPLES = 2000
 BOOTSTRAP_SEED = 20261105
 RUN_ID = re.compile("^[A-Za-z0-9][A-Za-z0-9._-]*$")
 RESUME_KEYS = ("split", "pipeline", "writer", "effort", "stub", "collections", "limit", "seed", "rank", "provider",
-               "endpoint", "max_tokens", "writer_extra", "dense_weight")
+               "endpoint", "max_tokens", "writer_extra", "dense_weight", "rerank_depth")
 CONFIG_DEFAULTS = {"provider": "anthropic", "endpoint": None, "max_tokens": None, "writer_extra": None,
-                   "dense_weight": None}    # keys older runs did not record
+                   "dense_weight": None, "rerank_depth": None}    # keys older runs did not record
+RERANK_TOKENS_PER_PASSAGE = 600     # recorded when a rerank reply reports no usage (a worst case at 2,000 characters)
 
 
 class Refused(Exception):
@@ -183,7 +185,7 @@ def parse_rank(spec: Optional[str]) -> Optional[dict]:
 
 def pipeline_label(pipeline: str, writer: str, effort: Optional[str], stub: bool, rank: Optional[dict] = None,
                    max_tokens: Optional[int] = None, extra_body: Optional[dict] = None,
-                   dense_weight: Optional[float] = None) -> str:
+                   dense_weight: Optional[float] = None, rerank_depth: Optional[int] = None) -> str:
     # A provider's model path ("@cf/org/model") becomes one safe name ("cf_org_model"): the label
     # names a file under test_runs/.
     label = f"{pipeline}-{re.sub(r'[^A-Za-z0-9._-]+', '_', price_model(writer)).strip('_')}"
@@ -197,6 +199,8 @@ def pipeline_label(pipeline: str, writer: str, effort: Optional[str], stub: bool
         label += f"-x{writers.extra_digest(extra_body)[:8]}"
     if dense_weight is not None:
         label += f"-dw{float(dense_weight):g}"
+    if rerank_depth:
+        label += f"-rr{int(rerank_depth)}"
     if stub:
         label += "-stub"
     return label
@@ -581,7 +585,8 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
                   ledger: Optional[Ledger] = None, engine_factory: Optional[Callable] = None,
                   writer_factory: Callable = real_writer, log: Callable = print, rank: Optional[dict] = None,
                   provider: str = "anthropic", endpoint: Optional[str] = None, max_tokens: Optional[int] = None,
-                  writer_extra: Optional[dict] = None, dense_weight: Optional[float] = None) -> int:
+                  writer_extra: Optional[dict] = None, dense_weight: Optional[float] = None,
+                  rerank_depth: Optional[int] = None) -> int:
     """Answer the split's items; 0 when every item was answered, 1 when some came back with an
     error (a rerun asks them again), 2 when the run stopped before a call that could cross a cap."""
     if not RUN_ID.match(run_id or ""):
@@ -623,7 +628,10 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
         raise Refused("--writer-extra is for the workers_ai and openai_compat providers")
     if dense_weight is not None and dense_weight < 0:
         raise Refused("--dense-weight must be 0 or more")
-    label = pipeline_label(pipeline, writer, effort, stub, rank, max_tokens, writer_extra, dense_weight)
+    if rerank_depth is not None and rerank_depth < 0:
+        raise Refused("--rerank-depth must be 0 or more")
+    rerank_depth = rerank_depth or None
+    label = pipeline_label(pipeline, writer, effort, stub, rank, max_tokens, writer_extra, dense_weight, rerank_depth)
     out_root = Path(out_root)
     marker = out_root / "test_runs" / f"{label}.json"
     if split == "test":
@@ -643,7 +651,7 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
     config = {"split": split, "pipeline": pipeline, "writer": writer, "effort": effort, "stub": stub,
               "collections": names, "limit": limit, "seed": seed, "rank": rank or None,
               "provider": provider, "endpoint": endpoint, "max_tokens": max_tokens, "writer_extra": writer_extra or None,
-              "dense_weight": dense_weight}
+              "dense_weight": dense_weight, "rerank_depth": rerank_depth}
     if run_json.exists():
         before = json.loads(run_json.read_text(encoding="utf-8"))
         changed = [k for k in RESUME_KEYS if before.get("config", {}).get(k, CONFIG_DEFAULTS.get(k)) != config[k]]
@@ -654,8 +662,8 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
     if own_engines:
         os.environ.setdefault("CIVIC_DENSE_BACKEND", "numpy")     # the deploy's dense backend
         os.environ.pop("CIVIC_CACHE_URL", None)                   # the engine cache stays a local temp file
-    if ledger is None and not stub:
-        ledger = Ledger(DEFAULT_LEDGER)
+    if ledger is None and (not stub or rerank_depth):
+        ledger = Ledger(DEFAULT_LEDGER)       # rerank calls are paid even with the stub writer
     info = {"format": 1, "run_id": run_id, "pipeline_label": label, "config": config,
             "price_model": None if stub else model, "cap_usd": cap, **facts,
             "items": len(items), "answer_version": answer_v2.ANSWER_VERSION if pipeline == "v2" else "v1",
@@ -672,6 +680,17 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
     log(f"{run_id}: {len(items)} items ({len(done & {it['item_id'] for it in items})} already answered), "
         f"pipeline {label}, collections {names}")
     stopped = None
+    # The reranker flag the engine reads (retrieve/rerank.py), for this run only, with every call metered.
+    saved_depth = os.environ.get(rerank_mod.DEPTH_ENV)
+    if rerank_depth:
+        os.environ[rerank_mod.DEPTH_ENV] = str(int(rerank_depth))
+
+        def meter(tokens: int, passages: int) -> None:
+            ledger.spend(run_id, "workers-ai", rerank_mod.MODEL, tokens or passages * RERANK_TOKENS_PER_PASSAGE, 0,
+                         what=f"rerank {passages} passages" + ("" if tokens else " (usage not reported: worst case)"))
+        rerank_mod.METER = meter
+    else:
+        os.environ.pop(rerank_mod.DEPTH_ENV, None)
     with tempfile.TemporaryDirectory(prefix="bench-engine-") as work:
         if own_engines:
             engine_factory = RealEngines(Path(work))
@@ -710,6 +729,11 @@ def run_benchmark(*, split: str, pipeline: str, run_id: str, cap: float, writer:
         finally:
             if own_engines:
                 engine_factory.close()
+            rerank_mod.METER = None
+            if saved_depth is None:
+                os.environ.pop(rerank_mod.DEPTH_ENV, None)
+            else:
+                os.environ[rerank_mod.DEPTH_ENV] = saved_depth
 
     rows = latest_rows(answers_path)
     order = {it["item_id"]: n for n, it in enumerate(items)}
@@ -1168,6 +1192,8 @@ def main(argv=None) -> int:
     p_run.add_argument("--endpoint", default=None, help="an [endpoints.<name>] entry in config/writers.toml")
     p_run.add_argument("--writer-extra", type=json.loads, default=None,
                        help='JSON object of extra request fields for an OpenAI-compatible writer, e.g. \'{"reasoning_effort": "low"}\'')
+    p_run.add_argument("--rerank-depth", type=int, default=None,
+                       help="the reranker on the pool's first N passages for this run (retrieve/rerank.py; 0 = off)")
     p_run.add_argument("--dense-weight", type=float, default=None,
                        help="[retrieve] dense_weight for this run (1.0 = the baseline fusion, 0 = BM25 alone)")
     p_run.add_argument("--max-tokens", type=int, default=None,
@@ -1192,14 +1218,14 @@ def main(argv=None) -> int:
         if args.command == "run":
             from archive_debugger.local_env import load_local_env
             load_local_env()
-            ledger = None if args.stub else Ledger(args.ledger)
+            ledger = None if (args.stub and not args.rerank_depth) else Ledger(args.ledger)
             return run_benchmark(split=args.split, pipeline=args.pipeline, run_id=args.run_id, cap=args.cap,
                                  writer=args.writer, effort=args.effort, limit=args.limit, seed=args.seed,
                                  collections=args.collections, stub=args.stub, final=args.final, out_root=out_root,
                                  lock_path=args.lock, splits_dir=args.splits_dir, ledger=ledger,
                                  rank=parse_rank(args.rank), provider=args.provider, endpoint=args.endpoint,
                                  max_tokens=args.max_tokens, writer_extra=args.writer_extra,
-                                 dense_weight=args.dense_weight)
+                                 dense_weight=args.dense_weight, rerank_depth=args.rerank_depth)
         if args.command == "judge-items":
             from archive_debugger.local_env import load_local_env
             load_local_env()
