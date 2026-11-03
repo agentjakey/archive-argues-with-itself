@@ -71,7 +71,7 @@ describe("the exhibit", () => {
     render(<App initialDeck={FIXTURE} initialKiosk={ONLINE} />);
     expect(screen.getByRole("heading", { level: 1, name: en.title })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: en.touchToStart })).toBeInTheDocument();
-    expect(screen.getByText(en.privacy)).toBeInTheDocument();
+    expect(screen.getByText(en.privacyWeb)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/?view=privacy");
     expect(screen.getByRole("link", { name: "Accessibility" })).toHaveAttribute("href", "/?view=accessibility");
   });

@@ -3,6 +3,7 @@
 // or control is clipped or pushed off screen, and in kiosk mode a round also fits with no vertical
 // scroll. Each screen of a visit is checked before and after its answer. With SHOTS=<folder> a
 // screenshot of every checked screen is written there (one folder per mode and size).
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -110,3 +111,65 @@ for (const mode of MODES) {
     });
   }
 }
+
+// No control ends up under the sticky Next bar when it is scrolled or tabbed into view (WCAG 2.4.11,
+// focus not obscured), or under the footer. The 2026-11-02 soak found the last rows of the Gap Hunt
+// grid under the kiosk footer at 1920x1080.
+for (const mode of MODES) {
+  for (const [w, h] of SIZES) {
+  test(`${mode.name} ${w}x${h}: every Gap Hunt cell can be reached and pressed`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(mode.path);
+    await page.getByRole("button", { name: "Touch to start" }).waitFor();
+    await page.getByRole("button", { name: "All games" }).click();
+    await page.getByRole("button", { name: /Gap Hunt/ }).click();
+    const cells = page.locator("button.cell");
+    await cells.first().waitFor();
+    const n = await cells.count();
+    for (let i = n - 1; i >= 0; i--) {
+      const cell = cells.nth(i);
+      await cell.focus();
+      const covered = await cell.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !(hit === el || el.contains(hit));
+      });
+      expect(covered, `cell ${i} is covered after focus`).toBe(false);
+      await cell.click({ timeout: 3000 });
+    }
+  });
+}
+}
+
+// The light theme: the switch works in the web view, every screen of a visit passes axe with the AAA
+// contrast rule, and a kiosk stays dark even when this browser saved a light choice.
+test("light theme: the switch, contrast on every screen, and a kiosk that stays dark", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
+  await page.goto("/exhibit/");
+  await page.getByRole("button", { name: "Touch to start" }).click();
+  await page.getByRole("button", { name: "Switch to light theme" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(await page.evaluate(() => localStorage.getItem("theme"))).toBe("light");
+  const contrast = async (where: string) => {
+    const result = await new AxeBuilder({ page }).withRules(["color-contrast", "color-contrast-enhanced"]).analyze();
+    expect(result.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`), where).toEqual([]);
+  };
+  for (let i = 1; i <= 8; i++) {
+    const stepEl = page.locator("[data-step]").first();
+    if (!(await stepEl.isVisible().catch(() => false))) break;
+    await contrast(`step ${i} ask`);
+    await answer(page);
+    await page.waitForTimeout(150);
+    await contrast(`step ${i} reveal`);
+    const next = page.locator("[data-primary]").first();
+    if (!(await next.isVisible().catch(() => false))) break;
+    await next.click();
+  }
+  await contrast("chronicle");
+  await page.goto("/exhibit/?kiosk=1");
+  await expect(page.getByRole("button", { name: "Touch to start" })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByTestId("theme-toggle")).toHaveCount(0);
+});

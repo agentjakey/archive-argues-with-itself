@@ -62,6 +62,9 @@ export function App({ initialDeck, initialKiosk }: { initialDeck?: Deck; initial
   // Kiosk presentation (the kiosk server, or ?kiosk=1 online): the kiosk type scale, one screen per round.
   useEffect(() => {
     document.documentElement.classList.toggle("kiosk", kiosk.kiosk);
+    // A kiosk is always dark, whatever was chosen on this browser before (the kiosk server sets kiosk
+    // mode from its own settings, not only from ?kiosk=1, so the boot script cannot know).
+    if (kiosk.kiosk) document.documentElement.setAttribute("data-theme", "dark");
   }, [kiosk.kiosk]);
 
   // The attract screen shows one real line at a time from the When Was This? clues (page text,
@@ -149,6 +152,7 @@ export function App({ initialDeck, initialKiosk }: { initialDeck?: Deck; initial
             <span className="brand-title">{t.title}</span>
           </p>
           <div className="top-actions">
+            {!kiosk.kiosk && <ThemeButton labels={t.theme} />}
             <button type="button" className="btn btn-quiet" onClick={() => setLang(lang === "en" ? "fr" : "en")} lang={lang === "en" ? "fr" : "en"}>
               <span className="label-long">{t.language}</span>
               <span className="label-short" aria-hidden="true">{t.short.language}</span>
@@ -330,7 +334,7 @@ export function App({ initialDeck, initialKiosk }: { initialDeck?: Deck; initial
           </p>
         )}
         <footer className="foot">
-          <p>{t.privacy}</p>
+          <p>{kiosk.kiosk ? t.privacy : t.privacyWeb}</p>
           {t.frenchPending && <p lang="fr">{t.frenchPending}</p>}
           {!kiosk.kiosk && (
             <p>
@@ -341,5 +345,65 @@ export function App({ initialDeck, initialKiosk }: { initialDeck?: Deck; initial
         </footer>
       </div>
     </SettingsContext.Provider>
+  );
+}
+
+type Theme = "light" | "dark";
+interface ThemeApi {
+  set: (theme: Theme) => Theme;
+}
+
+function currentTheme(): Theme {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "light" || attr === "dark") return attr;
+  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+/** The site's sun/moon switch, in the exhibit's own button style. The choice is kept by the site's
+ *  /theme-boot.js (one localStorage key, only when it differs from the device); without that script
+ *  it changes this page only. Never shown on a kiosk. */
+function ThemeButton({ labels }: { labels: { light: string; dark: string; toLight: string; toDark: string } }) {
+  const [theme, setTheme] = useState<Theme>(() => currentTheme());
+  useEffect(() => {
+    const media = window.matchMedia?.("(prefers-color-scheme: light)");
+    const sync = () => setTheme(currentTheme());
+    media?.addEventListener?.("change", sync);
+    return () => media?.removeEventListener?.("change", sync);
+  }, []);
+  const next: Theme = theme === "dark" ? "light" : "dark";
+  const flip = () => {
+    const api = (window as unknown as { archiveTheme?: ThemeApi }).archiveTheme;
+    if (api) {
+      setTheme(api.set(next));
+    } else {
+      document.documentElement.setAttribute("data-theme", next);
+      setTheme(next);
+    }
+  };
+  return (
+    <button
+      type="button"
+      className="btn btn-quiet theme-button"
+      onClick={flip}
+      aria-label={next === "light" ? labels.toLight : labels.toDark}
+      data-testid="theme-toggle"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        {next === "light" ? (
+          <>
+            <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" strokeWidth="2" />
+            <path
+              d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </>
+        ) : (
+          <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        )}
+      </svg>
+      <span>{next === "light" ? labels.light : labels.dark}</span>
+    </button>
   );
 }
