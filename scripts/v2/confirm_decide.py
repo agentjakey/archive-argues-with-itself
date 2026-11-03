@@ -41,6 +41,21 @@ SAMPLE_SEED = "confirm1-guardrail:20261113"
 SAMPLE_SIZE = 100
 RESAMPLES, BOOT_SEED, MARGIN = 2000, 20261105, 0.02
 
+# --set confirm2 (docs/evaluation/confirm2_preregistration.md): the same sample rule and guardrail, its own
+# folder, runs and seed. V1/CAND name the baseline and the candidate. The pooled fallback is confirm-1's only.
+SETS = {
+    "confirm1": {"dir": "confirm1", "base": "confirm1-v1", "cand": "confirm1-v2-glm53-low-dw0",
+                 "seed": "confirm1-guardrail:20261113"},
+    "confirm2": {"dir": "confirm2", "base": "confirm2-base", "cand": "confirm2-rr30",
+                 "seed": "confirm2-guardrail:20261123"},
+}
+
+
+def configure(name: str) -> None:
+    global CONFIRM, V1, CAND, SAMPLE_SEED
+    s = SETS[name]
+    CONFIRM, V1, CAND, SAMPLE_SEED = BENCH / s["dir"], s["base"], s["cand"], s["seed"]
+
 
 def answers(root: Path, run_id: str) -> dict:
     return {r["item_id"]: r for r in read_jsonl(root / "runs" / run_id / "answers.jsonl")}
@@ -189,12 +204,16 @@ def cmd_pooled(args) -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--set", choices=sorted(SETS), default="confirm1")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("sample")
     p = sub.add_parser("guardrail")
     p.add_argument("--audit", nargs=2, required=True, help="audit runs for v1 and the candidate, in that order")
     sub.add_parser("pooled")
     args = parser.parse_args(argv)
+    configure(args.set)
+    if args.set != "confirm1" and args.cmd == "pooled":
+        parser.error("the pooled fallback was registered for confirm-1 only")
     return {"sample": cmd_sample, "guardrail": cmd_guardrail, "pooled": cmd_pooled}[args.cmd](args)
 
 
