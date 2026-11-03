@@ -13,6 +13,12 @@ async function engineOff(page: Page): Promise<void> {
   await page.route(`${ENGINE}/**`, (route) => route.abort("connectionrefused"));
 }
 
+/** Whether the release under test includes the catalogue's data. */
+async function hasCatalogue(page: Page): Promise<boolean> {
+  const resp = await page.request.get("http://127.0.0.1:4173/catalogue/data/summary.json").catch(() => null);
+  return !!resp && resp.ok() && (resp.headers()["content-type"] ?? "").includes("json");
+}
+
 async function violations(page: Page): Promise<string[]> {
   await page.waitForTimeout(500);
   const result = await new AxeBuilder({ page }).withTags(TAGS).exclude("iframe").analyze();
@@ -83,11 +89,14 @@ test("a chosen theme is kept, painted before the app loads, and cleared by choos
   expect(await page.evaluate(() => (window as unknown as { firstTheme?: string }).firstTheme)).toBe("light");
   const ground = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
   expect(ground).toBe("rgb(245, 239, 225)");
-  // The catalogue shares the choice.
+  // The catalogue shares the choice (when this release has one: CI's release is assembled without
+  // the catalogue's data, which is built from R2).
+  if (await hasCatalogue(page)) {
   await page.goto("http://127.0.0.1:4173/catalogue/");
   await expect(page.getByRole("heading", { level: 1, name: "Catalogue" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(page.getByRole("button", { name: "Switch to dark theme" })).toBeVisible();
+  }
   await page.goto("http://127.0.0.1:4173/");
   await page.getByRole("button", { name: "Switch to dark theme" }).click();
   expect(await page.evaluate(() => localStorage.getItem("theme"))).toBeNull();
@@ -119,6 +128,7 @@ test("no page scrolls sideways on a phone", async ({ browser }) => {
 });
 
 test("the catalogue takes a title search from the URL, searches every decade and keeps it shareable", async ({ page }) => {
+  test.skip(!(await hasCatalogue(page)), "this release was assembled without the catalogue (CI has no catalogue data)");
   await page.goto("http://127.0.0.1:4173/catalogue/?q=tuberculosis");
   await expect(page.locator("#text")).toHaveValue("tuberculosis");
   await expect(page.locator("#decade")).toHaveValue("all");
