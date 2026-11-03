@@ -54,6 +54,32 @@ jurisdictions = ["british_columbia"]
 last_year = 2003
 undated = false
 
+[scopes."federal-1851-1899"]
+blurb = "844 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/federal-1851-1899/civic.db"
+index_path = "data/shards/federal-1851-1899/index/vectors.db"
+jurisdiction_phrase = "Government of Canada"
+label = "Government of Canada, 1851 to 1899"
+national = false
+release_dir = "shards/federal-1851-1899"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."federal-1851-1899".r2]
+db_key = "shards/v1/federal-1851-1899/civic.db"
+db_sha256 = "4097b8f1ae02f97570d754264a385f19775a89ceb54302fc0c36d587dfd72f4b"
+index_key = "shards/v1/federal-1851-1899/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."federal-1851-1899".shard]
+documents = 844
+first_year = 1851
+jurisdictions = ["federal"]
+last_year = 1899
+undated = false
+
 [scopes."federal-1899-1911"]
 blurb = "1,000 publications from Internet Archive Canada's government collection"
 collection = "governmentpublications"
@@ -104,6 +130,136 @@ documents = 1205
 first_year = 1911
 jurisdictions = ["federal"]
 last_year = 1921
+undated = false
+
+[scopes."federal-1921-1944"]
+blurb = "2,005 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/federal-1921-1944/civic.db"
+index_path = "data/shards/federal-1921-1944/index/vectors.db"
+jurisdiction_phrase = "Government of Canada"
+label = "Government of Canada, 1921 to 1944"
+national = false
+release_dir = "shards/federal-1921-1944"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."federal-1921-1944".r2]
+db_key = "shards/v1/federal-1921-1944/civic.db"
+db_sha256 = "83728c01cc03a11fe885043d38e1ec5e858eef8f7814db565543cd5000d5fb22"
+index_key = "shards/v1/federal-1921-1944/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."federal-1921-1944".shard]
+documents = 2005
+first_year = 1921
+jurisdictions = ["federal"]
+last_year = 1944
+undated = false
+
+[scopes."federal-1944-1947"]
+blurb = "997 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/federal-1944-1947/civic.db"
+index_path = "data/shards/federal-1944-1947/index/vectors.db"
+jurisdiction_phrase = "Government of Canada"
+label = "Government of Canada, 1944 to 1947"
+national = false
+release_dir = "shards/federal-1944-1947"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."federal-1944-1947".r2]
+db_key = "shards/v1/federal-1944-1947/civic.db"
+db_sha256 = "10a2af43aad76d358ee2a79b324a2fae5d1b290605ae0042a94d7aa6ae4b18a4"
+index_key = "shards/v1/federal-1944-1947/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."federal-1944-1947".shard]
+documents = 997
+first_year = 1944
+jurisdictions = ["federal"]
+last_year = 1947
+undated = false
+
+[scopes."federal-1947-1969"]
+blurb = "2,518 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/federal-1947-1969/civic.db"
+index_path = "data/shards/federal-1947-1969/index/vectors.db"
+jurisdiction_phrase = "Government of Canada"
+label = "Government of Canada, 1947 to 1969"
+national = false
+release_dir = "shards/federal-1947-1969"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."federal-1947-1969".r2]
+db_key = "shards/v1/federal-1947-1969/civic.db"
+db_sha256 = "1cbbbbe678e8491a4ece9221f05c9694b79850939ce69e100b3d9fe2e94d49b6"
+index_key = "shards/v1/federal-1947-1969/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."federal-1947-1969".shard]
+documents = 2518
+first_year = 1947
+jurisdictions = ["federal"]
+last_year = 1969
+undated = false
+
+[scopes."ontario-1980-1988"]
+blurb = "4,235 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/ontario-1980-1988/civic.db"
+index_path = "data/shards/ontario-1980-1988/index/vectors.db"
+jurisdiction_phrase = "Ontario"
+label = "Ontario, 1980 to 1988"
+national = false
+release_dir = "shards/ontario-1980-1988"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."ontario-1980-1988".r2]
+db_key = "shards/v1/ontario-1980-1988/civic.db"
+db_sha256 = "2c4b91a600eacb511e88e2d5db662a7501c85f6ee5003649edf013b2fb972dc1"
+index_key = "shards/v1/ontario-1980-1988/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."ontario-1980-1988".shard]
+documents = 4235
+first_year = 1980
+jurisdictions = ["ontario"]
+last_year = 1988
+undated = false
+
+[scopes."other-1858-2009"]
+blurb = "1,592 publications from Internet Archive Canada's government collection"
+collection = "governmentpublications"
+config = "config/shards/engine.toml"
+db_path = "data/shards/other-1858-2009/civic.db"
+index_path = "data/shards/other-1858-2009/index/vectors.db"
+jurisdiction_phrase = "British Columbia, Manitoba, New Brunswick and 8 more"
+label = "British Columbia, Manitoba, New Brunswick and 8 more, 1858 to 2009"
+national = false
+release_dir = "shards/other-1858-2009"
+source = "r2"
+tier = "INDEXED"
+
+[scopes."other-1858-2009".r2]
+db_key = "shards/v1/other-1858-2009/civic.db"
+db_sha256 = "91eb3ead02192d9463d4c49b6732eec1503f0a7acdd3286b2022d287e65d0e9c"
+index_key = "shards/v1/other-1858-2009/vectors.db"
+index_sha256 = "cbd8dac14253b758e1c7ad9450b78228c30620e5f38647d44aed1869611d8d6a"
+
+[scopes."other-1858-2009".shard]
+documents = 1592
+first_year = 1858
+jurisdictions = ["british_columbia", "manitoba", "new_brunswick", "newfoundland", "northwest_territories", "nova_scotia", "nunavut", "prince_edward_island", "quebec", "saskatchewan", "yukon"]
+last_year = 2009
 undated = false
 
 [scopes."unknown-1861-1993"]
