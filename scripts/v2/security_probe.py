@@ -195,6 +195,10 @@ def main(argv=None) -> int:
         if args.writer_extra:
             from archive_debugger.generate import writers as _writers
             tag += "-x" + _writers.extra_digest(args.writer_extra)[:8]
+        from archive_debugger.retrieve import rerank as _rerank
+        depth = _rerank.depth_from_env()
+        if depth:
+            tag += f"-rr{depth}"      # the reranker flag (CIVIC_RERANK_DEPTH) changes what the writer sees
         RUN_ID = f"security-probe-v2-{tag}"
         out_path = OUT.parent / f"v2_probe_{tag}.json"
     ledger = Ledger(REPO / "reports" / "v2" / "audit" / "ledger.jsonl")
