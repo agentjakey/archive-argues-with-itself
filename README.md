@@ -42,8 +42,37 @@ behind that test were checked by AI, not by people; outside review is planned. T
 catalogue and the exhibit share one look and one token file, [design/tokens.css](design/tokens.css),
 with contrast measured by `scripts/v2/contrast.py`.
 
+## What's live
+
+| Where | What it is |
+| --- | --- |
+| [archiveargues.org](https://archiveargues.org) | The reading room: ask a question of the federal pilot or the national microlog collection; every sentence links to its scanned page. Stories and recorded answers work while the engine sleeps. |
+| [archiveargues.org/exhibit](https://archiveargues.org/exhibit/) | The exhibit: date a real page, decide whether two records are the same thing, turn the Time Dial; alone or as a group passing one screen. Desktop and phone sizes. |
+| [archiveargues.org/kiosk](https://archiveargues.org/kiosk) | The same exhibit in kiosk presentation (attract loop, reset after a quiet minute, kiosk type scale), with counting and printing off and nothing stored: for a screen in a library or a classroom. |
+| [archiveargues.org/catalogue](https://archiveargues.org/catalogue/) | Every record of Internet Archive Canada's government collection known to this site, by decade, place, issuer and sub-collection, with what the site holds of each: known, text fetched, or indexed. |
+
+Current numbers, all measured and published with their limits in [docs/ACCURACY.md](docs/ACCURACY.md):
+
+- Answers: since release 2026-11-02.3 the v2 answer (six evidence states) written by GLM-5.3 on Workers AI from
+  keyword search. On the confirmatory test (839 fresh questions, drafts AI-checked), against the previous pipeline:
+  source page in the first ten +12.9 points [+9.5, +16.3]; answerable questions refused -9.1 [-12.7, -5.3];
+  should-refuse questions refused +5.2 [+1.4, +9.3].
+- The whole collection: the full-text fetch has 17,867 of 104,529 records (17%, on GitHub Actions, resumable;
+  projected to finish 2026-11-06 to 2026-11-08). Three of 41 shards are built and served in production, searchable
+  one by one or together as "the whole collection": federal 1899-1911, federal 1911-1921 and the undated-place
+  shard 1861-1993 (5,191 documents, 3.8 million passages). Their audit, with the production writer: strict SUPPORTS
+  95.1% [88.1, 98.1], 95.4% [87.3, 98.4] and 90.7% [80.1, 96.0] (54 to 82 sentences each; undecided sentences decided
+  by AI adjudication). Tier: INDEXED.
+- Audit status: nothing is AI-AUDITED. The labels the judges are measured against come from AI adjudication; no
+  human has checked them yet, and no AI-AUDITED claim will be made until outside review exists.
+
+Honest limits: scanned government OCR runs out in the 2010s; a record the site has not indexed is "not indexed",
+never "not in the archive"; the shards of the whole collection carry the tier INDEXED (searchable, unaudited by
+people); a cold engine takes 20 seconds to a few minutes to wake.
+
 ## Contents
 
+- [What's live](#whats-live)
 - [What it is, and is not](#what-it-is-and-is-not)
 - [The four rules](#the-four-rules)
 - [The numbers](#the-numbers)

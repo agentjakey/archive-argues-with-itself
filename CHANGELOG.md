@@ -3,6 +3,25 @@
 One entry per phase, in plain English, from the phase reports. Numbers are the
 reports' numbers; each entry names its source.
 
+## v2.0.0 (2026-11-02)
+`docs/ACCURACY.md`, `docs/evaluation/confirm1_preregistration.md`
+
+- On Cloudflare: the reading room as a static release that works while the engine sleeps, the engine in a container
+  that wakes on a question, data on R2, every release gated, rollback in one command.
+- Answers carry one of six evidence states (supported, partly supported, conflicting, not comparable, not enough
+  evidence, restricted) and are written by GLM-5.3, an open-weight model on Workers AI, from keyword search alone.
+  The change shipped only after a promotion rule fixed in advance passed on a fresh set of 839 AI-checked questions:
+  source page in the first ten +12.9 points, answerable questions refused -9.1, should-refuse questions refused +5.2
+  (all against the previous pipeline, 95% intervals in ACCURACY.md). On the earlier frozen test the false-refusal
+  bound missed; both results are published.
+- The v2 audit: AI judges from two families measured against AI-adjudicated reference labels; nothing is called
+  AI-AUDITED until outside human review exists.
+- The whole collection: a catalogue of every record at /catalogue/, a full-text fetch on GitHub Actions, shards built
+  and audited one by one, and a router that answers across the shards production serves. Three shards serve in production (5,191 documents,
+  3.8 million passages), each audited with the production writer before it was added.
+- The exhibit at /exhibit/ (and /kiosk for kiosk presentation): date a page, compare two records, the Time Dial,
+  group play on one screen; Agora's look, one design token file shared with the site and the catalogue.
+
 ## Corrections
 
 Dated corrections to what the app or its docs said. Stored model answers are never

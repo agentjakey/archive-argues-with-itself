@@ -220,6 +220,24 @@ readings, not human checks. The frozen test's result above stands as published: 
 refusal bound missed. Both sets are reported, and the decision followed the plan written before the
 second one was run.
 
+### The whole collection: shards audited before they serve (2026-11-02)
+
+Each shard of the whole collection is audited before production serves it. Questions are drafted from a seeded random
+sample of its own pages, answered by the production writer (GLM-5.3, the v2 answer, keyword search), and every cited
+sentence is checked by the same two-family panel for SUPPORTS. Sentences the judges split on, or one judge did not
+answer, were decided by AI adjudication with a written reason.
+
+| Shard | Sentences | Panel decided | Strict SUPPORTS, panel only | Strict SUPPORTS, every sentence | Tier |
+| --- | --- | --- | --- | --- | --- |
+| Government of Canada, 1899 to 1911 | 82 | 72 | 97.2% [90.4, 99.2] | 95.1% [88.1, 98.1] | INDEXED |
+| Government of Canada, 1911 to 1921 | 65 | 60 | 96.7% [88.6, 99.1] | 95.4% [87.3, 98.4] | INDEXED |
+| Place not read, 1861 to 1993 | 54 | 45 | 95.6% [85.2, 98.8] | 90.7% [80.1, 96.0] | INDEXED |
+
+Every cited passage in these audits resolved to a recorded page. What this does not say: a sample of 54 to 82 sentences
+gives intervals of about plus or minus 6 to 8 points; SUPPORTS is the only check measured here (not whether answers
+answer the question); the judges and the adjudication are AI; and the tier stays INDEXED until outside human review
+of the labels exists.
+
 ## What comes next
 
 Outside human review of the AI-adjudicated labels and questions, which is what any AI-AUDITED claim now
