@@ -1,4 +1,4 @@
-import { listWords, partLabel } from "../lib/parts";
+import { listWords, partLabel, reasonWords } from "../lib/parts";
 import type { RouterReport, ScopeInfo } from "../types";
 
 /** Deliverable 2: a plain line, above each result, naming the active corpus and its source
@@ -38,11 +38,11 @@ export function CollectionLine({ router, scopes }: { router: RouterReport; scope
           <ul className="mt-1">
             {router.left_out.map((p) => (
               <li key={p.shard}>
-                {partLabel(p.shard, scopes)}: {p.reason ?? "not chosen"}
+                {partLabel(p.shard, scopes)}: {reasonWords(p.reason)}
               </li>
             ))}
           </ul>
-          {router.note && <p className="mt-1">{router.note}</p>}
+          <p className="mt-1">A part that was not searched may still hold an answer. Setting a place or years under Refine changes which parts are searched.</p>
         </details>
       )}
     </div>
