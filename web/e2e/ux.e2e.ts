@@ -144,6 +144,24 @@ test("the catalogue takes a title search from the URL, searches every decade and
   expect(found).toEqual([]);
 });
 
+test("the catalogue matches URL search words in either order", async ({ page }) => {
+  await page.route("**/catalogue/data/summary.json", (route) => route.fulfill({ json: {
+    documents: 1, decades: { "1980s": { documents: 1 } }, places: { federal: 1 },
+    collections: {}, coverage: { known: 1 }, source: { text: "Synthetic catalogue fixture" },
+  } }));
+  await page.route("**/catalogue/data/decades/1980s.json", (route) => route.fulfill({ json: [
+    { id: "sample-report", t: "Annual report on tuberculosis", i: "Public Health", y: 1980,
+      p: "federal", s: ["known"], c: [] },
+  ] }));
+  for (const query of ["tuberculosis annual", "annual tuberculosis", "health tuberculosis"]) {
+    await page.goto(`/catalogue/?q=${encodeURIComponent(query)}`);
+    await expect(page.locator("#text")).toHaveValue(query);
+    await expect(page.locator("#decade")).toHaveValue("all");
+    await expect(page.locator("#results li")).toHaveCount(1);
+    await expect(page.locator("#results li")).toContainText("Annual report on tuberculosis");
+  }
+});
+
 test("a typed question searches the whole collection, names the parts it wakes, and says which it searched", async ({ page }) => {
   const recorded = JSON.parse(readFileSync(`${DATA}pilot/answers/seed-q001.json`, "utf-8"));
   const askUrls: string[] = [];
