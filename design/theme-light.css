@@ -1,0 +1,55 @@
+/* The light theme for the reading room (web/) and the catalogue (/catalogue/). The exhibit does not
+   load this file: it stays dark on every screen, for the room it stands in.
+
+   Warm paper instead of white, brown-black ink instead of black, and a dark gold that keeps the
+   Agora accent. design/theme-boot.js sets html[data-theme] before the first paint, from the visitor's
+   saved choice or else the device setting; the media block below covers a page without scripts.
+   Ratios, measured with scripts/v2/contrast.py against the ground (#f5efe1) and the surface (#fbf7ee):
+
+     text     #231c10  14.7 / 15.8   body text, AAA
+     muted    #4a3f2a   9.0 /  9.7   secondary text, AAA
+     gold     #6e4800   7.1 /  7.6   links, focus, hover, the cited mark, AAA
+     accent   #7d5800   5.6 /  6.0   rules, fills and large text only, AA
+     line     #857552   3.9 /  4.2   control edges, AA (non-text 3:1)
+     split-a  #22603f   6.5 /  7.0   the first record of a comparison
+     split-b  #8f421a   6.2 /  6.6   the second record of a comparison
+
+   Scanned pages are never filtered or inverted in either theme. */
+
+:root[data-theme="light"] {
+  --bg: #f5efe1;          --bg-rgb: 245 239 225;
+  --surface: #fbf7ee;     --surface-rgb: 251 247 238;
+  --surface-2: #ece3cf;   --surface-2-rgb: 236 227 207;
+  --hair: #d8ccb0;        --hair-rgb: 216 204 176;
+  --line: #857552;        --line-rgb: 133 117 82;
+  --text: #231c10;        --text-rgb: 35 28 16;
+  --muted: #4a3f2a;       --muted-rgb: 74 63 42;
+  --gold: #6e4800;        --gold-rgb: 110 72 0;
+  --accent: #7d5800;      --accent-rgb: 125 88 0;
+  --split-a: #22603f;     --split-a-rgb: 34 96 63;
+  --split-b: #8f421a;     --split-b-rgb: 143 66 26;
+  --panel-a: #e2ece4;
+  --panel-b: #f2e2d0;
+  --ink: #fbf7ee;         /* text on a gold fill */
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #f5efe1;          --bg-rgb: 245 239 225;
+    --surface: #fbf7ee;     --surface-rgb: 251 247 238;
+    --surface-2: #ece3cf;   --surface-2-rgb: 236 227 207;
+    --hair: #d8ccb0;        --hair-rgb: 216 204 176;
+    --line: #857552;        --line-rgb: 133 117 82;
+    --text: #231c10;        --text-rgb: 35 28 16;
+    --muted: #4a3f2a;       --muted-rgb: 74 63 42;
+    --gold: #6e4800;        --gold-rgb: 110 72 0;
+    --accent: #7d5800;      --accent-rgb: 125 88 0;
+    --split-a: #22603f;     --split-a-rgb: 34 96 63;
+    --split-b: #8f421a;     --split-b-rgb: 143 66 26;
+    --panel-a: #e2ece4;
+    --panel-b: #f2e2d0;
+    --ink: #fbf7ee;
+    color-scheme: light;
+  }
+}

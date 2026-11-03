@@ -1,7 +1,10 @@
 // Catalogue browsing: static files only (summary.json and one file per decade), filtered in the
-// browser. Archival text is shown as text, never as HTML. Nothing is stored in the browser.
+// browser. Archival text is shown as text, never as HTML. The search and filters live in the URL
+// (?q=, &decade=, &place=, &state=, &collection=), so a search can be shared or bookmarked; the only
+// thing kept in the browser is the visitor's own light or dark choice, by /theme-boot.js.
 const BASE = new URL("data/", document.baseURI);
 const PAGE = 100;
+const ALL = "all";
 const STATE_NAMES = { known: "Known", text_fetched: "Text fetched", indexed: "Indexed" };
 const PLACE_NAMES = {
   federal: "Federal", ontario: "Ontario", alberta: "Alberta", quebec: "Quebec", british_columbia: "British Columbia",
@@ -17,10 +20,13 @@ const el = (tag, text, cls) => {
   if (cls) e.className = cls;
   return e;
 };
+const fmt = (n) => n.toLocaleString("en-CA");
 
 let summary = null;
+let keys = [];
 let current = [];
 let shown = 0;
+let run = 0;
 const cache = new Map();
 
 function topState(states) {
@@ -70,7 +76,12 @@ function row(doc) {
   return li;
 }
 
-function render(reset) {
+function countLine(done, total) {
+  const searching = total > 1 && done < total ? ` Searching decade ${done} of ${total}...` : "";
+  return `${fmt(current.length)} documents match; showing ${fmt(shown)}.${searching}`;
+}
+
+function render(reset, done = 1, total = 1) {
   const list = $("results");
   if (reset) {
     list.replaceChildren();
@@ -80,48 +91,114 @@ function render(reset) {
   for (const doc of next) list.appendChild(row(doc));
   shown += next.length;
   $("more").hidden = shown >= current.length;
-  $("count").textContent = `${current.length.toLocaleString("en-CA")} documents match; showing ${shown.toLocaleString("en-CA")}.`;
+  $("count").textContent = countLine(done, total);
+}
+
+function writeUrl() {
+  const p = new URLSearchParams();
+  const text = $("text").value.trim();
+  if (text) p.set("q", text);
+  p.set("decade", $("decade").value);
+  for (const id of ["place", "state", "collection"]) if ($(id).value) p.set(id, $(id).value);
+  const qs = p.toString();
+  window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
 }
 
 async function update() {
+  const mine = ++run;
+  writeUrl();
   const key = $("decade").value;
+  const wanted = key === ALL ? keys : [key];
+  current = [];
+  render(true, 0, wanted.length);
   $("count").textContent = "Loading...";
-  const docs = await loadDecade(key);
-  current = docs.filter(matches);
-  render(true);
+  for (let i = 0; i < wanted.length; i++) {
+    const docs = await loadDecade(wanted[i]);
+    if (mine !== run) return;   // a newer search replaced this one
+    const found = docs.filter(matches);
+    current = current.concat(found);
+    if (shown < PAGE) render(false, i + 1, wanted.length);
+    else {
+      $("more").hidden = shown >= current.length;
+      $("count").textContent = countLine(i + 1, wanted.length);
+    }
+  }
+}
+
+function themeToggle() {
+  const api = window.archiveTheme;
+  const button = $("theme-toggle");
+  if (!api || !button || api.kiosk) return;
+  const sun = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const moon = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+  const paint = () => {
+    const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+    const label = `Switch to ${next} theme`;
+    button.innerHTML = next === "light" ? sun : moon;
+    button.setAttribute("aria-label", label);
+    button.title = label;
+  };
+  button.hidden = false;
+  paint();
+  button.addEventListener("click", () => {
+    const next = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+    api.set(next);
+    paint();
+  });
+  window.matchMedia?.("(prefers-color-scheme: light)").addEventListener?.("change", paint);
 }
 
 async function main() {
+  themeToggle();
   const res = await fetch(new URL("summary.json", BASE), { cache: "no-cache" });
   summary = await res.json();
-  const keys = Object.keys(summary.decades).sort((a, b) => (a === "undated" ? 1 : b === "undated" ? -1 : a.localeCompare(b)));
+  keys = Object.keys(summary.decades).sort((a, b) => (a === "undated" ? 1 : b === "undated" ? -1 : a.localeCompare(b)));
+  const all = el("option", `All decades (${fmt(summary.documents)}; a larger download)`);
+  all.value = ALL;
+  $("decade").appendChild(all);
   for (const k of keys) {
-    const o = el("option", `${k === "undated" ? "Undated" : k} (${summary.decades[k].documents.toLocaleString("en-CA")})`);
+    const o = el("option", `${k === "undated" ? "Undated" : k} (${fmt(summary.decades[k].documents)})`);
     o.value = k;
     $("decade").appendChild(o);
   }
-  $("decade").value = keys.includes("1980s") ? "1980s" : keys[0];
   for (const [p, n] of Object.entries(summary.places)) {
-    const o = el("option", `${PLACE_NAMES[p] || p} (${n.toLocaleString("en-CA")})`);
+    const o = el("option", `${PLACE_NAMES[p] || p} (${fmt(n)})`);
     o.value = p;
     $("place").appendChild(o);
   }
   for (const [c, n] of Object.entries(summary.collections)) {
-    const o = el("option", `${c} (${n.toLocaleString("en-CA")})`);
+    const o = el("option", `${c} (${fmt(n)})`);
     o.value = c;
     $("collection").appendChild(o);
   }
+
+  // Restore a search from the URL. A title search with no decade looks in every decade, so the
+  // search box on the home page can hand its words straight to this page.
+  const params = new URLSearchParams(window.location.search);
+  const q = (params.get("q") || "").slice(0, 200);
+  $("text").value = q;
+  const decade = params.get("decade");
+  $("decade").value = decade && (decade === ALL || keys.includes(decade)) ? decade : q ? ALL : keys.includes("1980s") ? "1980s" : keys[0];
+  for (const id of ["place", "state", "collection"]) {
+    const v = params.get(id);
+    if (v && [...$(id).options].some((o) => o.value === v)) $(id).value = v;
+  }
+
   const cov = summary.coverage;
-  $("totals").textContent = `${summary.documents.toLocaleString("en-CA")} documents known; ${(cov.indexed || 0).toLocaleString("en-CA")} indexed; ${(cov.text_fetched || 0).toLocaleString("en-CA")} with text fetched.`;
+  $("totals").textContent = `${fmt(summary.documents)} documents known; ${fmt(cov.indexed || 0)} indexed; ${fmt(cov.text_fetched || 0)} with text fetched.`;
   $("method").textContent = summary.source.text;
   for (const id of ["decade", "place", "state", "collection"]) $(id).addEventListener("change", update);
   let timer = 0;
   $("text").addEventListener("input", () => {
     window.clearTimeout(timer);
-    timer = window.setTimeout(update, 250);
+    timer = window.setTimeout(update, 300);
   });
-  $("filters").addEventListener("submit", (e) => e.preventDefault());
-  $("more").addEventListener("click", () => render(false));
+  $("filters").addEventListener("submit", (e) => {
+    e.preventDefault();
+    window.clearTimeout(timer);
+    update();
+  });
+  $("more").addEventListener("click", () => render(false, 1, 1));
   await update();
 }
 

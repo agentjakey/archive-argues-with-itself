@@ -176,7 +176,7 @@ describe("the line beside every answer", () => {
     };
     render(<AnswerCard answer={answer} byId={new Map([["itemA#29:0", row({ cited: true })]])} onOpen={vi.fn()} />);
     expect(screen.getByText(AI_LINE)).toBeInTheDocument();
-    expect(AI_LINE).toBe("Written by Claude, an AI model, from the pages cited. It can be wrong; open the page to check.");
+    expect(AI_LINE).toBe("Written by an AI model from the pages cited. It can be wrong; open the page to check.");
   });
 });
 
@@ -217,7 +217,8 @@ describe("public pages", () => {
     expect(screen.getByRole("heading", { name: "Please don't type personal information into questions" })).toBeInTheDocument();
     expect(screen.getByText("The question feature is for people 18 and over.")).toBeInTheDocument();
     expect(screen.getByText(/Deleted after 90 days/)).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: /Anthropic,/ })).toHaveLength(2);
+    expect(screen.getByRole("link", { name: /Cloudflare, Workers AI privacy/ })).toBeInTheDocument();
+    expect(screen.getAllByText(/GLM-5\.3/).length).toBeGreaterThan(0);
   });
 
   it("no page claims compliance or full security", () => {

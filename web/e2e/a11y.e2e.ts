@@ -63,7 +63,7 @@ test("axe finds nothing on an answer, a story and the page drawer", async ({ pag
   await engineOff(page);
   await page.goto(`/?${new URLSearchParams({ q: seed.text, ...seed.filters })}`);
   await expect(page.getByRole("heading", { name: "Answer from the record" })).toBeVisible();
-  await expect(page.getByText("Written by Claude, an AI model, from the pages cited.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Written by an AI model from the pages cited.", { exact: false })).toBeVisible();
   const found: Record<string, string[]> = { answer: await violations(page) };
   await page.getByRole("button", { name: /^Open the scanned page behind citation/ }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
@@ -118,8 +118,12 @@ test("keyboard: skip link, menu, footer pages, a question, the drawer and the fi
   await table.focus();
   await expect(table).toBeFocused();
 
-  // The menu's Ask returns to the question box with focus in it; a question is typed and sent.
-  await page.getByRole("navigation", { name: "Pages" }).getByRole("button", { name: "Ask" }).press("Enter");
+  // The header's Ask returns to the question box with focus in it; a question is typed and sent. On a
+  // phone the destinations sit behind the Menu button, which opens from the keyboard.
+  if (test.info().project.name === "phone") {
+    await page.getByRole("button", { name: /Menu/ }).press("Enter");
+  }
+  await page.locator('nav[aria-label="Main"]:visible').getByRole("button", { name: "Ask" }).press("Enter");
   await expect(page.locator("#question")).toBeFocused();
   await page.keyboard.type(seed.text);
   // The filters disclosure opens from the keyboard (Tab past Ask to the summary).

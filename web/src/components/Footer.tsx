@@ -34,7 +34,7 @@ export function Footer({ onView }: Props) {
       )}
       <p>
         An independent project built during the 2026 AI Builders Fellowship with the BC + AI Ecosystem and
-        Internet Archive Canada. Answers are written by Claude, an AI model, and can be wrong.{" "}
+        Internet Archive Canada. Answers are written by an AI model and can be wrong.{" "}
         <a className="linkish" href="https://github.com/agentjakey/archive-argues-with-itself" target="_blank" rel="noopener noreferrer">
           Source on GitHub
         </a>

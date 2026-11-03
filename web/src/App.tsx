@@ -15,6 +15,13 @@ import { ErrorCard } from "./components/ErrorCard";
 import { EvidenceTrail } from "./components/EvidenceTrail";
 import { Interstitial } from "./components/Interstitial";
 import { ExampleChips } from "./components/ExampleChips";
+import { Suggestions } from "./components/Suggestions";
+import { BrowseSection } from "./components/BrowseSection";
+import { ScopeSwitcher } from "./components/ScopeSwitcher";
+import { ShareBar } from "./components/ShareBar";
+import { SectionNav } from "./components/SectionNav";
+import { useCatalogueSummary } from "./hooks/useCatalogueSummary";
+import { featuredFor, type FeaturedQuestion } from "./lib/featured";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
 import { PageDrawer } from "./components/PageDrawer";
@@ -72,7 +79,7 @@ export default function App() {
   const [askedFilters, setAskedFilters] = useState<Filters>(initial.current.filters);
   const [pins, setPins] = useState<string[]>(initial.current.pins);
   const [drawer, setDrawer] = useState<EvidenceRow | null>(null);
-  const [chipsCollapsed, setChipsCollapsed] = useState(false);
+  const [chipsCollapsed, setChipsCollapsed] = useState(true);
   const [view, setView] = useState<View | null>(initial.current.view ?? null);
   const [storyRows, setStoryRows] = useState<[EvidenceRow, EvidenceRow] | null>(null);
   const [storyCaption, setStoryCaption] = useState<string | null>(null);
@@ -100,6 +107,12 @@ export default function App() {
   const activeScopeInfo =
     scopesInfo?.scopes.find((s) => s.name === (initial.current.scope ?? scopesInfo.default)) ?? null;
   const scopeExamples = useScopeExamples((scopesInfo?.scopes ?? []).map((s) => s.name));
+  const activeScopeName = initial.current.scope ?? scopesInfo?.default ?? "";
+  const featured = useMemo(
+    () => featuredFor(activeScopeName, scopeExamples[activeScopeName] ?? []),
+    [activeScopeName, scopeExamples],
+  );
+  const catalogue = useCatalogueSummary();
   const coverage = useCoverage(asked, askedFilters);
 
   const goView = useCallback(
@@ -355,7 +368,7 @@ export default function App() {
   );
 
   const pick = useCallback(
-    (e: Example) => {
+    (e: Example | FeaturedQuestion) => {
       setQuestion(e.text);
       setFilters(e.filters ?? {});
       ask(e.text, e.filters ?? {});
@@ -592,16 +605,9 @@ export default function App() {
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6">
       <a className="skip-link" href="#main-content">Skip to main content</a>
-      <Header
-        kiosk={kiosk}
-        view={view}
-        onView={goView}
-        onAsk={goAsk}
-        scopes={scopesInfo?.scopes ?? null}
-        activeScope={initial.current.scope ?? scopesInfo?.default ?? ""}
-        onSwitchScope={switchScope}
-      />
-      <EntryAdvisory />
+      <Header kiosk={kiosk} view={view} onView={goView} onAsk={goAsk} />
+      <SectionNav view={view} onView={goView} />
+      {!(view === null && showStories) && <EntryAdvisory />}
       {view === "explore" && (
         <ExplorePage
           scopes={scopesInfo?.scopes ?? null}
@@ -628,21 +634,65 @@ export default function App() {
       {view === "accessibility" && <Accessibility />}
       {view === "corrections" && <Corrections />}
       {view === null && (
-      <main id="main-content" tabIndex={-1}>
-      {showStories && (
+      <main id="main-content" tabIndex={-1} className={showStories ? "landing" : "results"}>
+      {showStories ? (
         <>
-          <section className="my-4" aria-label="What this is">
-            <p className="max-w-prose text-base leading-relaxed sm:text-lg">
-              The government's own words about public health changed over the decades, and that change is
-              the story. Ask a question and watch the wording shift across the record instead of reading
-              one collapsed summary. Every claim links back to the page it came from, so you can check it
-              yourself. When the record is too thin to answer, the tool says so and shows you the gap.
+          <section className="hero" aria-labelledby="hero-heading">
+            {activeScopeInfo && (
+              <p className="hero-kicker">
+                {activeScopeInfo.label}
+                {activeScopeInfo.coverage_window?.min_year != null && activeScopeInfo.coverage_window?.max_year != null
+                  ? `, ${activeScopeInfo.coverage_window.min_year} to ${activeScopeInfo.coverage_window.max_year}`
+                  : ""}
+              </p>
+            )}
+            <h1 id="hero-heading" className="hero-title">
+              Ask Canada's public-health record
+            </h1>
+            <p className="hero-lede">
+              Ask in your own words. Every answer cites the scanned government page it came from, and when the
+              record cannot answer, it says so and shows you the gap.
             </p>
+            {!offline && (
+              <AskBar
+                variant="hero"
+                question={question}
+                filters={filters}
+                busy={busy}
+                kiosk={kiosk}
+                scope={activeScopeInfo}
+                onQuestion={setQuestion}
+                onFilters={setFilters}
+                onAsk={onAsk}
+                onFocusQuestion={preWake}
+              />
+            )}
+            <Suggestions questions={featured} onPick={pick} disabled={busy} paused={question.trim() !== ""} />
+            {scopesInfo && scopesInfo.scopes.length > 1 && (
+              <ScopeSwitcher scopes={scopesInfo.scopes} active={activeScopeName} onSwitch={switchScope} />
+            )}
+            {!kiosk && (
+              <p className="hero-note">
+                Answers come only from the {activeScopeInfo ? `${plural(activeScopeInfo.item_count, "document")} of the collection chosen above` : "indexed documents"}.
+                {" "}Looking for a particular publication?{" "}
+                <a href={question.trim() ? `/catalogue/?q=${encodeURIComponent(question.trim())}` : "/catalogue/"}>
+                  {catalogue ? `Search all ${catalogue.documents.toLocaleString("en-CA")} catalogue records` : "Search the catalogue"}
+                </a>
+                . A first question can take up to a minute while the engine wakes; later ones are quick.
+              </p>
+            )}
           </section>
-          <ThresholdHero featured={heroStory(stories)} onOpen={openStory} />
-          <StoryGallery stories={galleryStories(stories)} loading={storiesLoading} onOpen={openStory} />
+          <EntryAdvisory />
+          <section className="stories-section" aria-labelledby="stories-heading">
+            <h2 id="stories-heading" className="section-title">
+              Start from a story
+            </h2>
+            <ThresholdHero featured={heroStory(stories)} onOpen={openStory} />
+            <StoryGallery stories={galleryStories(stories)} loading={storiesLoading} onOpen={openStory} />
+          </section>
+          <BrowseSection scopes={scopesInfo?.scopes ?? null} catalogue={catalogue} onView={goView} />
           {refuseExample && (
-            <p className="mt-6 max-w-prose text-sm text-muted">
+            <p className="mt-8 max-w-prose text-muted">
               <button
                 type="button"
                 onClick={() => pick(refuseExample)}
@@ -655,42 +705,41 @@ export default function App() {
               : ask about a year the record does not cover, like 2020, and it shows the gap instead of guessing.
             </p>
           )}
+          <details className="evidence-disclosure">
+            <summary>About this collection: {corpusSummary}</summary>
+            <CorpusStrip scope={activeScopeInfo ?? null} />
+          </details>
+        </>
+      ) : (
+        <>
+          <h1 className="sr-only">{asked ? `Results: ${asked}` : "Ask the record"}</h1>
+          {!offline && (
+            <div className="sticky-ask">
+              <AskBar
+                question={question}
+                filters={filters}
+                busy={busy}
+                kiosk={kiosk}
+                scope={activeScopeInfo}
+                onQuestion={setQuestion}
+                onFilters={setFilters}
+                onAsk={onAsk}
+                onFocusQuestion={preWake}
+              />
+            </div>
+          )}
+          <ExampleChips
+            chips={chips}
+            activeText={asked}
+            onPick={pick}
+            disabled={busy}
+            collapsed={chipsCollapsed}
+            onToggle={() => setChipsCollapsed((c) => !c)}
+            kiosk={kiosk}
+          />
         </>
       )}
-      {!offline && (
-        <div className={showStories ? "mt-8" : undefined}>
-          {showStories && <p className="mb-2 text-sm text-muted">Or ask the record your own question:</p>}
-          <AskBar
-            question={question}
-            filters={filters}
-            busy={busy}
-            kiosk={kiosk}
-            scope={activeScopeInfo}
-            onQuestion={setQuestion}
-            onFilters={setFilters}
-            onAsk={onAsk}
-            onFocusQuestion={preWake}
-          />
-        </div>
-      )}
-      {!showStories && (
-        <ExampleChips
-          chips={chips}
-          activeText={asked}
-          onPick={pick}
-          disabled={busy}
-          collapsed={chipsCollapsed && response !== null}
-          onToggle={() => setChipsCollapsed((c) => !c)}
-          kiosk={kiosk}
-        />
-      )}
       <AnswerSkeleton status={status} elapsed={elapsed} passages={activeScopeInfo?.composition?.passages ?? null} />
-      {showStories && (
-        <details className="evidence-disclosure">
-          <summary>About this corpus: {corpusSummary}</summary>
-          <CorpusStrip scope={activeScopeInfo ?? null} />
-        </details>
-      )}
 
       {status === "error" && error && <ErrorCard detail={error} onRetry={retry} />}
       {status === "waking" && wake && (
@@ -706,7 +755,10 @@ export default function App() {
         ) : (
         <>
           {showContextualNote && <ContextualNote flagged={flagged!} />}
-          {activeScopeInfo && <SourceLine scope={activeScopeInfo} />}
+          <div className="result-meta">
+            {activeScopeInfo && <SourceLine scope={activeScopeInfo} />}
+            {!kiosk && <ShareBar />}
+          </div>
           {askedFilters.jurisdiction &&
             PROVINCE_SLUGS.has(askedFilters.jurisdiction) &&
             activeScopeInfo?.composition?.jurisdiction_is_floor && (

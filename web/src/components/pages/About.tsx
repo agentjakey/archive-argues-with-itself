@@ -42,8 +42,9 @@ export function About({ scope }: { scope?: ScopeInfo | null }) {
 
       <h3>How answers are made</h3>
       <p>
-        The tool searches the scanned pages and picks the passages that best match your question. Claude, an AI
-        model made by Anthropic, then writes an answer from those passages only, and must cite a passage for
+        The tool searches the scanned pages and picks the passages that best match your question. An AI model
+        (GLM-5.3, an open-weight model run on Cloudflare Workers AI; the recorded example answers were written
+        earlier by Anthropic's Claude Haiku 4.5) then writes an answer from those passages only, and must cite a passage for
         every sentence. Deterministic checks run on every answer: a citation must point at a passage that was
         actually retrieved for your question and at a real recorded page; anything that fails is dropped or
         marked. The answers to the curated questions are also audited by hand. Even so, an answer can be wrong

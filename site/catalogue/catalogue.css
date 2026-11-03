@@ -2,6 +2,7 @@
    build at /tokens.css). Coverage states are square labels told apart by their words and a shape
    (hollow, half, full), never by colour alone. Print stays light. */
 @import url("/tokens.css");
+@import url("/theme-light.css");
 
 * { box-sizing: border-box; }
 body {
@@ -17,7 +18,24 @@ a { color: var(--gold); text-underline-offset: 0.18em; }
 :focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 .skip { position: absolute; left: -999px; }
 .skip:focus { left: 16px; top: 8px; background: var(--gold); color: var(--ink); padding: 4px 8px; }
-.crumb { margin: 1rem 0 0; font-size: 0.8rem; text-transform: uppercase; }
+html { background: var(--bg); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.site-header { display: flex; flex-wrap: wrap; align-items: center; gap: 0 1.5rem; min-height: 3.5rem; border-bottom: 1px solid var(--hair); margin-bottom: 1.5rem; }
+.brand { font-family: var(--display); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); text-decoration: none; font-size: 1.05rem; padding: 0.5rem 0; white-space: nowrap; }
+.brand:hover { color: var(--gold); }
+.site-header nav { margin-left: auto; }
+.nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.nav-link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 0.75rem; border-bottom: 2px solid transparent; font-family: var(--display); font-size: 0.8rem; letter-spacing: var(--label-tracking); text-transform: uppercase; color: var(--muted); text-decoration: none; }
+.nav-link:hover { color: var(--text); }
+.nav-link[aria-current="page"] { color: var(--text); border-bottom-color: var(--gold); }
+.icon-button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 0.5rem; border: 1px solid transparent; background: transparent; color: var(--muted); }
+.icon-button[hidden] { display: none; }
+@media (max-width: 767px) {
+  .site-header nav { order: 3; margin-left: 0; width: 100%; }
+  .icon-button { margin-left: auto; }
+  .nav-link { padding: 0 0.5rem; }
+}
+@media (max-width: 419px) { .brand-tail { display: none; } }
 h1 { margin: 0.2rem 0; font-size: clamp(1.5rem, 1rem + 2vw, 2.2rem); }
 .lede { color: var(--muted); max-width: 48rem; }
 .note { color: var(--muted); }
@@ -27,7 +45,8 @@ h1 { margin: 0.2rem 0; font-size: clamp(1.5rem, 1rem + 2vw, 2.2rem); }
 .states dd { margin: 0; }
 .filters { display: flex; flex-wrap: wrap; gap: 0.8rem 1.2rem; align-items: end; }
 .filters label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; text-transform: uppercase; color: var(--muted); }
-.filters .wide { flex: 1 1 16rem; }
+.filters .wide { flex: 1 1 100%; }
+.filters .wide input { font-size: 1.15rem; min-height: 3.25rem; }
 select, input {
   font: 1rem var(--reading); padding: 0.35rem 0.5rem; min-height: 2.75rem;
   border: 1px solid var(--line); border-radius: var(--radius);
@@ -52,5 +71,6 @@ button:hover, button:focus-visible { border-color: var(--gold); color: var(--gol
 footer { border-top: 1px solid var(--hair); margin-top: 2rem; color: var(--muted); }
 @media print {
   body { background: #ffffff; color: #000000; }
+  .site-header, .filters, #more, .skip { display: none; }
   a, .badge.indexed { color: #000000; }
 }

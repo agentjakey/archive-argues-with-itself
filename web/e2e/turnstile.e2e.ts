@@ -63,7 +63,7 @@ test("a question gets through, or gets a plain message and a retry", async ({ pa
 
   if (CASE.endsWith("-pass")) {
     // the loading skeleton shares the answer's heading; the line beside a written answer does not
-    await expect(page.getByText(/^Written by Claude, an AI model/)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/^Written by an AI model/)).toBeVisible({ timeout: 60_000 });
     expect(tokens.filter(Boolean).length).toBeGreaterThan(0);
     expect(tokens.every((t) => t === "XXXX.DUMMY.TOKEN.XXXX")).toBe(true);
     // Interaction-only: nothing is drawn for a visitor who passes without a click.

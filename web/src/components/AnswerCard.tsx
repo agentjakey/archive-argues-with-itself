@@ -17,7 +17,7 @@ interface Props {
 }
 
 /** Shown beside every answer the model wrote. */
-export const AI_LINE = "Written by Claude, an AI model, from the pages cited. It can be wrong; open the page to check.";
+export const AI_LINE = "Written by an AI model from the pages cited. It can be wrong; open the page to check.";
 
 /** No box: a left rule, serif heading, marks [n] beside each claim, Sources below. */
 export function AnswerCard({ answer, byId, onOpen, notes }: Props) {

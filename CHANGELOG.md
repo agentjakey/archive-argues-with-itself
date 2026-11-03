@@ -3,6 +3,28 @@
 One entry per phase, in plain English, from the phase reports. Numbers are the
 reports' numbers; each entry names its source.
 
+## v2.1.0 (2026-11-03): the reading room, redesigned around search
+`web/`, `site/catalogue/`, `design/theme-light.css`, `design/theme-boot.js`
+
+- The opening screen is one heading and one search box, with example topics under it. Each example is a seed
+  question whose recorded answer cites at least two scanned pages and carries no care flag (checked by a test
+  against the release's own data); a line above them crossfades between the full questions, pauses on hover,
+  focus or typing, and never moves with reduced motion.
+- One header on every page: Ask, Explore, Exhibit, How it works, and a sun/moon switch. On a phone the
+  destinations fold behind a Menu button. Timeline, coverage map, sources, gaps and about sit one click away in a
+  row under the header of their section.
+- A light theme, warm paper and brown ink, beside the dark one, shared with the catalogue. The site follows the
+  device until a visitor picks the other theme; that one choice is kept in their own browser (key "theme") and is
+  set before the first paint. Every colour pair meets its bar in both themes (`scripts/v2/contrast.py`). Kiosk
+  pages stay dark and store nothing; the exhibit keeps its dark look everywhere.
+- Results keep the question box at the top while reading, with Copy link, Print and Copy citations. Example
+  questions on a result fold behind one button instead of pushing the answer down.
+- The catalogue: the title search comes first, takes `?q=` from the home page, can search every decade, and keeps
+  its filters in the URL.
+- Corrections: the privacy, about and footer text said answers are written by Anthropic's Claude. Since 2026-11-02
+  live answers are written by GLM-5.3 on Cloudflare Workers AI; the recorded example answers were written earlier
+  by Claude Haiku 4.5. Privacy page, `docs/PRIVACY.md` and `docs/DATA_FLOWS.md` now say so (updated 2026-11-03).
+
 ## v2.0.0 (2026-11-02)
 `docs/ACCURACY.md`, `docs/evaluation/confirm1_preregistration.md`
 

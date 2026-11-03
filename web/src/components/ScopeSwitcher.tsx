@@ -15,9 +15,9 @@ export function ScopeSwitcher({ scopes, active, onSwitch }: Props) {
   if (scopes.length < 2) return null;
   const current = scopes.find((s) => s.name === active) ?? scopes[0];
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label="Choose a corpus to explore">
-      <span className="tag" aria-hidden="true">
-        Corpus
+    <div className="scope-switcher" role="group" aria-label="Choose a corpus to explore">
+      <span className="scope-switcher-label" aria-hidden="true">
+        Search in
       </span>
       {scopes.map((s) => {
         const on = s.name === current.name;
@@ -25,8 +25,9 @@ export function ScopeSwitcher({ scopes, active, onSwitch }: Props) {
           <button
             key={s.name}
             type="button"
-            className="chip"
+            className="chip chip-quiet"
             aria-pressed={on}
+            title={`${s.item_count.toLocaleString("en-CA")} documents`}
             onClick={() => {
               if (!on) onSwitch(s.name);
             }}

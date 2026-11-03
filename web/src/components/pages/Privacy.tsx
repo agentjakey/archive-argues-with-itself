@@ -34,7 +34,7 @@ const ROWS: Row[] = [
   {
     data: "Your question and any filters, when you ask",
     purpose: "Find matching pages and write an answer",
-    processor: "Cloudflare (the engine), Anthropic (the answer)",
+    processor: "Cloudflare (the engine, and Workers AI for the answer)",
     location: "United States and other countries",
     retention: "The question's text is not stored by this site; see the next rows",
   },
@@ -48,9 +48,16 @@ const ROWS: Row[] = [
   {
     data: "Your question and the retrieved page text, sent to the AI model",
     purpose: "Write the answer",
-    processor: "Anthropic",
-    location: "United States and other countries",
-    retention: "Deleted by Anthropic within 30 days, longer only if flagged under its usage policy; not used to train models",
+    processor: "Cloudflare Workers AI (the GLM-5.3 model)",
+    location: "Cloudflare's network",
+    retention: "Not kept by Cloudflare after the request is processed, except where the law requires; not used to train models",
+  },
+  {
+    data: "Your choice of light or dark theme, only if you pick one that differs from your device's setting",
+    purpose: "Show the site in the theme you chose on your next visit",
+    processor: "Your own browser (local storage, one entry named theme); never sent to this site",
+    location: "Your device",
+    retention: "Until you switch back to your device's setting or clear your browser's site data",
   },
   {
     data: "A scrambled form of your IP address",
@@ -83,8 +90,10 @@ export function Privacy() {
       <h3>The short version</h3>
       <p>
         No accounts, no ads, no cookies and no tracking on this site, and nothing is sold. Questions are
-        answered by an AI model at Anthropic, and a copy of each answer is kept for 90 days without the
-        question's text. Please don't type personal information into questions.
+        answered by an open-weight AI model (GLM-5.3) running on Cloudflare Workers AI, and a copy of each
+        answer is kept for 90 days without the question's text. If you choose a light or dark theme, your
+        browser remembers that one choice on your device. Please don't type personal information into
+        questions.
       </p>
 
       <h3>What happens to your data</h3>
@@ -119,16 +128,13 @@ export function Privacy() {
       <h3>Who processes it</h3>
       <p>
         Cloudflare hosts the site and the engine and provides the content network, security, Turnstile, the
-        database (D1) and file storage (R2). Anthropic's model writes the answers. Anthropic says it deletes API
-        inputs and outputs within 30 days unless it must keep them longer to enforce its usage policy or by law (
-        <Ext href="https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data">
-          Anthropic, data retention
-        </Ext>
-        ), and that it does not train models on inputs or outputs from its commercial products by default (
-        <Ext href="https://privacy.claude.com/en/articles/7996868-is-my-data-used-for-model-training">
-          Anthropic, model training
-        </Ext>
-        ). Your data may be processed in the United States and other countries.
+        database (D1), file storage (R2) and, since 2026-11-02, the model that writes the answers: GLM-5.3 on
+        Workers AI. Cloudflare says it does not keep Workers AI inputs or outputs after a request is processed
+        and does not use them to train models (
+        <Ext href="https://developers.cloudflare.com/workers-ai/platform/privacy/">Cloudflare, Workers AI privacy</Ext>
+        , updated 2026-10-16). The recorded answers to the published example and story questions were written
+        earlier by Anthropic's Claude Haiku 4.5, and each one names the model that wrote it. Your data may be
+        processed in the United States and other countries.
       </p>
       <p>
         This site uses Cloudflare Turnstile to tell people from bots. Its use is governed by the Turnstile Privacy

@@ -1,80 +1,135 @@
+import { useEffect, useId, useRef, useState } from "react";
 import type { View } from "../lib/urlstate";
-import type { ScopeInfo } from "../types";
 import { KioskQr } from "./KioskQr";
-import { ScopeSwitcher } from "./ScopeSwitcher";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface Props {
   kiosk: boolean;
   view: View | null;
   onView: (view: View | null) => void;
-  onAsk?: () => void;               // nav "Ask": return to the landing AND focus the ask input
-  scopes?: ScopeInfo[] | null;      // more than one -> the switcher renders; null/one -> hidden
-  activeScope?: string;
-  onSwitchScope?: (name: string) => void;
+  onAsk?: () => void;               // "Ask": return to the search AND focus the question box
 }
 
-const LINKS: { view: View; label: string }[] = [
-  { view: "explore", label: "Explore" },
-  { view: "how", label: "How this works" },
-  { view: "gaps", label: "Gaps" },
-  { view: "map", label: "Coverage map" },
-  { view: "timeline", label: "Timeline" },
-  { view: "sources", label: "Sources" },
-  { view: "about", label: "About" },
-];
+type Section = "ask" | "explore" | "how";
 
-// A lighter, secondary nav: muted by default so it never competes with the content; the active page
-// reads in ink, and any link inks in on hover.
-const navCls = (active: boolean) =>
-  `bg-transparent border-0 p-0 cursor-pointer font-sans text-sm underline-offset-2 hover:underline ${
-    active ? "text-ink underline" : "text-muted hover:text-ink"
-  }`;
+// Which top-level section a page belongs to, so the current place stays obvious on every page.
+const SECTION_OF: Record<View, Section | null> = {
+  explore: "explore",
+  timeline: "explore",
+  map: "explore",
+  sources: "explore",
+  how: "how",
+  gaps: "how",
+  about: "how",
+  privacy: null,
+  terms: null,
+  accessibility: null,
+  corrections: null,
+};
 
-/** The slim persistent band: title, nav, and (multi-scope only) the compact scope switcher. The
- *  framing lives once on the landing, the corpus provenance in the "About this corpus" disclosure,
- *  and the discretion note is its own compact line, so this band stays short on every page. */
-export function Header({ kiosk, view, onView, onAsk, scopes, activeScope, onSwitchScope }: Props) {
+export function sectionOf(view: View | null): Section | null {
+  return view === null ? "ask" : SECTION_OF[view];
+}
+
+/** The site header: the name, four destinations (Ask, Explore, Exhibit, How it works) and the theme
+ *  switch. On a narrow screen the destinations fold into a Menu button. The exhibit is a separate
+ *  page, so its entry is a plain link. */
+export function Header({ kiosk, view, onView, onAsk }: Props) {
+  const [open, setOpen] = useState(false);
+  const menuId = useId();
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const section = sectionOf(view);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        menuButton.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const go = (next: View | null) => {
+    setOpen(false);
+    if (next === null && onAsk) onAsk();
+    else onView(next);
+  };
+
+  const links = (
+    <>
+      <NavItem label="Ask" current={section === "ask"} onClick={() => go(null)} />
+      <NavItem label="Explore" current={section === "explore"} onClick={() => go("explore")} />
+      {!kiosk && (
+        <li>
+          <a className="nav-link" href="/exhibit/">
+            Exhibit
+          </a>
+        </li>
+      )}
+      <NavItem label="How it works" current={section === "how"} onClick={() => go("how")} />
+    </>
+  );
+
   return (
-    <header className="mb-4">
-      <div className="flex items-start justify-between gap-6">
-        <h1 className="font-serif text-2xl leading-tight">
-          <button type="button" className="linkish no-underline font-serif text-2xl" onClick={() => onView(null)}>
-            Archive Argues With Itself
+    <header className="site-header">
+      <div className="site-header-row">
+        <a
+          className="brand"
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            go(null);
+          }}
+        >
+          Archive Argues <span className="brand-tail">With Itself</span>
+        </a>
+        <nav aria-label="Main" className="nav-wide">
+          <ul className="nav-list">{links}</ul>
+        </nav>
+        <div className="header-tools">
+          {!kiosk && <ThemeToggle />}
+          <button
+            ref={menuButton}
+            type="button"
+            className="icon-button menu-button"
+            aria-expanded={open}
+            aria-controls={menuId}
+            onClick={() => setOpen((o) => !o)}
+          >
+            <MenuIcon open={open} />
+            <span className="menu-label">Menu</span>
           </button>
-        </h1>
+        </div>
         {kiosk && <KioskQr />}
       </div>
-      <p className="mt-1 max-w-prose font-sans text-sm text-muted">
-        See how Canada's public-health record changed over the decades, with every claim linked to the
-        page it came from.
-      </p>
-      <nav
-        className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-rule pt-2"
-        aria-label="Pages"
-      >
-        <button
-          type="button"
-          className={navCls(view === null)}
-          aria-current={view === null ? "page" : undefined}
-          onClick={onAsk ?? (() => onView(null))}
-        >
-          Ask
-        </button>
-        {LINKS.map((l) => (
-          <button
-            key={l.view}
-            type="button"
-            className={navCls(view === l.view)}
-            aria-current={view === l.view ? "page" : undefined}
-            onClick={() => onView(l.view)}
-          >
-            {l.label}
-          </button>
-        ))}
+      <nav aria-label="Main" id={menuId} className="nav-narrow" hidden={!open}>
+        <ul className="nav-list-narrow">{links}</ul>
       </nav>
-      {scopes && onSwitchScope && (
-        <ScopeSwitcher scopes={scopes} active={activeScope ?? ""} onSwitch={onSwitchScope} />
-      )}
     </header>
+  );
+}
+
+function NavItem({ label, current, onClick }: { label: string; current: boolean; onClick: () => void }) {
+  return (
+    <li>
+      <button type="button" className="nav-link" aria-current={current ? "page" : undefined} onClick={onClick}>
+        {label}
+      </button>
+    </li>
+  );
+}
+
+function MenuIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      {open ? (
+        <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      ) : (
+        <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      )}
+    </svg>
   );
 }

@@ -90,7 +90,7 @@ describe("reading pages", () => {
     expect(screen.getByText(/nor\s+the Government of Canada, endorses the answers/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "BC + AI Ecosystem" })).toHaveAttribute("href", "https://bc-ai.ca");
     expect(screen.getByRole("link", { name: "Internet Archive Canada" })).toHaveAttribute("href", "https://internetarchivecanada.org");
-    expect(screen.getByText(/Claude, an AI\s+model made by Anthropic/)).toBeInTheDocument();
+    expect(screen.getByText(/GLM-5\.3, an open-weight model run on Cloudflare Workers AI/)).toBeInTheDocument();
     expect(screen.getByText(/88.6% to 96.1%/)).toBeInTheDocument();
     expect(screen.getByText(/No human has checked those labels yet, and outside review is planned/)).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/human-verified/i);

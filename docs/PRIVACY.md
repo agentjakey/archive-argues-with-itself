@@ -2,7 +2,7 @@
 
 The full privacy page is on the site: https://archiveargues.org/?view=privacy. Every piece of data
 the site and the engine touch, with how each was checked, is in `docs/DATA_FLOWS.md`. In short
-(last updated 2026-11-01):
+(last updated 2026-11-03):
 
 - No accounts, no ads, no cookies and no tracking on the site, and nothing is sold.
 - A visitor's question is not stored as text. Its answer is stored under a one-way key made from the
@@ -10,9 +10,15 @@ the site and the engine touch, with how each was checked, is in `docs/DATA_FLOWS
   days (D1's history can restore deleted rows for up to 30 more days). A question that contains an
   email address or a phone number is answered but never stored. The answers to the published seed
   and story questions are kept with their questions, as part of the exhibit.
-- The question and the retrieved page text are sent to Anthropic to write the answer. Anthropic
-  deletes API inputs and outputs within 30 days unless it must keep them longer to enforce its
-  usage policy or by law, and does not train on them by default.
+- Since 2026-11-02 the question and the retrieved page text go to GLM-5.3, an open-weight model on
+  Cloudflare Workers AI, to write the answer. Cloudflare says it does not keep Workers AI inputs or
+  outputs after the request is processed and does not train on them
+  (https://developers.cloudflare.com/workers-ai/platform/privacy/, updated 2026-10-16). The recorded
+  answers to the published example and story questions were written earlier by Anthropic's Claude
+  Haiku 4.5.
+- A visitor who picks a light or dark theme that differs from their device setting has that one
+  choice kept in their own browser's local storage (key "theme"). It is never sent to the site. Kiosk
+  pages never store it.
 - The engine receives the question only, without the visitor's address or browser details. Logs
   hold routes, outcomes and timings, never a question or an address, for 7 days.
 - Rate limiting uses a hash of the visitor's address held by Cloudflare for one minute; it is never

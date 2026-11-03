@@ -16,22 +16,22 @@ export function ExampleChips({ chips, activeText, onPick, disabled, collapsed, o
   if (collapsed && !kiosk) {
     return (
       <div className="mt-3">
-        <button type="button" className="chip" onClick={onToggle} aria-expanded={false}>
-          More questions
+        <button type="button" className="chip chip-quiet" onClick={onToggle} aria-expanded={false}>
+          Example questions
         </button>
       </div>
     );
   }
   return (
     <div className="mt-3">
-      <div className="flex flex-wrap gap-2" aria-label="Example questions">
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Example questions">
         {chips.map((e) => {
           const active = e.text === activeText;
           return (
             <button
               key={e.qid}
               type="button"
-              className="chip"
+              className="topic-chip text-left"
               aria-pressed={active}
               disabled={disabled}
               onClick={() => onPick(e)}

@@ -13,6 +13,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
 TOKENS = REPO / "design" / "tokens.css"
+LIGHT = REPO / "design" / "theme-light.css"   # the reading room and catalogue light theme
 
 # (token, bar, what it is for)
 ROLES = [
@@ -29,6 +30,8 @@ GROUNDS = ("bg", "surface", "surface-2")
 
 def tokens(path: Path = TOKENS) -> dict:
     text = path.read_text(encoding="utf-8")
+    if path == LIGHT:   # the light block is written twice (data-theme and the no-script media query)
+        text = text[:text.index("@media")]
     return {m.group(1): m.group(2) for m in re.finditer(r"--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})\s*;", text)}
 
 
@@ -47,7 +50,16 @@ def ratio(a: str, b: str) -> float:
 
 
 def main() -> int:
-    t = tokens()
+    misses = 0
+    for title, path in (("Dark (design/tokens.css)", TOKENS), ("Light (design/theme-light.css)", LIGHT)):
+        print(f"## {title}")
+        misses += check(tokens(path))
+    print(f"| print | black on white | 7.0:1 | {ratio('#000000', '#ffffff'):.1f} | | |")
+    print(f"{misses} pair(s) below their bar")
+    return 1 if misses else 0
+
+
+def check(t: dict) -> int:
     misses = 0
     print("| Token | Use | Bar | " + " | ".join(f"on {g}" for g in GROUNDS) + " |")
     print("| --- | --- | --- |" + " --- |" * len(GROUNDS))
@@ -68,9 +80,7 @@ def main() -> int:
             print(f"| {name} on {panel} | text on an option panel | 7.0:1 | {r:.1f}{'' if r >= 7.0 else ' MISS'} | | |")
     print(f"| ink on gold | text on a gold fill | 7.0:1 | {ratio(t['ink'], t['gold']):.1f} | | |")
     misses += 0 if ratio(t["ink"], t["gold"]) >= 7.0 else 1
-    print(f"| print | black on white | 7.0:1 | {ratio('#000000', '#ffffff'):.1f} | | |")
-    print(f"{misses} pair(s) below their bar")
-    return 1 if misses else 0
+    return misses
 
 
 if __name__ == "__main__":

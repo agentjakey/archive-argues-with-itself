@@ -10,14 +10,14 @@
     <meta name="theme-color" content="#0e0c09" />
     <link rel="canonical" href="https://archiveargues.org/" />
 
-    <title>Archive Argues With Itself</title>
+    <title>Archive Argues With Itself: ask Canada's public-health record</title>
 
     <!-- Share / link-preview metadata. Copy is Jacob's to edit. The image at og-image.png
          is supplied separately (a clean attract screen or a non-flagged compare view); it is
          not generated here and must not point at a flagged or content-warned screenshot. -->
     <meta
       name="description"
-      content="Public AI over the Internet Archive's Democracy's Library. It reads the Canadian government's own public-health record, cites every answer to the scanned page, and refuses when the record is silent. Open source."
+      content="Ask Canada's public-health record in plain language. Answers cite the scanned government page they came from, say so when the record is silent, and every catalogue record of Internet Archive Canada's government publications is browsable. Open source."
     />
 
     <meta property="og:type" content="website" />
@@ -39,54 +39,47 @@
     />
     <meta name="twitter:image" content="https://archiveargues.org/og-image.png" />
 
-    <!-- Critical inline styles (values copied from design/tokens.css): paint the dark ground and a themed skeleton immediately, so
-         there is no white flash before the JS bundle loads and React mounts. No animation, so it
-         is reduced-motion safe by construction. Tailwind (in the bundle) takes over on hydrate. -->
+    <!-- Sets html[data-theme] before the first paint (saved choice, else the device setting), so the
+         page never flashes the wrong theme. A blocking file, not inline: the CSP allows no inline script. -->
+    <script src="/theme-boot.js"></script>
+
+    <!-- Critical inline styles (values copied from design/tokens.css and theme-light.css): paint the
+         ground and the opening screen at once, in the right theme, before the bundle loads. No
+         animation, so it is reduced-motion safe by construction. Tailwind takes over on mount. -->
     <style>
-      html { background: #0e0c09; }
+      html { background: #0e0c09; color: #e8dfc0; }
+      html[data-theme="light"] { background: #f5efe1; color: #231c10; }
+      @media (prefers-color-scheme: light) { html:not([data-theme]) { background: #f5efe1; color: #231c10; } }
       body {
         margin: 0;
-        background: #0e0c09;
-        color: #e8dfc0;
+        background: transparent;
         font-family: "Crimson Text", Georgia, "Times New Roman", serif;
         -webkit-font-smoothing: antialiased;
       }
-      #app-skeleton { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
-      #app-skeleton .sk-title {
-        font-family: Cinzel, Georgia, serif; text-transform: uppercase; letter-spacing: 0.06em;
-        font-size: clamp(28px, 5vw, 40px);
-        line-height: 1.1;
-        color: #e8dfc0;
+      #app-static { max-width: 46rem; margin: 0 auto; padding: 18vh 16px 24px; text-align: center; }
+      #app-static h1 {
+        font-family: Cinzel, Georgia, serif; text-transform: uppercase; letter-spacing: 0.05em;
+        font-weight: 600; font-size: clamp(28px, 5vw, 44px); line-height: 1.1; margin: 0;
       }
-      #app-skeleton .sk-sub { margin-top: 8px; color: #c2b791; font-size: 15px; }
-      #app-skeleton .sk-rule { margin-top: 16px; border-top: 2px solid #3a3320; }
-      #app-skeleton .sk-line {
-        height: 16px;
-        margin-top: 14px;
-        background: #1a1710;
-        border: 1px solid #3a3320;
-        border-radius: 4px;
-      }
-      #app-skeleton .sk-block {
-        height: 200px;
-        margin-top: 20px;
-        background: #1a1710;
-        border: 1px solid #3a3320;
-        border-radius: 6px;
-      }
+      #app-static p { font-size: 18px; line-height: 1.5; opacity: 0.85; }
+      #app-static a { color: inherit; }
     </style>
   </head>
   <body>
     <div id="root">
-      <!-- Replaced by React on mount. Shown instantly so the first paint is the themed reading
-           room, never a blank white screen (matters on a projector and a cold kiosk boot). -->
-      <div id="app-skeleton" aria-hidden="true">
-        <div class="sk-title">Archive Argues With Itself</div>
-        <div class="sk-sub">Public AI over Canada's public-health record. Loading the reading room.</div>
-        <div class="sk-rule"></div>
-        <div class="sk-line" style="width: 60%"></div>
-        <div class="sk-line" style="width: 45%"></div>
-        <div class="sk-block"></div>
+      <!-- Replaced by React on mount. Real words, not a placeholder, so the opening screen reads
+           correctly before scripts run, to search engines and link previews too. -->
+      <div id="app-static">
+        <h1>Ask Canada's public-health record</h1>
+        <p>
+          Ask a question in plain language. Every answer cites the scanned government page it came from,
+          and says so when the record cannot answer.
+        </p>
+        <p>
+          <a href="/catalogue/">Browse the catalogue</a> &middot; <a href="/exhibit/">The exhibit</a> &middot;
+          <a href="/?view=how">How it works</a>
+        </p>
+        <noscript><p>The question box needs JavaScript. The catalogue and the exhibit pages work without it.</p></noscript>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

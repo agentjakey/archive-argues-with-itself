@@ -6,9 +6,9 @@ import type { ReactNode } from "react";
 export function Page({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
   return (
     <main id="main-content" tabIndex={-1} className={className ? `reading ${className}` : "reading"} aria-labelledby="page-heading">
-      <h2 id="page-heading" tabIndex={-1} className="screen-title">
+      <h1 id="page-heading" tabIndex={-1} className="screen-title">
         {title}
-      </h2>
+      </h1>
       <div className="mt-3 max-w-prose leading-relaxed reading-body">{children}</div>
     </main>
   );
@@ -44,4 +44,4 @@ export function Ext({ href, children }: { href: string; children: ReactNode }) {
 export const REPO_URL = "https://github.com/agentjakey/archive-argues-with-itself";
 export const HELLO = "hello@archiveargues.org";
 export const POLICY_DATE = "2026-10-31";
-export const PRIVACY_DATE = "2026-11-01";
+export const PRIVACY_DATE = "2026-11-03";

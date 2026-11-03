@@ -62,9 +62,12 @@ export function WakingCard({ wake, question, onRetry }: Props) {
             The stories and the example questions below are recorded answers, with every page cited, and they
             still work. Try your question again in a few minutes.
           </p>
-          <button type="button" className="chip mt-3" onClick={onRetry}>
-            Try again
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className="chip chip-primary" onClick={onRetry}>
+              Try again
+            </button>
+            <CatalogueLink question={question} />
+          </div>
         </>
       ) : (
         <>
@@ -85,8 +88,24 @@ export function WakingCard({ wake, question, onRetry }: Props) {
           <p className="mt-2 text-sm text-muted" aria-live="off">
             Waiting {wake.elapsed} s
           </p>
+          {wake.phase === "slow" && (
+            <p className="mt-3">
+              <CatalogueLink question={question} />
+            </p>
+          )}
         </>
       )}
     </article>
+  );
+}
+
+/** While the engine is away, the catalogue still works: it searches titles and issuers, not page
+ *  text, so it is offered as a different kind of search, carrying the question's words. */
+function CatalogueLink({ question }: { question: string }) {
+  const href = question ? `/catalogue/?q=${encodeURIComponent(question.slice(0, 120))}` : "/catalogue/";
+  return (
+    <a className="chip" href={href}>
+      Search catalogue titles instead
+    </a>
   );
 }
