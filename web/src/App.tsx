@@ -651,7 +651,7 @@ export default function App() {
                 filters={filters}
                 busy={busy}
                 kiosk={kiosk}
-                scope={activeScopeInfo}
+                scope={initial.current.scope ? activeScopeInfo : null}
                 onQuestion={setQuestion}
                 onFilters={setFilters}
                 onAsk={onAsk}
@@ -727,7 +727,7 @@ export default function App() {
                 filters={filters}
                 busy={busy}
                 kiosk={kiosk}
-                scope={activeScopeInfo}
+                scope={initial.current.scope ? activeScopeInfo : null}
                 onQuestion={setQuestion}
                 onFilters={setFilters}
                 onAsk={onAsk}
@@ -746,7 +746,7 @@ export default function App() {
           />
         </>
       )}
-      <AnswerSkeleton status={status} elapsed={elapsed} passages={activeScopeInfo?.composition?.passages ?? null} />
+      <AnswerSkeleton status={status} elapsed={elapsed} passages={initial.current.scope ? activeScopeInfo?.composition?.passages ?? null : null} />
 
       {status === "error" && error && <ErrorCard detail={error} onRetry={retry} />}
       {status === "waking" && wake && (

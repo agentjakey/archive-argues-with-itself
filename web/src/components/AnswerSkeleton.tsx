@@ -46,7 +46,7 @@ export function AnswerSkeleton({ status, elapsed, passages }: Props) {
   }, [status]);
 
   if (status !== "waiting" || !show) return null;
-  const scope = passages != null ? `${formatInt(passages)} passages` : "the record";
+  const scope = passages != null ? `${formatInt(passages)} passages` : "the parts of the archive that hold your question's words";
   return (
     <SkeletonBody
       heading="Answer from the record"
