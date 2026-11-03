@@ -33,12 +33,14 @@ The site is a static release on Cloudflare, so the examples and stories work eve
 ## What it can and cannot do
 
 - Every cited passage resolves to a recorded page (100% in every audit). Sentences fully supported by
-  their cited page: 93.3% and 98.0% in the hand audits of the first two collections; 90.7% to 95.4% in
+  their cited page: 93.3% and 98.0% in the hand audits of the first two collections; 85.7% to 96.1% in
   the AI-checked audits of the newer parts.
 - Against the previous pipeline, on 839 fresh test questions, the current one put the right page in the
   first ten 12.9 points more often and wrongly refused answerable questions 9.1 points less often.
 - It still refuses many answerable questions (38% on that test), most often because search did not bring
   back enough. A refusal means "not found in what is indexed", never "not in the archive".
+- A reranker that reorders search results found the right page more often in a second test fixed in
+  advance, but it could not show that it does not add wrong refusals, so it is not switched on.
 - The newer checks were made by AI judges and AI adjudication, not by people. Nothing is called
   AI-audited until outside human review exists.
 - Scanned government text thins out after 2009 and stops in the 2010s. There is no 2020s material.
@@ -47,8 +49,8 @@ Every number, how it was measured, and what it does not say: [docs/ACCURACY.md](
 
 ## Coverage
 
-As of 2026-11-03: answers can draw on 21,988 documents with searchable text, out of 118,044 in the
-catalogue. The full-text fetch was 23% done and is expected to finish between 2026-11-06 and 2026-11-08;
+As of 2026-11-03: answers can draw on 33,925 documents with searchable text, out of 118,044 in the
+catalogue. The full-text fetch was 38% done and is expected to finish around 2026-11-05;
 parts are added as they are built and checked. Live figures: the [catalogue](https://archiveargues.org/catalogue/)
 and the line under the question box.
 

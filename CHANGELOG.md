@@ -3,6 +3,16 @@
 What changed for readers, newest first. Measurements behind each change are in
 [docs/ACCURACY.md](docs/ACCURACY.md). Corrections and privacy-page changes are kept below, dated.
 
+## 2.2.1 (2026-11-03): six more parts of the archive
+
+- Six newly built parts are searchable: Government of Canada publications from 1851 to 1899, 1921 to
+  1944, 1944 to 1947 and 1947 to 1969; Ontario, 1980 to 1988; and a mixed part covering other provinces and
+  territories, 1858 to 2009. Answers can now draw on 33,925 documents, up from 21,988. Each part was
+  checked before the site searched it; see [ACCURACY.md](docs/ACCURACY.md).
+- The reranker test is finished. The reranker found the right page more often but did not pass the
+  rule fixed in advance on wrong refusals, so it stays off. The full result is in
+  [ACCURACY.md](docs/ACCURACY.md).
+
 ## 2.2.0 (2026-11-03): one question box for the whole collection
 
 - The Ask page searches every part of the archive that has searchable text: the two collections that

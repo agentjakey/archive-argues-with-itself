@@ -8,14 +8,51 @@ first. Every figure comes from a committed report or a script in this repository
 - Every cited passage resolves to a recorded page, in every audit so far.
 - The current pipeline was adopted because it passed a rule fixed in advance, on 839 fresh questions.
 - It still refuses many answerable questions, mostly because search brings back too little.
+- A reranker found the right page more often in a second fixed-rule test (2026-11-03) but did not pass
+  the rule on wrong refusals, so it stays off.
 - The newer checks were made by AI judges and AI adjudication. No human has checked them yet, so nothing
   is called AI-audited.
 
 ## The reranker test (confirm-2, 2026-11-03)
 
-A reranker (a second model that reorders the pages search found) is being tested against production on a
-fresh set, under a plan committed before the set was drafted ([pre-registration](evaluation/confirm2_preregistration.md)).
-It ships only if it passes the same rule as above. The result will be published here, whatever it says.
+Result: it did not pass, so it is not switched on. A reranker (a second model, bge-reranker-base on
+Workers AI, that reorders the first 30 pages search found) was tested against production on a fresh
+set, under a plan committed before the set was drafted
+([pre-registration](evaluation/confirm2_preregistration.md)), by the same rule as confirm-1 below.
+
+The set: 820 questions (641 answerable, 179 that should be refused), drafted by a model from documents
+no earlier test had used (3,181 archive items excluded), each draft checked by AI with a written reason
+(238 of 1,058 drafts failed and were dropped). No human has checked these questions. Frozen by sha256
+before either pipeline answered. Each pipeline answered every question once; 48 of the baseline's
+answers failed on a network error and were asked again by resuming the same run. With reranker minus
+without, paired bootstrap (2,000 resamples):
+
+| Measure | Without | With | Difference [95%] | Rule | Result |
+| --- | --- | --- | --- | --- | --- |
+| Source page in the first ten passages | 65.1% (417/641) | 68.8% (441/641) | +3.7 [+1.6, +5.8] | must improve | met |
+| Answerable questions refused | 37.6% (241/641) | 37.6% (241/641) | 0.0 [-2.7, +2.7] | may rise at most 2 points | not met |
+| Should-refuse questions refused | 98.9% (177/179) | 98.9% (177/179) | 0.0 [-1.6, +1.7] | no more than 2 points worse | met |
+| Planted-instruction and markup tests | pass | pass | | must pass | met |
+
+The refusal totals are equal, but they are not the same questions: 39 answerable questions were refused
+only with the reranker and 39 others only without it. With that much churn, 641 questions
+cannot rule out a rise of more than 2 points, and the rule needs it ruled out.
+
+On a seeded sample of 100 questions both pipelines answered (two AI judges; the 29 checks they left
+undecided were decided by AI, blind to the pipeline), neither check found a difference:
+
+| Check (100 questions) | Without | With | Difference [95%] | Result |
+| --- | --- | --- | --- | --- |
+| Sentences fully supported | 96.6% (of 261) | 96.7% (of 275) | +0.2 [-3.0, +3.3] | holds |
+| Answers that do not answer the question | 4% | 5% | +1.0 [-3.0, +6.0] | holds |
+
+Cost per answer: $0.0088 against $0.0085; median time 2.8 s against 2.0 s (95th percentile 6.6 s
+against 5.7 s). Total spent on the test, drafting included: about $13.20.
+
+What this says: the reranker puts the right page in front of the writer more often, but on this set
+that did not turn into fewer wrong refusals, and the test could not show it does no harm there. What it
+does not say: that the reranker makes answers worse (no measure found that); the questions were drafted
+and checked by AI, not asked by visitors. The test set is now used; a new test would need a new set.
 
 ## The answers today: the confirmatory test (confirm-1, 2026-11-02)
 
@@ -66,9 +103,16 @@ reason.
 | Government of Canada, 1899 to 1911 | 82 | 72 | 97.2% [90.4, 99.2] | 95.1% [88.1, 98.1] | INDEXED |
 | Government of Canada, 1911 to 1921 | 65 | 60 | 96.7% [88.6, 99.1] | 95.4% [87.3, 98.4] | INDEXED |
 | Place not read, 1861 to 1993 | 54 | 45 | 95.6% [85.2, 98.8] | 90.7% [80.1, 96.0] | INDEXED |
+| Government of Canada, 1851 to 1899 (2026-11-03) | 98 | 80 | 93.8% [86.2, 97.3] | 85.7% [77.4, 91.3] | INDEXED |
+| Government of Canada, 1921 to 1944 (2026-11-03) | 57 | 51 | 98.0% [89.7, 99.7] | 94.7% [85.6, 98.2] | INDEXED |
+| Government of Canada, 1944 to 1947 (2026-11-03) | 66 | 55 | 98.2% [90.4, 99.7] | 93.9% [85.4, 97.6] | INDEXED |
+| Government of Canada, 1947 to 1969 (2026-11-03) | 102 | 90 | 95.6% [89.1, 98.3] | 96.1% [90.3, 98.5] | INDEXED |
+| Ontario, 1980 to 1988 (2026-11-03) | 92 | 80 | 93.8% [86.2, 97.3] | 88.0% [79.8, 93.2] | INDEXED |
+| British Columbia, Manitoba, New Brunswick and 8 more, 1858 to 2009 (2026-11-03) | 98 | 91 | 98.9% [94.0, 99.8] | 95.9% [90.0, 98.4] | INDEXED |
 
-Every cited passage resolved to a recorded page. What this does not say: 54 to 82 sentences give
-intervals of about 6 to 8 points either way; only support was measured here, not whether answers answer
+Every cited passage resolved to a recorded page. The sentences the judges split on were mostly partial
+support: a date, a speaker or a linking claim added to what the page says. What this does not say: 54
+to 102 sentences give intervals of about 5 to 8 points either way; only support was measured here, not whether answers answer
 the question; the checks are AI; the tier stays INDEXED (searchable, not audited by people).
 
 ## Who checks the checkers
