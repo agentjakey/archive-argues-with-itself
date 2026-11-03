@@ -4,6 +4,7 @@
 // (R2 reads and the answer cache, through Worker entrypoints, so the container holds no R2 key),
 // stops it after SLEEP_AFTER_MINUTES without a question or a wake (its own alarm, not only the
 // platform timeout), and records how long every wake took.
+import { RERANK_MODEL, rerankDepth } from "./rerank";
 import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import { readRow, writeRow, isKey, type CacheRow } from "./cache";
 import { ENGINE_CONFIG, type Env, instanceFor, verifyPolicy, whole, asChatCompletion, candidateModel, servedScopes } from "./config";
@@ -148,6 +149,12 @@ export class EngineContainer extends DurableObject<Env> {
       env.CIVIC_ENABLED_SCOPES = this.engineName;
     }
     if (this.env.ANTHROPIC_API_KEY) env.ANTHROPIC_API_KEY = this.env.ANTHROPIC_API_KEY;
+    const depth = rerankDepth(this.env);
+    if (depth > 0) {
+      // The reranker flag: the engine reorders the head of each pool through the AI proxy.
+      env.CIVIC_RERANK_DEPTH = String(depth);
+      env.CIVIC_AI_PROXY_URL = `http://${AI_HOST}`;
+    }
     const candidate = candidateModel(this.env);
     if (candidate) {
       // The staging flag: the engine answers with this open writer, through the AI proxy.
@@ -185,8 +192,10 @@ export class EngineContainer extends DurableObject<Env> {
     await this.container.interceptOutboundHttp(R2_HOST, this.ctx.exports.R2Proxy({ props: {} }));
     await this.container.interceptOutboundHttp(CACHE_HOST, this.ctx.exports.CacheProxy({ props: { token: this.cacheToken } }));
     const candidate = candidateModel(this.env);
-    if (candidate) {
-      await this.container.interceptOutboundHttp(AI_HOST, this.ctx.exports.AIProxy({ props: { token: this.cacheToken, model: candidate } }));
+    const rerank = rerankDepth(this.env) > 0;
+    if (candidate || rerank) {
+      await this.container.interceptOutboundHttp(AI_HOST, this.ctx.exports.AIProxy({
+        props: { token: this.cacheToken, model: candidate ?? "", rerank } }));
     }
     await this.applySleepAfter();
     await this.markActivity();
@@ -398,13 +407,15 @@ export class R2Proxy extends WorkerEntrypoint<Env> {
 /** Workers AI for the container, through the Worker's AI binding: POST /v1/chat/completions with
  *  the per-start token, for the staging flag's one model only. No Workers AI token reaches the
  *  container, and the binding is not bound in production. */
-export class AIProxy extends WorkerEntrypoint<Env, { token: string; model: string }> {
+export class AIProxy extends WorkerEntrypoint<Env, { token: string; model: string; rerank?: boolean }> {
   async fetch(request: Request): Promise<Response> {
-    const { token, model } = this.ctx.props;
+    const { token, model, rerank } = this.ctx.props;
     if (!token || request.headers.get("authorization") !== `Bearer ${token}`) {
       return new Response("forbidden", { status: 403 });
     }
-    if (new URL(request.url).pathname !== "/v1/chat/completions") return new Response("not found", { status: 404 });
+    const path = new URL(request.url).pathname;
+    if (path === "/v1/rerank" && rerank) return rerankThrough(this.env, request);
+    if (path !== "/v1/chat/completions" || !model) return new Response("not found", { status: 404 });
     if (request.method !== "POST") return new Response("method not allowed", { status: 405 });
     if (!this.env.AI) return new Response("no AI binding", { status: 503 });
     let body: Record<string, any>;
@@ -424,6 +435,26 @@ export class AIProxy extends WorkerEntrypoint<Env, { token: string; model: strin
       const status = /invalid|unsupported|schema|bad input/i.test(message) ? 400 : 502;
       return new Response(message.slice(0, 300), { status });
     }
+  }
+}
+
+/** POST /v1/rerank for the container: {query, contexts: [{text}], top_k} to the one reranker model. */
+export async function rerankThrough(env: Pick<Env, "AI">, request: Request): Promise<Response> {
+  if (request.method !== "POST") return new Response("method not allowed", { status: 405 });
+  if (!env.AI) return new Response("no AI binding", { status: 503 });
+  let body: { query?: unknown; contexts?: unknown; top_k?: unknown };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return new Response("not JSON", { status: 400 });
+  }
+  const contexts = Array.isArray(body.contexts) ? body.contexts.slice(0, 100) : [];
+  if (typeof body.query !== "string" || !contexts.length) return new Response("bad input", { status: 400 });
+  try {
+    const result = await env.AI.run(RERANK_MODEL as any, { query: body.query, contexts, top_k: contexts.length } as any);
+    return Response.json(result);
+  } catch (err) {
+    return new Response(String((err as Error)?.message ?? err).slice(0, 300), { status: 502 });
   }
 }
 

@@ -7,7 +7,7 @@ import { readAsk } from "../src/ask";
 import { askCollection } from "../src/collection";
 import { ENGINE_CONFIG, SCOPES } from "../src/config";
 import {
-  COLLECTION, bucketName, choose, collectionServed, fnv1a, globalStats, merge, parseBuckets, resetRouterCache, terms,
+  COLLECTION, bucketName, choose, collectionScopes, collectionServed, fnv1a, globalStats, merge, parseBuckets, resetRouterCache, terms,
   type RouterPointer, type TermDf,
 } from "../src/router";
 
@@ -78,11 +78,15 @@ describe("the whole-collection scope", () => {
   const ask = (scope: string) =>
     new Request(`https://x/ask?scope=${scope}`, { method: "POST", body: JSON.stringify({ question: "q" }) });
 
-  it("is served only where SHARDS names a shard, and never from the cache", async () => {
+  it("is served everywhere its parts are, searches the parts plus the shards SHARDS names, never from the cache", async () => {
     expect(COLLECTION?.scope).toBe("collection");
     const base = { PUBLIC_MODELS: "", PUBLIC_NOCACHE: "" };
-    expect(collectionServed("")).toBe(false);
-    expect(await readAsk(ask("collection"), { ...base, SHARDS: "" })).toBeNull();
+    // The collections served before the shards are always parts of the whole collection.
+    expect(COLLECTION?.parts).toEqual(["pilot", "microlog"]);
+    expect(collectionServed("")).toBe(true);
+    expect(collectionScopes("")).toEqual(["pilot", "microlog"]);
+    expect(collectionScopes(shardScopes[0])).toEqual(["pilot", "microlog", shardScopes[0]]);
+    expect((await readAsk(ask("collection"), { ...base, SHARDS: "" }))?.input.scope).toBe("collection");
     const parsed = await readAsk(ask("collection"), { ...base, SHARDS: shardScopes[0] });
     expect(parsed?.input.scope).toBe("collection");
     expect(parsed?.cacheable).toBe(false);
@@ -146,5 +150,27 @@ describe("the whole-collection scope", () => {
     const out = (await resp.json()) as any;
     expect(out.status).toBe("waking");
     expect(out.engines[0]).toMatchObject({ shard: s1, stage: "downloading" });
+  });
+});
+
+describe("/health for a waiting question", () => {
+  it("reports only the engines of the named scopes, and every engine otherwise", async () => {
+    const { healthEngines } = await import("../src/ask");
+    const env = { ENGINE_LAYOUT: "split", SHARDS: "federal-1899-1911" } as never;
+    expect(healthEngines(env, "pilot,federal-1899-1911")).toEqual(["pilot", "federal-1899-1911"]);
+    expect(healthEngines(env, "pilot,not-served,federal-1911-1921")).toEqual(["pilot"]);
+    expect(healthEngines(env, null)).toContain("microlog");
+    expect(healthEngines(env, "nothing-served")).toContain("pilot");
+  });
+});
+
+describe("the reranker flag", () => {
+  it("keys answers with the context the engine computes (api/app.py cache_context)", async () => {
+    const { rerankContext } = await import("../src/ask");
+    const { rerankDepth } = await import("../src/rerank");
+    expect(await rerankContext("abc", 20)).toBe("8e0abb1e10f9f0398b347bb7914d49bf114a5adaa56038e2bc7b5f75dab1ec7b");
+    expect(rerankDepth({ RERANK_DEPTH: "" })).toBe(0);
+    expect(rerankDepth({ RERANK_DEPTH: "20" })).toBe(20);
+    expect(rerankDepth({ RERANK_DEPTH: "x" })).toBe(0);
   });
 });

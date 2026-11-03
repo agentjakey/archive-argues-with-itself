@@ -1,10 +1,12 @@
 import type { WakeProgress } from "../lib/waking";
-import type { EngineStage } from "../types";
+import { listWords, partLabel } from "../lib/parts";
+import type { EngineStage, ScopeInfo } from "../types";
 
 interface Props {
   wake: WakeProgress;
   question: string;
   onRetry: () => void;
+  scopes?: ScopeInfo[] | null;   // for the parts' plain names
 }
 
 const GB = 1_000_000_000;
@@ -38,14 +40,18 @@ export function stageLine(stage: EngineStage | null): string {
 
 /** Shown while a live question waits for the engine, which sleeps when nobody is asking. The
  *  question is kept and asked again on its own; the stories below never need the engine. */
-export function WakingCard({ wake, question, onRetry }: Props) {
+export function WakingCard({ wake, question, onRetry, scopes }: Props) {
   const downloading = wake.stage?.stage === "downloading" && !!wake.stage.bytes_total;
+  const parts = (wake.parts ?? []).map((p) => partLabel(p, scopes));
+  const several = parts.length > 1;
   const heading =
     wake.phase === "down"
       ? "The archive engine is not answering right now"
       : wake.phase === "slow"
         ? "Still waking, slower than usual"
-        : "Waking the archive engine";
+        : several
+          ? `Waking ${parts.length} parts of the archive`
+          : "Waking the archive engine";
   return (
     <article className="settle rule-left mt-6" role="status" aria-live="polite" aria-labelledby="waking-heading">
       <h2 id="waking-heading" className="screen-title">
@@ -54,6 +60,13 @@ export function WakingCard({ wake, question, onRetry }: Props) {
       {question && (
         <p className="mt-3 max-w-prose leading-relaxed">
           Your question is kept: <q className="italic">{question}</q>
+        </p>
+      )}
+      {parts.length > 0 && wake.phase !== "down" && (
+        <p className="mt-3 max-w-prose leading-relaxed" data-testid="waking-parts">
+          {several
+            ? `This question needs ${listWords(parts)}. Each part sleeps when nobody is asking and wakes on its own; the answer comes when they are all ready.`
+            : `This question needs ${parts[0]}, which sleeps when nobody is asking and is waking now.`}
         </p>
       )}
       {wake.phase === "down" ? (

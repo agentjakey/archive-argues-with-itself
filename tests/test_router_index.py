@@ -55,3 +55,15 @@ def test_the_workers_parity_fixture_is_current():
     done = subprocess.run([sys.executable, str(REPO / "tests" / "fixtures" / "make_router_parity.py"), "--check"],
                           cwd=REPO, env={**os.environ, "PYTHONPATH": str(REPO / "src")})
     assert done.returncode == 0, "run python tests/fixtures/make_router_parity.py"
+
+
+def test_the_collections_served_first_are_parts_of_the_whole_collection(monkeypatch):
+    ri = router_index()
+    monkeypatch.setattr(ri, "local_db", lambda name, entry: None)
+    parts = ri.parts()
+    assert sorted(parts) == ["microlog", "pilot"]
+    assert ri.coverage_key(parts["pilot"]) == "pilot/coverage.json"
+    assert ri.coverage_key(parts["microlog"]) == "microlog/coverage.json"
+    # The Worker's generated config lists the same parts, so it searches what the index holds.
+    config = json.loads((REPO / "worker" / "engine" / "src" / "generated" / "engine_config.json").read_text(encoding="utf-8"))
+    assert config["collection"]["parts"] == ["pilot", "microlog"]

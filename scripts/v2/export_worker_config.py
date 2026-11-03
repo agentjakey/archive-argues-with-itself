@@ -90,7 +90,8 @@ def build() -> dict:
             router = tomllib.load(fh)
         collection = {"scope": router["scope"], "label": router["label"], "max_engines": int(router["max_engines"]),
                       "top_k": int(router["top_k"]), "pool_size": int(router["pool_size"]),
-                      "provider": shard_rows[0]["provider"], "model": shard_rows[0]["model"]}
+                      "provider": shard_rows[0]["provider"], "model": shard_rows[0]["model"],
+                      "parts": [p for p in router.get("parts", []) if p in scope_rows]}
     keys = [f.key for f in release_files.all_files(registry)]
     notes = editorial.load_notes(editorial.DEFAULT_NOTES)
     answer_notes = []

@@ -27,6 +27,7 @@ export interface Env {
   PUBLIC_NOCACHE?: string;       // "true" lets a public /ask skip the answer cache (staging); off in production
   PUBLIC_URL: string;
   WRITER_CANDIDATE?: string;     // staging flag: an open writer candidate (config/writers.toml) answers in place of the configured one
+  RERANK_DEPTH?: string;         // the reranker flag: passages of the pool it reorders, "" or "0" for off
   SHARDS?: string;               // the whole collection's shard scopes this deployment serves: comma-separated ids, or "" for none
   AI?: Ai;                       // Workers AI binding, staging only: the container reaches it through AIProxy
   // Secrets (wrangler secret put)

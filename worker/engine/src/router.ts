@@ -27,15 +27,24 @@ export interface CollectionConfig {
   pool_size: number;
   provider: string;
   model: string;
+  parts?: string[];   // collections served before the shards, always part of the whole collection
 }
 
 export const COLLECTION: CollectionConfig | null = (ENGINE_CONFIG as any).collection ?? null;
 
-/** Whether this deployment serves the whole-collection scope: it does wherever SHARDS names at least
- *  one shard the generated config knows. */
+/** The scopes the whole collection searches here: its always-served parts (the collections served
+ *  before the shards) and every shard SHARDS names. */
+export function collectionScopes(shards: string | undefined): string[] {
+  if (!COLLECTION) return [];
+  const parts = (COLLECTION.parts ?? []).filter((s) => s in ENGINE_CONFIG.scopes);
+  const served = Object.keys(ENGINE_CONFIG.scopes).filter((s) => ENGINE_CONFIG.scopes[s].shard && scopeServed(s, shards));
+  return [...parts, ...served];
+}
+
+/** Whether this deployment serves the whole-collection scope: it does wherever it has a part or SHARDS
+ *  names at least one shard the generated config knows. */
 export function collectionServed(shards: string | undefined): boolean {
-  if (!COLLECTION) return false;
-  return Object.keys(ENGINE_CONFIG.scopes).some((s) => ENGINE_CONFIG.scopes[s].shard && scopeServed(s, shards));
+  return collectionScopes(shards).length > 0;
 }
 
 export function isCollection(scope: string): boolean {
@@ -109,7 +118,7 @@ export interface Filters {
 /** The shards of the index this deployment serves (SHARDS), and which served shards the index
  *  does not hold yet. */
 export function servedInIndex(pointer: RouterPointer, shards: string | undefined): { shards: string[]; missing: string[] } {
-  const served = Object.keys(ENGINE_CONFIG.scopes).filter((s) => ENGINE_CONFIG.scopes[s].shard && scopeServed(s, shards));
+  const served = collectionScopes(shards);
   return {
     shards: served.filter((s) => s in pointer.shards),
     missing: served.filter((s) => !(s in pointer.shards)),

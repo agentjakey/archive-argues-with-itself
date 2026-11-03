@@ -9,3 +9,6 @@ label = "The whole collection"
 max_engines = 3
 top_k = 12
 pool_size = 30
+# The collections served before the shards, as parts of the whole collection: always served, so the
+# Ask page's one question box searches them and every shard a deployment's SHARDS names.
+parts = ["pilot", "microlog"]

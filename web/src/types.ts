@@ -217,6 +217,24 @@ export interface AskResponse {
   degraded?: Degraded;
   flagged?: Flagged | null;
   editorial_notes?: EditorialNote[];   // dated notes about a stored answer, shown beside it
+  router?: RouterReport | null;        // a whole-collection answer: the parts searched and left out
+}
+
+/** One part of the whole collection in a router report. */
+export interface RouterPart {
+  shard: string;
+  tier: string | null;
+  candidates?: number;
+  reason?: string;
+}
+
+/** What the engine's router did for a whole-collection question. */
+export interface RouterReport {
+  scope?: string;
+  label?: string;
+  searched: RouterPart[];
+  left_out: RouterPart[];
+  note?: string;
 }
 
 export interface Example {
@@ -271,7 +289,7 @@ export interface EngineStatus {
   stage?: EngineStage | null;
   error?: string | null;
   retry_after_seconds?: number;
-  engines?: { name: string; status: EngineState; stage: EngineStage | null; error: string | null }[];
+  engines?: { name?: string; shard?: string; status: EngineState; stage: EngineStage | null; error: string | null }[];
 }
 
 export interface DecadeCoverage {

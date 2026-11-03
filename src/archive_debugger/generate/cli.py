@@ -21,6 +21,7 @@ from archive_debugger.generate.answer import compose, coverage_of, generation_me
 from archive_debugger.generate.llm import make_llm
 from archive_debugger.retrieve import citation
 from archive_debugger.retrieve import meta_rank
+from archive_debugger.retrieve import rerank as rerank_mod
 from archive_debugger.retrieve.filters import Filters
 from archive_debugger.retrieve.search import Retriever
 
@@ -70,6 +71,8 @@ def load_generate_config(config_path: Path) -> dict:
         "extra_body": dict(g.get("extra_body") or {}) or None,
         # Year, place and issuer ranking weights ([rank], retrieve/meta_rank.py); all zero by default.
         "rank": meta_rank.load_weights(config_path),
+        # The second ranking stage (retrieve/rerank.py), on only when CIVIC_RERANK_DEPTH > 0.
+        "rerank": rerank_mod.settings(),
     }
 
 

@@ -17,7 +17,6 @@ import { Interstitial } from "./components/Interstitial";
 import { ExampleChips } from "./components/ExampleChips";
 import { Suggestions } from "./components/Suggestions";
 import { BrowseSection } from "./components/BrowseSection";
-import { ScopeSwitcher } from "./components/ScopeSwitcher";
 import { ShareBar } from "./components/ShareBar";
 import { SectionNav } from "./components/SectionNav";
 import { useCatalogueSummary } from "./hooks/useCatalogueSummary";
@@ -42,7 +41,7 @@ import { HowItWorks } from "./components/pages/HowItWorks";
 import { SourcesPage } from "./components/pages/Sources";
 import { ExplorePage } from "./components/pages/Explore";
 import { TimelinePage } from "./components/pages/Timeline";
-import { SourceLine } from "./components/SourceLine";
+import { CollectionLine, SourceLine } from "./components/SourceLine";
 import { CoverageMap } from "./components/CoverageMap";
 import { useAttractLoop } from "./hooks/useAttractLoop";
 import { useScopes } from "./hooks/useScopes";
@@ -57,6 +56,9 @@ import { plural } from "./lib/format";
 import type { Comparability, EditorialNote, EvidenceRow, Example, Filters, Flagged, Period, Story } from "./types";
 import { FILTER_KEYS } from "./types";
 import { askedQuestion, attractStories, galleryStories, heroStory } from "./lib/stories";
+
+// The landing with no ?scope: one question box over the whole collection.
+const COLLECTION_HOME = "";
 
 export default function App() {
   const kiosk = useKiosk();
@@ -286,9 +288,8 @@ export default function App() {
     // Carry the active scope so an attract/idle reset returns to the same corpus's home, not the
     // pilot default: scope survives the idle reset and the attract timeout.
     const scope = initial.current.scope;
-    const def = scopesInfo?.default ?? "";
     const flags = [
-      scope && scope !== def ? `scope=${encodeURIComponent(scope)}` : "",
+      scope ? `scope=${encodeURIComponent(scope)}` : "",
       kiosk ? "kiosk=1" : "",
       offline ? "offline=1" : "",
       idleParam.current ? `idle=${encodeURIComponent(idleParam.current)}` : "",
@@ -312,9 +313,8 @@ export default function App() {
   // (kiosk/offline/idle) are preserved. The pilot is the default and carries no ?scope.
   const switchScope = useCallback(
     (name: string) => {
-      const def = scopesInfo?.default ?? "";
       const params = new URLSearchParams();
-      if (name && name !== def) params.set("scope", name);
+      if (name && name !== COLLECTION_HOME) params.set("scope", name);
       if (view) params.set("view", view);   // stay on the current page after the switch, not bounce home
       if (kiosk) params.set("kiosk", "1");
       if (offline) params.set("offline", "1");
@@ -331,9 +331,8 @@ export default function App() {
   // full reload the switcher uses; only the destination differs (view is dropped, not preserved).
   const enterScopeHome = useCallback(
     (name: string) => {
-      const def = scopesInfo?.default ?? "";
       const params = new URLSearchParams();
-      if (name && name !== def) params.set("scope", name);
+      if (name) params.set("scope", name);
       // deliberately omit view: land on the corpus home (the ask screen), not back on Explore
       if (kiosk) params.set("kiosk", "1");
       if (offline) params.set("offline", "1");
@@ -350,9 +349,8 @@ export default function App() {
   // cross-scope reset the switcher guarantees.
   const enterScopeWithQuestion = useCallback(
     (name: string, text: string, f: Filters) => {
-      const def = scopesInfo?.default ?? "";
       const params = new URLSearchParams();
-      if (name && name !== def) params.set("scope", name);
+      if (name) params.set("scope", name);
       if (text) params.set("q", text);
       for (const k of FILTER_KEYS) {
         const v = (f as Record<string, string | undefined>)[k];
@@ -638,16 +636,9 @@ export default function App() {
       {showStories ? (
         <>
           <section className="hero" aria-labelledby="hero-heading">
-            {activeScopeInfo && (
-              <p className="hero-kicker">
-                {activeScopeInfo.label}
-                {activeScopeInfo.coverage_window?.min_year != null && activeScopeInfo.coverage_window?.max_year != null
-                  ? `, ${activeScopeInfo.coverage_window.min_year} to ${activeScopeInfo.coverage_window.max_year}`
-                  : ""}
-              </p>
-            )}
+            <p className="hero-kicker">Internet Archive Canada's government publications</p>
             <h1 id="hero-heading" className="hero-title">
-              Ask Canada's public-health record
+              Ask Canada's public record
             </h1>
             <p className="hero-lede">
               Ask in your own words. Every answer cites the scanned government page it came from, and when the
@@ -668,17 +659,33 @@ export default function App() {
               />
             )}
             <Suggestions questions={featured} onPick={pick} disabled={busy} paused={question.trim() !== ""} />
-            {scopesInfo && scopesInfo.scopes.length > 1 && (
-              <ScopeSwitcher scopes={scopesInfo.scopes} active={activeScopeName} onSwitch={switchScope} />
+            {initial.current.scope && activeScopeInfo && (
+              <p className="hero-note" data-testid="scope-note">
+                Searching only {activeScopeInfo.label}.{" "}
+                <button type="button" className="linkish" onClick={() => switchScope(COLLECTION_HOME)}>
+                  Search the whole collection
+                </button>
+              </p>
             )}
             {!kiosk && (
-              <p className="hero-note">
-                Answers come only from the {activeScopeInfo ? `${plural(activeScopeInfo.item_count, "document")} of the collection chosen above` : "indexed documents"}.
-                {" "}Looking for a particular publication?{" "}
-                <a href={question.trim() ? `/catalogue/?q=${encodeURIComponent(question.trim())}` : "/catalogue/"}>
-                  {catalogue ? `Search all ${catalogue.documents.toLocaleString("en-CA")} catalogue records` : "Search the catalogue"}
-                </a>
-                . A first question can take up to a minute while the engine wakes; later ones are quick.
+              <p className="hero-note" data-testid="coverage-line">
+                {catalogue?.coverage?.indexed != null ? (
+                  <>
+                    Answers can draw on <strong>{catalogue.coverage.indexed.toLocaleString("en-CA")}</strong> documents whose
+                    text is searchable so far, out of {catalogue.documents.toLocaleString("en-CA")} in the catalogue
+                    {catalogue.built_at ? ` (as of ${catalogue.built_at.slice(0, 10)})` : ""}.{" "}
+                  </>
+                ) : (
+                  <>Answers draw on the documents whose text is searchable so far. </>
+                )}
+                <a href="/catalogue/">See what is covered</a>
+                {question.trim() ? (
+                  <>
+                    {" "}or{" "}
+                    <a href={`/catalogue/?q=${encodeURIComponent(question.trim())}`}>find a publication by title</a>
+                  </>
+                ) : null}
+                . A first question can take a minute while parts of the archive wake; later ones are quick.
               </p>
             )}
           </section>
@@ -744,7 +751,7 @@ export default function App() {
       {status === "error" && error && <ErrorCard detail={error} onRetry={retry} />}
       {status === "waking" && wake && (
         <>
-          <WakingCard wake={wake} question={asked} onRetry={retry} />
+          <WakingCard wake={wake} question={asked} onRetry={retry} scopes={scopesInfo?.scopes ?? null} />
           <StoryGallery stories={galleryStories(stories)} loading={storiesLoading} onOpen={openStory} />
         </>
       )}
@@ -756,7 +763,11 @@ export default function App() {
         <>
           {showContextualNote && <ContextualNote flagged={flagged!} />}
           <div className="result-meta">
-            {activeScopeInfo && <SourceLine scope={activeScopeInfo} />}
+            {response.router ? (
+              <CollectionLine router={response.router} scopes={scopesInfo?.scopes ?? null} />
+            ) : (
+              activeScopeInfo && <SourceLine scope={activeScopeInfo} />
+            )}
             {!kiosk && <ShareBar />}
           </div>
           {askedFilters.jurisdiction &&
@@ -814,13 +825,13 @@ export default function App() {
               {response.degraded ? (
                 <>
                   <LimitedModeCard answer={response.answer} degraded={response.degraded} />
-                  <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation scope={activeScopeInfo} />
+                  {!response.router && <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation scope={activeScopeInfo} />}
                 </>
               ) : response.answer.abstained ? (
                 <>
                   <EditorialNotes notes={response.editorial_notes} className="mb-3" />
                   <AbstentionCard answer={response.answer} />
-                  <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation scope={activeScopeInfo} />
+                  {!response.router && <CoveragePanel coverage={coverage} undatedShare={undatedShare} explanation scope={activeScopeInfo} />}
                 </>
               ) : (
                 <AnswerCard answer={response.answer} byId={byId} onOpen={setDrawer} notes={response.editorial_notes} />
@@ -859,7 +870,7 @@ export default function App() {
                   onPin={togglePin}
                   source={activeScopeInfo}
                 />
-                {!response.answer.abstained && <CoveragePanel coverage={coverage} undatedShare={undatedShare} scope={activeScopeInfo} />}
+                {!response.answer.abstained && !response.router && <CoveragePanel coverage={coverage} undatedShare={undatedShare} scope={activeScopeInfo} />}
               </details>
             </>
           )}

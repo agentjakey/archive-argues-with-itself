@@ -1,6 +1,7 @@
 // The engine Worker on api.archiveargues.org: the only way to reach the engine container.
 //
-//   GET  /health      the engine's state (asleep, waking with its stage, ready, failed); never wakes it
+//   GET  /health      the engine's state (asleep, waking with its stage, ready, failed); never wakes it.
+//                     ?scope=a,b reports only those scopes' engines (a waiting visitor's question)
 //   POST /wake        pre-wake from the site (Turnstile, rate limited)
 //   POST /admin/wake  operator wake with ADMIN_WAKE_TOKEN (src/admin.ts); 404 when no token is set.
 //                     The same bearer token on /ask replaces Turnstile for operator smoke tests
@@ -17,7 +18,7 @@
 //
 // Logs carry the route, the outcome and timings, never a question or an address.
 import { checkAdmin } from "./admin";
-import { bareRequest, readAsk, engineFor, engineNames, engineRequest } from "./ask";
+import { bareRequest, readAsk, engineFor, engineNames, engineRequest, healthEngines } from "./ask";
 import { servedHit, purgeExpired, storedAnswerResponse } from "./cache";
 import { benchCacheStores, type BenchBindings } from "./bench";
 import { ENGINE_CONFIG, ROBOTS, scopeServed, type Env } from "./config";
@@ -95,8 +96,8 @@ async function handleAsk(request: Request, env: Env, cors: Record<string, string
   return withHeaders(resp, { ...cors, "x-answer-source": "engine" });
 }
 
-async function handleHealth(env: Env, cors: Record<string, string>, wakes: boolean): Promise<Response> {
-  const engines = await Promise.all(engineNames(env).map((name) => stub(env, name).status()));
+async function handleHealth(env: Env, cors: Record<string, string>, wakes: boolean, scopeParam: string | null = null): Promise<Response> {
+  const engines = await Promise.all(healthEngines(env, scopeParam).map((name) => stub(env, name).status()));
   const states = engines.map((e) => e.status);
   const status = states.includes("failed") ? "failed" : states.every((s) => s === "ready")
     ? "ready" : states.some((s) => s === "waking") ? "waking" : states.every((s) => s === "asleep") ? "asleep" : "waking";
@@ -141,7 +142,7 @@ export default {
         return new Response(ROBOTS, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=86400" } });
       }
       if (url.pathname === "/health" && request.method === "GET") {
-        return await handleHealth(env, cors, url.searchParams.get("wakes") === "1");
+        return await handleHealth(env, cors, url.searchParams.get("wakes") === "1", url.searchParams.get("scope"));
       }
       if (url.pathname === "/wake" && request.method === "POST") return await handleWake(request, env, cors);
       if (url.pathname === "/admin/wake" && request.method === "POST") return await handleAdminWake(request, env);

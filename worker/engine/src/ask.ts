@@ -3,14 +3,25 @@
 import type { AskInput } from "./cache";
 import { ENGINE_CONFIG, flag, modelAllowed, scopeConfig, scopeServed, servedScopes, type Env } from "./config";
 import { COLLECTION, collectionServed, isCollection } from "./router";
+import { RERANK_MODEL, rerankDepth } from "./rerank";
 
 /** Which engine serves a scope: the single "engine" container, or the scope's own (split layout). */
-export function engineFor(env: Env, scope: string): string {
+export function engineFor(env: Pick<Env, "ENGINE_LAYOUT">, scope: string): string {
   return env.ENGINE_LAYOUT === "split" ? scope : "engine";
 }
 
 export function engineNames(env: Pick<Env, "ENGINE_LAYOUT" | "SHARDS">): string[] {
   return env.ENGINE_LAYOUT === "split" ? servedScopes(env.SHARDS) : ["engine"];
+}
+
+/** The engines a /health request asks about: every engine, or with ?scope=a,b only the engines those
+ *  served scopes run on (so a visitor waiting on one question is not held up by engines it never woke). */
+export function healthEngines(env: Pick<Env, "ENGINE_LAYOUT" | "SHARDS">, scopeParam: string | null): string[] {
+  const all = engineNames(env);
+  if (!scopeParam) return all;
+  const wanted = scopeParam.split(",").map((s) => s.trim()).filter((s) => s && scopeServed(s, env.SHARDS));
+  const names = [...new Set(wanted.map((s) => engineFor(env, s)))].filter((n) => all.includes(n));
+  return names.length ? names : all;
 }
 
 export interface ParsedAsk {
@@ -25,17 +36,27 @@ export interface ParsedAsk {
  *  cache (not with evidence_only, nor with a provider or model other than the configured one, nor
  *  with nocache where PUBLIC_NOCACHE allows it); and whether the provider and model it asks for are
  *  allowed here. Production leaves PUBLIC_NOCACHE off, so a public nocache is ignored. */
-export async function readAsk(request: Request, env: Pick<Env, "PUBLIC_MODELS" | "PUBLIC_NOCACHE" | "WRITER_CANDIDATE" | "SHARDS">): Promise<ParsedAsk | null> {
+/** The cache context with the reranker flag on: the engine computes sha256("<context>|rerank:<model>:<depth>")
+ *  last (api/app.py cache_context), so a reranked answer never shares a key with a plain one. */
+export async function rerankContext(context: string, depth: number): Promise<string> {
+  const data = new TextEncoder().encode(`${context}|rerank:${RERANK_MODEL}:${depth}`);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  return [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function readAsk(request: Request, env: Pick<Env, "PUBLIC_MODELS" | "PUBLIC_NOCACHE" | "WRITER_CANDIDATE" | "SHARDS" | "RERANK_DEPTH">): Promise<ParsedAsk | null> {
   const url = new URL(request.url);
   const scope = url.searchParams.get("scope") || ENGINE_CONFIG.default_scope;
   // The whole collection (src/router.ts) is a scope of its own wherever a shard is served: its writer
   // is the shards' one engine config, and it is never served from the cache.
   const collection = isCollection(scope);
   if (collection ? !collectionServed(env.SHARDS) : !scopeServed(scope, env.SHARDS)) return null;
-  const configured = collection && COLLECTION
+  const base = collection && COLLECTION
     ? { context: "", provider: COLLECTION.provider, model: COLLECTION.model }
     : scopeConfig(scope, env.WRITER_CANDIDATE);
-  if (!configured) return null;
+  if (!base) return null;
+  const depth = rerankDepth(env);
+  const configured = depth > 0 && base.context ? { ...base, context: await rerankContext(base.context, depth) } : base;
   let question: string;
   let filters: Record<string, string> | null;
   let provider: string | null;

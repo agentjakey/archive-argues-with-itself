@@ -3,7 +3,8 @@ whole-collection question, without waking any (docs/formats/shards.md, "Router i
 
     python scripts/v2/router_index.py build [--compute-missing] [--dry-run]
 
-For every shard in config/shards/served.toml it reads the shard's coverage file (coverage.json beside
+For every shard in config/shards/served.toml, and every part config/shards/router.toml names (the
+collections served before the shards, keyed in config/scopes.toml), it reads the coverage file (coverage.json beside
 the shard's corpus database on R2, written by shard_builder.py). With --compute-missing, a shard
 without one (the bounded run's shards) has its database downloaded, its coverage computed with the
 same code and uploaded beside it. Then it writes, under a new content-addressed folder:
@@ -34,6 +35,8 @@ sys.path.insert(0, str(REPO / "src"))
 from archive_debugger.shards import coverage as coverage_mod  # noqa: E402
 
 SERVED = REPO / "config" / "shards" / "served.toml"
+ROUTER = REPO / "config" / "shards" / "router.toml"
+SCOPES = REPO / "config" / "scopes.toml"
 PREFIX = "router/v1"
 BUCKETS = 4096
 FORMAT = 1
@@ -62,6 +65,30 @@ def served() -> dict:
         return tomllib.load(fh).get("scopes") or {}
 
 
+def parts() -> dict:
+    """The always-served parts (router.toml parts) as served-style entries: their R2 keys from
+    config/scopes.toml, tier from the same file when it names one."""
+    with ROUTER.open("rb") as fh:
+        names = tomllib.load(fh).get("parts") or []
+    with SCOPES.open("rb") as fh:
+        scopes = tomllib.load(fh).get("scopes") or {}
+    return {n: {"r2": scopes[n]["r2"], "tier": scopes[n].get("tier"), "local": local_db(n, scopes[n])}
+            for n in names if n in scopes and "r2" in scopes[n]}
+
+
+def local_db(name: str, entry: dict) -> str | None:
+    """A local copy of the part's database, used instead of a download when its hash is the one R2
+    serves; None when there is none."""
+    path = REPO / entry["db_path"] if entry.get("db_path") else None
+    if path is None or not path.exists():
+        return None
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for block in iter(lambda: fh.read(1 << 22), b""):
+            h.update(block)
+    return str(path) if h.hexdigest() == entry["r2"].get("db_sha256") else None
+
+
 def coverage_key(entry: dict) -> str:
     return entry["r2"]["db_key"].rsplit("/", 1)[0] + "/coverage.json"
 
@@ -73,9 +100,12 @@ def load_coverage(r2, sid: str, entry: dict, compute_missing: bool) -> dict:
     if not compute_missing:
         raise SystemExit(f"{key} is not on R2 (run with --compute-missing to compute it from the shard's database)")
     with tempfile.TemporaryDirectory() as tmp:
-        db = Path(tmp) / "civic.db"
-        db.write_bytes(r2.get(entry["r2"]["db_key"]))
-        conn = sqlite3.connect(db)
+        if entry.get("local"):
+            db = Path(entry["local"])
+        else:
+            db = Path(tmp) / "civic.db"
+            db.write_bytes(r2.get(entry["r2"]["db_key"]))
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
         cov = coverage_mod.compute(conn, sid)
         conn.close()
     r2.put(key, json.dumps(cov).encode("utf-8"))
@@ -111,7 +141,7 @@ def cmd_build(args) -> int:
     from archive_debugger.local_env import load_local_env
     load_local_env(log=None)
     r2 = R2Store()
-    entries = served()
+    entries = {**served(), **parts()}
     if not entries:
         raise SystemExit("no served shards in config/shards/served.toml")
     coverages = {sid: load_coverage(r2, sid, e, args.compute_missing) for sid, e in sorted(entries.items())}

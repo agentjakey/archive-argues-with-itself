@@ -66,9 +66,11 @@ export function useAsk() {
           phase.current = "waking";
           setStatus("waking");
           const stage = e instanceof api.EngineWaking ? e.engine.stage ?? null : null;
-          setWake({ phase: "waking", elapsed: Math.round((Date.now() - t0) / 1000), stage });
-          await waitForEngine(t0, { status: api.engineStatus, sleep, now: Date.now }, (p) => {
-            if (!abort.signal.aborted) setWake(p);
+          // The parts this question woke: wait for those alone, and name them on the waiting screen.
+          const parts = e instanceof api.EngineWaking ? api.wakingParts(e.engine) : [];
+          setWake({ phase: "waking", elapsed: Math.round((Date.now() - t0) / 1000), stage, parts });
+          await waitForEngine(t0, { status: () => api.engineStatus(parts), sleep, now: Date.now }, (p) => {
+            if (!abort.signal.aborted) setWake({ ...p, parts });
           }, abort.signal);
           if (abort.signal.aborted) return;
           setStatus("waiting");                           // ready: ask again, the question kept
@@ -78,7 +80,7 @@ export function useAsk() {
       if (abort.signal.aborted || (e instanceof DOMException && e.name === "AbortError")) return;
       if (e instanceof EngineDown) {
         phase.current = "idle";
-        setWake((w) => ({ phase: "down", elapsed: Math.round((Date.now() - t0) / 1000), stage: w?.stage ?? null }));
+        setWake((w) => ({ phase: "down", elapsed: Math.round((Date.now() - t0) / 1000), stage: w?.stage ?? null, parts: w?.parts }));
         setStatus("waking");
         return;
       }

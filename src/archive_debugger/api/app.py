@@ -39,6 +39,7 @@ from archive_debugger.eval import store
 from archive_debugger.eval.questions import load_seed
 from archive_debugger.generate.answer import Answer, compose, coverage_of, generation_meta, salient_terms
 from archive_debugger.generate import answer_v2
+from archive_debugger.retrieve import rerank as rerank_mod
 from archive_debugger.generate.cli import build_filters, load_generate_config, retrieve_pool, sent_temperature
 from archive_debugger.generate import writers
 from archive_debugger.generate.llm import LLM, AnthropicLLM, make_llm
@@ -278,6 +279,11 @@ def cache_context(scope: str, data_sha256: dict, retrieve: dict, gcfg: dict, kin
     if extra:
         # A writer's extra request fields (a reasoning setting) change its answers; none leaves keys as they were.
         context = hashlib.sha256(f"{context}|writer_extra:{extra}".encode("utf-8")).hexdigest()
+    if gcfg.get("rerank"):
+        # Last, so the engine Worker extends its generated context the same way (worker/engine/src/ask.ts
+        # rerankContext): the reranker changes which passages the writer sees; off leaves keys as they were.
+        r = gcfg["rerank"]
+        context = hashlib.sha256(f"{context}|rerank:{r['model']}:{int(r['depth'])}".encode("utf-8")).hexdigest()
     return context
 
 
@@ -1531,6 +1537,11 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
             except _RetrievalTimeout:
                 _log_timing(b.name, time.monotonic() - t_start, 0.0, "degraded:retrieval_slow", 0)
                 return degraded("retrieval_slow", [], [], pr.conn)
+            if gcfg.get("rerank") and not evidence_only:
+                # The second ranking stage (retrieve/rerank.py): the pool's head reordered, same members.
+                pool_rows, rinfo = rerank_mod.rerank(clean, pool_rows, int(gcfg["rerank"]["depth"]))
+                hits = pool_rows[: gcfg["top_k"]]
+                gen = dict(gen, rerank=rinfo)
             t_ret = time.monotonic() - t_start
             notices: list = []
             if not reg.empty:
@@ -1780,6 +1791,12 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
         rows = [r for r in req.hits if isinstance(r, dict) and r.get("passage_id") and r.get("item_id")
                 and r.get("leaf_index") is not None and isinstance(r.get("text"), str)]
         prompt_ids = [p for p in req.prompt_ids if p in {r["passage_id"] for r in rows}][: gcfg["top_k"]]
+        rinfo = None
+        if gcfg.get("rerank") and not req.evidence_only and clean:
+            # The merged pool's head reordered by the reranker; the writer sees its new top_k.
+            rows, rinfo = rerank_mod.rerank(clean, rows, int(gcfg["rerank"]["depth"]))
+            if rinfo.get("reranked"):
+                prompt_ids = [r["passage_id"] for r in rows[: gcfg["top_k"]]]
         by_id = {r["passage_id"]: r for r in rows}
         hits = [by_id[p] for p in prompt_ids]
         kind = b.provider or gcfg["provider"]
@@ -1790,6 +1807,8 @@ def create_app(config_path: Path = Path("config/pilot.toml"), *, retriever: Opti
                                          max_tokens=gcfg["max_tokens"], top_k=gcfg["top_k"]) if v2 else
                generation_meta(provider=kind, model=model_id, temperature=temp, max_tokens=gcfg["max_tokens"],
                                top_k=gcfg["top_k"]))
+        if rinfo is not None:
+            gen = dict(gen, rerank=rinfo)
 
         def shown(ans) -> dict:
             out = {"answer": ans.to_dict(),

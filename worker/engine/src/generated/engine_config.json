@@ -16,6 +16,10 @@
   "label": "The whole collection",
   "max_engines": 3,
   "model": "claude-haiku-4-5-20251001",
+  "parts": [
+   "pilot",
+   "microlog"
+  ],
   "pool_size": 30,
   "provider": "anthropic",
   "scope": "collection",

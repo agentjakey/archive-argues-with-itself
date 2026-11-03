@@ -112,6 +112,27 @@ async function staticScope(): Promise<string> {
   return (await shards.scopes()).default;
 }
 
+/** The engine's whole-collection scope: its router searches every served part (the collections
+ *  served first and every promoted shard) for one question. */
+export const COLLECTION_SCOPE = "collection";
+
+/** Where a typed question goes: the collection a link named (?scope=), else, in a static release,
+ *  the whole collection. Locally (no static data) the default engine scope, as before. */
+export function askScope(): string | null {
+  const s = activeScope();
+  if (s) return s;
+  return staticMode() ? COLLECTION_SCOPE : null;
+}
+
+/** The parts whose recorded answers a question may match: the named collection, or every collection
+ *  of the release, the landing one first. */
+async function recordedScopes(): Promise<string[]> {
+  const s = activeScope();
+  if (s) return [s];
+  const all = await shards.scopes();
+  return [all.default, ...all.scopes.map((x) => x.name).filter((n) => n !== all.default)];
+}
+
 /** The server's own words, verbatim: our {"error"} shape, FastAPI's {"detail"}
  *  (string or validation list), else a sentence that still names the status. */
 export function errorDetail(status: number, body: unknown): string {
@@ -181,10 +202,16 @@ async function request<T>(path: string, init?: RequestInit & { guarded?: boolean
 
 export async function ask(body: AskRequest): Promise<AskResponse> {
   if (staticMode() && !body.provider && !body.nocache && !body.evidence_only) {
-    const recorded = await shards.recordedAnswer(await staticScope(), body.question, body.filters);
-    if (recorded) return recorded;
+    // A seed or story question is answered from its recording, in whichever part recorded it.
+    for (const scope of await recordedScopes()) {
+      const recorded = await shards.recordedAnswer(scope, body.question, body.filters);
+      if (recorded) return recorded;
+    }
   }
-  return request<AskResponse>(withQuery("/ask", scoped(new URLSearchParams())), {
+  const target = askScope();
+  const params = new URLSearchParams();
+  if (target) params.set("scope", target);
+  return request<AskResponse>(withQuery("/ask", params), {
     method: "POST",
     body: JSON.stringify(body),
     guarded: true,
@@ -212,8 +239,20 @@ export async function health(): Promise<Health> {
 
 /** The engine's state from the engine Worker (asleep, waking with its stage, ready, failed). Never
  *  wakes it. Only meaningful in a static release. */
-export function engineStatus(): Promise<EngineStatus> {
-  return request<EngineStatus>("/health");
+/** The engines' state. With scopes, only the engines those scopes run on: the parts one waiting
+ *  question woke, so it is not held up by parts it does not need. */
+export function engineStatus(scopes?: string[] | null): Promise<EngineStatus> {
+  const named = (scopes ?? []).filter(Boolean);
+  return request<EngineStatus>(named.length ? `/health?scope=${encodeURIComponent(named.join(","))}` : "/health");
+}
+
+/** The parts a waking engine reply names: each engine of a whole-collection question, or the one engine. */
+export function wakingParts(engine: EngineStatus): string[] {
+  // "engine" is the single-engine layout's one container, not a part of the archive.
+  const isPart = (n: string | undefined): n is string => !!n && n !== "engine";
+  const listed = (engine.engines ?? []).map((e) => e.shard ?? e.name).filter(isPart);
+  if (listed.length) return [...new Set(listed)];
+  return isPart(engine.name) ? [engine.name] : [];
 }
 
 /** Ask the engine Worker to start the engine ahead of a question (page load, question focus).
@@ -247,8 +286,12 @@ export function flag(pins: string[]): Promise<{ flagged: Flagged | null }> {
 
 export async function coverage(q: string, filters: Filters): Promise<CoverageResponse> {
   if (staticMode()) {
-    const recorded = await shards.recordedCoverage(await staticScope(), q, filters);
-    if (recorded) return recorded;
+    for (const scope of await recordedScopes()) {
+      const recorded = await shards.recordedCoverage(scope, q, filters);
+      if (recorded) return recorded;
+    }
+    // The decade counts come from one collection's engine; a whole-collection answer has none.
+    if (askScope() === COLLECTION_SCOPE) throw new ApiError(404, "no decade coverage for the whole collection");
   }
   const p = new URLSearchParams({ q });
   for (const k of FILTER_KEYS) {

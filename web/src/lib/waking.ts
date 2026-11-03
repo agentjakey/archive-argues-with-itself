@@ -9,6 +9,7 @@ export interface WakeProgress {
   phase: WakePhase;
   elapsed: number;              // seconds since the question was asked
   stage: EngineStage | null;
+  parts?: string[];             // the parts of the archive this question woke (scope ids), when known
 }
 
 export const SLOW_AFTER_S = 60;           // past this, say plainly that it is slow and point to the stories

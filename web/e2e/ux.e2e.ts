@@ -2,10 +2,13 @@
 // an example topic lands on a cited answer with its scanned page, the light and dark themes both pass
 // axe, a chosen theme survives a reload without a flash of the other one, the results keep the
 // question box in view, and nothing is stored unless the visitor picks a theme.
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 const ENGINE = "https://engine.example.test";
+const DATA = fileURLToPath(new URL("../../site/data/", import.meta.url));
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 test.describe.configure({ timeout: 120_000 });
 
@@ -33,7 +36,7 @@ test("the search box is on the first screen, above everything else", async ({ pa
   const box = await input.boundingBox();
   const viewport = page.viewportSize()!;
   expect(box!.y + box!.height).toBeLessThan(viewport.height);
-  await expect(page.getByRole("heading", { level: 1, name: "Ask Canada's public-health record" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Ask Canada's public record" })).toBeVisible();
   const storage = await page.evaluate(() => localStorage.length);
   expect(storage).toBe(0);
 });
@@ -139,4 +142,76 @@ test("the catalogue takes a title search from the URL, searches every decade and
   await expect(page).toHaveURL(/place=federal/);
   const found = await violations(page);
   expect(found).toEqual([]);
+});
+
+test("a typed question searches the whole collection, names the parts it wakes, and says which it searched", async ({ page }) => {
+  const recorded = JSON.parse(readFileSync(`${DATA}pilot/answers/seed-q001.json`, "utf-8"));
+  const askUrls: string[] = [];
+  const healthUrls: string[] = [];
+  await page.route(`${ENGINE}/**`, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/wake") return route.fulfill({ status: 202, json: { engines: [] } });
+    if (url.pathname === "/health") {
+      healthUrls.push(url.search);
+      const status = healthUrls.length < 2 ? "waking" : "ready";
+      return route.fulfill({ json: { status, engines: [{ name: "federal-1899-1911", status, stage: null, error: null }] } });
+    }
+    if (url.pathname === "/ask") {
+      askUrls.push(url.search);
+      if (askUrls.length === 1) {
+        return route.fulfill({
+          status: 503,
+          json: {
+            status: "waking",
+            retry_after_seconds: 3,
+            engines: [
+              { shard: "pilot", name: "pilot", status: "ready", stage: null },
+              { shard: "federal-1899-1911", name: "federal-1899-1911", status: "waking", stage: { stage: "loading" } },
+            ],
+          },
+        });
+      }
+      return route.fulfill({
+        json: {
+          ...recorded,
+          answer: { ...recorded.answer, cached: null },
+          router: {
+            scope: "collection",
+            searched: [
+              { shard: "pilot", tier: null, candidates: 30 },
+              { shard: "federal-1899-1911", tier: "INDEXED", candidates: 12 },
+            ],
+            left_out: [{ shard: "unknown-1861-1993", tier: "INDEXED", reason: "holds none of the question's words" }],
+            note: "Shards left out were not searched for this question.",
+          },
+        },
+      });
+    }
+    return route.fulfill({ status: 404, json: { error: "not found" } });
+  });
+  await page.goto("/");
+  await page.locator("#question").fill("What did annual reports say about rural nursing stations?");
+  await page.locator("#question").press("Enter");
+  await expect(page.getByTestId("waking-parts")).toContainText("Federal public health and Federal, 1899 to 1911");
+  await expect(page.getByRole("heading", { name: "Answer from the record" })).toBeVisible({ timeout: 30_000 });
+  expect(askUrls[0]).toContain("scope=collection");
+  expect(healthUrls[0]).toContain("scope=pilot%2Cfederal-1899-1911");
+  await expect(page.getByTestId("collection-line")).toContainText("Searched across the whole collection");
+  await expect(page.getByTestId("collection-line")).toContainText("Federal, 1899 to 1911");
+  // No decade panel that would describe one collection's counts under a whole-collection answer.
+  await expect(page.getByRole("heading", { name: "Coverage" })).toHaveCount(0);
+});
+
+test("a featured question is still served from its recording, and a collection link searches only that collection", async ({ page }) => {
+  const asks: string[] = [];
+  await page.route(`${ENGINE}/**`, (route) => {
+    if (new URL(route.request().url()).pathname === "/ask") asks.push(route.request().url());
+    return route.abort("connectionrefused");
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Drug safety: / }).click();
+  await expect(page.getByRole("heading", { name: "Answer from the record" })).toBeVisible();
+  expect(asks).toEqual([]);
+  await page.goto("/?scope=microlog");
+  await expect(page.getByTestId("scope-note")).toContainText("Searching only");
 });
