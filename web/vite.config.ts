@@ -32,8 +32,14 @@ function sharedTokens(): Plugin {
   };
 }
 
+// Vite 7 moved the default build target to "baseline-widely-available" (Chrome and Edge 107, Firefox
+// 104, Safari 16). The site keeps Vite 5's default targets, so every browser it served before still
+// gets code it can run.
+const BUILD_TARGET =["es2020", "edge88", "firefox78", "chrome87", "safari14"];
+
 export default defineConfig({
   plugins: [react(), sharedTokens()],
+  build: { target: BUILD_TARGET },
   server: {
     proxy: {
       "/ask": API,

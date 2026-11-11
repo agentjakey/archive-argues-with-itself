@@ -10,6 +10,9 @@ export default defineConfig({
     outDir: "../../build/exhibit-app",
     emptyOutDir: true,
     sourcemap: false,
+    // Vite 7 moved the default target to "baseline-widely-available" (Chrome and Edge 107, Firefox
+    // 104, Safari 16); the exhibit keeps Vite 5's default targets so the browsers it ran on still do.
+    target: ["es2020", "edge88", "firefox78", "chrome87", "safari14"],
   },
   test: {
     environment: "jsdom",

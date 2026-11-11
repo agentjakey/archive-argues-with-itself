@@ -1,0 +1,54 @@
+# Dependabot: grouped weekly updates, so the dependency PRs stay few and reviewable.
+#
+# Every update of an ecosystem goes into one group. Dependabot opens one grouped pull request per
+# directory, so a week brings at most four npm PRs (web, exhibit, the engine Worker, the site Worker)
+# and two pip PRs (the project and the job images), never one per package. Security updates are
+# grouped the same way, apart from version updates, and arrive as soon as an advisory is published.
+# Security updates need "Dependabot security updates" switched on in the repository's settings.
+#
+# Exact pins stay exact: Dependabot edits the pinned version in place. A major version bump (vite,
+# vitest, Pillow, pytest and the like) lands in the same group and needs its code and config changes
+# made in that PR before it merges; CI runs every suite on it.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directories:
+      - "/web"
+      - "/exhibit/app"
+      - "/worker/engine"
+      - "/worker/site"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Vancouver"
+    open-pull-requests-limit: 8
+    commit-message:
+      prefix: "npm"
+    groups:
+      npm-weekly:
+        applies-to: version-updates
+        patterns: ["*"]
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: "pip"
+    directories:
+      - "/"                 # pyproject.toml (the engine and the scripts)
+      - "/docker/jobs"      # requirements-cpu.txt and requirements-gpu.txt (the job images)
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Vancouver"
+    open-pull-requests-limit: 4
+    commit-message:
+      prefix: "pip"
+    groups:
+      pip-weekly:
+        applies-to: version-updates
+        patterns: ["*"]
+      pip-security:
+        applies-to: security-updates
+        patterns: ["*"]

@@ -70,11 +70,24 @@ def _try(get: Callable, ident: str, name: str, refusals) -> Optional[bytes]:
         raise
 
 
+def safe_part(value: str, what: str, folders: bool = False) -> str:
+    """An identifier or file name from the catalogue or an item's metadata (untrusted). It is joined
+    to the local folder and the R2 prefix, so it may not be absolute, use a backslash or step up a
+    level. Only a file name may sit in a sub-folder."""
+    parts = value.split("/")
+    if not folders and len(parts) > 1:
+        raise ValueError(f"unsafe {what} from archive metadata: {value!r}")
+    if not value or "\\" in value or any(p in ("", ".", "..") for p in parts):
+        raise ValueError(f"unsafe {what} from archive metadata: {value!r}")
+    return value
+
+
 def fetch_item(ident: str, get: Callable, refusals) -> dict:
     """{identifier, kind, files: {role: (name, bytes)}}; kind "no_text" when the item has no OCR.
     When the files are not named after the identifier, the item's metadata names them, and it is
     kept too, compressed, for its page and file lists."""
     import gzip
+    safe_part(ident, "identifier")
     # Most items name their files after the identifier: two requests, no metadata call.
     text = _try(get, ident, ident + SEARCHTEXT, refusals)
     if text is not None:
@@ -92,6 +105,7 @@ def fetch_item(ident: str, get: Callable, refusals) -> dict:
     names = [f["name"] for f in meta.get("files") or []]
     search = next((f for f in names if f.endswith(SEARCHTEXT)), None)
     if search:
+        safe_part(search, "file name", folders=True)
         text = _try(get, ident, search, refusals)
         if text is not None:
             files["searchtext"] = (search, text)
@@ -105,6 +119,8 @@ def fetch_item(ident: str, get: Callable, refusals) -> dict:
                     files["page_numbers"] = (numbers_name + ".gz", gzip.compress(numbers, mtime=0))
             return {"identifier": ident, "kind": "hocr" if index is not None else "searchtext_only", "files": files}
     djvu = next((f for f in names if f.endswith(DJVU)), None)
+    if djvu:
+        safe_part(djvu, "file name", folders=True)
     data = _try(get, ident, djvu, refusals) if djvu else None
     if data is None:
         return {"identifier": ident, "kind": "no_text", "files": files}
@@ -246,8 +262,9 @@ def run(identifiers: list, out: Path, *, store=None, get: Callable = None, worke
         folder = out / ident[:2] / ident
         for role, (name, data) in item["files"].items():
             if keep_local or store is None:
-                folder.mkdir(parents=True, exist_ok=True)
-                (folder / name).write_bytes(data)
+                target = folder / name           # name passed safe_part in fetch_item
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
             entry = {"name": name, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
             if store is not None:
                 entry["r2_key"] = f"{R2_PREFIX}/{ident}/{name}"
