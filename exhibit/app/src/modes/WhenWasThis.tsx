@@ -5,7 +5,7 @@
 import { useState } from "react";
 import type { Lang, WhenRound } from "../lib/deck";
 import { quoteById } from "../lib/deck";
-import { useDial } from "../lib/input";
+import { dialStart, useDial } from "../lib/input";
 import { SOLO_PACE, useStaged } from "../lib/pace";
 import { useSettings } from "../lib/settings";
 import { score } from "../lib/text";
@@ -29,8 +29,7 @@ type Props = {
 
 export function WhenWasThis({ round, lang, t, first, last, progress, nextLabel, onEvent, onNext }: Props) {
   const { reducedMotion } = useSettings();
-  const mid = Math.round((first + last) / 2);
-  const [year, setYear] = useState(mid);
+  const [year, setYear] = useState(() => dialStart(first, last, round.play.year, round.id));
   const [locked, setLocked] = useState<number | null>(null);
   const [howOpen, setHowOpen] = useState(false);
   const shown = useStaged(SOLO_PACE.slice(0, 4), reducedMotion, round.id, locked !== null);

@@ -309,3 +309,6 @@ docs/v2/
 # Phase G: rendered manifests and the filled-in values file stay local
 k8s/out/
 k8s/values.toml
+
+# Share packs for partners (screens, clips, sheets) are made from the live site and never committed
+share-pack/

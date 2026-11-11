@@ -2,8 +2,10 @@
 // labelled tick for every decade. It always settles on a whole year (a detent), and every way of
 // turning it gives the same steps: the physical USB knob and the arrow keys, a drag along the tape,
 // a mouse wheel, and the two large buttons. It is a real ARIA slider, so a screen reader announces
-// the year. With sound switched on, each detent ticks.
-import { useEffect, useRef } from "react";
+// the year. With sound switched on, each detent ticks. A decade label shows only while the whole
+// label fits inside the window: near an end of the range the tape stops at the last year, and a
+// label cut by the window's edge read as a stray digit (the "0" of 2010 at 2018).
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { clampYear, wheelAccumulator } from "../lib/input";
 import { useSettings } from "../lib/settings";
@@ -38,6 +40,29 @@ export function Dial({ year, first, last, onChange, t, valueText, locked = false
     if (!ticks || ticks.length < 2) return 20;
     return Math.max(4, (ticks[1] as HTMLElement).offsetLeft - (ticks[0] as HTMLElement).offsetLeft);
   };
+  // How many years from the needle a decade label can sit and still show whole; null until measured
+  // (and in tests without layout), when every label shows.
+  const frame = useRef<HTMLDivElement>(null);
+  const [room, setRoom] = useState<number | null>(null);
+  useEffect(() => {
+    const el = frame.current;
+    if (!el) return;
+    const measure = () => {
+      const ticks = tape.current?.children;
+      const label = el.querySelector<HTMLElement>(".dial-tick-label");
+      const half = el.clientWidth / 2;
+      if (!ticks || ticks.length < 2 || !label || half <= 0) return setRoom(null);
+      const step = (ticks[1] as HTMLElement).offsetLeft - (ticks[0] as HTMLElement).offsetLeft;
+      if (step <= 0) return setRoom(null);
+      setRoom(Math.floor((half - label.offsetWidth / 2 - 2) / step));
+    };
+    measure();
+    void document.fonts?.ready.then(measure);
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   const years: number[] = [];
   for (let y = first; y <= last; y++) years.push(y);
   const style = { "--at": year - first } as CSSProperties;
@@ -53,6 +78,7 @@ export function Dial({ year, first, last, onChange, t, valueText, locked = false
           </svg>
         </button>
         <div
+          ref={frame}
           className="dial-window"
           data-allow-clip
           role="slider"
@@ -101,7 +127,9 @@ export function Dial({ year, first, last, onChange, t, valueText, locked = false
                 className={`dial-tick${y % 10 === 0 ? " dial-tick-decade" : y % 5 === 0 ? " dial-tick-five" : ""}`}
                 style={{ "--i": y - first } as CSSProperties}
               >
-                {y % 10 === 0 && <span className="dial-tick-label">{y}</span>}
+                {y % 10 === 0 && (
+                  <span className={`dial-tick-label${room !== null && Math.abs(y - year) > room ? " dial-tick-label-off" : ""}`}>{y}</span>
+                )}
               </span>
             ))}
           </div>

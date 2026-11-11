@@ -164,7 +164,7 @@ const en = {
     } as Record<string, string>,
     explain: {
       recorded: (place: string, d: number, idx: number, cat: string) =>
-        `${place}, ${d}s: ${idx} ${idx === 1 ? "item is" : "items are"} indexed here, from the collections this exhibit draws on. Separately, Internet Archive Canada's government publications collection holds ${cat} items that name ${place} as publisher or creator.`,
+        `${place}, ${d}s: ${idx} indexed ${idx === 1 ? "item is" : "items are"} filed under ${place}. That is a different count from the ${cat} items in Internet Archive Canada's government publications collection whose publisher or creator names ${place}: the indexed items also come from other collections and are sorted by place another way, so either number can be the larger.`,
       not_indexed: (place: string, d: number, _idx: number, cat: string) =>
         `${place}, ${d}s: the archive's catalogue lists ${cat} items that name ${place}, but none are indexed here yet. Not indexed is not the same as missing.`,
       quiet_examined: (place: string, d: number) =>
@@ -369,7 +369,7 @@ const fr: Strings = {
     },
     explain: {
       recorded: (place: string, d: number, idx: number, cat: string) =>
-        `${place}, ann\u00e9es ${d} : ${idx} document${idx > 1 ? "s" : ""} index\u00e9${idx > 1 ? "s" : ""} ici, tir\u00e9${idx > 1 ? "s" : ""} des collections de cette exposition. Par ailleurs, la collection des publications gouvernementales d'Internet Archive Canada compte ${cat} documents dont l'\u00e9diteur ou l'auteur nomme ${place}.`,
+        `${place}, ann\u00e9es ${d} : ${idx} document${idx > 1 ? "s" : ""} index\u00e9${idx > 1 ? "s sont class\u00e9s" : " est class\u00e9"} sous ${place}. C'est un autre compte que les ${cat} documents de la collection des publications gouvernementales d'Internet Archive Canada dont l'\u00e9diteur ou l'auteur nomme ${place} : les documents index\u00e9s viennent aussi d'autres collections et sont class\u00e9s par lieu d'une autre fa\u00e7on, donc l'un ou l'autre nombre peut \u00eatre le plus grand.`,
       not_indexed: (place: string, d: number, _idx: number, cat: string) =>
         `${place}, ann\u00e9es ${d} : le catalogue des archives compte ${cat} documents qui nomment ${place}, mais aucun n'est encore index\u00e9 ici. Non index\u00e9 ne veut pas dire manquant.`,
       quiet_examined: (place: string, d: number) =>

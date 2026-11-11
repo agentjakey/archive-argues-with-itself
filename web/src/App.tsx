@@ -697,7 +697,7 @@ export default function App() {
             <ThresholdHero featured={heroStory(stories)} onOpen={openStory} />
             <StoryGallery stories={galleryStories(stories)} loading={storiesLoading} onOpen={openStory} />
           </section>
-          <BrowseSection scopes={scopesInfo?.scopes ?? null} catalogue={catalogue} onView={goView} />
+          <BrowseSection catalogue={catalogue} onView={goView} />
           {refuseExample && (
             <p className="mt-8 max-w-prose text-muted">
               <button

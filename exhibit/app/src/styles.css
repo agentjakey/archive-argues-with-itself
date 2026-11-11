@@ -214,6 +214,7 @@ blockquote { margin: 0; padding: var(--s1) 0 var(--s1) var(--s3); border-left: 1
 .dial-tick-five { height: 0.9rem; }
 .dial-tick-decade { height: 1.4rem; width: 2px; margin-left: -1px; background: var(--text); }
 .dial-tick-label { position: absolute; bottom: 1.5rem; left: 50%; transform: translateX(-50%); font-family: var(--display); font-size: 0.8rem; color: var(--text); line-height: 1.1; font-variant-numeric: lining-nums tabular-nums; }
+.dial-tick-label-off { visibility: hidden; }
 .dial-needle { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--gold); pointer-events: none; }
 .dial-needle::before { content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%); border: 0.4rem solid transparent; border-top-color: var(--gold); }
 .dial-hint { color: var(--muted); font-style: italic; margin: var(--s2) 0 0; }
@@ -390,6 +391,18 @@ html.kiosk .round-chronicle > * { min-height: 0; overflow-y: auto; }
 .legend li { display: flex; align-items: center; gap: var(--s2); }
 .legend-swatch { width: 1.6rem; min-width: 1.6rem; height: 1.1rem; display: inline-block; }
 .gap-explain { font-size: 1.05rem; min-height: 3em; background: var(--surface); border-top: 1px solid var(--gold); padding: var(--s3) var(--s4); }
+/* Kiosk, landscape: the grid on the left and its heading, legend and explanation on the right, so a
+   picked square's explanation is on screen without scrolling. Fourteen rows of 64 px targets (R4)
+   do not fit under the header and footer at 1080 px, so the grid scrolls inside its own pane; it
+   takes no height from the rows beside it (contain: size) and fills them instead. */
+@media (min-width: 900px) and (min-aspect-ratio: 5/4) {
+  html.kiosk .gaphunt { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(16rem, 1fr);
+    grid-template-rows: repeat(5, auto) minmax(0, 1fr); column-gap: var(--s6); align-content: start; }
+  html.kiosk .gaphunt > .gap-grid-wrap { grid-column: 1; grid-row: 1 / -1; contain: size; overflow-y: auto; overscroll-behavior: contain; scroll-padding: var(--s2) 0; }
+  html.kiosk .gaphunt > :not(.gap-grid-wrap) { grid-column: 2; }
+  html.kiosk .gaphunt > h2 { margin-top: 0; }
+  html.kiosk .gaphunt .legend { flex-direction: column; gap: var(--s2); margin: var(--s2) 0 var(--s4); }
+}
 .attract .gap-grid { pointer-events: none; }
 
 .idle-warning { position: fixed; left: 50%; bottom: 2.5vh; transform: translateX(-50%); background: var(--gold); color: var(--ink); font-weight: 700; padding: var(--s2) var(--s4); max-width: 90vw; text-align: center; margin: 0; }

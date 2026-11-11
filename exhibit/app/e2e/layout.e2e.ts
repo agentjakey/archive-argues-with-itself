@@ -142,6 +142,73 @@ for (const mode of MODES) {
 }
 }
 
+// Kiosk, landscape: whichever Gap Hunt square is picked, its explanation is on the screen and not
+// covered, with nothing scrolled to get there (the 2026-11-11 share-pack review found it below the
+// fold at 1920x1080).
+for (const [w, h] of SIZES.filter(([sw, sh]) => sw >= 900 && sw / sh >= 1.25)) {
+  test(`kiosk ${w}x${h}: the Gap Hunt explanation is on screen without scrolling`, async ({ page }) => {
+    await page.setViewportSize({ width: w, height: h });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/exhibit/?kiosk=1");
+    await page.getByRole("button", { name: "All games" }).click();
+    await page.getByRole("button", { name: /Gap Hunt/ }).click();
+    const cells = page.locator("button.cell");
+    await cells.first().waitFor();
+    const n = await cells.count();
+    for (const i of [0, Math.floor(n / 2), n - 1]) {
+      await cells.nth(i).click();
+      const where = await page.evaluate(() => {
+        const el = document.querySelector(".gap-explain") as HTMLElement;
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + Math.min(r.height / 2, 20));
+        const main = document.querySelector(".main") as HTMLElement;
+        return { top: r.top, bottom: r.bottom, vh: window.innerHeight, text: el.textContent ?? "",
+          covered: !(hit === el || el.contains(hit)), mainScrolled: main.scrollTop, pageScrolled: window.scrollY };
+      });
+      expect(where.text.length, `cell ${i}: explanation text`).toBeGreaterThan(10);
+      expect(where.top, `cell ${i}: explanation top`).toBeGreaterThanOrEqual(0);
+      expect(where.bottom, `cell ${i}: explanation bottom`).toBeLessThanOrEqual(where.vh);
+      expect(where.covered, `cell ${i}: explanation covered`).toBe(false);
+      expect([where.mainScrolled, where.pageScrolled], `cell ${i}: screen scrolled`).toEqual([0, 0]);
+    }
+  });
+}
+
+// The year dial never shows a cut decade label: every label that shows sits wholly inside the dial's
+// window, at both ends of the range and in between (the 2026-11-11 review found a lone "0", the end
+// of 2010, at 2018).
+for (const mode of MODES) {
+  for (const [w, h] of SIZES) {
+    test(`${mode.name} ${w}x${h}: the Time Dial shows only whole year labels`, async ({ page }) => {
+      await page.setViewportSize({ width: w, height: h });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto(mode.path);
+      await page.getByRole("button", { name: "All games" }).click();
+      await page.getByRole("button", { name: /Time Dial/ }).click();
+      await page.locator(".round-picker .choice-list button").first().click();
+      const slider = page.getByRole("slider", { name: "Year" });
+      await slider.focus();
+      await page.keyboard.press("Home");
+      for (let year = 1960; year <= 2018; year++) {
+        if (year > 1960) await page.keyboard.press("ArrowRight");
+        if (year % 3 !== 0 && year !== 2018) continue;
+        const cut = await page.evaluate(() => {
+          const frame = document.querySelector(".dial-window") as HTMLElement;
+          const box = frame.getBoundingClientRect();
+          return [...frame.querySelectorAll<HTMLElement>(".dial-tick-label")]
+            .filter((l) => getComputedStyle(l).visibility !== "hidden")
+            .filter((l) => {
+              const r = l.getBoundingClientRect();
+              return r.left < box.left - 0.5 || r.right > box.right + 0.5;
+            })
+            .map((l) => l.textContent);
+        });
+        expect(cut, `year ${year}: labels cut by the window`).toEqual([]);
+      }
+    });
+  }
+}
+
 // The light theme: the switch works in the web view, every screen of a visit passes axe with the AAA
 // contrast rule, and a kiosk stays dark even when this browser saved a light choice.
 test("light theme: the switch, contrast on every screen, and a kiosk that stays dark", async ({ page }) => {

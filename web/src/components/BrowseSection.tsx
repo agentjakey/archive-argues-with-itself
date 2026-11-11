@@ -1,19 +1,18 @@
 import { formatInt } from "../lib/format";
 import type { View } from "../lib/urlstate";
 import type { CatalogueSummary } from "../hooks/useCatalogueSummary";
-import type { ScopeInfo } from "../types";
 
 interface Props {
-  scopes: ScopeInfo[] | null;
   catalogue: CatalogueSummary | null;
   onView: (view: View) => void;
 }
 
 /** Ways in without a question: through time, across the country, the collections searched here, and
- *  the whole catalogue. Every figure is read from the release's own data (the corpora's composition
- *  and the catalogue summary); a figure that has not loaded is left out rather than guessed. */
-export function BrowseSection({ scopes, catalogue, onView }: Props) {
-  const items = (scopes ?? []).reduce((n, s) => n + s.item_count, 0);
+ *  the whole catalogue. Every coverage figure on the home page comes from the catalogue summary, the
+ *  same source as the coverage line above it; a figure that has not loaded is left out rather than
+ *  guessed. The collections card carries no count: the engine's own scope list covers only the first
+ *  two collections, not the served shards, so a count from it would disagree with the coverage line. */
+export function BrowseSection({ catalogue, onView }: Props) {
   const known = catalogue?.documents ?? null;
   const indexed = catalogue?.coverage?.indexed ?? null;
   return (
@@ -39,11 +38,7 @@ export function BrowseSection({ scopes, catalogue, onView }: Props) {
         <li>
           <BrowseCard
             title="The collections"
-            body={
-              items > 0
-                ? `The ${formatInt(items)} documents answers are drawn from: what they cover, how well they were scanned, and what is missing.`
-                : "The documents answers are drawn from: what they cover, how well they were scanned, and what is missing."
-            }
+            body="The collections answers are drawn from: what they cover, how well they were scanned, and what is missing."
             onClick={() => onView("explore")}
           />
         </li>
