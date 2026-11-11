@@ -47,9 +47,9 @@ COPY docker/entrypoint.sh /entrypoint.sh
 
 # Bake the query embedding model into the image at build time so the running
 # container downloads nothing (N1: its only network call is the configured LLM API).
-RUN python -c "import tomllib; from fastembed import TextEmbedding; \
+RUN python -c "import tomllib; from archive_debugger.retrieve.embed import fastembed_text_model; \
 m = tomllib.load(open('config/pilot.toml', 'rb'))['index']['embedding_model']; \
-TextEmbedding(model_name=m); print('cached', m)"
+fastembed_text_model(m); print('cached', m)"
 
 RUN chmod +x /entrypoint.sh
 EXPOSE 8080

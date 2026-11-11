@@ -41,8 +41,8 @@ def write_shard(rows: list) -> bytes:
 
 
 def _fastembed(index: dict) -> Callable:
-    from fastembed import TextEmbedding
-    model = TextEmbedding(model_name=index["model"])
+    from archive_debugger.retrieve.embed import fastembed_text_model
+    model = fastembed_text_model(index["model"])
     return lambda texts: np.array(list(model.embed(texts)), dtype=np.float32)
 
 

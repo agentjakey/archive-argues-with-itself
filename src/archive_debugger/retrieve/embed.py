@@ -45,14 +45,44 @@ class StubEmbedder:
         return self._vec(text)
 
 
+# fastembed 0.4.2 ran this model's ONNX file with CLS pooling and L2 normalisation. fastembed 0.5
+# and later run the same file with mean pooling, which gives different vectors (measured 2026-11-11
+# on 300 passages: lowest cosine 0.33, a different top 10 for every test query). Every index here
+# was built the 0.4.2 way, so the model is registered under its own name with 0.4.2's pooling; with
+# onnxruntime 1.19.2 the vectors are identical to 0.4.2's (largest difference 0 on the same sample).
+LEGACY_CLS_MODELS = {
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
+        "name": "archive-argues/paraphrase-multilingual-MiniLM-L12-v2-cls-normalized",
+        "hf": "Qdrant/paraphrase-multilingual-MiniLM-L12-v2-onnx-Q",
+        "model_file": "model_optimized.onnx",
+        "dim": 384,
+    },
+}
+
+
+def fastembed_text_model(model_id: str):
+    """A fastembed TextEmbedding for `model_id` that gives the vectors the project's indexes hold."""
+    from fastembed import TextEmbedding  # noqa: imported lazily on purpose
+    legacy = LEGACY_CLS_MODELS.get(model_id)
+    if legacy is None:
+        return TextEmbedding(model_name=model_id)
+    from fastembed.common.model_description import ModelSource, PoolingType
+    known = {m["model"] for m in TextEmbedding.list_supported_models()}
+    if legacy["name"] not in known:
+        TextEmbedding.add_custom_model(
+            model=legacy["name"], pooling=PoolingType.CLS, normalization=True,
+            sources=ModelSource(hf=legacy["hf"]), dim=legacy["dim"], model_file=legacy["model_file"],
+        )
+    return TextEmbedding(model_name=legacy["name"])
+
+
 class FastEmbedEmbedder:
     """Real embedder. Lazy fastembed import keeps CI hermetic."""
 
     def __init__(self, model_id: str, dim: int):
-        from fastembed import TextEmbedding  # noqa: imported lazily on purpose
         self.model_id = model_id
         self.dim = dim
-        self._model = TextEmbedding(model_name=model_id)
+        self._model = fastembed_text_model(model_id)
 
     def embed_passages(self, texts: list[str]) -> list[list[float]]:
         return [list(map(float, v)) for v in self._model.embed(texts)]
