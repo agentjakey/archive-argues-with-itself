@@ -451,8 +451,12 @@ def enrich(
 
 def content_ref(md5: str, name: str) -> str:
     """Deterministic, cache-root-relative content address for a file. Phase 4
-    joins this to raw/ to locate the cached derivative."""
+    joins this to raw/ to locate the cached derivative. The md5 and the name come
+    from the item's metadata, which is untrusted: only the name's last part is
+    kept, and neither may hold a separator or step up a level."""
     base = os.path.basename(name)
+    if not md5 or "/" in md5 or "\\" in md5 or ".." in md5 or base in ("", ".", ".."):
+        raise ValueError(f"unsafe file reference from archive metadata: md5={md5!r} name={name!r}")
     return f"ocr/{md5[:2]}/{md5}__{base}"
 
 
