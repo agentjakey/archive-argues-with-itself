@@ -14,6 +14,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --gid 10001 jobs && useradd --uid 10001 --gid 10001 --home-dir /scratch/home --no-create-home jobs
 WORKDIR /app
+# The base image ships older pip, setuptools and wheel with published advisories; upgrade them first.
+RUN pip install --no-cache-dir --upgrade pip==26.3 setuptools==84.2.1 wheel==0.48.0
 COPY docker/jobs/requirements-cpu.txt /app/docker/jobs/requirements-cpu.txt
 RUN pip install --no-cache-dir -r docker/jobs/requirements-cpu.txt
 

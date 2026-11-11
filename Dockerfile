@@ -34,6 +34,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# The base image ships older pip, setuptools and wheel with published advisories; upgrade them first.
+RUN pip install --no-cache-dir --upgrade pip==26.3 setuptools==84.2.1 wheel==0.48.0
+
 # Package install (editable, so REPO_ROOT-relative paths in api/app.py resolve to /app).
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
