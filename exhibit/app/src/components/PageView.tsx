@@ -22,6 +22,9 @@ export function PageView({ page, label, t, marks = [], masks = [], hideTitleYear
   const [imageOpen, setImageOpen] = useState(false);
   const segments = segment(page.text, marks, masks);
   const title = hideTitleYears ? segment(page.title, [], hideTitleYears) : null;
+  // The scan's alt text names the page too, so it hides the same years as the title (a screen reader
+  // would otherwise read the answer out before the guess).
+  const altTitle = title ? title.map((s) => (s.kind === "mask" ? t.when.hidden : s.text)).join("") : page.title;
   return (
     <section className="page" aria-label={label}>
       <header className="page-head">
@@ -42,7 +45,7 @@ export function PageView({ page, label, t, marks = [], masks = [], hideTitleYear
             <img
               className="page-image"
               src={page.image_url}
-              alt={t.imageAlt(page.title, page.leaf)}
+              alt={t.imageAlt(altTitle, page.leaf)}
               loading="lazy"
               referrerPolicy="no-referrer"
               onError={() => setImageFailed(true)}
