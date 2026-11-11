@@ -22,7 +22,7 @@ has got and asks again on its own when it is ready.
 ## What you need
 
 A Cloudflare account on the Workers Paid plan (containers need it), Docker (wrangler builds the
-engine image locally), Node 20 or later, Python 3.11, an Anthropic API key, and the published data:
+engine image locally), Node 20.19 or later, Python 3.11, an Anthropic API key, and the published data:
 the corpus and vectors databases from the data release, plus the derived release files described
 below.
 
