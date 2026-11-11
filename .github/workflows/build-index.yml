@@ -23,6 +23,12 @@ on:
       slots:
         description: "how many 5.5-hour fetch slots this run may use (at most 20)"
         default: "20"
+      concurrency:
+        description: "requests at once to archive.org at the start of each slot"
+        default: "4"
+      max_concurrency:
+        description: "the most requests at once the fetch may rise to"
+        default: "8"
   push:
     branches: [main]
     paths: [".github/workflows/build-index.yml"]
@@ -70,7 +76,7 @@ jobs:
         if: steps.budget.outputs.go == 'yes'
         run: |
           python scripts/v2/catalogue.py fulltext --stream --order-r2 --max-minutes 330 \
-            --concurrency 4 --max-concurrency 8 --step 2 --pause 1.0 --sync-every 100 \
+            --concurrency "${{ inputs.concurrency || '4' }}" --max-concurrency "${{ inputs.max_concurrency || '8' }}" --step 2 --pause 1.0 --sync-every 100 \
             --out "$RUNNER_TEMP/fulltext" > "$RUNNER_TEMP/fetch.log" 2>&1 &
           fetch=$!
           # While the fetch runs, start the shard build once an hour (it builds only shards whose
@@ -80,9 +86,12 @@ jobs:
             kill -0 "$fetch" 2>/dev/null && gh workflow run build-shards.yml --ref "$GITHUB_REF_NAME" || true
             tail -n 3 "$RUNNER_TEMP/fetch.log"
           done
-          wait "$fetch"; code=$?
+          # The step runs under bash -e: a plain `wait` that returns non-zero would end it here, before
+          # the half-hour pause below, so the next slot would start at once (seen on 2026-11-05).
+          code=0
+          wait "$fetch" || code=$?
           tail -n 40 "$RUNNER_TEMP/fetch.log"
-          python scripts/v2/catalogue.py status --r2
+          python scripts/v2/catalogue.py status --r2 || true
           if [ "$code" -ne 0 ]; then
             # archive.org kept refusing: wait half an hour before the next slot starts.
             echo "the fetch stopped on refusals; the next slot waits 30 minutes"

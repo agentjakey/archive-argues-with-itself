@@ -45,6 +45,14 @@ updates:
     open-pull-requests-limit: 4
     commit-message:
       prefix: "pip"
+    # fastembed, onnxruntime and tokenizers are pinned on purpose: with exactly these versions the
+    # dense model's vectors match the ones stored in every index (retrieve/embed.py, LEGACY_CLS_MODELS;
+    # fastembed 0.5 changed the pooling, and a newer onnxruntime moves the vectors slightly). Bumping
+    # any of them means re-measuring the vectors first, so Dependabot leaves them alone.
+    ignore:
+      - dependency-name: "fastembed"
+      - dependency-name: "onnxruntime"
+      - dependency-name: "tokenizers"
     groups:
       pip-weekly:
         applies-to: version-updates
