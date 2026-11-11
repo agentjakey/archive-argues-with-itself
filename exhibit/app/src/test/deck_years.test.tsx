@@ -1,14 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { App } from "../App";
 import type { Deck, WhenRound } from "../lib/deck";
 import { STRINGS } from "../lib/strings";
+import published from "../../../../site/exhibit/deck.json";
 
 // Every When Was This? card in the published deck, before the guess: nothing a visitor can read or
 // hear (the page text, the title, the issuer, the label, the scan's alt text and every accessible name)
 // contains the card's own answer year. Run against site/exhibit/deck.json, the deck that ships.
-const DECK = JSON.parse(readFileSync(resolve(process.cwd(), "../../site/exhibit/deck.json"), "utf-8")) as Deck;
+const DECK = published as unknown as Deck;
 const ONLINE = { kiosk: false, idle_reset_seconds: 60, printer: false, counting: false };
 const en = STRINGS.en;
 const WHEN = DECK.rounds.filter((r): r is WhenRound => r.mode === "when_was_this");
