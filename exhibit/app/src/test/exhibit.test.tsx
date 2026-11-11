@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { App } from "../App";
 import { FIXTURE } from "./fixture";
 import { findQuote, maskSpans, score, segment } from "../lib/text";
-import { clampYear, stepFromKey, wheelAccumulator } from "../lib/input";
+import { DIAL_START_GAP, clampYear, dialStart, stepFromKey, wheelAccumulator } from "../lib/input";
 import { buildArc, totalPoints } from "../lib/arc";
 import { STRINGS } from "../lib/strings";
 
@@ -54,6 +54,22 @@ describe("dial input", () => {
     expect(clampYear(1950, 1960, 2018)).toBe(1960);
     expect(clampYear(2030, 1960, 2018)).toBe(2018);
   });
+  it("never starts When Was This? on the answer, or near enough to score", () => {
+    for (let answer = 1955; answer <= 2025; answer++) {
+      for (const id of ["wwt-1", "wwt-1bcb77f70b", "wwt-2c1562d68b", `wwt-${answer}`]) {
+        const start = dialStart(1960, 2018, answer, id);
+        expect(start).toBeGreaterThanOrEqual(1960);
+        expect(start).toBeLessThanOrEqual(2018);
+        expect(Math.abs(start - answer)).toBeGreaterThanOrEqual(DIAL_START_GAP);
+        expect(score(start, answer)).toBe(0);
+        expect(dialStart(1960, 2018, answer, id)).toBe(start); // the same card starts in the same place
+      }
+    }
+    // 1989, the old midpoint start, is no longer where a 1989 card begins
+    expect(dialStart(1960, 2018, 1989, "wwt-1bcb77f70b")).not.toBe(1989);
+    // a range too short for the gap still never starts on the answer
+    for (let answer = 2000; answer <= 2004; answer++) expect(dialStart(2000, 2004, answer, "x")).not.toBe(answer);
+  });
 });
 
 describe("the visit", () => {
@@ -104,7 +120,10 @@ describe("the exhibit", () => {
     expect(screen.getByRole("heading", { name: en.when.prompt })).toBeInTheDocument();
     expect(screen.queryByText(/1975-76/)).toBeNull();
     const slider = screen.getByRole("slider", { name: "Year" });
-    for (let i = 0; i < 14; i++) fireEvent.keyDown(slider, { key: "ArrowLeft" });
+    const startYear = Number(slider.getAttribute("aria-valuenow"));
+    expect(Math.abs(startYear - 1975)).toBeGreaterThanOrEqual(DIAL_START_GAP);
+    fireEvent.keyDown(slider, { key: "Home" });
+    for (let i = 0; i < 15; i++) fireEvent.keyDown(slider, { key: "ArrowRight" });
     fireEvent.click(screen.getByRole("button", { name: en.when.guess }));
     expect(screen.getByText(en.when.actual(1975))).toBeInTheDocument();
     expect(screen.getByRole("img", { name: en.when.timeline(1975, 1975) })).toBeInTheDocument();
@@ -162,6 +181,11 @@ describe("the exhibit", () => {
     fireEvent.click(screen.getByRole("button", { name: /Gap Hunt/ }));
     fireEvent.click(screen.getByRole("button", { name: /Ontario, 1970s/ }));
     expect(screen.getByText(/none are indexed here yet\. Not indexed is not the same as missing\./)).toBeInTheDocument();
+    // An indexed square says its two counts measure different things, so a larger indexed count
+    // than catalogue count does not read as a contradiction.
+    fireEvent.click(screen.getByRole("button", { name: /Ontario, 1960s/ }));
+    expect(screen.getByText(/120 indexed items are filed under Ontario\. That is a different count from the 1,698 items/)).toBeInTheDocument();
+    expect(screen.getByText(/so either number can be the larger\./)).toBeInTheDocument();
   });
 
   it("resets the kiosk after a quiet minute, with sound off again", () => {
