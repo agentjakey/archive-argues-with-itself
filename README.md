@@ -49,9 +49,10 @@ Every number, how it was measured, and what it does not say: [docs/ACCURACY.md](
 
 ## Coverage
 
-As of 2026-11-03: answers can draw on 33,925 documents with searchable text, out of 118,044 in the
-catalogue. The full-text fetch was 38% done and is expected to finish around 2026-11-05;
-parts are added as they are built and checked. Live figures: the [catalogue](https://archiveargues.org/catalogue/)
+As of 2026-11-12: answers can draw on 90,017 documents with searchable text, out of 118,044 in the
+catalogue, served from 33 of the collection's 41 parts (plus the first two collections). The other 8
+parts wait on the last few dozen documents of the full-text fetch; parts are added as they are
+built and checked. Live figures: the [catalogue](https://archiveargues.org/catalogue/)
 and the line under the question box.
 
 ## Run it yourself
