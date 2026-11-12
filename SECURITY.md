@@ -2,11 +2,14 @@
 
 ## Reporting
 
-If you find a security problem, please do not open a public issue. Email
-security@archiveargues.org, or report it through a private security advisory on
-the repository
+If you find a security problem, please do not open a public issue. Report it
+privately through GitHub's private vulnerability reporting: on the repository's
+Security tab, choose "Report a vulnerability"
 (https://github.com/agentjakey/archive-argues-with-itself/security/advisories/new).
-English or French is fine. I aim to reply within a week.
+Only the maintainer sees the report, and the fix and any advisory are worked out
+there before anything is public. If you cannot use GitHub, email
+security@archiveargues.org. English or French is fine. I aim to reply within a
+week.
 
 The same contact is published at https://archiveargues.org/.well-known/security.txt.
 

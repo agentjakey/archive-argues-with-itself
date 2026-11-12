@@ -312,3 +312,19 @@ k8s/values.toml
 
 # Share packs for partners (screens, clips, sheets) are made from the live site and never committed
 share-pack/
+
+# Keys and local credentials: never committed (.env and .env.* are covered above; the tracked web/.env.*
+# files hold only public build values such as the API origin and the Turnstile site key)
+.dev.vars
+**/.dev.vars
+.wrangler/
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+credentials*.json
+secrets*.json
+service-account*.json
+.npmrc

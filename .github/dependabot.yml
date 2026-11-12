@@ -1,14 +1,15 @@
 # Dependabot: grouped weekly updates, so the dependency PRs stay few and reviewable.
 #
-# Every update of an ecosystem goes into one group. Dependabot opens one grouped pull request per
-# directory, so a week brings at most four npm PRs (web, exhibit, the engine Worker, the site Worker)
-# and two pip PRs (the project and the job images), never one per package. Security updates are
-# grouped the same way, apart from version updates, and arrive as soon as an advisory is published.
-# Security updates need "Dependabot security updates" switched on in the repository's settings.
+# Every update of an ecosystem goes into one group, and Dependabot opens one grouped pull request for
+# it across all of the ecosystem's directories: a week brings at most one npm PR (web, exhibit, the
+# engine Worker, the site Worker), one pip PR (the project and the job images) and one for the
+# workflows' actions, never one per package. Security updates are grouped the same way, apart from
+# version updates, and arrive as soon as an advisory is published; they need "Dependabot security
+# updates" switched on in the repository's settings (it is).
 #
-# Exact pins stay exact: Dependabot edits the pinned version in place. A major version bump (vite,
-# vitest, Pillow, pytest and the like) lands in the same group and needs its code and config changes
-# made in that PR before it merges; CI runs every suite on it.
+# Exact pins stay exact: Dependabot edits the pinned version in place. The packages named under
+# `ignore` below are held back on purpose (the reason is beside each list); any other major version
+# lands in its group and needs its code and config changes made in that PR before it merges.
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -25,6 +26,13 @@ updates:
     open-pull-requests-limit: 8
     commit-message:
       prefix: "npm"
+    # Major versions wait for a deliberate upgrade with its own tests and review: React 19 changes
+    # rendering and types across web/ and the exhibit (its grouped update failed CI on 2026-11-11).
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-weekly:
         applies-to: version-updates
@@ -53,10 +61,51 @@ updates:
       - dependency-name: "fastembed"
       - dependency-name: "onnxruntime"
       - dependency-name: "tokenizers"
+      # Major versions of these wait for a deliberate upgrade: numpy feeds the dense leg the v1 baseline
+      # depends on; anthropic is the SDK behind the frozen generate/llm.py; python-doctr,
+      # sentence-transformers, transformers and torch change the job images (and the OCR comparison was
+      # measured on python-doctr 0.10); fastapi and uvicorn are the engine's API layer. Note that
+      # Dependabot reads 0.x versions as major.minor.patch, so fastapi and uvicorn 0.x bumps still come.
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "python-doctr"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sentence-transformers"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "transformers"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "torch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "anthropic"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "uvicorn"
+        update-types: ["version-update:semver-major"]
     groups:
       pip-weekly:
         applies-to: version-updates
         patterns: ["*"]
       pip-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  # The workflows' actions are pinned to full commit SHAs (version in a comment); this keeps the pins
+  # current, one grouped PR a week.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Vancouver"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "actions"
+    groups:
+      actions-weekly:
+        applies-to: version-updates
+        patterns: ["*"]
+      actions-security:
         applies-to: security-updates
         patterns: ["*"]
