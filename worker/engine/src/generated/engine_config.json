@@ -46,6 +46,10 @@
   "shards/bounded/british_columbia-1968-2001/vectors.db",
   "shards/bounded/british_columbia-2001-2003/civic.db",
   "shards/bounded/british_columbia-2001-2003/vectors.db",
+  "shards/v1/alberta-1866-1985/civic.db",
+  "shards/v1/alberta-1866-1985/vectors.db",
+  "shards/v1/alberta-undated/civic.db",
+  "shards/v1/alberta-undated/vectors.db",
   "shards/v1/federal-1851-1899/civic.db",
   "shards/v1/federal-1851-1899/vectors.db",
   "shards/v1/federal-1899-1911/civic.db",
@@ -58,15 +62,99 @@
   "shards/v1/federal-1944-1947/vectors.db",
   "shards/v1/federal-1947-1969/civic.db",
   "shards/v1/federal-1947-1969/vectors.db",
+  "shards/v1/federal-1969-1983/civic.db",
+  "shards/v1/federal-1969-1983/vectors.db",
+  "shards/v1/federal-1996-2025/civic.db",
+  "shards/v1/federal-1996-2025/vectors.db",
+  "shards/v1/federal-undated-3/civic.db",
+  "shards/v1/federal-undated-3/vectors.db",
+  "shards/v1/federal-undated-4/civic.db",
+  "shards/v1/federal-undated-4/vectors.db",
+  "shards/v1/federal-undated-5/civic.db",
+  "shards/v1/federal-undated-5/vectors.db",
+  "shards/v1/federal-undated-6/civic.db",
+  "shards/v1/federal-undated-6/vectors.db",
+  "shards/v1/federal-undated/civic.db",
+  "shards/v1/federal-undated/vectors.db",
+  "shards/v1/ontario-1856-1912/civic.db",
+  "shards/v1/ontario-1856-1912/vectors.db",
+  "shards/v1/ontario-1912-1949/civic.db",
+  "shards/v1/ontario-1912-1949/vectors.db",
+  "shards/v1/ontario-1949-1971/civic.db",
+  "shards/v1/ontario-1949-1971/vectors.db",
+  "shards/v1/ontario-1971-1980/civic.db",
+  "shards/v1/ontario-1971-1980/vectors.db",
   "shards/v1/ontario-1980-1988/civic.db",
   "shards/v1/ontario-1980-1988/vectors.db",
+  "shards/v1/ontario-1988-1995/civic.db",
+  "shards/v1/ontario-1988-1995/vectors.db",
+  "shards/v1/ontario-1995-2025/civic.db",
+  "shards/v1/ontario-1995-2025/vectors.db",
+  "shards/v1/ontario-undated/civic.db",
+  "shards/v1/ontario-undated/vectors.db",
   "shards/v1/other-1858-2009/civic.db",
   "shards/v1/other-1858-2009/vectors.db",
+  "shards/v1/other-undated/civic.db",
+  "shards/v1/other-undated/vectors.db",
   "shards/v1/unknown-1861-1993/civic.db",
-  "shards/v1/unknown-1861-1993/vectors.db"
+  "shards/v1/unknown-1861-1993/vectors.db",
+  "shards/v1/unknown-1993-2021/civic.db",
+  "shards/v1/unknown-1993-2021/vectors.db",
+  "shards/v1/unknown-undated-2/civic.db",
+  "shards/v1/unknown-undated-2/vectors.db",
+  "shards/v1/unknown-undated-3/civic.db",
+  "shards/v1/unknown-undated-3/vectors.db",
+  "shards/v1/unknown-undated-4/civic.db",
+  "shards/v1/unknown-undated-4/vectors.db",
+  "shards/v1/unknown-undated-5/civic.db",
+  "shards/v1/unknown-undated-5/vectors.db",
+  "shards/v1/unknown-undated-6/civic.db",
+  "shards/v1/unknown-undated-6/vectors.db",
+  "shards/v1/unknown-undated/civic.db",
+  "shards/v1/unknown-undated/vectors.db"
  ],
  "retention_days": 90,
  "scopes": {
+  "alberta-1866-1985": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "a8fd5650af05c8417367c87c9d692ac04237e0a22b11e6647e38befe11ac0ca0",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "71160728fe80bb759fcdb7a375a12863a1b361c47faf92fda758025815bf1b4a",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "f10046e6ae20949964409148456cb9b8f76f3fffaae0ff4a113bd10b6fa3a482",
+   "curated_context": "58f6d9c6bcba7629cf44138aaefbb85e347649c35b8deac5565965a26fe3456e",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "alberta-undated": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "6fc9d060ce691e3b273fc8589655bfd1b7b12b60ba70b9f5879197f9408e67e4",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "2ed57f8c5e95905ab25d6e358aaf006232cdd30ee6b8c12a5320eb582f3b6969",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "04357b3f764aeeae131696494f56b76b152716661405e1108c3345c4960b739c",
+   "curated_context": "9f360288e2d953d7ce4f6ac13009d03da0060bd6d37171c126e629699287b730",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
   "british_columbia-1968-2001": {
    "candidates": {
     "gemma4_26b": {
@@ -227,6 +315,146 @@
    "shard": true,
    "tier": "INDEXED"
   },
+  "federal-1969-1983": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "fd5a9056bb51b3a251a53b8d2d655dba1009206584152f52d744f77760bc0789",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "77a94c104be4cc6378124d3dbcd3066f339118d064338e0532bc9dd834c07922",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "dc19c523e7a79b6f94a4b886977e3fc4d5df97f735fa79f3765f6a824454e3e3",
+   "curated_context": "d60a7172198ea258670cff0d9a07478b2c1a641933d7560e42b1ba08b249a17d",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "federal-1996-2025": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "2f5d9f145e6ec3f6e3e2699d4c56f0842d6fa44e12ec2bb5599e0708beb2409c",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "0d5133b769e2f58539cd0d36d92cfe5add545f9015c8e6df58123d7576380743",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "bc794f025100c7204b88eb5843b912ca31d31e4eccd6f2ad7118ed019e92a183",
+   "curated_context": "a46dbcc4789ac0e1b9bd3bd1a7d1c508931e772104da43a193dd80fb2778431a",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "federal-undated": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "8e7b04ff6fa268d02633b7df1e5b0be78d1baf9d75b989b72460621ebca6f397",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "c694313a1a6f6f3d5c0e4d58de00a4b1612b7d8179dde553d42b1125975a4689",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "ce45a836ab62a71dc03b13da14c5a7f1751fa75bff312d06d3b3e51936f526bb",
+   "curated_context": "c4e48d4c819f694ee8553ee457751398db5a9f4bf32dfe5e29229b2334b3925b",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "federal-undated-3": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "4120312a545e64b5a89bd5f588a4026edd680db2d2192563fbe00cbd3314767e",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "e4238d332b9553e83f0e627db86de7f521193e4e3688ce3bd392a058b519dad6",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "a12014a1174cab780730dcabbca94d69b2558e8a13743b7a297cceb0f2abd5fc",
+   "curated_context": "0b1aa72574647b3e33be727d666e3f86a1fc71f0590085e5532ee7268e3e5161",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "federal-undated-4": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "7dd33baae726588febcd23651767aac7c22375bde77dfd27e482c297aee4a739",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "86360a4eb52dc6d3ea1791aefa245f2ef664843171ea5fa4873ac6de70e403a2",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "0d8d2862601e45836157b88b4e8460c90882df0f8422ab2e2e4186da644ea4c3",
+   "curated_context": "9abc2d3f68a63ffc2a020f5f7035729eb07e633d4d1fe638b390e1ef5cc624c9",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "federal-undated-5": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "f528c85fa4668780c4f3321732873b7d7ef33a182649766df2beef00a53b28aa",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "4f7ff0d87917da22e643939fe8f97386e621df67d751b8425af3eb1626ee2041",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "4976abfd237f5643962cd4a6e5b79ef3345455ec2970b83d32781b7ee1f29fab",
+   "curated_context": "4e46c6934ca44d974336a4154871acffa4201a53cdebabf65d5b035636a7acd0",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "federal-undated-6": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "3536fdd343949683f16394bb6becd80799744e14709252aa9018733b43431f26",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "3803231e069133a9a63c755560298079737473042c65ac1c76987969e5ff623b",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "d2874d641331a8565bdf89dd7189f2132b14b178d6cc89f27224a3c828bb1886",
+   "curated_context": "9570557c699cc71150b24ba38a6ceb0fd78871e41d9eb0441b676c763f1a20a5",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
   "microlog": {
    "candidates": {
     "gemma4_26b": {
@@ -244,6 +472,86 @@
    "curated_context": "f8f179ef53522710552b7984c68c93f712f91971e83db2529c50248fe6431248",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic"
+  },
+  "ontario-1856-1912": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "437bd12882c48dd75481377b8b59da75e4127c108db7b95fa7b64ff744a3da51",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "1bf01f1b64742222e97d42e9967711d967cc10c6f6adb1fe51da4702a1b96c5f",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "12c571a87f389b22bf87867ba56f2846d7adf463a2d7298611e21dc514369860",
+   "curated_context": "0633dceafc710c894ff003435d5d7759cb53bd732184eeda5af419918cc257cd",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "ontario-1912-1949": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "c154557c9cf12c9c02e06a3d9542bdab2c47353b62807e86257315ca883625bc",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "09c8c480d4190f56dda3614306e426448d7de8b6fbee9be976fd16aeb76e308b",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "4a55950764540b46c35bb1708fb28caa95aaebf175db264d0b88766fda3d717a",
+   "curated_context": "7801de0f124da9f00980da87a69c0de8c180cc2a6e86bbf6bfdc230250826e90",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "ontario-1949-1971": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "4afa0bd447e317cbc20784c76aa93cfde1b46b015329d620193e2aadff05bba8",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "5d19f1d5319115808f2523a2f3b427e2120029d59db302368e9c02e62805c720",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "c385ba55d97c1618edd5d3243fc33f585f1d456b152a19be114efcb5669d8ad1",
+   "curated_context": "e357bfa21501bb290ba7519c45e98d0df28bdd5dd7596616a9a36a675e281691",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "ontario-1971-1980": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "7959dc4a377d70f63700c202226847e56df5b8af1deb2645bffec520cb72aaa4",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "741bb38c8a8d0a8fb75985d3d8832c3bcceba7f4fa110a90eae118dbaebec899",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "42f5dc81b89974c15822d3e6083ba0911761ab60b20ca3a2c37cc89a4546a130",
+   "curated_context": "45d12eead5f3f10f437318f6efb97fb93a218bbeedbb0cd7cdc57ee9b4d653a5",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
   },
   "ontario-1980-1988": {
    "candidates": {
@@ -265,6 +573,66 @@
    "shard": true,
    "tier": "INDEXED"
   },
+  "ontario-1988-1995": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "5c278b82235db9087c08a0e4cafff74ac1a6f1d394c7300076a55a8fca1b2dfb",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "a878bdf5fb3992d25d97fc7a45935e6d6d63cebfd212bbc2b0407135fd1804b4",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "b5b24d755c8a019a84075ce02d315767f855aa9d83f22e9cf3b125d418fcea5f",
+   "curated_context": "3fe775dbf7f9bdac3852b65fcdab25615b43368cc7a89fb953aefb29e747d4ea",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "ontario-1995-2025": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "9ff0be243d3ca865b501971b79bfb266d255c1bedd0fefa03fc7a7c4c46c9c5b",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "7d8886688fec0db6c1f013db161b1ac51abee9220e3cfd1ef19c30c03dc5a007",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "bd283af925d275ab5bf8c197ed6ffa7edba16dde28014f51ea50a26a988e4bda",
+   "curated_context": "de45f165ab73d0666a5f96187508fe7179e5239da8a3a5122c72d6bd3324e58f",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "ontario-undated": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "7bfcf24f57fa57aa2d62c7af9e76ae90cad826d793ec182d2024209a757b0e58",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "3deae0aef3f1bbe0d9f2407285feed853700b97d3dceb792abbb54111cdaa818",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "474f1bc2a464b4950c98b675416c14c7dc3807b80c49531747c2ec43bf23b53a",
+   "curated_context": "2357aa9f8b559e084a2855bb2eb9a6caeb18df27d29d570fb44e6d7eccf78215",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
   "other-1858-2009": {
    "candidates": {
     "gemma4_26b": {
@@ -280,6 +648,26 @@
    },
    "context": "27a04947bb41eaecbd56eb0728e1bf8f10e2ebb97d42ad31e7f03e26837ea526",
    "curated_context": "44f5dad5d7428218989813e641172b0c4b3d7a762529c65b474444b7fdd6d98a",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "other-undated": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "07ede96dd0de182bf44ece2c9a6d70eea402cf52ef40f81b5f7e441e773e9770",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "6702d6fe3d8e8c97eaac437fe2324b448cacbbde6da1f49a59ba2ebdf90c3c12",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "94050d76c3f18083f6e363671b9e89035f82d3dbf5d30ce0b224623be2dcdcc9",
+   "curated_context": "15f8788027813b99199419eb0ad034c3a0a3c51f3419178024b3419922663fbb",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic",
    "shard": true,
@@ -318,6 +706,146 @@
    },
    "context": "b3eda218a1d6c4870b3ab24cbaaef3bbb477a84e30ecbabcfa404944610c30ea",
    "curated_context": "0d8b579af24b9af9b34c92e676016619311ab58296e13bfb7e74d1a64fce70a7",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "unknown-1993-2021": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "72483a63dbd56e711237f631f8b13ef10665e7e866d5b085ff6d55f29ec60bce",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "0cb8e3e4445f7fa6fd88ab6edea749b4f091e10a66e9c17159bb46cf2d8e5ef3",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "180b146b19bea3f39ef4c416fa6fc949ece4b749c2d4c3b9d40c70908ff39c29",
+   "curated_context": "639ae300d91f408f84df3e70630d1c8967e8e32a5bca837e334324fb493f1971",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "unknown-undated": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "ca84c1788ac6c907a238d6a285dd756bf4e13d3634660d79be90d9441f53f1b2",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "caa71b9674d15678d3bd1f1a0f24b00e93ea92e013992880249d99cd9584b729",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "11ba53ca11afcef440352a38737acf63ace35416ea710458bf97f5732f2c0382",
+   "curated_context": "b85f92ad438985dc8e49bdc23f9e768882b941c47957c31dd01b7e757dc206b1",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "unknown-undated-2": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "7b9fff13f5e2245e2512a8bb9864b86803697baaf503c7901be2cf32304422a4",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "093f39ecd4f59aee2117a4e91803e6e7036bd2eaa0e17ef8dbb633394f4c9914",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "b976142d8e15db32a5411040b9a9049d9cea74657df99954c6088b0adbc05a78",
+   "curated_context": "1da9c7ae44030a1ffca11724f7239c4880269da894f40b751efca8c2d6501d2f",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "unknown-undated-3": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "0aa8ade941cc578a6c86dc8d77c9434feee5f99d597af2059a3ace5e9d238635",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "cc55e3b56bf2cf193078f759b6d0f2e3529bd79129023abf2464299d5ea5f293",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "504d4ffa9dd401f00f53fea1f40944d62addaca2442d5c708f422721551dfcd7",
+   "curated_context": "a1a2a928ee99710225617205d585aab5dd7027e2024b8798016a56c18007b8bd",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "unknown-undated-4": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "b1319a5733f8c34dacf5250d5201d60a6d754a74c89d9c641b8f7ba844c02479",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "fcb67ad4545a953aacdc98dd4c4876df11c9eb0d2f6b33e8bede37632b88f776",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "fd31d493e47dccb6f5f5e3833b4231997caeb66c105faa202d118f7e500c8fb3",
+   "curated_context": "c46a63f737733c13cec4110e8bfa7d61d8f117b034ddfbe93c0f85f67444b548",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "unknown-undated-5": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "c849df208fddb93681651b786b37cf0f25b2b328975b4125eaffd9fd06961f80",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "a4932806b8ed65b0fba30075e146620ac80cae11f0122a2eb5612fb07c9d210b",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "e37f974495072d92af9b5fed30eacfcdbae43e7b672cffeba2d6a1b568551447",
+   "curated_context": "0d828f686654d63dfd1d61261e94b876b5a8557c7a4e79eb83b1da69d5ffc8c6",
+   "model": "claude-haiku-4-5-20251001",
+   "provider": "anthropic",
+   "shard": true,
+   "tier": "INDEXED"
+  },
+  "unknown-undated-6": {
+   "candidates": {
+    "gemma4_26b": {
+     "context": "55dbf1d8521341fe007d22c3bb0126b38083c6c449534c11ccd432df3b6803cd",
+     "model": "@cf/google/gemma-4-26b-a4b-it",
+     "provider": "workers_ai"
+    },
+    "glm53": {
+     "context": "2feb4a83d4950bdfed6095d3ad0544ee85feae662abdcb6d64009e1365f4c62d",
+     "model": "@cf/zai-org/glm-5.3",
+     "provider": "workers_ai"
+    }
+   },
+   "context": "52340b70b7ac6dc62d3bd1859d010a2c0d1d2bfa5f40eaa041eff40680001e8d",
+   "curated_context": "f1a295875b0d9c9febf85ebec89a7d626323e932383800a98654de101a4f71e2",
    "model": "claude-haiku-4-5-20251001",
    "provider": "anthropic",
    "shard": true,
