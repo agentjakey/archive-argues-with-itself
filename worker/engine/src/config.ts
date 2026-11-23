@@ -29,7 +29,9 @@ export interface Env {
   WRITER_CANDIDATE?: string;     // staging flag: an open writer candidate (config/writers.toml) answers in place of the configured one
   RERANK_DEPTH?: string;         // the reranker flag: passages of the pool it reorders, "" or "0" for off
   SHARDS?: string;               // the whole collection's shard scopes this deployment serves: comma-separated ids, or "" for none
-  AI?: Ai;                       // Workers AI binding, staging only: the container reaches it through AIProxy
+  AI?: Ai;                       // Workers AI binding: the container reaches it only through AIProxy (src/aigateway.ts)
+  AI_GATEWAY_ID?: string;        // the AI Gateway every Workers AI call goes through; unset means no model call at all
+  DAILY_AI_CALLS?: string;       // per-day ceiling on Workers AI calls; unset means none at all
   // Secrets (wrangler secret put)
   ANTHROPIC_API_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;

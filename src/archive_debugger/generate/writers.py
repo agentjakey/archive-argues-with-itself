@@ -22,6 +22,7 @@ import concurrent.futures
 import hashlib
 import json
 import os
+import re
 import time
 import tomllib
 from dataclasses import dataclass, field
@@ -50,6 +51,43 @@ class Endpoint:
     header_envs: dict = field(default_factory=dict)   # header name -> environment variable
     temperature: Optional[float] = 0.0
     json_schema: bool = True
+    # The environment variable naming the AI Gateway every request must go through (cf-aig-gateway-id).
+    # Set for the direct Workers AI REST endpoint (billing audit 2026-11-23: ungated GLM-5.3 calls bypassed
+    # every spend limit and prepaid credit). Unset in the environment, the gateway comes from
+    # config/audit.toml [gateway] workers_ai; with neither, the writer refuses to start. There is no
+    # ungated override.
+    gateway_env: Optional[str] = None
+
+
+AUDIT_CONFIG = REPO / "config" / "audit.toml"
+_GATEWAY_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def configured_gateway(path: Path = AUDIT_CONFIG) -> str:
+    """The Workers AI gateway named in config/audit.toml [gateway] workers_ai, or "" when none is."""
+    if not Path(path).exists():
+        return ""
+    raw = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    return str((raw.get("gateway") or {}).get("workers_ai") or "").strip()
+
+
+def gateway_headers(gateway_env: Optional[str], env: dict, default: Optional[str] = None) -> dict:
+    """cf-aig-* headers for the gateway named by env[gateway_env], else by `default` (config/audit.toml
+    when not given), plus cf-aig-authorization when CF_AIG_TOKEN is set (an authenticated gateway).
+    {} when the endpoint needs no gateway. Raises when one is needed and none is named or the id is
+    malformed: a Workers AI REST call never goes out ungated."""
+    if not gateway_env:
+        return {}
+    gateway = (env.get(gateway_env) or "").strip() or (configured_gateway() if default is None else default)
+    if not gateway:
+        raise RuntimeError(f"Workers AI calls must go through an AI Gateway: set {gateway_env} "
+                           f"or [gateway] workers_ai in config/audit.toml")
+    if not _GATEWAY_ID.match(gateway):
+        raise RuntimeError(f"{gateway_env} is not a valid AI Gateway id")
+    headers = {"cf-aig-gateway-id": gateway}
+    if env.get("CF_AIG_TOKEN"):
+        headers["cf-aig-authorization"] = f"Bearer {env['CF_AIG_TOKEN']}"
+    return headers
 
 
 def load_endpoints(path: Path = WRITERS_CONFIG) -> dict:
@@ -66,7 +104,8 @@ def load_endpoints(path: Path = WRITERS_CONFIG) -> dict:
         out[name] = Endpoint(provider=provider, base_url=str(e["base_url"]), key_env=str(e["key_env"]),
                              header_envs=dict(e.get("header_envs") or {}),
                              temperature=None if temp == "omit" else float(temp),
-                             json_schema=bool(e.get("json_schema", True)))
+                             json_schema=bool(e.get("json_schema", True)),
+                             gateway_env=e.get("gateway_env") or None)
     return out
 
 
@@ -104,6 +143,7 @@ def resolve(endpoint: Endpoint, env: Optional[dict] = None) -> tuple:
         if not value:
             raise RuntimeError(f"the writer endpoint needs {var} in the environment or .env (header {header})")
         headers[header.lower()] = value
+    headers.update(gateway_headers(endpoint.gateway_env, env))
     return url, headers
 
 
