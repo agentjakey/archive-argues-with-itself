@@ -107,7 +107,8 @@ describe("per-day call ceiling", () => {
 
 describe("budget-exceeded handling", () => {
   it("turns a gateway spend-limit or rate-limit refusal into a 429 with the budget header", async () => {
-    for (const msg of ["AiError: 429 Too Many Requests", "Gateway spend limit reached", "rate limited"]) {
+    for (const msg of ["AiError: 429 Too Many Requests", "Gateway spend limit reached", "rate limited",
+                       "402: Insufficient unified billing balance for this request. Your available balance is $0.00."]) {
       const e = env({ ai: new FakeAi(() => new Error(msg)) });
       const err = await runGated(e, "m", {}, NOW).catch((x) => x);
       expect(err).toBeInstanceOf(AiRefused);

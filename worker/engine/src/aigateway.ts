@@ -53,10 +53,11 @@ export async function takeAiCall(db: D1Database | undefined, env: Pick<Env, "DAI
   }
 }
 
-/** Whether an error from the binding is the gateway refusing on a spend limit or rate limit. */
+/** Whether an error from the binding is the gateway refusing on a spend limit or rate limit, or on
+ *  Unified Billing's credit balance (HTTP 402, "Insufficient unified billing balance", codes 2021/2052/2049). */
 export function isBudgetError(err: unknown): boolean {
   const message = String((err as Error)?.message ?? err);
-  return /\b429\b|rate.?limit|spend.?limit|budget|quota|too many requests/i.test(message);
+  return /\b429\b|\b402\b|rate.?limit|spend.?limit|budget|quota|too many requests|insufficient.*balance/i.test(message);
 }
 
 /** Run one model through the environment's gateway, after counting the call. Throws AiRefused
