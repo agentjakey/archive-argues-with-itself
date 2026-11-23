@@ -9,6 +9,7 @@ import { DurableObject, WorkerEntrypoint } from "cloudflare:workers";
 import { readRow, writeRow, isKey, type CacheRow } from "./cache";
 import { ENGINE_CONFIG, type Env, instanceFor, verifyPolicy, whole, asChatCompletion, candidateModel, servedScopes } from "./config";
 import { parseRange } from "./ranges";
+import { AiRefused, type AiEnv, refusalResponse, runGated } from "./aigateway";
 import { idleCheck } from "./schedule";
 
 const PORT = 8080;
@@ -427,9 +428,10 @@ export class AIProxy extends WorkerEntrypoint<Env, { token: string; model: strin
     if (body.model !== model) return new Response("model not allowed here", { status: 400 });
     const { model: _omit, ...inputs } = body;
     try {
-      const result = await this.env.AI.run(model as any, inputs as any);
+      const result = await runGated(this.env, model, inputs);
       return Response.json(asChatCompletion(model, result));
     } catch (err) {
+      if (err instanceof AiRefused) return refusalResponse(err);
       const message = String((err as Error)?.message ?? err);
       // A refused input (a schema the model does not take) is a 400, so the writer can fall back.
       const status = /invalid|unsupported|schema|bad input/i.test(message) ? 400 : 502;
@@ -439,7 +441,7 @@ export class AIProxy extends WorkerEntrypoint<Env, { token: string; model: strin
 }
 
 /** POST /v1/rerank for the container: {query, contexts: [{text}], top_k} to the one reranker model. */
-export async function rerankThrough(env: Pick<Env, "AI">, request: Request): Promise<Response> {
+export async function rerankThrough(env: AiEnv, request: Request): Promise<Response> {
   if (request.method !== "POST") return new Response("method not allowed", { status: 405 });
   if (!env.AI) return new Response("no AI binding", { status: 503 });
   let body: { query?: unknown; contexts?: unknown; top_k?: unknown };
@@ -451,9 +453,10 @@ export async function rerankThrough(env: Pick<Env, "AI">, request: Request): Pro
   const contexts = Array.isArray(body.contexts) ? body.contexts.slice(0, 100) : [];
   if (typeof body.query !== "string" || !contexts.length) return new Response("bad input", { status: 400 });
   try {
-    const result = await env.AI.run(RERANK_MODEL as any, { query: body.query, contexts, top_k: contexts.length } as any);
+    const result = await runGated(env, RERANK_MODEL, { query: body.query, contexts, top_k: contexts.length });
     return Response.json(result);
   } catch (err) {
+    if (err instanceof AiRefused) return refusalResponse(err);
     return new Response(String((err as Error)?.message ?? err).slice(0, 300), { status: 502 });
   }
 }

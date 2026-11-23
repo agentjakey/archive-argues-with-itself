@@ -53,8 +53,15 @@ def transport(env: Optional[dict] = None) -> Optional[tuple]:
     if proxy and env.get("CIVIC_CACHE_TOKEN"):
         return (proxy.rstrip("/") + "/v1/rerank", {"authorization": f"Bearer {env['CIVIC_CACHE_TOKEN']}"})
     if env.get("CF_ACCOUNT_ID") and env.get("CF_AI_TOKEN"):
+        # The REST path goes through the AI Gateway (CF_AIG_GATEWAY_ID, else config/audit.toml) like
+        # every other Workers AI call; with no gateway named the reranker is off (retrieval order kept).
+        from archive_debugger.generate.writers import gateway_headers
+        try:
+            aig = gateway_headers("CF_AIG_GATEWAY_ID", dict(env))
+        except RuntimeError:
+            return None
         return (REST_URL.format(account=env["CF_ACCOUNT_ID"], model=MODEL),
-                {"authorization": f"Bearer {env['CF_AI_TOKEN']}"})
+                {"authorization": f"Bearer {env['CF_AI_TOKEN']}", **aig})
     return None
 
 

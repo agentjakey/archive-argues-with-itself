@@ -17,6 +17,10 @@
 provider = "workers_ai"
 base_url = "https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/v1"
 key_env = "CF_AI_TOKEN"
+# Required: the AI Gateway the requests go through (cf-aig-gateway-id), so spend limits, analytics and
+# Unified Billing credits apply: CF_AIG_GATEWAY_ID, else config/audit.toml [gateway] workers_ai. With
+# neither the writer refuses to start; there is no ungated override. CF_AIG_TOKEN is sent when set.
+gateway_env = "CF_AIG_GATEWAY_ID"
 
 # Any OpenAI-compatible host: a hosted API, or a vLLM / llama.cpp server behind a Cloudflare Tunnel
 # with an Access service token (set OPENAI_COMPAT_HEADER_ID and OPENAI_COMPAT_HEADER_SECRET).

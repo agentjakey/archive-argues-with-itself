@@ -6,6 +6,8 @@ type Row = Record<string, string | number | null>;
 export class FakeD1 {
   answers = new Map<string, Row>();
   budget = new Map<string, number>();
+  aiCalls = new Map<string, number>();
+  failAiBudget = false;
 
   prepare(sql: string) {
     const db = this;
@@ -21,6 +23,13 @@ export class FakeD1 {
           const row = db.answers.get(key);
           if (!row || (row.expires_at !== null && String(row.expires_at) < now)) return null;
           return { ...row } as T;
+        }
+        if (sql.startsWith("INSERT INTO ai_call_budget")) {
+          if (db.failAiBudget) throw new Error("D1 unavailable");
+          const [day] = params as [string];
+          const calls = (db.aiCalls.get(day) ?? 0) + 1;
+          db.aiCalls.set(day, calls);
+          return { calls } as T;
         }
         if (sql.startsWith("INSERT INTO model_budget")) {
           const [day] = params as [string];

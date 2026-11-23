@@ -60,6 +60,17 @@ production; the staging file uses Cloudflare's always-pass test key). Seed D1 wi
 example questions (`scripts/v2/export_cache_sql.py`, then `npx wrangler d1 execute DB --remote --file
 <sql>`); only curated rows are exported.
 
+### Workers AI: one AI Gateway per environment
+
+Every Workers AI call goes through an AI Gateway: the engine's AI binding through `AI_GATEWAY_ID`
+(`archive-argues-staging`, `archive-argues-production`), and the REST writer and reranker used by
+scripts and CI through `CF_AIG_GATEWAY_ID`, else `config/audit.toml` `[gateway] workers_ai`
+(`archive-argues-audit`). There is no ungated path: without a gateway id, no model is called. Before
+deploying an environment with a writer, create its gateway, set its Workers AI Billing to Unified
+billing (so calls draw prepaid credits) and add a gateway-wide spend limit. `DAILY_AI_CALLS` caps the
+engine's model calls per UTC day (counted in D1 by `migrations/0003_ai_call_budget.sql`); unset means
+none. Past either limit, answers show the record without a model call.
+
 The production environment attaches the custom domains in `worker/engine/wrangler.jsonc` and
 `worker/site/wrangler.jsonc` when you deploy; your zone must be on Cloudflare.
 

@@ -24,13 +24,22 @@ def test_off_by_default_and_on_with_a_depth():
 def test_routes_through_the_proxy_in_the_container_and_rest_elsewhere():
     url, headers = rerank.transport({"CIVIC_AI_PROXY_URL": "http://ai.internal", "CIVIC_CACHE_TOKEN": "t"})
     assert url == "http://ai.internal/v1/rerank" and headers["authorization"] == "Bearer t"
-    url, _ = rerank.transport({"CF_ACCOUNT_ID": "acc", "CF_AI_TOKEN": "k"})
+    # REST only through an AI Gateway (billing audit 2026-11-23): CF_AIG_GATEWAY_ID, else config/audit.toml's.
+    _, headers = rerank.transport({"CF_ACCOUNT_ID": "acc", "CF_AI_TOKEN": "k"})
+    assert headers["cf-aig-gateway-id"] == "archive-argues-audit"
+    # a malformed gateway id turns the reranker off rather than calling ungated
+    assert rerank.transport({"CF_ACCOUNT_ID": "acc", "CF_AI_TOKEN": "k", "CF_AIG_GATEWAY_ID": "a/b"}) is None
+    url, headers = rerank.transport({"CF_ACCOUNT_ID": "acc", "CF_AI_TOKEN": "k", "CF_AIG_GATEWAY_ID": "gw"})
     assert url == "https://api.cloudflare.com/client/v4/accounts/acc/ai/run/@cf/baai/bge-reranker-base"
+    assert headers["cf-aig-gateway-id"] == "gw" and "cf-aig-authorization" not in headers
+    _, headers = rerank.transport({"CF_ACCOUNT_ID": "acc", "CF_AI_TOKEN": "k", "CF_AIG_GATEWAY_ID": "gw",
+                                   "CF_AIG_TOKEN": "g"})
+    assert headers["cf-aig-authorization"] == "Bearer g"
     assert rerank.transport({}) is None
 
 
 def test_reorders_only_the_head_and_keeps_every_passage():
-    env = {"CF_ACCOUNT_ID": "acc", "CF_AI_TOKEN": "k"}
+    env = {"CF_ACCOUNT_ID": "acc", "CF_AI_TOKEN": "k", "CF_AIG_GATEWAY_ID": "gw"}
     sent = {}
 
     def post(url, headers, body):

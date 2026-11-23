@@ -188,3 +188,40 @@ def test_extra_body_joins_the_v2_cache_context_only_when_set():
     plain = cache_context(*args, gcfg, "workers_ai", "m")
     assert cache_context(*args, {**gcfg, "extra_body": None}, "workers_ai", "m") == plain
     assert cache_context(*args, {**gcfg, "extra_body": {"reasoning_effort": "low"}}, "workers_ai", "m") != plain
+
+
+# --- AI Gateway routing (billing audit 2026-11-23). No network: resolve() only builds headers. ---
+
+def test_workers_ai_rest_endpoint_always_goes_through_a_gateway():
+    ep = writers.load_endpoints()["workers_ai"]
+    assert ep.gateway_env == "CF_AIG_GATEWAY_ID"
+    base = {"CF_ACCOUNT_ID": "acc", "CF_AI_TOKEN": "k"}
+    # Unset in the environment: the audit gateway from config/audit.toml, never an ungated call.
+    _, headers = writers.resolve(ep, dict(base))
+    assert headers["cf-aig-gateway-id"] == writers.configured_gateway() == "archive-argues-audit"
+    assert "cf-aig-authorization" not in headers
+    url, headers = writers.resolve(ep, {**base, "CF_AIG_GATEWAY_ID": "archive-argues-staging", "CF_AIG_TOKEN": "g"})
+    assert url == "https://api.cloudflare.com/client/v4/accounts/acc/ai/v1/chat/completions"
+    assert headers["cf-aig-gateway-id"] == "archive-argues-staging"
+    assert headers["cf-aig-authorization"] == "Bearer g"
+    assert headers["authorization"] == "Bearer k"
+
+
+def test_no_gateway_or_a_bad_id_refuses_and_there_is_no_ungated_override():
+    with pytest.raises(RuntimeError, match="AI Gateway"):
+        writers.gateway_headers("CF_AIG_GATEWAY_ID", {}, default="")
+    with pytest.raises(RuntimeError, match="AI Gateway"):
+        writers.gateway_headers("CF_AIG_GATEWAY_ID", {"CF_AIG_ALLOW_UNGATED": "1"}, default="")
+    with pytest.raises(RuntimeError, match="not a valid"):
+        writers.gateway_headers("CF_AIG_GATEWAY_ID", {"CF_AIG_GATEWAY_ID": "a/b"})
+    assert not hasattr(writers, "ALLOW_UNGATED_ENV")
+    source = (writers.REPO / "src" / "archive_debugger" / "generate" / "writers.py").read_text(encoding="utf-8")
+    assert "ALLOW_UNGATED" not in source
+
+
+def test_proxy_and_other_endpoints_need_no_gateway():
+    shipped = writers.load_endpoints()
+    assert shipped["workers_ai_proxy"].gateway_env is None      # the engine Worker enforces its own gateway
+    assert shipped["openai_compat"].gateway_env is None
+    _, headers = writers.resolve(endpoint(), ENV)
+    assert not any(h.startswith("cf-aig-") for h in headers)

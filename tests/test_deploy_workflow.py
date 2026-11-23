@@ -48,3 +48,25 @@ def test_every_deploying_job_sits_behind_the_guard():
     assert guard == ["if: ${{ github.event_name == 'workflow_dispatch' }}"]
     for job in ("site", "engine"):
         assert "    needs: test" in _job_block(text, job)
+
+
+def test_production_needs_main_and_a_typed_confirmation_and_defaults_are_safe():
+    text = WORKFLOW.read_text(encoding="utf-8")
+    test_job = "\n".join(_job_block(text, "test"))
+    # the production check is the first step of the job every deploying job needs
+    first_step = test_job.split("      - ", 2)[1]
+    assert "production needs main" in first_step
+    assert '"$GITHUB_REF" != "refs/heads/main"' in first_step
+    assert '"$CONFIRM" != "deploy production"' in first_step
+    # nothing falls back to production, and the default target leaves the laptop-published site alone
+    assert "|| 'production'" not in text
+    assert "default: engine" in "\n".join(_top_level_block(text, "on"))
+
+
+def test_the_workflow_runs_the_same_wrangler_as_the_workers_lockfiles():
+    import json
+    text = WORKFLOW.read_text(encoding="utf-8")
+    pinned = set(re.findall(r'wranglerVersion: "([^"]+)"', text))
+    root = WORKFLOW.parents[2]
+    for pkg in ("worker/engine/package.json", "worker/site/package.json"):
+        assert pinned == {json.loads((root / pkg).read_text(encoding="utf-8"))["devDependencies"]["wrangler"]}
