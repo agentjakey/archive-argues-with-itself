@@ -19,22 +19,26 @@ on:
         options: [staging, production]
         default: staging
       target:
-        description: "what to deploy"
+        description: "what to deploy (the site is published from the laptop with build_release.py)"
         type: choice
         options: [site, engine, both]
-        default: both
+        default: engine
+      confirm:
+        description: "production only: type 'deploy production' (runs only from main)"
+        type: string
+        default: ""
 
 # Least privilege: the deploy reads the repository; Cloudflare access comes from its own secrets.
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-${{ github.event.inputs.environment || 'production' }}
+  group: deploy-${{ github.event.inputs.environment || 'staging' }}
   cancel-in-progress: false
 
 env:
-  DEPLOY_ENV: ${{ github.event.inputs.environment || 'production' }}
-  DEPLOY_TARGET: ${{ github.event.inputs.target || 'both' }}
+  DEPLOY_ENV: ${{ github.event.inputs.environment || 'staging' }}
+  DEPLOY_TARGET: ${{ github.event.inputs.target || 'engine' }}
   RELEASE_ID: ${{ github.ref_type == 'tag' && github.ref_name || format('{0}-run{1}', github.event.inputs.environment, github.run_number) }}
 
 jobs:
@@ -43,6 +47,16 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
+      - name: production needs main and an explicit confirmation
+        # A production deploy runs only from main and only when the confirm input says so, so a
+        # misclick or a branch run cannot reach production. Staging needs neither.
+        env:
+          CONFIRM: ${{ github.event.inputs.confirm }}
+        run: |
+          if [ "$DEPLOY_ENV" = "production" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then echo "production deploys run only from main (got $GITHUB_REF)"; exit 1; fi
+            if [ "$CONFIRM" != "deploy production" ]; then echo "type 'deploy production' in the confirm input"; exit 1; fi
+          fi
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -56,7 +70,7 @@ jobs:
     needs: test
     if: ${{ github.event.inputs.target != 'engine' }}
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'production' }}
+    environment: ${{ github.event.inputs.environment || 'staging' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -86,7 +100,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.151.3"
+          wranglerVersion: "4.160.1"
           workingDirectory: worker/site
           command: deploy --env ${{ env.DEPLOY_ENV }} --message "release ${{ env.RELEASE_ID }}"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -99,7 +113,7 @@ jobs:
     needs: test
     if: ${{ github.event.inputs.target != 'site' }}
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'production' }}
+    environment: ${{ github.event.inputs.environment || 'staging' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -114,7 +128,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.151.3"
+          wranglerVersion: "4.160.1"
           workingDirectory: worker/engine
           command: d1 migrations apply DB --remote --env ${{ env.DEPLOY_ENV }}
       - name: deploy the engine Worker and its container image
@@ -122,6 +136,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4.151.3"
+          wranglerVersion: "4.160.1"
           workingDirectory: worker/engine
           command: deploy --env ${{ env.DEPLOY_ENV }} --var RELEASE_ID:${{ env.RELEASE_ID }}
