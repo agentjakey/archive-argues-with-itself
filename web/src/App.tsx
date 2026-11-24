@@ -28,6 +28,7 @@ import { AnswerSkeleton, SkeletonBody } from "./components/AnswerSkeleton";
 import { useAsk } from "./hooks/useAsk";
 import { usePreWake } from "./hooks/usePreWake";
 import { WakingCard } from "./components/WakingCard";
+import { showsLanding } from "./lib/layout";
 import { useCoverage } from "./hooks/useCoverage";
 import { useExamples } from "./hooks/useExamples";
 import { useKiosk, useOffline } from "./hooks/useKiosk";
@@ -563,7 +564,7 @@ export default function App() {
   const compare: [EvidenceRow, EvidenceRow] | null = decadeCompare
     ? [decadeCompare.a, decadeCompare.b]
     : storyRows ?? (pinned.length === 2 ? [pinned[0], pinned[1]] : null);
-  const showStories = view === null && response === null && status !== "waiting" && status !== "error";
+  const showStories = showsLanding(view, response !== null, status);
   const salient = response?.answer.coverage.salient_terms ?? [];
   // resultFlagged gates the initial-result interstitial (question + story). The note also
   // folds in a free user-pinned pair's flag, so a pinned comparison shows the same note; a

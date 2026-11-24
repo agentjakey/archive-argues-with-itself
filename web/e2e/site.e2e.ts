@@ -98,6 +98,9 @@ test("a live question waits for the waking engine, keeps the question, and answe
   await box.press("Enter");
   await expect(page.getByRole("status").filter({ hasText: "Waking the archive engine" })).toBeVisible();
   await expect(page.getByText(/Your question is kept/)).toBeVisible();
+  // the waiting question keeps the results layout: no landing hero, and the waking card on screen
+  await expect(page.locator("section.hero")).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Waking the archive engine" })).toBeInViewport();
   await shot(page, "waking", page.getByRole("status").filter({ hasText: "Waking the archive engine" }));
   await expect(page.getByRole("heading", { name: "Answer from the record" })).toBeVisible({ timeout: 30_000 });
   expect(asks).toBe(2);
