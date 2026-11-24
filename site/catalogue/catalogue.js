@@ -52,7 +52,8 @@ function matches(doc) {
   if (place && doc.p !== place) return false;
   if (state && topState(doc.s) !== state) return false;
   if (coll && !doc.c.includes(coll)) return false;
-  if (text && !(`${doc.t} ${doc.i || ""}`.toLowerCase().includes(text))) return false;
+  const searchable = `${doc.t} ${doc.i || ""}`.toLowerCase();
+  if (text && !text.split(/\s+/).every((word) => searchable.includes(word))) return false;
   return true;
 }
 

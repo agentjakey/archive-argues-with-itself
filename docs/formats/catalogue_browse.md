@@ -5,6 +5,10 @@ sub-collection, with its coverage state. It reads only static files compiled fro
 (`scripts/v2/catalogue.py browse`, code `src/archive_debugger/catalogue/browse.py`), which a site
 release publishes at `/catalogue/data/`.
 
+The title search is case-insensitive and matches every whitespace-separated query word in the
+combined title and issuer, in any order. For example, `tuberculosis annual` matches
+`Annual report on tuberculosis`. Place, coverage, and collection filters still apply.
+
 ## `summary.json`
 
 | Field | Meaning |
